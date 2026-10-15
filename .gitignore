@@ -1,0 +1,12 @@
+# Unreal generated
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+Build/
+.vs/
+*.xcworkspace
+*.xcodeproj
+Plugins/*/Binaries/
+Plugins/*/Intermediate/
+.DS_Store
