@@ -8,6 +8,7 @@ Unreal Engine 5 C++ life-sim. Realistic 3D; camera zooms continuously from an is
 - Content data (items, recipes, NPCs) in CSV/JSON under `Data/`, imported as DataTables. No hard-coded tables in C++.
 - Sim logic is covered by Automation Tests in `Source/MedievalSim/Private/Tests/`, named `MedievalSim.Sim.*`.
 - Binary assets go through Git LFS (see `.gitattributes`).
+- Asset production follows `docs/asset-pipeline.md`.
 
 ## Look
 Realistic (Megascans / Tripo props / MetaHuman), presented like a classic pre-rendered isometric game: Lumen GI, soft AO, neutral grade, no stylisation, no pixelation.
