@@ -9,17 +9,29 @@ Unreal Engine 5 C++ life-sim. Realistic 3D; camera zooms continuously from an is
 - Sim logic is covered by Automation Tests in `Source/MedievalSim/Private/Tests/`, named `MedievalSim.Sim.*`.
 - Binary assets go through Git LFS (see `.gitattributes`).
 
-## Commands (Mac, Apple Silicon)
-Engine: `/Users/Shared/Epic Games/UE_5.5` (update `EngineAssociation` in `MedievalSim.uproject` and these paths when the engine changes).
+## Look
+Realistic (Megascans / Tripo props / MetaHuman), presented like a classic pre-rendered isometric game: Lumen GI, soft AO, neutral grade, no stylisation, no pixelation.
+Camera (`CameraZoom.h`, `MSPlayerCharacter`): far zoom is a fixed 45° yaw / -30° pitch iso view with a 10° FOV (near-orthographic); zooming eases continuously to a 65° perspective over-the-shoulder view. Camera distance is derived from FOV so framing shrinks without pops.
+
+## Commands (Mac, Apple Silicon, fish shell)
+`UE` = `/Users/Shared/Epic Games/UE_5.8` (must match `EngineAssociation` in `MedievalSim.uproject`).
 
 Build editor target:
 ```
-"/Users/Shared/Epic Games/UE_5.5/Engine/Build/BatchFiles/Mac/Build.sh" MedievalSimEditor Mac Development "-Project=$PWD/MedievalSim.uproject" -WaitMutex
+"$UE/Engine/Build/BatchFiles/Mac/Build.sh" MedievalSimEditor Mac Development "-Project=$PWD/MedievalSim.uproject" -WaitMutex
 ```
 
-Run sim tests headless:
+Run sim tests headless (exit code non-zero on failure):
 ```
-"/Users/Shared/Epic Games/UE_5.5/Engine/Binaries/Mac/UnrealEditor.app/Contents/MacOS/UnrealEditor" "$PWD/MedievalSim.uproject" -ExecCmds="Automation RunTests MedievalSim.Sim; Quit" -unattended -nullrhi -nosplash -log
+"$UE/Engine/Binaries/Mac/UnrealEditor.app/Contents/MacOS/UnrealEditor-Cmd" "$PWD/MedievalSim.uproject" -ExecCmds="Automation RunTests MedievalSim.Sim; Quit" -unattended -nullrhi -nosplash -log
 ```
 
-Status: neither command has succeeded yet. UE 5.5 accepts only Xcode 15.2–16.9 and this Mac has Xcode 27.
+Rebuild test scene (`/Game/Maps/TestVillage`, placeholder shapes):
+```
+"$UE/Engine/Binaries/Mac/UnrealEditor.app/Contents/MacOS/UnrealEditor-Cmd" "$PWD/MedievalSim.uproject" -run=pythonscript -script="$PWD/Tools/build_test_scene.py" -unattended
+```
+
+Visual check: far-iso and close-third-person screenshots into `Saved/Screenshots/`, then quits:
+```
+"$UE/Engine/Binaries/Mac/UnrealEditor.app/Contents/MacOS/UnrealEditor" "$PWD/MedievalSim.uproject" -game -CaptureShots -windowed -ResX=1920 -ResY=1080 -unattended
+```
