@@ -1,6 +1,6 @@
 {
 	"FileVersion": 3,
-	"EngineAssociation": "5.5",
+	"EngineAssociation": "5.8",
 	"Category": "",
 	"Description": "",
 	"Modules": [
@@ -14,12 +14,30 @@
 		{
 			"Name": "PythonScriptPlugin",
 			"Enabled": true,
-			"TargetAllowList": [ "Editor" ]
+			"TargetAllowList": [
+				"Editor"
+			]
 		},
 		{
 			"Name": "EditorScriptingUtilities",
 			"Enabled": true,
-			"TargetAllowList": [ "Editor" ]
+			"TargetAllowList": [
+				"Editor"
+			]
+		},
+		{
+			"Name": "ModelContextProtocol",
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
+		},
+		{
+			"Name": "EditorToolset",
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
 		}
 	]
 }

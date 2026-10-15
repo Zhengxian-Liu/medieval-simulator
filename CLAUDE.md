@@ -22,17 +22,17 @@ Build editor target:
 "$UE/Engine/Build/BatchFiles/Mac/Build.sh" MedievalSimEditor Mac Development "-Project=$PWD/MedievalSim.uproject" -WaitMutex
 ```
 
-Run sim tests headless (exit code non-zero on failure):
+Run sim tests headless; results go to `~/Library/Logs/Unreal Engine/MedievalSimEditor/MedievalSim.log` (grep `Test Completed`, `TEST COMPLETE. EXIT CODE`):
 ```
-"$UE/Engine/Binaries/Mac/UnrealEditor.app/Contents/MacOS/UnrealEditor-Cmd" "$PWD/MedievalSim.uproject" -ExecCmds="Automation RunTests MedievalSim.Sim; Quit" -unattended -nullrhi -nosplash -log
+"$UE/Engine/Binaries/Mac/UnrealEditor-Cmd" "$PWD/MedievalSim.uproject" -ExecCmds="Automation RunTests MedievalSim.Sim; Quit" -unattended -nullrhi -nosplash -log
 ```
 
 Rebuild test scene (`/Game/Maps/TestVillage`, placeholder shapes):
 ```
-"$UE/Engine/Binaries/Mac/UnrealEditor.app/Contents/MacOS/UnrealEditor-Cmd" "$PWD/MedievalSim.uproject" -run=pythonscript -script="$PWD/Tools/build_test_scene.py" -unattended
+"$UE/Engine/Binaries/Mac/UnrealEditor-Cmd" "$PWD/MedievalSim.uproject" -run=pythonscript -script="$PWD/Tools/build_test_scene.py" -unattended
 ```
 
-Visual check: far-iso and close-third-person screenshots into `Saved/Screenshots/`, then quits:
+Visual check: far-iso and close-third-person screenshots into `Saved/Screenshots/`, then quits. Needs Xcode's Metal Toolchain (`xcodebuild -downloadComponent MetalToolchain`):
 ```
 "$UE/Engine/Binaries/Mac/UnrealEditor.app/Contents/MacOS/UnrealEditor" "$PWD/MedievalSim.uproject" -game -CaptureShots -windowed -ResX=1920 -ResY=1080 -unattended
 ```
