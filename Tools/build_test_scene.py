@@ -46,7 +46,12 @@ def house(x, y, yaw, wall, roof):
         block(CUBE, roof, (x + off.x, y + off.y, 80 + h + 110), (w + 60, d * 0.62, 25), yaw, roll=side * 35)
 
 
-levels.new_level(MAP)
+if unreal.EditorAssetLibrary.does_asset_exist(MAP):
+    if not levels.load_level(MAP):
+        raise RuntimeError("load_level failed for " + MAP)
+    actors.destroy_actors(actors.get_all_level_actors())
+elif not levels.new_level(MAP):
+    raise RuntimeError("new_level failed for " + MAP)
 
 GRASS = material("MI_Grass", (0.09, 0.13, 0.05))
 STONE = material("MI_Stone", (0.25, 0.24, 0.22))
@@ -70,7 +75,7 @@ torch = actors.spawn_actor_from_class(unreal.PointLight, unreal.Vector(150, -150
 tl = torch.point_light_component
 tl.set_editor_property("use_temperature", True)
 tl.set_editor_property("temperature", 2200.0)
-tl.set_editor_property("intensity", 8000.0)
+tl.set_editor_property("intensity", 100.0)  # candela; a real torch is ~100 cd
 tl.set_editor_property("attenuation_radius", 900.0)
 
 sun = actors.spawn_actor_from_class(unreal.DirectionalLight, unreal.Vector(0, 0, 1000), unreal.Rotator(roll=0.0, pitch=-42.0, yaw=-130.0))
@@ -84,15 +89,12 @@ actors.spawn_actor_from_class(unreal.ExponentialHeightFog, unreal.Vector(0, 0, 0
 pp = actors.spawn_actor_from_class(unreal.PostProcessVolume, unreal.Vector(0, 0, 0))
 pp.set_editor_property("unbound", True)
 s = pp.settings
-s.set_editor_property("override_auto_exposure_min_brightness", True)
-s.set_editor_property("auto_exposure_min_brightness", 1.0)
-s.set_editor_property("override_auto_exposure_max_brightness", True)
-s.set_editor_property("auto_exposure_max_brightness", 1.0)
 s.set_editor_property("override_ambient_occlusion_intensity", True)
 s.set_editor_property("ambient_occlusion_intensity", 0.6)
 pp.set_editor_property("settings", s)
 
 actors.spawn_actor_from_class(unreal.PlayerStart, unreal.Vector(150, -350, 100))
 
-levels.save_current_level()
+if not levels.save_current_level():
+    raise RuntimeError("save failed for " + MAP)
 unreal.log("build_test_scene: saved " + MAP)
