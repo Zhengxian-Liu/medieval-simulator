@@ -2,7 +2,8 @@
 
 Target: environment and building quality of a classic pre-rendered isometric game (Commandos 2, Baldur's Gate,
 Diablo II) and of Path of Exile / Diablo IV — realistic materials, daylight, neutral grade, no dark mood.
-The quality bar is judged by Fable (art director) against `docs/reference/` and by `tools/art_check.py` numbers.
+The quality bar is judged by Fable (art director) against `docs/reference/` (the pre-rendered indication and The Guild
+screenshots in `docs/reference/the-guild/`, breakdown in `docs/visual-target.md`) and by `tools/art_check.py` numbers.
 Done = Fable overall ≥ 8 with no area < 7, and `art_check.py` passes.
 
 Everything below is a rule; every number lives in **`godot/art/look.json`** (each value with its reason). Change a

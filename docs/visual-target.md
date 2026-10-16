@@ -27,3 +27,23 @@ Breakdown below is from the Pine & Parcel video thumbnail only (one frame, 420×
 5. Water: bed detail visible through shallow water, foam around rocks.
 
 `docs/screenshots/cycles_far.png` is the same scene path-traced in Blender Cycles: it isolates how much of the gap is rendering (1) versus content (2–5).
+
+## The Guild (user reference, 2026-10-16)
+Screenshots: `docs/reference/the-guild/` (public Steam store images, sources in `SOURCES.md`; internal reference only).
+The Guild 3 (2020) is the closest match to what we want; The Guild II Renaissance (2010) shows the same layout ideas
+with older rendering.
+
+| aspect | The Guild | adopt? |
+|---|---|---|
+| camera | free camera; the typical town view is a high oblique ~35–50° down at 20–60 m, close-ups at house scale | yes: our 16 m far / 10 m mid range fits; keep the option of a wider town view later |
+| scale & density | houses packed close along lanes, gardens and fences filling every gap, trees woven between buildings; never an empty square | **yes, main gap**: our village is sparse — more buildings, closer spacing, gardens, lanes |
+| buildings | thatch is thick, shaggy, bundle-textured with ragged eaves; walls are timber, daub and rough stone; lots of small attachments (lean-tos, stairs, porches, shutters, signs) | yes: add lean-tos/porches/attachments to the building specs; our thatch already layered |
+| ground | cobbles in the town, packed dirt and worn grass elsewhere; strong transitions; puddles and wheel ruts | yes: cobbled square/lane option, ruts |
+| clutter | woodpiles, barrels, crates, carts, tools, fences, market goods at every door | yes: denser yard kits |
+| water | river with jetties, boats, reeds, clear shallows | yes: jetty + reeds props |
+| light & grade | bright midday sun, saturated greens, warm thatch; GI-soft shade | partly: keep our neutral AgX grade (user), but match the sun brightness and soft shade |
+| people | townsfolk on every street | later (characters are not built yet) |
+| what not to copy | UI, the 2010 game's flat textures and fake mountains, the city/cathedral scale | — |
+
+How it ranks in reviews: Fable scores each round against both the pre-rendered indication and these frames
+("how close to The Guild's feel").
