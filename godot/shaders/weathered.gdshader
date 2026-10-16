@@ -12,9 +12,11 @@ uniform float dirt_height = 1.0;  // metres above the asset origin that splash d
 uniform float moss = 0.0;         // 0..1 coverage on upward faces
 uniform vec3 dirt_color : source_color = vec3(0.2, 0.15, 0.1);
 uniform vec3 moss_color : source_color = vec3(0.1, 0.13, 0.05);
+uniform float ao_strength = 1.0;  // vertex colour = Cycles-baked AO (tools/hero_cottage.py bake_ao)
 
 varying vec3 world_pos;
 varying vec3 world_normal;
+varying float baked_ao;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float vnoise(vec2 p) {
@@ -26,6 +28,7 @@ float vnoise(vec2 p) {
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
+	baked_ao = COLOR.r;
 }
 
 void fragment() {
@@ -37,6 +40,10 @@ void fragment() {
 	float up = smoothstep(0.45, 0.9, world_normal.y);
 	c = mix(c, moss_color, moss * up * smoothstep(0.5, 0.78, n));
 	ALBEDO = c;
+	AO = mix(1.0, baked_ao, ao_strength);  // occludes ambient/GI light only, so direct sun still lands on the surface
+	AO_LIGHT_AFFECT = 0.25;                  // and a little on direct light: crevices stay dark at noon too
+	// grime collects where the AO says the surface is sheltered: under eaves, between beams, at the base
+	ALBEDO = mix(ALBEDO, dirt_color * 0.6, (1.0 - baked_ao) * 0.35 * ao_strength);
 	ROUGHNESS = texture(rough_tex, UV).r;
 	NORMAL_MAP = texture(normal_tex, UV).rgb;
 }

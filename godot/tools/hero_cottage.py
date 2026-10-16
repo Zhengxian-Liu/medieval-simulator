@@ -463,6 +463,28 @@ def render(out_dir, samples):
         print(f"hero_cottage: {name} in {time.time() - t:.1f}s")
 
 
+def bake_ao(obj, samples=64):
+    """Cycles ambient occlusion baked into a vertex colour layer ("AO", exported as COLOR_0): soft, path-traced
+    darkening in every crevice, under eaves and where the asset meets the ground (a temporary ground plane occludes).
+    The game multiplies it in (shaders/weathered.gdshader), so it survives the real-time day/night cycle."""
+    bpy.ops.mesh.primitive_plane_add(size=60, location=(0, 0, 0))
+    ground = bpy.context.active_object
+    ca = obj.data.color_attributes.new("AO", "BYTE_COLOR", "CORNER")
+    obj.data.color_attributes.active_color = ca
+    obj.data.color_attributes.render_color_index = obj.data.color_attributes.active_color_index
+    scene = bpy.context.scene
+    scene.render.engine = "CYCLES"
+    scene.cycles.device = "CPU"
+    scene.cycles.samples = samples
+    scene.world = scene.world or bpy.data.worlds.new("w")
+    scene.world.light_settings.distance = 1.5  # AO reach in metres: contact/crevice scale, not whole-room darkening
+    for o in bpy.context.scene.objects:
+        o.select_set(o == obj)
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.bake(type="AO", target="VERTEX_COLORS")
+    bpy.data.objects.remove(ground)
+
+
 def export(out_dir):
     """One GLB per variant: all parts joined, materials exported by name only (Godot assigns the
     weathered materials by name, see scripts/village.gd)."""
@@ -481,10 +503,12 @@ def export(out_dir):
         obj = bpy.context.view_layer.objects.active
         obj.name = name
         tris = sum(len(p.vertices) - 2 for p in obj.data.polygons)
-        for mat in obj.data.materials:
-            mat.use_nodes = False  # keep only the slot name; textures are applied in Godot
+        bake_ao(obj)
         path = out / f"{name}.glb"
-        bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB", use_selection=True, export_yup=True)
+        for o in bpy.context.scene.objects:
+            o.select_set(o == obj)
+        bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB", use_selection=True, export_yup=True,
+                                  export_vertex_color="ACTIVE", export_image_format="NONE")  # textures are applied in Godot by slot name
         print(f"hero_cottage: exported {path} ({tris} triangles)")
 
 

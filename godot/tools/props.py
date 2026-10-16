@@ -221,11 +221,13 @@ def main():
         bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
         obj = bpy.context.view_layer.objects.active
         obj.name = name
-        for mat in obj.data.materials:
-            mat.use_nodes = False  # slot name only; Godot applies the weathered materials
+        hc.bake_ao(obj)
         tris = sum(len(p.vertices) - 2 for p in obj.data.polygons)
         path = out / f"{name}.glb"
-        bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB", use_selection=True, export_yup=True)
+        for o in bpy.context.scene.objects:
+            o.select_set(o == obj)
+        bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB", use_selection=True, export_yup=True,
+                                  export_vertex_color="ACTIVE", export_image_format="NONE")  # textures are applied in Godot by slot name
         print(f"props: {name} {tris} triangles -> {path}")
 
 
