@@ -107,7 +107,8 @@ def build(name, seed, height, crown, trunk_r, leaves, leaf_size):
     rng = random.Random(seed)
     mesh = Mesh()
     crown_center = Vector((0, 0, height * (0.62 if trunk_r else 0.45)))
-    tips = []
+    lobes = []
+    lobe_r = crown * (0.4 if trunk_r else 0.45)
     if trunk_r:
         top = Vector((rng.uniform(-0.3, 0.3), rng.uniform(-0.3, 0.3), height * 0.55))
         limb(mesh, rng, Vector((0, 0, -0.2)), top, trunk_r * 1.25, trunk_r * 0.7, sides=9)
@@ -116,22 +117,24 @@ def build(name, seed, height, crown, trunk_r, leaves, leaf_size):
             start = top + Vector((0, 0, rng.uniform(-0.6, 0.6)))
             end = crown_center + Vector((math.cos(ang) * crown * 0.7, math.sin(ang) * crown * 0.7, rng.uniform(-0.6, 1.4)))
             limb(mesh, rng, start, end, trunk_r * 0.55, trunk_r * 0.18)
-            for _ in range(4):
-                twig_end = end + Vector((rng.uniform(-1.2, 1.2), rng.uniform(-1.2, 1.2), rng.uniform(-0.4, 1.0)))
-                limb(mesh, rng, end, twig_end, trunk_r * 0.18, 0.02, sides=5)
-                tips.append(twig_end)
-    # leaf clumps: points inside a lumpy ellipsoid, concentrated near its surface so the crown reads as masses
-    lobes = [crown_center + Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-0.4, 0.6))) * crown * 0.45
-             for _ in range(7)]
-    # inner volume in every lobe, just under its leaf shell (leaves sit 0.4-0.6 crown out): gaps show leafy shade, not
-    # ground or sky (Fable round 7: oak canopy see-through, bushes near-black holes)
-    for c in [crown_center] + lobes:
-        inner(mesh, c, crown * rng.uniform(0.34, 0.38))
-    lobes += tips
+            # each branch carries its own leaf clusters (The Guild's oaks: 6-10 lit clusters with shadowed gaps, Fable
+            # rounds 8-9); twigs stay inside them so no bare skeleton shows (round 10 A/Bs)
+            for c in (end, end.lerp(crown_center, 0.35) + Vector((0, 0, lobe_r * 0.9))):
+                lobes.append(c)
+                for _ in range(2):
+                    twig_end = c + Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-0.3, 0.8))) * lobe_r * 0.5
+                    limb(mesh, rng, end, twig_end, trunk_r * 0.18, 0.02, sides=5)
+    else:  # bushes: lobes around the centre
+        lobes = [crown_center + Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-0.4, 0.6))) * crown * 0.45
+                 for _ in range(7)]
+        inner(mesh, crown_center, lobe_r * 0.8)
+    # inner volume in every lobe, just under its leaf shell: gaps show leafy shade, not ground or sky (round 7)
+    for c in lobes:
+        inner(mesh, c, lobe_r * rng.uniform(0.76, 0.84))
     for _ in range(leaves):
         c = rng.choice(lobes)
         d = Vector((rng.gauss(0, 1), rng.gauss(0, 1), rng.gauss(0, 0.8))).normalized()
-        r = crown * rng.uniform(0.42, 0.52) * (rng.random() ** 0.15)  # on the lobe surface: few stragglers (round 8 confetti)
+        r = lobe_r * rng.uniform(0.93, 1.15) * (rng.random() ** 0.15)  # on the lobe surface: few stragglers (round 8)
         p = c + d * r
         p.z = max(p.z, 0.15 if not trunk_r else height * 0.32)
         out = (p - crown_center)
