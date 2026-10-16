@@ -102,14 +102,14 @@ func _build_lighting() -> void:
 # Sun path: rises in the east at 6:00, highest at 12:00, sets at 18:00; dims and warms near the horizon.
 func _apply_time() -> void:
 	var elevation := sin((hour - 6.0) / 12.0 * PI) * 55.0
-	sun.rotation_degrees = Vector3(-elevation, -150.0 + (hour - 12.0) * 10.0, 0)
+	sun.rotation_degrees = Vector3(-elevation, 75.0 + (hour - 12.0) * 10.0, 0)  # from the upper left of the screen (classic iso key light), so the roofs and walls we see are lit
 	var day := clampf(elevation / 20.0, 0.0, 1.0)
 	sun.light_energy = lerpf(0.0, 1.4, day)
 	sun.light_color = Color(1.0, 0.55, 0.3).lerp(Color(1.0, 0.96, 0.9), day)
 	sun.visible = elevation > -2.0
 	# The HDRI is a daytime sky: dim it (and the ambient light it gives) toward night.
 	environment.background_energy_multiplier = lerpf(0.04, 1.0, day)
-	environment.ambient_light_energy = lerpf(0.08, 0.45, day)  # the HDRI is bright; full strength washed out the sun shadows
+	environment.ambient_light_energy = lerpf(0.08, 0.6, day)  # the HDRI is bright; full strength washed out the sun shadows
 
 func _apply_camera() -> void:
 	var pose := CameraZoom.evaluate(zoom)

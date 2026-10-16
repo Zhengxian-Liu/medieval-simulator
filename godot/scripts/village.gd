@@ -67,6 +67,8 @@ func _place(root: Node3D, sets: Array, pos: Vector3, scale: float, material: Mat
 	root.add_child(mi)
 var _mats := {}
 
+const Ground = preload("res://scripts/ground.gd")
+
 # Slots with a Poly Haven texture set (see assets/CREDITS.md); others stay flat colour placeholders.
 const TEXTURED := {grass = 0.25, riverbed = 0.4, stone = 0.6, plaster = 0.5, timber = 0.6, thatch = 0.5, rock = 0.8}  # tiles per metre
 
@@ -121,11 +123,12 @@ func _cyl(top: float, bottom: float, height: float, sides := 8) -> CylinderMesh:
 
 func build(root: Node3D) -> Node3D:
 	_rng.seed = 7  # deterministic so screenshots are comparable between runs
-	_ground(root)
+	var houses := [[-9, 6, 10, "cottage_a"], [6, 9, -15, "barn"], [-3, 19, 80, "cottage_b"], [15, -3, 40, "cottage_a"]]
+	var ground_mat: Material = Ground.new().build(root, houses, Vector2(2, 3), Vector2(3, RIVER_Z + RIVER_HALF + 1.0), RIVER_Z, RIVER_HALF, _rng, _mat("grass"))
+	_ground(root, ground_mat)
 	_river(root)
 	_add(root, _box(Vector3(2.4, 0.25, 9.0)), "timber", Vector3(3, 0.35, RIVER_Z))  # bridge
 
-	var houses := [[-9, 6, 10, "cottage_a"], [6, 9, -15, "barn"], [-3, 19, 80, "cottage_b"], [15, -3, 40, "cottage_a"]]
 	for h in houses:
 		_house(root, Vector3(h[0], 0, h[1]), h[2], h[3])
 
@@ -178,12 +181,13 @@ func _clear_of_houses(p: Vector3, houses: Array, radius: float) -> bool:
 			return false
 	return true
 
-func _ground(root: Node3D) -> void:
+func _ground(root: Node3D, mat: Material) -> void:
 	var far_edge := 150.0
 	var north := RIVER_Z - RIVER_HALF
 	var south := RIVER_Z + RIVER_HALF
-	_add(root, _box(Vector3(300, 1, far_edge + north)), "grass", Vector3(0, -0.5, (north - far_edge) / 2.0))
-	_add(root, _box(Vector3(300, 1, far_edge - south)), "grass", Vector3(0, -0.5, (south + far_edge) / 2.0))
+	for slab in [[far_edge + north, (north - far_edge) / 2.0], [far_edge - south, (south + far_edge) / 2.0]]:
+		var mi := _add(root, _box(Vector3(300, 1, slab[0])), "grass", Vector3(0, -0.5, slab[1]))
+		mi.material_override = mat
 
 # Channel cross-section: shore (y=0) slopes down to a flat bed, so the water shader sees a depth gradient for foam.
 func _river(root: Node3D) -> void:

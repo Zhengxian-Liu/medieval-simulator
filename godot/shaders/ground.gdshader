@@ -1,0 +1,42 @@
+// Village ground: grass and trampled dirt blended by a painted mask (paths, yards, the square),
+// with noise breaking up the mask edge and large-scale colour variation so the grass never reads as one tile.
+shader_type spatial;
+
+uniform sampler2D grass_albedo : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D grass_normal : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D grass_rough : hint_roughness_r, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D dirt_albedo : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D dirt_normal : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D dirt_rough : hint_roughness_r, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D mask : filter_linear;  // r = how trampled (0 grass .. 1 bare dirt)
+uniform vec4 mask_rect;                  // world x0, z0, width, depth covered by the mask
+uniform vec3 grass_tint : source_color = vec3(0.5, 0.66, 0.42);
+uniform float grass_tiles = 0.25;        // tiles per metre
+uniform float dirt_tiles = 0.4;
+
+varying vec3 world_pos;
+
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float vnoise(vec2 p) {
+	vec2 i = floor(p), f = fract(p);
+	vec2 u = f * f * (3.0 - 2.0 * f);
+	return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y);
+}
+
+void vertex() {
+	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+}
+
+void fragment() {
+	vec2 uvg = world_pos.xz * grass_tiles;
+	vec2 uvd = world_pos.xz * dirt_tiles;
+	float m = texture(mask, (world_pos.xz - mask_rect.xy) / mask_rect.zw).r;
+	float n = vnoise(world_pos.xz * 0.9) * 0.6 + vnoise(world_pos.xz * 3.7) * 0.4;
+	float dirt = smoothstep(0.38, 0.62, m + (n - 0.5) * 0.55);
+	float patchy = mix(0.78, 1.12, vnoise(world_pos.xz * 0.12));  // big soft colour patches in the grass
+	vec3 grass = texture(grass_albedo, uvg).rgb * grass_tint * patchy;
+	vec3 soil = texture(dirt_albedo, uvd).rgb;
+	ALBEDO = mix(grass, soil, dirt);
+	ROUGHNESS = mix(texture(grass_rough, uvg).r, texture(dirt_rough, uvd).r, dirt);
+	NORMAL_MAP = mix(texture(grass_normal, uvg).rgb, texture(dirt_normal, uvd).rgb, dirt);
+}

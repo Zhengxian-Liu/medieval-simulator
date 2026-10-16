@@ -1,0 +1,123 @@
+# Ground pass: a painted "trampled" mask (dirt paths from the square to every door and the bridge, worn yards,
+# the square itself), a ground material that blends grass and dirt by it, and grass clumps scattered on the grass,
+# densest along path edges and walls where real grass grows tall.
+extends RefCounted
+
+const MASK_PX := 512
+const MASK_RECT := Rect2(-40, -40, 80, 80)  # world x/z covered by the mask
+const GRASS_CLUMPS := 9000
+
+var _mask := Image.create(MASK_PX, MASK_PX, false, Image.FORMAT_RF)
+
+# houses: [[x, z, yaw_deg, variant], ...]; door is on the house's local +Z side.
+func build(root: Node3D, houses: Array, square: Vector2, bridge: Vector2, river_z: float, river_half: float,
+		rng: RandomNumberGenerator, grass_mat: Material) -> Material:
+	_disc(square, 4.5, 1.0)
+	for h in houses:
+		var door := _door(h)
+		_line(square, door, 0.9, 0.95)
+		_disc(door, 1.6, 0.8)
+	_line(square, bridge, 1.0, 0.95)
+	_line(bridge, bridge + Vector2(0, -6), 0.9, 0.9)  # path continues past the river
+	var mat := _material(grass_mat)
+	_grass(root, houses, river_z, river_half, rng)
+	return mat
+
+func _door(h: Array) -> Vector2:
+	var local := Vector2(0, 3.2)  # just outside the door
+	return Vector2(h[0], h[1]) + local.rotated(-deg_to_rad(h[2]))
+
+func _px(p: Vector2) -> Vector2:
+	return (p - MASK_RECT.position) / MASK_RECT.size * MASK_PX
+
+func _stamp(center: Vector2, radius: float, strength: float) -> void:
+	var c := _px(center)
+	var r := radius / MASK_RECT.size.x * MASK_PX
+	for y in range(maxi(0, int(c.y - r)), mini(MASK_PX, int(c.y + r) + 1)):
+		for x in range(maxi(0, int(c.x - r)), mini(MASK_PX, int(c.x + r) + 1)):
+			var d := Vector2(x, y).distance_to(c) / r
+			if d < 1.0:
+				var v := strength * smoothstep(1.0, 0.45, d)
+				_mask.set_pixel(x, y, Color(maxf(_mask.get_pixel(x, y).r, v), 0, 0))
+
+func _disc(center: Vector2, radius: float, strength: float) -> void:
+	_stamp(center, radius, strength)
+
+func _line(a: Vector2, b: Vector2, half_width: float, strength: float) -> void:
+	var steps := int(a.distance_to(b) / (half_width * 0.5)) + 1
+	for i in steps + 1:
+		var p := a.lerp(b, float(i) / steps)
+		p += Vector2(sin(p.y * 0.7), cos(p.x * 0.6)) * 0.25  # paths wander slightly
+		_stamp(p, half_width, strength)
+
+func dirt_at(p: Vector2) -> float:
+	var q := _px(p)
+	if q.x < 0 or q.y < 0 or q.x >= MASK_PX or q.y >= MASK_PX:
+		return 0.0
+	return _mask.get_pixel(int(q.x), int(q.y)).r
+
+func _material(grass_mat: StandardMaterial3D) -> ShaderMaterial:
+	var dirt := "res://assets/textures/riverbed/"
+	var m := ShaderMaterial.new()
+	m.shader = load("res://shaders/ground.gdshader")
+	m.set_shader_parameter("grass_albedo", grass_mat.albedo_texture)
+	m.set_shader_parameter("grass_normal", grass_mat.normal_texture)
+	m.set_shader_parameter("grass_rough", grass_mat.roughness_texture)
+	m.set_shader_parameter("dirt_albedo", load(dirt + "albedo.jpg"))
+	m.set_shader_parameter("dirt_normal", load(dirt + "normal.jpg"))
+	m.set_shader_parameter("dirt_rough", load(dirt + "roughness.jpg"))
+	m.set_shader_parameter("mask", ImageTexture.create_from_image(_mask))
+	m.set_shader_parameter("mask_rect", Vector4(MASK_RECT.position.x, MASK_RECT.position.y, MASK_RECT.size.x, MASK_RECT.size.y))
+	return m
+
+# One clump = a fan of tapered blades, dark at the root and lighter at the tip.
+func _clump_mesh(rng: RandomNumberGenerator) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in 11:
+		var a := rng.randf() * TAU
+		var h := rng.randf_range(0.22, 0.5)
+		var lean := Vector3(cos(a), 0, sin(a)) * rng.randf_range(0.05, 0.2)
+		var side := Vector3(-sin(a), 0, cos(a)) * 0.025
+		var base := Vector3(cos(a), 0, sin(a)) * rng.randf_range(0.0, 0.06)
+		var root_c := Color(0.06, 0.09, 0.03)
+		var tip_c := Color(0.32, 0.38, 0.14).lerp(Color(0.42, 0.36, 0.16), rng.randf() * 0.5)
+		for v in [[base - side, root_c], [base + side, root_c], [base + lean + Vector3(0, h, 0), tip_c]]:
+			st.set_color(v[1])
+			st.add_vertex(v[0])
+	st.generate_normals()
+	return st.commit()
+
+func _grass(root: Node3D, houses: Array, river_z: float, river_half: float, rng: RandomNumberGenerator) -> void:
+	var mat := StandardMaterial3D.new()
+	mat.vertex_color_use_as_albedo = true
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.roughness = 0.9
+	var xforms: Array[Transform3D] = []
+	for i in GRASS_CLUMPS:
+		var p := Vector2(rng.randf_range(-34, 34), rng.randf_range(-34, 34))
+		if absf(p.y - river_z) < river_half + 0.3:
+			continue
+		var near_house := false
+		for h in houses:
+			near_house = near_house or Vector2(p.x - h[0], p.y - h[1]).length() < 3.6
+		if near_house:
+			continue
+		var d := dirt_at(p)
+		# none on bare dirt, many on the fringe of paths/yards, a moderate scatter in open grass
+		var keep := 0.0 if d > 0.55 else (0.9 if d > 0.12 else 0.35)
+		if rng.randf() > keep:
+			continue
+		var s := rng.randf_range(0.7, 1.4)
+		xforms.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * s), Vector3(p.x, 0, p.y)))
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = _clump_mesh(rng)
+	mm.instance_count = xforms.size()
+	for i in xforms.size():
+		mm.set_instance_transform(i, xforms[i])
+	var mmi := MultiMeshInstance3D.new()
+	mmi.name = "GrassClumps"
+	mmi.multimesh = mm
+	mmi.material_override = mat
+	root.add_child(mmi)

@@ -12,7 +12,7 @@ UE (`Source/`, `Content/`, `Config/`) and three.js (`web/`) attempts are kept in
 Commands (from repo root):
 ```
 godot --headless --path godot -s res://tests/test_camera_zoom.gd     # tests, exit 1 on failure
-godot --path godot --quit-after 10000 -- --capture="$PWD/docs/screenshots"   # far/mid/dusk shots at 1920x1080; frame cap so a script error cannot hang it (check for 3 "captured" lines)
+godot --path godot --always-on-top --resolution 480x270 --quit-after 100000 -- --capture="$PWD/docs/screenshots"  # far/mid/dusk at 1920x1080 (SubViewport). On top: macOS stops rendering a covered window. Frame cap: a script error cannot hang it. Expect 3 "captured" lines
 godot --path godot                                                      # play
 godot --editor --path godot                                             # editor
 ```
