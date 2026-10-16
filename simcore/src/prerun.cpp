@@ -15,7 +15,6 @@ void World::prerun() {
     playerHousehold_ = kNone;
     playerDynasty_ = kNone;
     pendingAmbition_ = false;
-    chronicle_.clear();  // the opening line is written at the hand-over
     if (Id h = households_[house].head; h != kNone && ageYears(people_[h]) >= 16) chooseAmbition(people_[h]);
     std::string occupation = households_[house].head != kNone ? people_[households_[house].head].occupation : "peasant";
     runYears(cfg_.prerun);
@@ -34,6 +33,11 @@ void World::prerun() {
     for (const auto& h : households_)
         if (pick == kNone && alive(h) && h.id != lordHouse && h.id != priestHouse) pick = h.id;
     if (pick == kNone) {
+        // Nobody left to take over: the game is over before it began, but the tools still have a family to name.
+        playerHousehold_ = house;
+        playerDynasty_ = dynasty;
+        chronicle_.clear();
+        log(1, "【開局】" + std::to_string(playYear) + " 年，" + villageName_ + "已經沒有人家可以接手了。");
         gameOver_ = true;
         return;
     }
@@ -47,6 +51,8 @@ void World::handOver(Id house, Id dynasty, int playYear) {
     Household& h = households_[house];
     Person& head = people_[h.head];
     Dynasty& d = dynasties_[dynasty];
+    // The village's years before the hand-over are not the family's story; what of them it carries is told below.
+    chronicle_.clear();
     if (d.heads.empty() || d.heads.back() != h.head) {
         d.heads.push_back(h.head);
         d.headSince.push_back(day_);

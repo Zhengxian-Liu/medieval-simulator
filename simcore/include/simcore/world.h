@@ -267,6 +267,7 @@ struct AskOption {
 };
 struct AskResult {
     int day = -1;
+    int season = -1;     // year * 4 + quarter: a no can be pressed only in the season it was given
     Id who = kNone;
     std::string ask, office;
     Id object = kNone, subject = kNone;

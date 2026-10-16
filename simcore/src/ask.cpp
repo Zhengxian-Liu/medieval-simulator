@@ -138,17 +138,19 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
         if (o.ask == what && o.object == object && o.subject == subject && o.office == officeId) opt = &o;
     bool again = !lever.empty();
     if (again) {
-        // Pressing the answer just given: no more time, and only with a lever offered.
+        // Pressing the answer just given: in the same season, with a lever offered, and another free day.
         if (lastAsk_.who != who || lastAsk_.ask != what || lastAsk_.object != object || lastAsk_.subject != subject ||
+            lastAsk_.season != year() * 4 + month() / 3 ||
             std::find(lastAsk_.levers.begin(), lastAsk_.levers.end(), lever) == lastAsk_.levers.end())
             return;
-        if (!opt) return;
+        if (!opt || !spendTime(1)) return;
     } else {
         if (!opt || !opt->open || !spendTime(1)) return;
     }
     AskOption o = *opt;
     Household& ph = households_[playerHousehold_];
     Household& th = households_[t.household];
+    const Id thId = th.id;  // marry() below can add a household and move households_
     Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
     auto surname = [&](Id h) { return h != kNone && households_[h].dynasty != kNone ? dynasties_[households_[h].dynasty].surname : std::string(); };
     double fineRate = worldFlags_.count("post_plague") ? 1.5 : 3;
@@ -279,9 +281,11 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
 
     // The lever, if pressing a first answer.
     std::string leverNote;
+    // What a yes costs the family outright, so a gift never spends the money the deal itself needs.
+    const double dealCost = what == "sell_parcel" || what == "rent_vacant" || what == "apprentice" ? price : 0;
     if (lever == "gift") {
         double g = std::max(12.0, std::round(price * 0.1));
-        if (ph.money < g) return;
+        if (ph.money < g + dealCost) return;
         ph.money -= g;
         th.money += g;
         book(ph, "送禮", -g);
@@ -352,8 +356,16 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
         if (it != plain.end()) why = it->second;
     }
 
+    // A yes the family cannot pay for is no deal: never spend money it does not have.
+    const double payNow = dealCost + (lever == "meet" && what != "lend" ? demandMoney : 0);
+    if (answer == 1 && payNow > households_[playerHousehold_].money + 0.01) {
+        answer = 3;
+        why = "等你家湊夠 " + pence(payNow) + "再說";
+    }
+
     AskResult res;
     res.day = day_;
+    res.season = year() * 4 + month() / 3;
     res.who = who;
     res.ask = what;
     res.office = officeId;
@@ -431,7 +443,7 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
         if (lever == "meet") {
             if (demandParcel != kNone) {
                 std::string pn = parcelName(parcels_[demandParcel]);
-                moveParcel(demandParcel, th.id, "換來");
+                moveParcel(demandParcel, thId, "換來");
                 res.text += "你家把" + pn + "讓了出去。";
             }
             if (!demandOffice.empty()) promises_[{head, demandOffice}] = who;
@@ -455,7 +467,7 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
     if (!leverNote.empty()) res.text = "你" + leverNote + res.text;
     // A first no or a condition can be pressed once more, by whatever the family has to press with.
     if (lever.empty() && (answer == 2 || answer == 3)) {
-        if (ph.money >= std::max(12.0, std::round(price * 0.1)) + (what == "sell_parcel" || what == "apprentice" ? price : 0)) res.levers.push_back("gift");
+        if (households_[playerHousehold_].money >= std::max(12.0, std::round(price * 0.1)) + dealCost) res.levers.push_back("gift");
         if (favourOwed(who, head) >= 5) res.levers.push_back("favour");
         if (hookDeed(head, who) != kNone) res.levers.push_back("hook");
     }

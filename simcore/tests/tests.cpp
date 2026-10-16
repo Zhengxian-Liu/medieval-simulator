@@ -115,6 +115,44 @@ int main() {
         CHECK(a.digest() == b.digest(), "pre-run worlds differ for one seed");
         checkInvariants(a, "prerun");
     }
+    // Every ask on everyone, pressed with every lever offered: the family never spends money it does not have,
+    // and a no is pressed only once more, in the same season, for another free day.
+    std::map<std::string, int> presses;
+    for (int seed : {3, 5, 8}) {
+        Config c;
+        c.seed = seed;
+        c.prerun = 25;
+        World w(defs, c);
+        for (int season = 0; season < 24 && !w.gameOver(); ++season) {
+            for (Id who : w.peopleToSee()) {
+                if (w.playerHead() == kNone) break;
+                for (const auto& o : w.asksFor(who)) {
+                    if (!o.open) continue;
+                    std::string sub = o.subject == kNone ? "" : std::to_string(o.subject);
+                    w.issue({w.today(), "ask", w.playerHead(), o.ask + "|" + o.office + "||" + sub, who, o.object});
+                    w.runCommands();
+                    CHECK(w.household(w.playerHousehold()).money > -0.01, "an ask left the family in the red");
+                    for (const auto& lever : std::vector<std::string>(w.lastAsk().levers)) {
+                        int before = w.timeLeft();
+                        std::string said = w.lastAsk().text;
+                        w.issue({w.today(), "ask", w.playerHead(), o.ask + "|" + o.office + "|" + lever + "|" + sub, who, o.object});
+                        w.runCommands();
+                        CHECK(w.household(w.playerHousehold()).money > -0.01, "pressing an ask left the family in the red");
+                        if (w.lastAsk().text == said) break;  // not pressed (no time left, or no money for the lever)
+                        CHECK(w.timeLeft() == before - 1, "pressing an ask cost no time");
+                        ++presses[lever];
+                        break;  // one press per answer
+                    }
+                    break;  // one ask per person a season
+                }
+            }
+            for (int d = 0; d < kDaysPerYear / 4 && !w.gameOver(); ++d) w.stepDay();
+        }
+        checkInvariants(w, "asks");
+    }
+    std::printf("asks: pressed with");
+    for (const auto& [l, n] : presses) std::printf(" %s %d", l.c_str(), n);
+    std::printf("\n");
     // A run driven by the auto-player replays exactly from its command log alone.
     {
         Config c;

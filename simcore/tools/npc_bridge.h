@@ -65,6 +65,7 @@ public:
 private:
     World* w_ = nullptr;
     std::string model_, logPath_;
+    bool warned_ = false;
     std::vector<std::pair<int, std::string>> replay_;
     size_t pos_ = 0;
     std::ofstream log_;
@@ -105,6 +106,12 @@ private:
                     std::string first = text.substr(0, text.find('\n'));
                     size_t tab = first.find('\t');
                     out[i] = {parseIndex(first.substr(0, tab)), tab == std::string::npos ? "" : first.substr(tab + 1)};
+                }
+                // Say so once, out loud: a model command that never answers otherwise looks just like a rules game.
+                if (out[i].first < 0 && !warned_) {
+                    warned_ = true;
+                    std::string why = out[i].second.empty() ? model_ : out[i].second;
+                    std::fprintf(stderr, "注意：模型沒有回答（%s），沒回答的決定改由規則決定。\n", why.c_str());
                 }
                 std::remove(paths[i - from].c_str());
             }

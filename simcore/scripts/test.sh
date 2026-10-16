@@ -31,18 +31,21 @@ echo "   通過"
 echo "2/5 單元測試"
 ./build/simcore_tests | tail -1
 echo "3/5 模型局的記錄能逐字重播"
-fake="python3 $PWD/tests/fake_decider.py"
+# The launchers hand the model command over the same way, quoted, and the user's folder has a space in its name.
+mkdir -p "$tmp/有 空格"; cp tests/fake_decider.py "$tmp/有 空格/"
+fake="python3 '$tmp/有 空格/fake_decider.py'"
 ./build/play --data data --seed 21 --years 30 --npc-model "$fake" --npc-log "$tmp/npc.txt" --out "$tmp/a.md" </dev/null >/dev/null 2>&1
 n1=$(wc -l < "$tmp/npc.txt")
 ./build/play --data data --seed 21 --years 30 --npc-model false --npc-log "$tmp/npc.txt" --out "$tmp/b.md" </dev/null >/dev/null 2>&1
 n2=$(wc -l < "$tmp/npc.txt")
-[ "$n1" -gt 0 ] || { echo "失敗：假模型一次都沒被呼叫"; exit 1; }
+grep -qv '^-1' "$tmp/npc.txt" || { echo "失敗：假模型一次都沒回答（指令沒跑起來？）"; exit 1; }
 cmp -s "$tmp/a.md" "$tmp/b.md" || { echo "失敗：重播和原局不同"; exit 1; }
 [ "$n1" = "$n2" ] || { echo "失敗：重播時又叫了模型（$n1 → $n2 行）"; exit 1; }
 echo "   通過（$n1 次決定）"
 echo "4/5 模型連不上時退回規則"
 out=$(echo '{"who":"x","title":"t","situation":"s","mind":"m","options":["a","b"]}' | DECIDER_URL=http://127.0.0.1:9/none python3 tools/npc_decider.py)
-[ "$out" = "-1" ] || { echo "失敗：應該印 -1，實際是 $out"; exit 1; }
+# -1, then after a tab why (for the one warning the game prints).
+case "$out" in "-1"|"-1	"*) ;; *) echo "失敗：應該印 -1，實際是 $out"; exit 1 ;; esac
 echo "   通過"
 echo "5/5 瀏覽器版能玩完一年"
 python3 tests/ui_smoke.py "$tmp/ui.md"

@@ -169,8 +169,12 @@ def main() -> None:
         probs = answer_of(post(url, request_body(req, model)))["probabilities"]
         keys = [f"o{i}" for i in range(len(options))]
         weights = [max(0.0, float(probs.get(k, 0.0))) for k in keys]
-    except (urllib.error.URLError, OSError, ValueError, TypeError, KeyError, IndexError):
-        print("-1")
+    except urllib.error.HTTPError as e:
+        # The reason after the tab is for the one warning the game prints; it never holds the key.
+        print(f"-1\t連不上決策模型：HTTP {e.code}" + ("（金鑰不對？）" if e.code in (401, 403) else ""))
+        return
+    except (urllib.error.URLError, OSError, ValueError, TypeError, KeyError, IndexError) as e:
+        print(f"-1\t連不上決策模型：{type(e).__name__}")
         return
     weights = blend(weights, req.get("rule_weights", []), int(req.get("fallback", -1)))
     if not weights or sum(weights) <= 0:
