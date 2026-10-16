@@ -21,8 +21,13 @@ static func river_yaw(x: float) -> float:
 	return -rad_to_deg(atan(RIVER_AMP * RIVER_FREQ * cos(x * RIVER_FREQ + RIVER_PHASE)))
 
 # Ground height: flat land, a shelf of shallows inside each bank, then down to the bed.
+static var _wander: float = -1.0
+
 static func ground_height(x: float, z: float) -> float:
-	var d := river_dist(Vector2(x, z))
+	if _wander < 0.0:
+		_wander = Look.v("materials.waterline_wander")
+	# the bank shelf wanders a little so the waterline is never a ruler-straight line
+	var d := river_dist(Vector2(x, z)) + _wander * (sin(x * 1.3) * 0.6 + sin(x * 0.47 + z * 0.9) * 0.4)
 	if d >= RIVER_HALF:
 		return 0.0
 	if d > RIVER_HALF - SHALLOWS:

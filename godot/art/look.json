@@ -208,22 +208,23 @@
           ],
           "dirt_height": 0.0,
           "moss": 0.45,
-          "detile": 0.45
+          "detile": 0.6
         },
-        "why": "grey scan aged to straw; second sample hides the tile period"
+        "why": "grey scan aged to straw; the second sample (0.6) hides the tile period now that courses have no discrete offsets"
       },
       "cloth": {
         "v": {
           "tint": [
-            0.5,
-            0.33,
-            0.24
+            0.62,
+            0.55,
+            0.42
           ],
           "dirt_height": 0.5,
           "moss": 0.0,
+          "edge_wear": 0.0,
           "texture": "plaster"
         },
-        "why": "faded madder linen on the plaster grain"
+        "why": "undyed linen; no edge wear (it lightened folds into rusty metal, review 3)"
       }
     },
     "weathered_common": {
@@ -265,14 +266,14 @@
           0.3
         ],
         "deep": [
-          0.03,
-          0.13,
-          0.16
+          0.06,
+          0.09,
+          0.07
         ],
         "depth_scale": 1.4,
-        "roughness": 0.08
+        "roughness": 0.2
       },
-      "why": "depth-coloured river over a visible bed"
+      "why": "depth-coloured river over a visible bed; deep is dark green-brown, not saturated blue; 0.2 roughness avoids clipped white specks (review 3)"
     },
     "ground": {
       "v": {
@@ -306,6 +307,10 @@
         ]
       },
       "why": "untextured slots and placeholders (player capsule, torch post, window voids)"
+    },
+    "waterline_wander": {
+      "v": 0.1,
+      "why": "metres of noise on the bank shelf so the waterline is never a ruler line (review 3)"
     }
   },
   "placement": {
@@ -334,8 +339,8 @@
     "grass_tuft": {
       "v": {
         "blades": [
-          18,
-          30
+          8,
+          12
         ],
         "height": [
           0.05,
@@ -347,17 +352,17 @@
           0.22
         ],
         "tip": [
-          0.52,
-          0.56,
-          0.27
+          0.42,
+          0.47,
+          0.22
         ],
         "tip_dry": [
-          0.62,
-          0.56,
-          0.32
+          0.5,
+          0.47,
+          0.27
         ]
       },
-      "why": "short pale tufts read as texture at the far view"
+      "why": "few short blades, tip close to root colour: tufts read as texture, never as countable dark starbursts (review 3)"
     },
     "debris_points": {
       "v": 26000,
@@ -380,6 +385,10 @@
         "drying_rack"
       ],
       "why": "props that must never block a path or yard; dropped if placed on trampled ground (mask > 0.3)"
+    },
+    "grass_tuft_shadows": {
+      "v": false,
+      "why": "tuft shadows made dark stars at the far view (review 3)"
     }
   },
   "checks": {

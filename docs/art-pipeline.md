@@ -48,7 +48,7 @@ Shared modules:
 | `kit.py` | `new_object` (box UVs with V along the grain, named material slot), `cube_bm` (bevel/subdiv/jitter), `beam` (bevelled, slightly bowed timber), `stone` (irregular), `lathe`, `log`, Cycles preview materials |
 | `bake.py` | `bake_ao`, `bake_edges` |
 | `export.py` | `join_all`, `bake_and_export`, `export_glb`, `triangles` |
-| `roofs.py` | `thatch_roof` (layered courses, ragged eave, sag between gables, wavy ridge, lumpy ridge cap), `stagger_courses` |
+| `roofs.py` | `thatch_roof` (layered courses, ragged eave, sag between gables, wavy ridge, lumpy ridge cap) |
 | `buildings.py` | `VARIANTS` spec per building + footing, walls, timber frame, openings, chimney |
 | `props.py` | one function per prop + `PROPS` table |
 | `foliage.py` / `trees.py` | oaks + bushes (leaf cards) / background firs |
@@ -101,7 +101,7 @@ Add it to `godot/tools/fetch_polyhaven.py` (Poly Haven / ambientCG, CC0 only, 1K
 | shimmering, "20-year-old 3D game" | textures imported without mipmaps | importer defaults generate mipmaps; `art_check` audits it |
 | far view had no sun shadows | camera ~43 m from the ground, shadow range fixed at 40 m | one orthogonal cascade fitted to the visible depth every zoom (`main.gd _apply_camera`) |
 | black triangle on gables | vertex AO on a 3-vertex face: all corners under the eave | subdivide large flat faces before baking |
-| diagonal stripes on thatch | one texture period across the whole roof; per-course scale made corduroy | per-course/bundle UV offsets only, plus detile sample |
+| diagonal stripes on thatch | one texture period across the whole roof; per-course UV offsets/scales then made corduroy seams | no per-course UV tricks: shader detile sample (0.6) + patch noise |
 | 1.8 MB barrels | glTF exporter embedded every texture | export with `export_image_format="NONE"`; Godot textures by slot |
 | assets changed every build | Python `hash(str)` is randomised per process | seed with `zlib.crc32(name)` |
 | washed-out / black grass and trees | vertex colours authored as sRGB read as linear | `vertex_color_is_srgb = true` on those materials |

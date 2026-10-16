@@ -136,6 +136,8 @@ func _grass(root: Node3D, houses: Array, river_dist: Callable, river_half: float
 		mmi.name = "GrassTufts%d" % v
 		mmi.multimesh = mm
 		mmi.material_override = mat
+		if not Look.v("placement.grass_tuft_shadows"):
+			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		root.add_child(mmi)
 
 # Ground debris (art direction round 3): pebbles, twigs, wood chips and dead leaves, one small "detail event" per
