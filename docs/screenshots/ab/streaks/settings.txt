@@ -1,0 +1,2 @@
+materials.weathered.thatch.streaks=0.5
+materials.weathered.thatch.course_shadow=0.3
