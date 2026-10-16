@@ -18,6 +18,7 @@ uniform float detile = 0.0;  // blend in a second, rotated and rescaled sample: 
 varying vec3 world_pos;
 varying vec3 world_normal;
 varying float baked_ao;
+varying float edge;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float vnoise(vec2 p) {
@@ -30,6 +31,7 @@ void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 	baked_ao = COLOR.r;
+	edge = COLOR.g;  // convexity baked by tools/hero_cottage.py bake_edges
 }
 
 void fragment() {
@@ -50,6 +52,9 @@ void fragment() {
 	AO_LIGHT_AFFECT = 0.25;                  // and a little on direct light: crevices stay dark at noon too
 	// grime collects where the AO says the surface is sheltered: under eaves, between beams, at the base
 	ALBEDO = mix(ALBEDO, dirt_color * 0.6, (1.0 - baked_ao) * 0.35 * ao_strength);
-	ROUGHNESS = texture(rough_tex, UV).r;
+	// worn edges: lighter, drier, slightly rougher where beams, planks and stones turn a corner (breaks up flat shapes)
+	float wear = smoothstep(0.25, 0.8, edge) * smoothstep(0.3, 0.7, n);
+	ALBEDO = mix(ALBEDO, ALBEDO * 1.45 + vec3(0.03), wear * 0.6);
+	ROUGHNESS = clamp(texture(rough_tex, UV).r * mix(0.85, 1.15, n) + wear * 0.1, 0.0, 1.0);
 	NORMAL_MAP = texture(normal_tex, UV).rgb;
 }

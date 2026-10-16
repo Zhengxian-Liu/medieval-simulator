@@ -503,6 +503,32 @@ def bake_ao(obj, samples=64):
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.bake(type="AO", target="VERTEX_COLORS")
     bpy.data.objects.remove(ground)
+    bake_edges(obj, ca)
+
+
+def bake_edges(obj, ca, reach=0.04):
+    """Convexity into the green channel of the same colour layer: 1 on outward edges and corners (where timber and
+    stone get worn and catch light), 0 on flats and in hollows. The shader lightens and roughens those edges."""
+    me = obj.data
+    me.calc_loop_triangles()
+    convex = [0.0] * len(me.vertices)
+    count = [0] * len(me.vertices)
+    for e in me.edges:
+        a, b = e.vertices
+        va, vb = me.vertices[a], me.vertices[b]
+        d = vb.co - va.co
+        if d.length < 1e-6:
+            continue
+        # neighbour below the vertex's normal plane => the vertex sits on a convex ridge
+        convex[a] += max(0.0, -d.normalized().dot(va.normal))
+        convex[b] += max(0.0, d.normalized().dot(vb.normal))
+        count[a] += 1
+        count[b] += 1
+    val = [min(1.0, (c / n) * 2.5) if n else 0.0 for c, n in zip(convex, count)]
+    data = ca.data
+    for loop in me.loops:
+        r, g, bb, a = data[loop.index].color
+        data[loop.index].color = (r, val[loop.vertex_index], bb, a)
 
 
 def export(out_dir):
