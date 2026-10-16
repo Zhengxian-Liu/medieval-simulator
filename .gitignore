@@ -16,3 +16,6 @@ simcore/saves/
 *.xcodeproj
 /Plugins/*/Binaries/
 /Plugins/*/Intermediate/
+
+# Local secrets (simcore/.env.example is the template)
+.env

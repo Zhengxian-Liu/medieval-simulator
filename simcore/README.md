@@ -6,7 +6,7 @@ Medieval Simulator 的模擬核心：標準 C++20 + CMake，不依賴 Unreal。�
 
 需要：Mac 上裝好 Xcode 命令列工具（`xcode-select --install`）和 Python 3。有 CMake 會用 CMake，沒有也能編。
 
-- 試玩：`bash scripts/play.sh`（隨機種子）或 `bash scripts/play.sh --seed 7`。第一次會先編譯，約 1 分鐘。設定 `export OPENROUTER_API_KEY=金鑰` 後，村民由決策模型決定；沒設就由規則決定。每局記錄存在 `saves/`。
+- 試玩：`bash scripts/play.sh`（隨機種子）或 `bash scripts/play.sh --seed 7`。第一次會先編譯，約 1 分鐘。在 `simcore/.env` 寫一行 `OPENROUTER_API_KEY=金鑰`（照 `.env.example`；git 不會收這個檔），之後村民由決策模型決定；沒有就由規則決定。每局記錄存在 `saves/`。
 - 瀏覽器版試玩：`bash scripts/ui.sh`（參數同上），會自動打開 http://127.0.0.1:8765/ 。家人的心情、需求、對你的看法，村民和關係網，村裡在說的消息，計畫和每個選項都列成按鈕和面板；在終端機按 Ctrl+C 結束。遊戲端是 `tools/webplay.cpp`（一行一個 JSON），網頁和本機伺服器在 `tools/ui/`（只用 Python 內建模組）。
 - 測試：`bash scripts/test.sh`。先確認腳本在 Mac 內建的 bash 3.2 下能跑，再跑單元測試、模型局記錄能逐字重播、模型連不上時退回規則、瀏覽器版能玩完一年；不用網路也不用金鑰。改完任何東西都要先跑這個。
 - 只編譯：`bash scripts/build.sh`。

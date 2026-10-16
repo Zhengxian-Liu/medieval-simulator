@@ -8,7 +8,9 @@ person the options touch; "rule_weights" is what the rules alone would weigh eac
 is one line: "<option index>\t<reason>", or "-1" to let SimCore's rules decide.
 
 Default: Perplexity's pplx-decider (27B, Apache-2.0, fine-tuned from Qwen3.8-27B), through
-OpenRouter's Decisions API. It needs OPENROUTER_API_KEY. The full model is about 52 GB, more than a
+OpenRouter's Decisions API. It needs an OpenRouter key: OPENROUTER_API_KEY from the environment, else from simcore/.env (one line
+`OPENROUTER_API_KEY=...`; git ignores the file, see .env.example). This is the only place the key is
+read; `npc_decider.py --has-key` (exit 0/1) is how the launchers ask. The full model is about 52 GB, more than a
 16 GB Mac can hold, so it runs hosted. Input costs about $0.02–0.04 per million tokens and output is
 free; a decision is a few hundred tokens and takes well under a second.
   DECIDER_MODEL  model id (default perplexity/pplx-decider-v1.1-27b, the hosted newer v1.1)
@@ -114,9 +116,28 @@ def blend(model_probs: list, rule_weights: list, fallback: int = -1) -> list:
     return out
 
 
+ENV_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+
+
+def api_key() -> str:
+    """The OpenRouter key: the environment's, else simcore/.env's (it lasts across terminals and pulls)."""
+    key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+    if key or os.environ.get("SIM_IGNORE_ENV_FILE"):
+        return key
+    try:
+        with open(ENV_FILE, encoding="utf-8") as f:
+            for line in f:
+                name, sep, value = line.strip().removeprefix("export ").partition("=")
+                if sep and name.strip() == "OPENROUTER_API_KEY":
+                    return value.strip().strip("'\"")
+    except OSError:
+        pass
+    return ""
+
+
 def post(url: str, body: dict) -> dict:
     headers = {"content-type": "application/json"}
-    key = os.environ.get("OPENROUTER_API_KEY", "")
+    key = api_key()
     if key and "openrouter.ai" in url:
         headers["authorization"] = "Bearer " + key
     r = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"), headers=headers)
@@ -132,6 +153,8 @@ def answer_of(result: dict) -> dict:
 
 
 def main() -> None:
+    if sys.argv[1:] == ["--has-key"]:
+        sys.exit(0 if api_key() else 1)
     req = json.load(sys.stdin)
     options = req.get("options", [])
     if len(options) < 2:

@@ -13,11 +13,11 @@ if [ -z "$seed" ]; then seed=$((RANDOM * 32768 + RANDOM)); args+=(--seed "$seed"
 dir="saves/$(date +%Y%m%d-%H%M%S)-seed$seed"
 mkdir -p "$dir"
 model=()
-if [ -n "${OPENROUTER_API_KEY:-}" ]; then
+if python3 tools/npc_decider.py --has-key; then
   model=(--npc-model "python3 $PWD/tools/npc_decider.py" --npc-log "$dir/npc.txt")
   echo "村民由決策模型決定（pplx-decider）。"
 else
-  echo "沒有 OPENROUTER_API_KEY，村民由規則決定。要用模型：export OPENROUTER_API_KEY=你的金鑰"
+  echo "沒有 OPENROUTER_API_KEY，村民由規則決定。要用模型：在 simcore/.env 寫一行 OPENROUTER_API_KEY=你的金鑰（範本 .env.example）。"
 fi
 echo "種子 ${seed}，記錄存在 $dir/"
 python3 tools/ui/server.py -- ${args[@]+"${args[@]}"} ${model[@]+"${model[@]}"} --out "$dir/log.md"
