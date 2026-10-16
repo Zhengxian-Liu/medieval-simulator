@@ -1,0 +1,2 @@
+environment.ssao_intensity=1.0
+environment.ssao_power=1.3
