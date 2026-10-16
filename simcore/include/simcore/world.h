@@ -246,7 +246,7 @@ struct News {
     int day = 0;
     std::string cause;       // for a death
     int age = 0;
-    std::string subjectName, otherName, subjectFirst;
+    std::string subjectName, otherName, subjectFirst, otherFirst;
     bool again = false;      // the same thing has happened to them before (a mother losing another baby)  // as they were called that day (no "老"/"已故的" for the newly dead)
     std::set<Id> heard;      // households that know
     std::vector<Id> came;    // who turned out for it (a wake, a wedding)

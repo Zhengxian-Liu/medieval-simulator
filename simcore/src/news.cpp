@@ -179,6 +179,7 @@ std::string World::formatNews(const std::string& tmpl, const News& n) const {
             Id dyn = n.house != kNone ? households_[n.house].dynasty : kNone;
             val = dyn != kNone ? dynasties_[dyn].surname : "";
         } else if (key == "cause") val = n.cause;
+        else if (key == "other_first") val = n.otherFirst;
         else if (key == "again") val = n.again ? "又" : "";
         else if (key == "age") val = std::to_string(n.age);
         else if (key == "sexword") val = n.subject != kNone && people_[n.subject].sex == Sex::Male ? "兒子" : "女兒";
@@ -229,6 +230,7 @@ Id World::addNews(const std::string& kind, Id subject, Id other, Id house, Id de
     n.subjectName = name(subject);
     n.otherName = name(other);
     n.subjectFirst = subject != kNone ? shortName(subject) : "";
+    n.otherFirst = other != kNone ? shortName(other) : "";
     for (const auto& o : news_)
         if (o.kind == kind && other != kNone && o.other == other && o.subject != subject) n.again = true;
     // The houses it happened in know it; the houses close to them know it at once.
@@ -382,7 +384,9 @@ void World::learnNews(News& n, Id household, Id teller, double link) {
         // A death in a house the family is close to: they are asked to the wake. A wedding: to the ale.
         Id head = actingHead();
         bool mourner = head != kNone && n.subject != kNone && closeness(head, n.subject) >= 85;  // their own grief, not a call
-        if (!k->invite.empty() && link >= k->inviteLink && n.age >= k->inviteMinAge && head != kNone && !mourner)
+        // Only while there is still a wake (or a wedding) to go to: word that comes round weeks later is just news.
+        bool timely = day_ - n.day <= 7;
+        if (!k->invite.empty() && timely && link >= k->inviteLink && n.age >= k->inviteMinAge && head != kNone && !mourner)
             emit({"news:" + k->invite, n.deed, head, n.subject, false, link});
     }
     // What the village says of the family: once most of it has heard, the family hears that it has.

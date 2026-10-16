@@ -8,13 +8,13 @@
   // `log_link`: news from a house at least this close is told in the chronicle as it comes (default 0.75); the rest
   // waits for the season's glance. `invite_min_age`: a child's burial is the family's own.
   // `wide`: the player is told when most of the village has heard this about the family.
-  // Text keys: {subject} {other} (full names), {subject_first}, {house} (the family it is about), {cause}, {age},
+  // Text keys: {subject} {other} (full names), {subject_first} {other_first}, {house} (the family it is about), {cause}, {age},
   // {sexword} (兒子/女兒), {again} (又, when it has happened to {other} before). For deeds {subject} is the doer and {other} the one it was done to.
   "kinds": [
     {"id": "death",        "text": "{house}家的{subject_first}因{cause}去世了，享年 {age} 歲", "heat": 0.9, "fade_months": 4, "instant": 0.5, "log_link": 0.6,
      "invite": "funeral", "invite_link": 0.6, "invite_min_age": 14, "gathering": true, "attend_mod": "came_to_wake"},
     {"id": "child_death",  "text": "{house}家的{subject_first}因{cause}夭折了，才 {age} 歲", "heat": 0.75, "fade_months": 3, "instant": 0.5, "log_link": 0.85},
-    {"id": "infant_death", "text": "{house}家{other}剛生下的孩子{subject_first}{again}沒保住", "heat": 0.5, "fade_months": 2, "instant": 0.8, "log_link": 0.9},
+    {"id": "infant_death", "text": "{house}家的{other_first}剛生下的孩子{subject_first}{again}沒保住", "heat": 0.5, "fade_months": 2, "instant": 0.8, "log_link": 0.9},
     {"id": "birth",        "text": "{other}生了個{sexword}，取名{subject_first}", "heat": 0.45, "fade_months": 3, "instant": 0.8, "log_link": 0.9},
     {"id": "marriage",     "text": "{subject}娶了{other}", "heat": 0.8, "fade_months": 4, "instant": 0.5, "log_link": 0.6,
      "invite": "wedding", "invite_link": 0.6, "gathering": true, "attend_mod": "came_to_wedding"},
