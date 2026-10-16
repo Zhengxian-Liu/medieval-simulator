@@ -378,6 +378,14 @@ func _dress_square(root: Node3D) -> void:
 	_prop(root, "crate", Vector3(4.2, 0, -0.6), 0)
 	_prop(root, "crate", Vector3(3.5, 0, -1.1), 25)
 	_prop(root, "barrel", Vector3(4.8, 0, -1.4), 0)
+	# market corner around the square, so no stretch of it is empty (art review 2: no empty patch > 3 m²)
+	_prop(root, "stall", Vector3(-1.5, 0, 0.0), 30)
+	_prop(root, "stall", Vector3(5.5, 0, 6.5), -110)
+	for p in [Vector3(-0.2, 0, 6.2), Vector3(0.3, 0, 6.6), Vector3(3.2, 0, 8.0), Vector3(-2.6, 0, 2.6)]:
+		_prop(root, "sack", p, _rng.randf() * 360.0)
+	_prop(root, "barrel", Vector3(-2.2, 0, 3.3), 0)
+	_prop(root, "barrel", Vector3(6.2, 0, 3.0), 0)
+	_prop(root, "woodpile", Vector3(-3.0, 0, 6.5), 70)
 	for x in [-2.5, -5.6, -8.7, 8.5, 11.6, 14.7]:  # rail fence along the south bank either side of the bridge
 		_prop(root, "rail_fence", Vector3(x, 0, river_center(x) + RIVER_HALF + 1.6), river_yaw(x))
 
@@ -387,6 +395,7 @@ const WEATHER := {
 	plaster = {tint = Color(0.95, 0.92, 0.85), dirt_height = 1.1, moss = 0.0},
 	timber = {tint = Color(1.26, 1.19, 1.12), dirt_height = 1.0, moss = 0.2},  # the Poly Haven planks are very dark
 	thatch = {tint = Color(0.78, 0.6, 0.38), dirt_height = 0.0, moss = 0.45, detile = 0.45},
+	cloth = {tint = Color(0.5, 0.33, 0.24), dirt_height = 0.5, moss = 0.0},  # faded madder-dyed linen on the plaster texture grain
 }
 
 func _weathered(slot: String) -> Material:
@@ -414,7 +423,7 @@ func _weathered(slot: String) -> Material:
 		else:
 			var m := ShaderMaterial.new()
 			m.shader = load("res://shaders/weathered.gdshader")
-			var dir := "res://assets/textures/%s/" % slot
+			var dir := "res://assets/textures/%s/" % ("plaster" if slot == "cloth" else slot)
 			m.set_shader_parameter("albedo_tex", load(dir + "albedo.jpg"))
 			m.set_shader_parameter("normal_tex", load(dir + "normal.jpg"))
 			m.set_shader_parameter("rough_tex", load(dir + "roughness.jpg"))

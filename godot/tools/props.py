@@ -228,9 +228,41 @@ def bridge(origin=(0, 0, 0), length=9.0, width=2.2):
     log("rail", o + Vector((width / 2 - 0.05, -length * 0.45, deck + 0.95)), o + Vector((width / 2 - 0.05, length * 0.45, deck + 0.95)), 0.05)
 
 
+def sack(origin=(0, 0, 0)):
+    """Lumpy grain sack: a squashed, bulging lathe with a tied neck."""
+    o = Vector(origin)
+    prof = [(0.22, 0.0), (0.27, 0.08), (0.28, 0.25), (0.24, 0.42), (0.12, 0.52), (0.06, 0.56), (0.08, 0.62), (0.0, 0.64)]
+    obj = lathe("sack", prof, "cloth", segments=14, location=o, wobble=0.12)
+    obj.scale = (1.0, 0.8, 0.9)
+
+
+def stall(origin=(0, 0, 0)):
+    """Market stall: four posts, a plank counter on trestles, a sagging cloth awning, sacks and a crate under it."""
+    o = Vector(origin)
+    w, d = 2.6, 1.4
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            h = 2.3 if sy < 0 else 2.0  # awning slopes to the front
+            hc.beam(f"post_{sx}_{sy}", o + Vector((sx * w / 2, sy * d / 2, 0)), o + Vector((sx * w / 2 + RNG.uniform(-0.03, 0.03), sy * d / 2, h)), section=0.1)
+    for k in range(5):  # counter planks
+        bm = hc.cube_bm((w - 0.2, 0.17, 0.04), bevel=0.005, subdiv=1, jitter=0.004)
+        hc.new_object(f"counter_{k}", bm, "timber", grain_axis=0, location=o + Vector((0, -0.05 + (k - 2) * 0.18 + 0.35, 0.85)))
+    for sx in (-1, 1):  # trestles
+        hc.beam(f"trestle_{sx}", o + Vector((sx * (w / 2 - 0.3), 0.0, 0.0)), o + Vector((sx * (w / 2 - 0.3), 0.35, 0.83)), section=0.07)
+    bm = hc.cube_bm((w + 0.3, d + 0.4, 0.02), subdiv=6)
+    for vtx in bm.verts:  # sag between the posts and slope to the front
+        x, y = vtx.co.x / (w + 0.3) + 0.5, vtx.co.y / (d + 0.4) + 0.5
+        vtx.co.z -= 0.12 * math.sin(math.pi * x) * math.sin(math.pi * y) + (1.0 - y) * 0.3
+    hc.new_object("awning", bm, "cloth", location=o + Vector((0, 0, 2.3)))
+    sack(o + Vector((-0.7, -0.2, 0)))
+    sack(o + Vector((-0.25, -0.35, 0)))
+    crate(o + Vector((0.6, -0.15, 0)), size=0.55)
+
+
 PROPS = {
     "barrel": barrel, "crate": crate, "woodpile": woodpile, "handcart": handcart, "wattle_fence": wattle_fence,
     "rail_fence": rail_fence, "well": well, "drying_rack": drying_rack, "haystack": haystack, "bridge": bridge,
+    "sack": sack, "stall": stall,
 }
 
 
