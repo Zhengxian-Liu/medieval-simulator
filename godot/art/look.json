@@ -102,6 +102,14 @@
     "night_sky_energy": {
       "v": 0.25,
       "why": "sky (= GI fill) at night: readable moonlit night, not black (user default 2026-10-16)"
+    },
+    "sky_energy_low": {
+      "v": 0.25,
+      "why": "sky fill (x day) when the sun is low (same ramp as the sun colour): the real sky dims with the sun; at full fill the 17 deg dusk sun barely showed (key:fill 1.4, 2026-10-16). Swept 2026-10-16: 0.45 -> dusk key:fill 2.0, 0.25 -> 3.8"
+    },
+    "exposure_low": {
+      "v": 3.5,
+      "why": "exposure (x tonemap_exposure) when the sun is low: the camera exposes up for golden hour instead of the frame going dark. 3.5 keeps the dusk frame at 0.22 with the dimmer sky (swept 2.5-3.5)"
     }
   },
   "sun": {
@@ -168,6 +176,10 @@
     "energy_low": {
       "v": 0.85,
       "why": "sun energy floor (x day energy) while low above the horizon: golden hour, not dusk-dark (review 5)"
+    },
+    "warm_below_elevation": {
+      "v": 50.0,
+      "why": "degrees; sun colour ramps from color_day to color_low below this. At 20 the 17 deg dusk shot was barely warm (key warmth 1.05, same as noon, 2026-10-16); the 11:00 noon shot (53 deg) stays above it, neutral"
     }
   },
   "materials": {
@@ -731,7 +743,27 @@
           "max": 0.5
         },
         "why": "whole frame at golden hour stays a daylight frame (review 5). 0.30 -> 0.22, user decision 2026-10-16: a 16-17 deg sun lights flat ground at ~0.29 of noon, so golden hour is judged by warmth and contrast, not brightness (docs/art-check-conflicts.md)"
+      },
+      "key_warmth": {
+        "v": {
+          "measure": "key_warmth",
+          "min": 1.5,
+          "max": 2.5
+        },
+        "why": "red/blue of the light on sunlit surfaces (lighting-only pass): noon sun [1,0.96,0.9] gives ~1.1; golden hour clearly warm (>= 1.5) but not sunset orange (<= 2.5). Set before measuring. user decision 2026-10-16 (“改看暖色”): golden hour is judged by warmth and contrast, not brightness (docs/art-check-conflicts.md)"
+      },
+      "key_fill": {
+        "v": {
+          "measure": "key_fill",
+          "min": 3.0,
+          "max": 6.0
+        },
+        "why": "a low sun still models form: key:fill at least the daytime 3, up to 6 (long, deeper shadows). Set before measuring. user decision 2026-10-16 (“改看暖色”): golden hour is judged by warmth and contrast, not brightness (docs/art-check-conflicts.md)"
       }
+    },
+    "light_pass_exposure": {
+      "v": 0.15,
+      "why": "exposure of the lighting-only measurement pass, rendered with the linear tonemapper so the brightest sunlit light stays below 1.0 (no clipping) and keeps its colour"
     }
   }
 }

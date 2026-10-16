@@ -102,6 +102,9 @@ Add it to `godot/tools/fetch_polyhaven.py` (Poly Haven / ambientCG, CC0 only, 1K
 - Saturation (HSL mean, lit pixels) 0.28–0.35: colour from materials, neutral grade.
 - Grass speckle ≤ 2% of open-grass pixels brighter than median + 0.15.
 - Roof macro structure: 16 px-blurred std dev on the barn roof ≥ 0.05.
+- Dusk (`godot_far_dusk`, 16:48, sun ~17 deg; user decision 2026-10-16): frame >= 0.22, key warmth (R/B of the key light
+  on lit pixels, lighting-only pass) 1.5–2.5, key:fill 3–6.
+- Quick A/B of one value: `SHOTS=godot_mid godot/tools/capture.sh && python3 godot/tools/art_check.py --no-capture`.
 - Night (`godot_far_night`, hour 22): frame mean 0.10–0.20 (moonlit, readable), torch pool ≥ 1.8x the frame mean.
 - Every texture mipmapped; every GLB within its triangle budget.
 - Screenshots: `godot/tools/capture.sh` renders each shot in its own Godot process at 3840×2160 → 1920×1080.
@@ -133,3 +136,6 @@ Add it to `godot/tools/fetch_polyhaven.py` (Poly Haven / ambientCG, CC0 only, 1K
 | frame grey (saturation 0.17 vs 0.30-0.40 in references) | colour came only from desaturated scans + neutral grade | chroma lives in material tints (grass, soil, thatch, daub, timber, leaves); `checks.*.saturation` 0.28-0.35 |
 | fixed check rectangles broke when the sun moved | shadows move with the sun | `capture.sh` also renders far/mid with the sun off; `art_check.py` classifies lit/shadow pixels from the pair |
 | far and mid shadow targets could not both pass with one fill knob | displayed shadow value = light × albedo; the shadowed materials differ per shot (0.51× vs 1.88× the lit albedo) | lighting rules are measured on the lighting-only pass (`key_fill`); write down conflicting checks with evidence before tuning |
+| key:fill and light warmth looked flat; far key:fill 2.1 vs mid 4.0 "under the same light" | the lighting-only pass went through AgX: lit light capped at ~0.89 and bleached | the lighting-only pass renders with the linear tonemapper at `checks.light_pass_exposure` (no clipping) |
+| a swapped texture never showed up in the shots | running the game uses cached imports | `capture.sh` runs `godot --headless --import` first |
+| golden hour looked like overcast dusk (sun on ~= sun off) | sun colour warmed only below 20 deg; sky fill stayed at full noon strength | `sun.warm_below_elevation`, `environment.sky_energy_low` (sky dims with the sun), `environment.exposure_low` (camera exposes up); all gated to daylight |

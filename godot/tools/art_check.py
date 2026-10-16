@@ -64,6 +64,8 @@ def masked(full_png, fill_png):
             "shadow_tint": mean([light[i][2] / max(light[i][0], 1e-3) for i in shadow]),
             "shadow_green": mean([light[i][1] / max((light[i][0] + light[i][2]) / 2, 1e-3) for i in shadow]),
             "lit_saturation": mean([_sat(rgb_full[i]) for i in lit]),
+            # key-light colour: red / blue of the light on sunlit surfaces (lighting-only pass), so straw and soil don't count
+            "key_warmth": mean([light[i][0] / max(light[i][2], 1e-3) for i in lit]),
             # key:fill = light reaching sunlit vs shadowed surfaces, linear, on the lighting-only pass (albedo-free)
             "key_fill": (mean([(sum(light[i]) / 3) ** 2.2 for i in lit])
                          / max(mean([(sum(light[i]) / 3) ** 2.2 for i in shadow]), 1e-6)),
@@ -144,7 +146,7 @@ def main():
         png = SHOTS / f"godot_{shot}.png"
         subprocess.run(["magick", str(png), "-colorspace", "gray", str(SHOTS / f"godot_{shot}_grey.png")], check=True)
         stats = masked(png, SHOTS / f"godot_{shot}_fill.png")
-        rows.append(("info", f"{shot} masks", f"lit {stats['lit_share']:.0%}, shadow {stats['shadow_share']:.0%}",
+        rows.append(("info", f"{shot} masks", f"lit {stats['lit_share']:.0%}, shadow {stats['shadow_share']:.0%}, key warmth {stats['key_warmth']:.2f}",
                      "", True, "share of the frame classified lit / in shadow"))
         for name, leaf in CHECKS[shot].items():
             spec = leaf["v"]
@@ -166,6 +168,8 @@ def main():
             spec = leaf["v"]
             if spec.get("measure") == "torch_pool":
                 m = region_mean(png, spec["rect"]) / max(region_mean(png, [0, 0, 1920, 1080]), 1e-3)
+            elif spec.get("measure") in ("key_fill", "key_warmth"):
+                m = masked(png, SHOTS / png_name.replace(".png", "_fill.png"))[spec["measure"]]
             else:
                 m = region_mean(png, spec["rect"])
             passed = spec["min"] <= m <= spec["max"]

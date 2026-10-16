@@ -137,15 +137,18 @@ func _build_lighting() -> void:
 func _apply_time() -> void:
 	var elevation: float = sin((hour - 6.0) / 12.0 * PI) * Look.v("sun.peak_elevation")
 	sun.rotation_degrees = Vector3(-elevation, Look.v("sun.yaw_at_noon") + (hour - 12.0) * Look.v("sun.yaw_per_hour"), 0)
-	# separate ramps (review 5): colour warms over the last 20° of elevation, but energy keeps a floor until the sun
+	# separate ramps (review 5): colour warms below sun.warm_below_elevation, but energy keeps a floor until the sun
 	# actually sets, so a low sun is golden hour, not night; sky fill, moon and torches follow sunset (elevation < 0)
-	var warm := clampf(elevation / 20.0, 0.0, 1.0)
+	var warm := clampf(elevation / Look.v("sun.warm_below_elevation"), 0.0, 1.0)
 	var day := clampf((elevation + 2.0) / 6.0, 0.0, 1.0)
 	sun.light_energy = Look.v("sun.energy_day") * lerpf(Look.v("sun.energy_low"), 1.0, warm) * day
 	sun.light_color = Look.col("sun.color_low").lerp(Look.col("sun.color_day"), warm)
 	sun.visible = elevation > -2.0
 	# The HDRI is a daytime sky: dim it (and the ambient light it gives) toward night.
-	environment.background_energy_multiplier = lerpf(Look.v("environment.night_sky_energy"), 1.0, day)  # also scales the sky as GI fill
+	environment.background_energy_multiplier = lerpf(Look.v("environment.night_sky_energy"), 1.0, day) \
+			* lerpf(1.0, lerpf(Look.v("environment.sky_energy_low"), 1.0, warm), day)  # also the GI fill; dims with a low sun
+	# the camera exposes up for a low sun (as a photographer would), so golden hour keeps its contrast without going dark
+	environment.tonemap_exposure = Look.v("environment.tonemap_exposure") * lerpf(1.0, lerpf(Look.v("environment.exposure_low"), 1.0, warm), day)  # daylight only; night has its own checks
 	# moonlight: a dim blue key from high in the sky once the sun is down, so night stays readable
 	moon.visible = day < 0.05
 	for t in get_tree().get_nodes_in_group("torches"):
@@ -221,11 +224,17 @@ func _capture(vp: SubViewport, dir: String) -> void:
 			# lighting-only pass (white albedo): the colour of the light itself, so shadow tint is measured without
 			# material colour mixed in
 			vp.debug_draw = Viewport.DEBUG_DRAW_LIGHTING
+			# linear tonemap at reduced exposure: AgX capped lit light at ~0.89 and bleached its colour, which flattened
+			# key:fill and warmth (2026-10-16)
+			environment.tonemap_mode = Environment.TONE_MAPPER_LINEAR
+			environment.tonemap_exposure = Look.v("checks.light_pass_exposure")
 			for i in SETTLE_FRAMES:
 				await RenderingServer.frame_post_draw
 			if not _save_shot(vp, dir.path_join(shot[0] + "_light.png")):
 				return
 			vp.debug_draw = Viewport.DEBUG_DRAW_DISABLED
+			environment.tonemap_mode = Environment.TONE_MAPPER_AGX
+			_apply_time()
 	get_tree().quit(0)
 
 func _save_shot(vp: SubViewport, path: String) -> bool:

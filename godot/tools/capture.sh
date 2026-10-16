@@ -4,10 +4,13 @@
 # works in other windows, but a fresh run renders its shot. Each shot gets one retry. Exits non-zero on failure.
 cd "$(dirname "$0")/.." || exit 1
 OUT="${1:-$(cd .. && pwd)/docs/screenshots}"
-for shot in godot_far godot_mid godot_far_dusk godot_far_night godot_river; do
+# Reimport first: running the game uses the cached imports, so a swapped texture or rebuilt GLB never reached the shots.
+godot --headless --path . --import >/dev/null 2>&1 || { echo "import failed" >&2; exit 1; }
+# SHOTS="godot_mid" tools/capture.sh  re-renders only those shots (quick A/B of one value); default: all
+for shot in ${SHOTS:-godot_far godot_mid godot_far_dusk godot_far_night godot_river}; do
 	rm -f "$OUT/$shot.png"
 	for attempt in 1 2; do
-		fill=0; case $shot in godot_far|godot_mid) fill=1;; esac  # sun-off frame for tools/art_check.py shadow masks
+		fill=0; case $shot in godot_far|godot_mid|godot_far_dusk) fill=1;; esac  # sun-off + lighting-only frames for tools/art_check.py masks
 		caffeinate -d godot --path . --always-on-top --resolution 480x270 --quit-after 6000 -- --capture="$OUT" --only=$shot --fill-pass=$fill >/dev/null 2>&1
 		[ -f "$OUT/$shot.png" ] && break
 	done
