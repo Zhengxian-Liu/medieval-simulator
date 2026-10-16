@@ -171,7 +171,6 @@ void World::setupVillage() {
             playerDynasty_ = dyn;
         }
     }
-    vacantAcres_ = v.numberOr("vacant_acres", 10);
     if (playerHousehold_ == kNone) throw JsonError("village.json has no household for origin " + origin);
 
     // Neighbours start out with some history between them.

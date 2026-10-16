@@ -1,6 +1,7 @@
 // Headless tests for SimCore: determinism and state invariants over long runs.
 #include <cmath>
 #include <cstdio>
+#include <map>
 #include <set>
 #include <string>
 
@@ -56,7 +57,31 @@ static void checkInvariants(const World& w, const char* label) {
                 CHECK(false, "two people in one house with the same name");
             }
     }
+    // Land (design/contested.md): every household's acres are the parcels it holds, no map cell is in two parcels.
+    std::map<Id, double> acres, freehold;
+    std::set<int> cells;
+    for (const auto& pc : w.parcels()) {
+        if (pc.gone) continue;
+        CHECK(pc.acres > 0, "empty parcel");
+        if (pc.holder != kNone) {
+            acres[pc.holder] += pc.acres;
+            if (pc.free) freehold[pc.holder] += pc.acres;
+        }
+        for (int c : pc.cells) CHECK(cells.insert(c).second, "map cell in two parcels");
+    }
+    for (const auto& h : w.households()) {
+        CHECK(std::abs(acres[h.id] - h.acres) < 1e-6, "household acres differ from its parcels");
+        CHECK(std::abs(freehold[h.id] - h.freehold) < 1e-6, "household freehold differs from its parcels");
+        if (h.extinct) CHECK(h.acres < 1e-6, "extinct household still holds land");
+    }
     (void)label;
+}
+
+static double villageAcres(const World& w) {
+    double a = 0;
+    for (const auto& pc : w.parcels())
+        if (!pc.gone) a += pc.acres;
+    return a;
 }
 
 int main() {
@@ -116,6 +141,22 @@ int main() {
         CHECK(!w.heard().empty(), "the family heard no news in 25 years");
         std::printf("news: %zu items, %d deaths of which %d reached half the village, family heard %zu\n", w.news().size(), deaths,
                     wide, w.heard().size());
+    }
+    // The village's land neither grows nor shrinks: it only changes hands.
+    {
+        Config c;
+        c.seed = 9;
+        World w(defs, c);
+        double before = villageAcres(w);
+        int movedStart = 0;
+        for (const auto& pc : w.parcels()) movedStart += pc.since > 0;
+        w.runYears(60);
+        checkInvariants(w, "land");
+        CHECK(std::abs(villageAcres(w) - before) < 1e-6, "the village's land changed in size");
+        int moved = 0;
+        for (const auto& pc : w.parcels()) moved += !pc.gone && pc.since > 0;
+        CHECK(moved > movedStart, "no land changed hands in 60 years");
+        std::printf("land: %.0f acres in %zu parcels, %d moved in 60 years\n", before, w.parcels().size(), moved);
     }
     // Different seeds -> different histories.
     {
