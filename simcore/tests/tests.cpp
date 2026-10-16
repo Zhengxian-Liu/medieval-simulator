@@ -46,6 +46,15 @@ static void checkInvariants(const World& w, const char* label) {
             CHECK(w.person(p.spouse).spouse == p.id, "spouse link not mutual");
         for (double n : p.needs) CHECK(n >= 0 && n <= 100, "need out of range");
     }
+    // Namesakes under one roof can be told apart (塞西莉, 二塞西莉, 小塞西莉).
+    for (const auto& h : w.households()) {
+        std::set<std::string> names;
+        for (Id m : h.members)
+            if (!names.insert(w.fullName(m)).second) {
+                std::printf("  same name in one house: %s\n", w.fullName(m).c_str());
+                CHECK(false, "two people in one house with the same name");
+            }
+    }
     (void)label;
 }
 

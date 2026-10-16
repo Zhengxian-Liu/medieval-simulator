@@ -147,16 +147,22 @@ std::string World::fullName(Id id) const {
     if (id == kNone) return "（無）";
     const Person& p = people_[id];
     std::string s = p.firstName;
-    // Families reuse names: call the younger namesake in the same house "小".
-    if (p.household != kNone)
-        for (Id m : households_[p.household].members)
-            if (m != id && people_[m].firstName == p.firstName && people_[m].birthDay < p.birthDay) {
-                s = "小" + s;
-                break;
-            }
+    // Families reuse names. Namesakes under one roof go by age: the eldest plain, the youngest "小",
+    // any between "二", "三"… (a mother and two daughters: 塞西莉, 二塞西莉, 小塞西莉).
+    int younger = 0;  // namesakes at home younger than this one (who take the 小)
+    if (p.household != kNone) {
+        int older = 0;
+        for (Id m : households_[p.household].members) {
+            if (m == id || people_[m].firstName != p.firstName || !people_[m].alive()) continue;
+            if (people_[m].birthDay < p.birthDay || (people_[m].birthDay == p.birthDay && m < id)) ++older;
+            else ++younger;
+        }
+        static const char* nth[] = {"二", "三", "四", "五"};
+        if (older > 0) s = (younger == 0 ? std::string("小") : std::string(nth[std::min(older, 4) - 1])) + s;
+    }
     // The dead whose name lives on in the family (a son named for his father, a girl for the sister who
     // died before her): "老約翰" for the elder gone, "早夭的茱莉安娜" for a child.
-    if (!p.alive() && p.dynasty != kNone) {
+    if (!p.alive() && p.dynasty != kNone && p.deathDay < day_) {  // not in the notice of the death itself
         double age = static_cast<double>(p.deathDay - p.birthDay) / kDaysPerYear;
         for (const auto& o : people_)
             if (o.id != id && o.alive() && o.dynasty == p.dynasty && o.firstName == p.firstName) {
@@ -165,6 +171,7 @@ std::string World::fullName(Id id) const {
                 break;
             }
     }
+    bool marked = s != p.firstName;  // already told apart above
     if (p.dynasty != kNone) s += "·" + dynasties_[p.dynasty].surname;
     // Another living namesake in another house: say whose child (or wife) this one is.
     if (p.alive() && p.household != kNone && p.dynasty != kNone) {
@@ -185,8 +192,9 @@ std::string World::fullName(Id id) const {
                 it = bynames_.emplace(id, by).first;
             }
             if (it->second == "小") {
-                if (s.rfind("小", 0) != 0) s = "小" + s;
-            } else if (s.rfind("小", 0) != 0) {
+                // Named for a father in another house, with a namesake child at home who is 小 already: 大.
+                if (!marked) s = (younger > 0 ? "大" : "小") + s;
+            } else if (!marked) {
                 s += it->second;
             }
         }
