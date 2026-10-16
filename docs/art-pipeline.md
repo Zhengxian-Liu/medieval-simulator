@@ -158,3 +158,6 @@ Add it to `godot/tools/fetch_polyhaven.py` (Poly Haven / ambientCG, CC0 only, 1K
 | gable walls read as one 6 m daub slab (round 7) | frame() framed only the long walls | gable walls get ~1.2 m stud bays, a mid-rail and braces (`buildings.py frame`) |
 | dark hexagon at the torch foot at night | the 6-sided post shadowed the ground under its own omni light | thin props under their own light don't cast shadows |
 | key:fill differed by view for the same ground (far 2.4-3.6, mid ~6) | not SSAO, SSIL or SDFGI resolution (each A/B'd); partly wall-side geometry | measure per material/region with the ID pass; unresolved remainder recorded in art-check-conflicts.md |
+| bushes still grew through props with a 1.1 m clearance (round 8) | bush crowns vary 0.9-1.7 m with scale | clearance from mesh bounds per instance (`_radius`, `placement.bush_crown_overlap`) |
+| crown hull read as a smooth shaded sphere (round 8) | one radius, flat shade | lumpy hull per lobe, lit top / dark underside (`foliage.py inner`) |
+| fixed check rectangles went stale when content moved (roof rect under the oak's shadow) | rects assume the frame | per-material checks on the ID pass (`class_*` measures) instead of rects |

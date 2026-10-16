@@ -6,7 +6,7 @@ import random
 
 import bmesh
 import bpy
-from mathutils import Matrix, Vector
+from mathutils import Matrix, Vector, noise
 
 ATLAS_COLS, ATLAS_ROWS = 3, 2
 
@@ -84,17 +84,23 @@ def leaf(mesh, rng, center, size, normal_hint, shade=1.0):
 
 
 def inner(mesh, center, radius, rings=6, segs=10):
-    """Low-poly sphere using the leaf material's darkest atlas corner (UV 0,0 region is opaque leaf body)."""
+    """Lumpy low-poly volume using the leaf material's opaque atlas cell (UV 0,0 region is opaque leaf body): fills the
+    gaps between leaf cards. Lumps and a top-lit / dark-underside shade so it reads as foliage mass, not a smooth
+    sphere (Fable round 8)."""
     verts = []
     for r in range(rings + 1):
         phi = math.pi * r / rings
-        verts.append([center + Vector((math.sin(phi) * math.cos(t), math.sin(phi) * math.sin(t), math.cos(phi) * 0.8)) * radius
-                      for t in (i / segs * math.tau for i in range(segs + 1))])
+        row = []
+        for t in (i / segs * math.tau for i in range(segs + 1)):
+            d = Vector((math.sin(phi) * math.cos(t), math.sin(phi) * math.sin(t), math.cos(phi) * 0.8))
+            row.append(center + d * radius * (1.0 + 0.35 * noise.noise(d * 2.2 + center)))
+        verts.append(row)
     uv = (0.5 / ATLAS_COLS, 0.5 / ATLAS_ROWS)  # centre of the first leaf: opaque green
     for r in range(rings):
         for i in range(segs):
             quad = [verts[r][i], verts[r + 1][i], verts[r + 1][i + 1], verts[r][i + 1]]
-            mesh.face(quad, [uv] * 4, 1, 0.3, (sum(quad, Vector()) / 4 - center).normalized())  # shade, not black
+            n = (sum(quad, Vector()) / 4 - center).normalized()
+            mesh.face(quad, [uv] * 4, 1, 0.15 + 0.35 * (n.z * 0.5 + 0.5), n)  # lit top, dark underside
 
 
 def build(name, seed, height, crown, trunk_r, leaves, leaf_size):
@@ -125,7 +131,7 @@ def build(name, seed, height, crown, trunk_r, leaves, leaf_size):
     for _ in range(leaves):
         c = rng.choice(lobes)
         d = Vector((rng.gauss(0, 1), rng.gauss(0, 1), rng.gauss(0, 0.8))).normalized()
-        r = crown * rng.uniform(0.4, 0.6) * (rng.random() ** 0.15)  # mostly near the lobe surface: a closed canopy
+        r = crown * rng.uniform(0.42, 0.52) * (rng.random() ** 0.15)  # on the lobe surface: few stragglers (round 8 confetti)
         p = c + d * r
         p.z = max(p.z, 0.15 if not trunk_r else height * 0.32)
         out = (p - crown_center)

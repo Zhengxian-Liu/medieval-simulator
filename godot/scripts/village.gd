@@ -294,21 +294,30 @@ func _house(root: Node3D, pos: Vector3, yaw: float, variant: String) -> void:
 # Props come from tools/blender/props.py; same material slots as the buildings.
 static var KEEP_OFF_PATHS: Array = Look.v("placement.keep_off_paths")
 
-var _prop_spots: Array[Vector2] = []  # where props stand, so bushes keep clear of them
+var _prop_spots: Array[Vector3] = []  # x, z, footprint radius of every placed prop, so bushes keep clear of them
 
 func _prop(root: Node3D, name: String, pos: Vector3, yaw: float) -> void:
 	if name in KEEP_OFF_PATHS and _ground.dirt_at(Vector2(pos.x, pos.z)) > 0.3:
 		return  # never block a path or yard
-	_prop_spots.append(Vector2(pos.x, pos.z))
-	_instance(root, "res://assets/models/props/%s.glb" % name, pos, yaw + _rng.randf_range(-4.0, 4.0))
+	var scene := _instance(root, "res://assets/models/props/%s.glb" % name, pos, yaw + _rng.randf_range(-4.0, 4.0))
+	_prop_spots.append(Vector3(pos.x, pos.z, _radius(scene)))
 
 func _bush(root: Node3D, p: Vector3) -> void:
-	for s in _prop_spots:
-		if s.distance_to(Vector2(p.x, p.z)) < float(Look.v("placement.bush_clear_of_props")):
-			return  # a bush grown through a barrel or crate (round 7)
-	_instance(root, FOLIAGE % ("bush_%d" % _rng.randi_range(0, 2)), p, _rng.randf() * 360.0, _rng.randf_range(0.8, 1.3))
+	var scene := _instance(root, FOLIAGE % ("bush_%d" % _rng.randi_range(0, 2)), p, _rng.randf() * 360.0, _rng.randf_range(0.8, 1.3))
+	var r := _radius(scene) * float(Look.v("placement.bush_crown_overlap"))
+	for s in _prop_spots:  # a bush grown through a barrel or crate (rounds 7-8): radii from the real bounds
+		if Vector2(s.x, s.y).distance_to(Vector2(p.x, p.z)) < r + s.z:
+			scene.queue_free()
+			return
 
-func _instance(root: Node3D, path: String, pos: Vector3, yaw: float, scale := 1.0) -> void:
+# Horizontal footprint radius of a placed scene (world units, incl. scale) from its meshes' bounds.
+func _radius(scene: Node3D) -> float:
+	var box := AABB()
+	for mi in scene.find_children("*", "MeshInstance3D", true, false):
+		box = box.merge((mi as MeshInstance3D).get_aabb())
+	return maxf(box.size.x, box.size.z) * 0.5 * scene.scale.x
+
+func _instance(root: Node3D, path: String, pos: Vector3, yaw: float, scale := 1.0) -> Node3D:
 	var scene: Node3D = load(path).instantiate()
 	scene.position = pos
 	scene.rotation_degrees.y = yaw
@@ -321,6 +330,7 @@ func _instance(root: Node3D, path: String, pos: Vector3, yaw: float, scale := 1.
 			mi.set_surface_override_material(i, _weathered(slot))
 	if not path.contains("/foliage/"):
 		_ground_skirt(root, scene)
+	return scene
 
 # Dirt/mud skirt projected onto the ground around an object's footprint: darkened, damp soil fading outward,
 # so walls, props and rocks sit *in* the ground instead of on it (pre-rendered games never have a clean seam).
