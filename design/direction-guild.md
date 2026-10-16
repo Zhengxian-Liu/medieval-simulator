@@ -1,6 +1,6 @@
 # 方向草案：村子裡的《行會》，加上 CK 的人（2026-10-16）
 
-> 狀態：草案，等 Zhengxian 看過再定。來源：本串討論（「CK3 平民版」「為什麼模擬市民好玩」「世界觀太小、整天種田」「《行會》很接近我要的感覺」），以及 [competitors.md](competitors.md)、[fun-analysis.md](fun-analysis.md)。
+> 狀態：**只是其中一個玩法選項，玩法還沒定。** Zhengxian 說「《行會》很接近」指的是美術風格，不是玩法（2026-10-16），這份是誤會之下寫的，保留作為討論材料。來源：本串討論（「CK3 平民版」「為什麼模擬市民好玩」「世界觀太小、整天種田」），以及 [competitors.md](competitors.md)、[fun-analysis.md](fun-analysis.md)。
 
 ## 一句話
 
