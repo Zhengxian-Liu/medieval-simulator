@@ -182,12 +182,13 @@ std::string World::familyReport() const {
     o << "家人：";
     bool firstMember = true;
     for (const auto& m : people_) {
-        if (!m.alive() || m.id == head || (!inPlayerHouse(m.household) && !inPlayerHouse(m.home))) continue;
+        bool away = isAway(m) && inPlayerHouse(m.awayFrom);
+        if (!m.alive() || m.id == head || (!inPlayerHouse(m.household) && !inPlayerHouse(m.home) && !away)) continue;
         std::string t;
         for (const auto& tr : m.traits)
             if (defs_.traits.at(tr).category == "personality") t += (t.empty() ? "" : "、") + defs_.traits.at(tr).name;
         o << (firstMember ? "" : "；") << shortName(m.id) << "（" << relation(m) << "，" << int(ageYears(m)) << " 歲"
-          << (t.empty() ? "" : "，" + t) << (!inPlayerHouse(m.household) ? "，在別家幫傭" : "")
+          << (t.empty() ? "" : "，" + t) << (away ? "，" + stationName(m) : !inPlayerHouse(m.household) ? "，在別家幫傭" : "")
           << "）";
         firstMember = false;
     }
@@ -212,11 +213,9 @@ std::string World::familyReport() const {
         }
         std::string branch;
         if (kinInChurch(playerDynasty_)) branch += "家裡有人在教會";
-        if (kinInTown(playerDynasty_)) {
-            const Dynasty& dy = dynasties_[playerDynasty_];
-            branch += std::string(branch.empty() ? "" : "，") + people_[dy.townKin].firstName + " 在鎮上" +
-                      ((day_ - dy.townSince) / kDaysPerYear >= 7 ? "當師傅" : "當學徒");
-        }
+        for (Id id : livingAway())
+            if (people_[id].dynasty == playerDynasty_)
+                branch += std::string(branch.empty() ? "" : "，") + people_[id].firstName + " " + stationName(people_[id]);
         if (!branch.empty()) o << branch << "。";
         o << "\n";
         Id acting = actingHead();

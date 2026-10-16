@@ -107,6 +107,7 @@ void World::stepDay() {
             yearlyWants();
             yearlyIntentions();
             yearlyService();
+            yearlyAway();
             yearlyFeuds();
             yearlyLiaisons();
             events.pulse("yearly");
@@ -391,6 +392,7 @@ uint64_t World::digest() const {
         mix(uint64_t(p.household + 10));
         mix(hashString(p.occupation));
         mix(uint64_t(p.free) * 7 + uint64_t(p.home + 10));
+        mix(hashString(p.station) + uint64_t(p.awayFrom + 10) * 13 + uint64_t(p.road.size()));
         for (const auto& b : beliefs_[p.id]) mix(uint64_t(b.deed) * 31 + uint64_t(b.culprit + 10));
         for (const auto& t : p.traits) mix(hashString(t));
         mix(uint64_t(std::llround(p.health * 1000)));

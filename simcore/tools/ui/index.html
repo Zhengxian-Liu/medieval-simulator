@@ -39,6 +39,8 @@ section.panel h2 small { font-weight: normal; color: var(--muted); font-size: 12
 .card .sub { color: var(--muted); font-size: 12px; }
 .mood { font-size: 13px; }
 .want { color: var(--accent); font-weight: 600; margin: 3px 0; }
+.station { font-size: 13px; margin: 2px 0; }
+.card.away { opacity: 0.85; border-style: dashed; }
 .op { font-size: 13px; cursor: pointer; }
 .op .reasons { display: none; color: var(--muted); font-size: 12px; margin-top: 2px; }
 .op.open .reasons { display: block; }
@@ -301,14 +303,26 @@ function renderFamily() {
     const me = p.id === s.head;
     return `<div class="card ${p.want ? "wants" : ""}">
       <div class="top"><span class="name">${me ? "你　" : ""}${esc(p.name)}</span><span class="sub">${esc(me ? "" : p.kin)} ${p.age} 歲${p.health < 40 ? ' <span class="neg">身體很差</span>' : ""}</span></div>
+      ${p.station ? `<div class="station">${esc(p.station)}</div>` : ""}
       <div class="mood">${esc(p.mood)}${p.mood_cause ? "：" + esc(p.mood_cause) : ""}</div>
       ${p.want ? `<div class="want">${esc(p.want)}</div>` : ""}
       ${me ? "" : `<div class="op" onclick="toggle(this)">對你 <b class="${cls(p.opinion)}">${esc(p.opinion_word)} ${signed(p.opinion)}</b> <span class="muted">▾</span><div class="reasons">${reasonsLine(p.reasons)}</div></div>`}
       ${needBars(p.needs)}
       ${p.traits.length ? `<div class="traits">${p.traits.map(esc).join("、")}</div>` : ""}
+      ${roadLine(p.road)}
       ${actionButtons(p)}
     </div>`;
-  }).join("");
+  }).join("") + (s.away || []).map((p) => `<div class="card away">
+      <div class="top"><span class="name">${esc(p.name)}</span><span class="sub">${esc(p.kin)} ${p.age} 歲</span></div>
+      <div class="station">${esc(p.station)}</div>
+      ${roadLine(p.road)}
+    </div>`).join("");
+}
+
+// 人生路: the turns a life has taken, oldest first, folded away until clicked.
+function roadLine(road) {
+  if (!road || !road.length) return "";
+  return `<div class="op" onclick="toggle(this)">人生路 <span class="muted">${road.length} 段 ▾</span><div class="reasons">${road.map((r) => `${r.year}　${esc(r.text)}`).join("<br>")}</div></div>`;
 }
 
 function lineClass(l) {

@@ -16,11 +16,12 @@ bool inRange(double v, const Json& r) {
 
 void EventRunner::pulse(const std::string& kind) {
     std::vector<Id> ids = w_.livingInVillage();
+    std::vector<Id> away = w_.livingAway();  // for "away" events: the family's people living outside the village
     Id playerHead = w_.playerHousehold_ != kNone ? w_.households_[w_.playerHousehold_].head : kNone;
 
     for (const auto& ev : w_.defs_.events) {
         if (ev.pulse != kind) continue;
-        for (Id id : ids) {
+        for (Id id : ev.scope == "away" ? away : ids) {
             Person& p = w_.people_[id];
             if (!eligible(ev, p, playerHead)) continue;
             if (!eval(ev.conditions, p, kNone)) continue;
@@ -38,7 +39,8 @@ void EventRunner::pulse(const std::string& kind) {
 }
 
 bool EventRunner::eligible(const EventDef& ev, const Person& p, Id playerHead) const {
-    if (!p.alive() || p.household == kNone) return false;
+    if (!p.alive()) return false;
+    if (ev.scope == "away" ? !w_.isAway(p) : p.household == kNone) return false;
     if (ev.scope == "player_family" && !w_.isPlayerFamily(p)) return false;
     if (ev.scope == "player_head" && p.id != playerHead) return false;
     if (ev.once && p.flags.count("ev_" + ev.id)) return false;
@@ -147,7 +149,7 @@ void EventRunner::fire(const EventDef& ev, Person& p, Id target) {
             for (Id m : w_.households_[p.household].members) w_.cooldowns_[{m, ev.id}] = w_.day_ + ev.cooldownYears * kDaysPerYear;
     }
 
-    bool home = p.household == w_.playerHousehold_ || p.home == w_.playerHousehold_ ||
+    bool home = p.household == w_.playerHousehold_ || p.home == w_.playerHousehold_ || (w_.isAway(p) && p.awayFrom == w_.playerHousehold_) ||
                 (target != kNone && w_.people_[target].household == w_.playerHousehold_);
     bool family = w_.isPlayerFamily(p) || (target != kNone && w_.isPlayerFamily(w_.people_[target]));
     ++w_.counters_["event:" + ev.id];
@@ -155,7 +157,7 @@ void EventRunner::fire(const EventDef& ev, Person& p, Id target) {
     std::string line = o.log.empty() ? "" : format(pickLog(o), p, target);
     if (!line.empty()) {
         if (family) {
-            std::string choice = ev.options.size() > 1 && w_.isPlayerFamily(p) ? "（選擇：" + format(o.text, p, target) + "）" : "";
+            std::string choice = ev.options.size() > 1 && w_.isPlayerFamily(p) ? "（選擇：" + optionText(o, p, target) + "）" : "";
             w_.log(home ? 1 : 2, "〔" + ev.title + "〕" + line + choice);
         } else if (ev.npcLog) {
             w_.log(2, line);
@@ -174,7 +176,7 @@ void EventRunner::runEvent(const EventDef& ev, Person& p, Id target, int importa
     std::string line = o.log.empty() ? "" : format(pickLog(o), p, target);
     if (!line.empty() && importance > 0) {
         bool chose = ev.options.size() > 1 && p.household == w_.playerHousehold_;
-        w_.log(importance, "  " + line + (chose ? "（選擇：" + format(o.text, p, target) + "）" : ""));
+        w_.log(importance, "  " + line + (chose ? "（選擇：" + optionText(o, p, target) + "）" : ""));
     }
     if (!w_.pendingReason_.empty()) {
         if (!line.empty() && importance > 0) w_.log(importance, "  （" + w_.pendingReason_ + "）");
@@ -210,7 +212,7 @@ void EventRunner::interact(const EventDef& ev, Person& p, Id head) {
     if (p.household != w_.playerHousehold_) w_.befriend(p.id, head, 8);  // seeking someone out is how you come to know them
     // The summary says what came of it: what they were waiting for, if this was it, or how they took it.
     if (!w_.answerWant(p.id, ev.id))
-        w_.seasonNotes_.push_back("你找" + w_.shortName(p.id) + "（" + ev.title + "）：" + format(o.text, p, head) + "。");
+        w_.seasonNotes_.push_back("你找" + w_.shortName(p.id) + "（" + ev.title + "）：" + optionText(o, p, head) + "。");
 }
 
 Id EventRunner::pickTarget(const EventDef& ev, const Person& p) {
@@ -309,11 +311,12 @@ bool EventRunner::optionOpen(const OptionDef& o, const Person& p, Id target) con
     if (!o.conditions.isNull() && !eval(o.conditions, p, target)) return false;
     // Only an option with a stated price ("（40 便士）") needs the coin in hand; tithes, fines and
     // the like are paid in kind or owed.
-    if (p.household == kNone || !o.effects.isArray() || o.text.find("便士") == std::string::npos) return true;
+    Id hid = p.household != kNone ? p.household : w_.isAway(p) ? p.awayFrom : kNone;
+    if (hid == kNone || !o.effects.isArray() || o.text.find("便士") == std::string::npos) return true;
     double cost = 0;
     for (const auto& e : o.effects.asArray())
         if (e.isObject() && e["money"].isNumber() && e["money"].asNumber() < 0) cost -= e["money"].asNumber();
-    return cost <= w_.households_[p.household].money + 0.5;
+    return cost <= w_.households_[hid].money + 0.5;
 }
 
 int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
@@ -327,7 +330,7 @@ int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
     }
     // The one keeping the house decides for themselves and for the young children in it.
     Id acting = w_.actingHead();
-    bool child = p.household == w_.playerHousehold_ && acting != kNone &&
+    bool child = (p.household == w_.playerHousehold_ || (w_.isAway(p) && p.awayFrom == w_.playerHousehold_)) && acting != kNone &&
                  (p.father == acting || p.mother == acting || p.father == w_.people_[acting].spouse || p.mother == w_.people_[acting].spouse);
     // Someone the head goes to see answers for themselves, child or not.
     bool asks = ev.scope != "interaction" && (p.id == acting || (p.household == w_.playerHousehold_ && w_.ageYears(p) < 14) ||
@@ -341,11 +344,11 @@ int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
             const OptionDef& o = ev.options[k];
             if (ws[k] <= 0 && !optionOpen(o, p, target)) {
                 if (o.conditions.isNull() || eval(o.conditions, p, target))
-                    prompt.unavailable.push_back(format(o.text, p, target) + "（錢不夠）");
+                    prompt.unavailable.push_back(optionText(o, p, target) + "（錢不夠）");
                 continue;
             }
             open.push_back(static_cast<int>(k));
-            prompt.options.push_back(format(o.text, p, target));
+            prompt.options.push_back(optionText(o, p, target));
             lines.push_back(format(o.logs.empty() ? o.log : o.logs[0], p, target));
         }
         if (!ev.prompt.empty()) {
@@ -379,7 +382,7 @@ int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
         for (size_t k = 0; k < ev.options.size(); ++k)
             if (ws[k] > 0) {
                 open.push_back(static_cast<int>(k));
-                texts.push_back(format(ev.options[k].text, p, target));
+                texts.push_back(optionText(ev.options[k], p, target));
                 weights.push_back(ws[k]);
             }
         if (open.size() > 1) {
@@ -406,7 +409,9 @@ bool EventRunner::eval(const Json& cond, const Person& p, Id target) const {
 
 bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, Id target) const {
     const World& w = w_;
-    const Household* h = p.household != kNone ? &w.households_[p.household] : nullptr;
+    // Someone living away still counts on the family's purse: money and the like are the house they belong to.
+    Id hid = p.household != kNone ? p.household : w.isAway(p) ? p.awayFrom : kNone;
+    const Household* h = hid != kNone ? &w.households_[hid] : nullptr;
     auto spouseAlive = [&] { return p.spouse != kNone && w.people_[p.spouse].alive(); };
 
     if (k == "all") return eval(v, p, target);
@@ -576,6 +581,7 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     // The contested ledger (contest.cpp): a place free with a master of that trade, a servant's place in the
     // person's house, and the entry fine.
     if (k == "place_open") return w.openApprenticeship(v.asString(), p.household) != kNone;
+    if (k == "any_place") return p.household != kNone && w.openPlace(v.asString(), p.household) != kNone;
     if (k == "service_place") return p.household != kNone && w.placeOpen(p.household, "service") == v.asBool();
     if (k == "fine_extended") {
         const EntryFine* f = nullptr;
@@ -611,6 +617,23 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     if (k == "deed_tried") return deed_ != kNone && w.deedTried(deed_) == v.asBool();
     if (k == "unsolved_secret") return (w.unsolvedDeed(p.id) != kNone) == v.asBool();
     if (k == "in_service") return (p.home != kNone) == v.asBool();
+    // 處境 (design/life-paths.md): "home" is the empty station.
+    if (k == "station") {
+        std::string st = p.station.empty() ? "home" : p.station;
+        if (v.isString()) return st == v.asString();
+        for (const auto& x : v.asArray())
+            if (st == x.asString()) return true;
+        return false;
+    }
+    if (k == "station_years_ge") return w.day_ - p.stationSince >= v.asNumber() * kDaysPerYear;
+    if (k == "station_due") return (p.stationUntil >= 0 && w.day_ >= p.stationUntil) == v.asBool();
+    if (k == "away") return w.isAway(p) == v.asBool();
+    if (k == "walked") {
+        // Has been at this station before, at any point of their road.
+        for (const auto& r : p.road)
+            if (r.station == v.asString()) return true;
+        return false;
+    }
     // The family ladder.
     if (k == "standing") return h && w.standing(h->id) == static_cast<int>(v.asNumber());
     if (k == "standing_ge") return h && w.standing(h->id) >= v.asNumber();
@@ -636,7 +659,8 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
     World& w = w_;
     for (const auto& e : effects.asArray()) {
         for (const auto& [k, v] : e.asObject()) {
-            Household* h = p.household != kNone ? &w.households_[p.household] : nullptr;
+            Id hid = p.household != kNone ? p.household : w.isAway(p) ? p.awayFrom : kNone;  // away: the family's house
+            Household* h = hid != kNone ? &w.households_[hid] : nullptr;
             if (k == "add_trait") {
                 const TraitDef* td = w.defs_.trait(v.asString());
                 if (!td) throw JsonError("unknown trait " + v.asString());
@@ -758,15 +782,27 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
             } else if (k == "to_town") {
                 // Off to a master in town: the family's town branch.
                 if (!h) continue;
-                h->members.erase(std::remove(h->members.begin(), h->members.end(), p.id), h->members.end());
-                p.household = kNone;
-                p.flags.insert("in_town");
-                if (p.dynasty != kNone) {
-                    w.dynasties_[p.dynasty].townKin = p.id;
-                    w.dynasties_[p.dynasty].townSince = w.day_;
-                }
-                if (h->head == p.id) w.onHeadDied(*h, p.id);
+                w.setStation(p.id, "town_apprentice", 7, "進城拜師");
                 return;
+            } else if (k == "station") {
+                // { "station": "archer" } or { "station": { "id": "archer", "years": [2, 4], "note": "應徵出征" } }
+                std::string id = v.isString() ? v.asString() : v["id"].asString();
+                int years = 0;
+                if (v.isObject() && v["years"].isNumber()) years = static_cast<int>(v["years"].asNumber());
+                if (v.isObject() && v["years"].isArray())
+                    years = w.rngEvents_.range(static_cast<int>(v["years"][0].asNumber()), static_cast<int>(v["years"][1].asNumber()));
+                w.setStation(p.id, id, years, v.isObject() ? v.stringOr("note", "") : "");
+            } else if (k == "send_home") {
+                // Money from someone away (or in service) to the house they belong to.
+                Id to = w.isAway(p) ? p.awayFrom : p.home != kNone ? p.home : p.household;
+                if (to == kNone || w.households_[to].extinct) continue;
+                w.households_[to].money += v.asNumber();
+                w.book(w.households_[to], "在外的家人捎回", v.asNumber());
+            } else if (k == "odds") {
+                // A try whose chance comes from who they are (design/life-paths.md): "effects" on success, "else" not.
+                bool hit = w.rngEvents_.chance(odds(v, p, target) / 100.0);
+                apply(hit ? v["effects"] : v["else"], p, target);
+                if (!p.alive()) return;
             } else if (k == "leave_village") {
                 if (!h) continue;
                 h->members.erase(std::remove(h->members.begin(), h->members.end(), p.id), h->members.end());
@@ -1120,6 +1156,9 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 }
             } else if (k == "set_free") {
                 w.setFree(p.id);
+            } else if (k == "take_any_place") {
+                Id master = p.household != kNone ? w.openPlace(v.asString(), p.household) : kNone;
+                if (master != kNone) w.takePlace(master, v.asString(), p.id);
             } else if (k == "take_place") {
                 // The person (an apprentice) goes to the master of that trade who has a place free.
                 Id master = w.openApprenticeship(v.asString(), p.household);
@@ -1136,6 +1175,11 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
             } else if (k == "spend_time") {
                 // An occasion takes one of the head's free days, if there are any left this season.
                 if (w.timeLeft() > 0) w.spendTime(static_cast<int>(v.asNumber()));
+            } else if (k == "tell") {
+                // A line for the family's chronicle only: how a try turned out, news from someone away.
+                if (!w.isPlayerFamily(p)) continue;
+                bool home = w.inPlayerHouse(p.household) || w.inPlayerHouse(p.home) || (w.isAway(p) && w.inPlayerHouse(p.awayFrom));
+                w.log(home ? 1 : 2, format(v.asString(), p, target));
             } else if (k == "log") {
                 w.log(p.household == w.playerHousehold_ ? 1 : 2, format(v.asString(), p, target));
             } else {
@@ -1143,6 +1187,44 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
             }
         }
     }
+}
+
+// The chance of a try, in percent: { base, skill: {learning: per point}, traits: {clever: +}, free: +,
+// lord_opinion / target_opinion / reputation: per point }. Never certain either way.
+double EventRunner::odds(const Json& o, const Person& p, Id target) const {
+    double c = o.numberOr("base", 50);
+    if (o["skill"].isObject())
+        for (const auto& [k, per] : o["skill"].asObject()) c += p.skills[skillFromKey(k)] * per.asNumber();
+    if (o["traits"].isObject())
+        for (const auto& [t, add] : o["traits"].asObject())
+            if (w_.hasTrait(p, t)) c += add.asNumber();
+    if (p.free) c += o.numberOr("free", 0);
+    if (o["lord_opinion"].isNumber() && w_.lord_ != kNone && w_.people_[w_.lord_].alive() && w_.lord_ != p.id)
+        c += w_.opinion(w_.lord_, p.id) * o["lord_opinion"].asNumber();
+    if (o["target_opinion"].isNumber() && target != kNone) c += w_.opinion(target, p.id) * o["target_opinion"].asNumber();
+    if (o["reputation"].isNumber()) c += p.reputation * o["reputation"].asNumber();
+    return std::clamp(c, 5.0, 95.0);
+}
+
+// An option's text, with {odds} spelled out the way the player would weigh it: "機會偏高，看讀書的本事".
+// The odds are told in words, not numbers, and say what they hang on ("depends"), not what was missed.
+std::string EventRunner::optionText(const OptionDef& o, const Person& p, Id target) const {
+    std::string t = o.text;
+    size_t at = t.find("{odds}");
+    if (at != std::string::npos) {
+        std::string said = "機會難說";
+        if (o.effects.isArray())
+            for (const auto& e : o.effects.asArray())
+                if (e["odds"].isObject()) {
+                    double c = odds(e["odds"], p, target);
+                    said = std::string("機會") + (c < 30 ? "偏低" : c < 50 ? "不到一半" : c < 70 ? "一半多" : "偏高");
+                    std::string dep = e["odds"].stringOr("depends", "");
+                    if (!dep.empty()) said += "，看" + dep;
+                    break;
+                }
+        t.replace(at, 6, said);
+    }
+    return format(t, p, target);
 }
 
 std::string EventRunner::format(const std::string& tmpl, const Person& p, Id target) const {

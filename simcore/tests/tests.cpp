@@ -40,6 +40,17 @@ static void checkInvariants(const World& w, const char* label) {
         CHECK(h.money >= 0 && h.food >= 0, "negative money or food");
     }
     for (const auto& p : w.people()) {
+        if (p.alive() && w.isAway(p)) {
+            // Living away (design/life-paths.md): out of every household, on an away station, still someone's.
+            const StationDef* sd = w.defs().station(p.station);
+            CHECK(sd && sd->away, "away person on a home station");
+            CHECK(!seen.count(p.id), "away person still listed in a household");
+            CHECK(p.awayFrom >= 0 && p.awayFrom < static_cast<Id>(w.households().size()), "away person belongs nowhere");
+        }
+        if (p.alive() && p.household != kNone && !p.station.empty()) {
+            const StationDef* sd = w.defs().station(p.station);
+            CHECK(sd && !sd->away, "villager on an away station");
+        }
         if (!p.alive() || p.household == kNone) continue;
         CHECK(seen.count(p.id), "living villager missing from household list");
         double age = w.ageYears(p);
@@ -153,6 +164,35 @@ int main() {
     std::printf("asks: pressed with");
     for (const auto& [l, n] : presses) std::printf(" %s %d", l.c_str(), n);
     std::printf("\n");
+    // Lives fork (design/life-paths.md): over a few villages and decades, people leave for town, for war and
+    // for school, some come back, and the roads they walked are kept.
+    {
+        std::map<std::string, int> walked;
+        int cameBack = 0;
+        for (int seed : {1, 2, 3, 4}) {
+            Config c;
+            c.seed = seed;
+            c.prerun = 25;
+            World w(defs, c);
+            w.runYears(30);
+            checkInvariants(w, "paths");
+            for (const auto& p : w.people()) {
+                bool wasAway = false;
+                for (const auto& r : p.road) {
+                    const StationDef* sd = w.defs().station(r.station);
+                    CHECK(sd != nullptr, "road through an unknown station");
+                    if (sd && sd->away) wasAway = true;
+                    else if (wasAway && sd) ++cameBack, wasAway = false;
+                    ++walked[r.station];
+                }
+            }
+        }
+        for (const char* st : {"servant", "apprentice", "labourer", "town_apprentice", "town_servant", "archer"})
+            CHECK(walked[st] > 0, "nobody walked a common road");
+        CHECK(cameBack > 0, "nobody who left ever came back");
+        std::printf("paths: %d servants, %d town apprentices, %d archers, %d came back\n", walked["servant"], walked["town_apprentice"],
+                    walked["archer"], cameBack);
+    }
     // A run driven by the auto-player replays exactly from its command log alone.
     {
         Config c;

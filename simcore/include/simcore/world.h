@@ -65,6 +65,13 @@ struct Concern {
     int since = 0;
 };
 
+// One step on a person's road through life (design/life-paths.md): the day they came to a station, and why.
+struct RoadStep {
+    int day = 0;
+    std::string station;
+    std::string note;  // what happened, in a few words: "考上了"、"受了傷回家"
+};
+
 struct Person {
     Id id = kNone;
     std::string firstName;
@@ -111,6 +118,12 @@ struct Person {
     int soughtDay = -1;             // the last day the head sought them out
     double effort = 1;          // how much of themselves they put into the work, from their mood over recent months
     std::map<Id, float> known;  // 熟識 (design/news.md): how well they know each other villager beyond kin, 0–100
+    // 處境 and 人生路 (design/life-paths.md). An empty station is "home": living with the family in the village.
+    std::string station;
+    int stationSince = 0;
+    int stationUntil = -1;      // a term (school, a campaign, years in service in town) is up on this day
+    Id awayFrom = kNone;        // living outside the village: the household they belong to and would come back to
+    std::vector<RoadStep> road;
 
     bool alive() const { return deathDay < 0; }
 };
@@ -559,6 +572,11 @@ public:
         std::string why;       // when closed: why not
     };
     std::vector<Interaction> interactionsWith(Id target);
+    // 處境 and 人生路 (design/life-paths.md).
+    std::string stationName(const Person& p) const;
+    bool isAway(const Person& p) const { return p.alive() && p.awayFrom != kNone && p.household == kNone; }
+    std::vector<Id> livingAway() const;  // alive and living outside the village, in id order
+    std::string lifeLine(Id id) const;   // the road walked, as one line: "拜…為師，出師當鐵匠，娶了…，當了家"
     std::vector<Id> peopleToSee() const;  // family first, then those the head knows
     void runCommands() { processCommands(); }
     void startSeason() { rollSeason(); }  // on a season's first day, before it runs: free time and the family's wants  // carry out what the player just asked for, before the day runs
@@ -764,6 +782,11 @@ private:
     void chargeHeriot(Household& h, Id dead);
     void recallServants(Id household);
     void yearlyService();
+    // Moves a person to another station: leaves the village for an away one, comes back for a home one.
+    void setStation(Id who, const std::string& station, int years, const std::string& note);
+    void comeHome(Id who);
+    void noteLife(Id who, const std::string& note);  // a turn on the road that is not a change of station
+    void yearlyAway();
     void sendToService(Id servant, Id master, int years);
     void setFree(Id person);
 
@@ -861,6 +884,8 @@ private:
     void ask(Id who, const std::string& what, Id object, Id subject, const std::string& office, const std::string& lever);
     Id bestParcelWant(Id house) const;  // the parcel this house is most after, kNone if none
     Id openApprenticeship(const std::string& trade, Id except) const;  // a master of that trade with a place free
+    // Any place of that kind free outside the household `except`: the lord's first for service, then in village order.
+    Id openPlace(const std::string& kind, Id except) const;
     EntryFine* fineOf(Id house);
     Id fineLender(const Household& h, double amount) const;
     void fineChoice(Household& h, const std::string& how);  // beg | borrow | forfeit (data/events/manor.json)

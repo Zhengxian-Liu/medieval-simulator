@@ -197,6 +197,7 @@ bool World::takePlace(Id master, const std::string& kind, Id who) {
         p.flags.insert("apprentice_at_" + std::to_string(master));
         p.flags.insert("apprentice_" + trade);
         p.flags.insert("trade_decided");
+        if (households_[master].head != kNone) setStation(who, "apprentice", 0, "拜" + fullName(households_[master].head) + "為師");
     } else {
         Id mh = households_[master].head;
         if (mh == kNone) return false;
@@ -245,6 +246,17 @@ Id World::openApprenticeship(const std::string& trade, Id except) const {
     for (const auto& pl : placesOf(households_, people_, lordHouse))
         if (pl.kind == "apprentice" && pl.trade == trade && pl.master != except && placeTaken(pl) < pl.slots) return pl.master;
     return kNone;
+}
+
+Id World::openPlace(const std::string& kind, Id except) const {
+    Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
+    Id best = kNone;
+    for (const auto& pl : placesOf(households_, people_, lordHouse)) {
+        if (pl.kind != kind || pl.master == except || placeTaken(pl) >= pl.slots) continue;
+        if (pl.master == lordHouse) return pl.master;
+        if (best == kNone) best = pl.master;
+    }
+    return best;
 }
 
 // ---- Wants -------------------------------------------------------------------------------------

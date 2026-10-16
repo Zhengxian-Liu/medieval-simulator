@@ -33,16 +33,6 @@
        {"text": "好", "log": "{target} 待 {name} 像自家孩子，還手把手教{pron}本事。",
         "effects": [{"deed": {"type": "good_master", "doer": "target"}}, {"skill": {"craft": 1, "charm": 1}}, {"need": {"social": 15}}]}
      ]},
-    {"id": "villein_flight", "title": "逃到鎮上", "prompt": "{name} 聽說鎮上缺人手，在城裡住滿一年零一天就是自由人。可農奴私逃，被抓回來要罰。", "scope": "player_family", "chance": 0.02, "cooldown_years": 5,
-     "conditions": {"free": false, "sex": "male", "age": [17, 28], "married": false, "is_head": false, "heir_apparent": false, "year": [1350, 1500]},
-     "options": [
-       {"text": "放他走", "log": "{name} 聽說鎮上缺人手，在城裡住滿一年零一天就是自由人，趁夜離開了村子。家裡只能對領主的管家說不知道。",
-        "effects": [{"leave_village": "fled_to_town"}],
-        "ai": {"base": 6, "traits": {"brave": 8, "ambitious": 8, "content": -8}}},
-       {"text": "留下來", "log": "{name} 想逃到鎮上去當自由人，最後還是捨不得家裡的地。",
-        "effects": [{"need": {"spirit": -10}}],
-        "ai": {"base": 10, "traits": {"content": 8, "craven": 6, "diligent": 4}}}
-     ]},
     {"id": "lent_fast", "title": "四旬期", "prompt": "四旬期到了，四十天不能吃肉、蛋和乳酪。燻肉還掛在灶上。", "scope": "player_family", "chance": 0.02, "cooldown_years": 6, "cooldown_scope": "household",
      "conditions": {"month": [1, 2], "age": [14, 65]},
      "options": [

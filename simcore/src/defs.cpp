@@ -98,6 +98,19 @@ Defs Defs::loadFromDir(const std::string& dir) {
         d.occupations[od.id] = od;
     }
 
+    Json pathsRoot = Json::parseFile(dir + "/paths.json");
+    for (const auto& o : pathsRoot["stations"].asArray()) {
+        StationDef sd;
+        sd.id = o["id"].asString();
+        sd.name = o.stringOr("name", sd.id);
+        sd.occupation = o.stringOr("occupation", "");
+        sd.away = o["away"].isBool() && o["away"].asBool();
+        sd.lasting = o["lasting"].isBool() && o["lasting"].asBool();
+        if (!sd.occupation.empty() && !d.occupations.count(sd.occupation))
+            throw JsonError("station " + sd.id + ": unknown occupation " + sd.occupation);
+        d.stations[sd.id] = sd;
+    }
+
     std::vector<fs::path> eventFiles;
     for (const auto& entry : fs::directory_iterator(dir + "/events"))
         if (entry.path().extension() == ".json") eventFiles.push_back(entry.path());
@@ -272,6 +285,10 @@ const TraitDef* Defs::trait(const std::string& id) const {
 const OccupationDef* Defs::occupation(const std::string& id) const {
     auto it = occupations.find(id);
     return it == occupations.end() ? nullptr : &it->second;
+}
+const StationDef* Defs::station(const std::string& id) const {
+    auto it = stations.find(id);
+    return it == stations.end() ? nullptr : &it->second;
 }
 const AmbitionDef* Defs::ambition(const std::string& id) const {
     for (const auto& a : ambitions)

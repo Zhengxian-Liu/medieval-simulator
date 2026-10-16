@@ -97,6 +97,14 @@ public:
 
     void send(const std::string& line) { std::cout << line << "\n" << std::flush; }
 
+    // 人生路: each turn of a person's road, with its year.
+    std::string road(const Person& p) const {
+        std::vector<std::string> v;
+        for (const auto& r : p.road)
+            if (!r.note.empty()) v.push_back(Obj().n("year", w_.config().startYear + r.day / kDaysPerYear).text("text", r.note).done());
+        return arr(v);
+    }
+
     // What the family can do with someone this season (empty while a choice is being asked).
     std::string actionsFor(Id who, const Person& head) {
         std::vector<std::string> out;
@@ -199,6 +207,7 @@ public:
             f.n("id", m).text("name", w.shortName(m)).text("full", w.fullName(m)).text("kin", m == head ? "你" : w.kinWord(head, m))
                 .n("age", std::floor(w.ageYears(p))).b("female", p.sex == Sex::Female).text("mood", mv.word).text("mood_cause", mv.cause)
                 .n("mood_value", std::lround(mv.value)).n("health", std::lround(p.health)).raw("needs", arr(needs)).raw("traits", arr(traits));
+            f.text("station", p.station.empty() ? "" : w.stationName(p)).raw("road", road(p));
             if (m != head) {
                 double op = w.opinion(m, head);
                 f.n("opinion", std::lround(op)).text("opinion_word", opinionWord(op)).raw("reasons", reasons(m, head)).text("want", w.wantText(p));
@@ -207,6 +216,15 @@ public:
             fam.push_back(f.done());
         }
         o.raw("family", arr(fam));
+        // The family's people living outside the village (design/life-paths.md): where they are, the road there.
+        std::vector<std::string> away;
+        for (Id m : w.livingAway()) {
+            const Person& p = w.people()[m];
+            if (p.awayFrom != hh) continue;
+            away.push_back(Obj().n("id", m).text("name", w.shortName(m)).text("kin", w.kinWord(head, m)).n("age", std::floor(w.ageYears(p)))
+                               .text("station", w.stationName(p)).raw("road", road(p)).done());
+        }
+        o.raw("away", arr(away));
 
         // Everyone else the family deals with: those it can go and see, and those with business with it.
         std::vector<Id> people;

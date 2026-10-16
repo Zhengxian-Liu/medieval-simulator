@@ -1,0 +1,23 @@
+{
+  "_doc": "處境 (design/life-paths.md): where a person is in life. name reads after a person's name (「湯姆 在鎮上當學徒」). away = lives outside the village; lasting = away for good. The forks between them are events in events/paths.json.",
+  "stations": [
+    {"id": "home",            "name": "在家"},
+    {"id": "servant",         "name": "在別人家幫傭"},
+    {"id": "apprentice",      "name": "跟村裡的師傅學手藝"},
+    {"id": "labourer",        "name": "給人做雇工"},
+    {"id": "veteran",         "name": "打完仗回了村", "occupation": "peasant"},
+    {"id": "retainer",        "name": "當領主的護衛", "occupation": "soldier"},
+    {"id": "clerk",           "name": "當書記", "occupation": "clerk"},
+    {"id": "town_apprentice", "name": "在鎮上當學徒", "away": true},
+    {"id": "town_journeyman", "name": "在鎮上當伙計", "away": true},
+    {"id": "town_master",     "name": "在鎮上當師傅", "away": true, "lasting": true},
+    {"id": "town_labourer",   "name": "在鎮上打零工", "away": true},
+    {"id": "town_servant",    "name": "在鎮上幫傭", "away": true},
+    {"id": "town_wife",       "name": "嫁到了鎮上", "away": true, "lasting": true},
+    {"id": "scholar",         "name": "在文法學校讀書", "away": true},
+    {"id": "priest_away",     "name": "在外地當神父", "occupation": "priest", "away": true, "lasting": true},
+    {"id": "archer",          "name": "出征當弓兵", "occupation": "soldier", "away": true},
+    {"id": "fled",            "name": "逃到了鎮上", "away": true},
+    {"id": "elsewhere",       "name": "在外地落了腳", "away": true, "lasting": true}
+  ]
+}

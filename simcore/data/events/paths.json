@@ -1,0 +1,227 @@
+{
+  "_doc": "人生的岔路 (design/life-paths.md): checkpoints at set ages whose options come from the family's means, standing and the places free; tries that can fail and send a life down another road; and the yearly lot of those living away (scope away). Stations are in data/paths.json.",
+  "events": [
+    {"id": "path_school", "title": "認字", "prompt": "神父願意教村裡的孩子認字。{name} {age} 歲了，家裡也正缺人手。", "scope": "anyone", "pulse": "yearly", "chance": 0.7, "parent_decides": true,
+     "conditions": {"age": [7, 9], "station": "home", "no_flag": "school_decided", "is_head": false},
+     "options": [
+       {"text": "跟神父認字（12 便士）", "conditions": {"money_ge": 12}, "log": "{name} 開始跟神父認字。",
+        "effects": [{"money": -12}, {"set_flag": "schooled"}, {"set_flag": "school_decided"}],
+        "ai": {"base": 4, "traits": {"pious": 4, "ambitious": 4, "greedy": -4, "clever": 6, "dull": -6},
+               "if": [{"cond": {"standing_ge": 2}, "add": 6}, {"cond": {"money_lt": 40}, "add": -3}, {"cond": {"tradition": "lettered"}, "add": 20}, {"cond": {"ambition": "educate_child"}, "add": 40}]}},
+       {"text": "留在家幫忙", "log": "", "effects": [{"set_flag": "school_decided"}, {"skill": {"farming": 1}}], "ai": {"base": 12}},
+       {"text": "送去別人家幫傭，換口飯吃", "conditions": {"any_place": "service", "money_lt": 30}, "log": "家裡揭不開鍋，{name} 才 {age} 歲就被送去別人家幫傭。",
+        "effects": [{"set_flag": "school_decided"}, {"take_any_place": "service"}],
+        "ai": {"base": 2, "if": [{"cond": {"food_days_lt": 60}, "add": 10}]}}
+     ]},
+
+    {"id": "path_youth_m", "title": "出路", "prompt": "{name} {age} 歲了，往後走哪條路，家裡得拿個主意。", "scope": "anyone", "pulse": "yearly", "chance": 0.6, "parent_decides": true,
+     "conditions": {"sex": "male", "age": [11, 13], "station": "home", "no_flag": "trade_decided", "is_head": false},
+     "options": [
+       {"text": "留在家裡，跟著家裡的活", "log": "", "effects": [{"set_flag": "trade_decided"}],
+        "ai": {"base": 12, "traits": {"content": 4}, "if": [{"cond": {"heir_apparent": true}, "add": 20}]}},
+       {"text": "拜村裡的師傅學手藝（24 便士）", "conditions": {"any_place": "apprentice", "money_ge": 24}, "log": "{name} 拜了村裡的師傅學手藝。",
+        "effects": [{"money": -24}, {"take_any_place": "apprentice"}],
+        "ai": {"base": 5, "traits": {"ambitious": 5, "diligent": 3}, "if": [{"cond": {"heir_apparent": true}, "add": -6}, {"cond": {"money_lt": 50}, "add": -3}]}},
+       {"text": "送進莊園或大戶當差", "conditions": {"any_place": "service"}, "log": "{name} 被送去當差。",
+        "effects": [{"set_flag": "trade_decided"}, {"take_any_place": "service"}],
+        "ai": {"base": 4, "if": [{"cond": {"money_lt": 20}, "add": 6}, {"cond": {"heir_apparent": true}, "add": -4}]}},
+       {"text": "送去鎮上當學徒（50 便士，七年）", "conditions": {"free": true, "money_ge": 50}, "log": "{name} 跟著趕集的人進了城，拜了一個織布師傅，要學七年。",
+        "effects": [{"money": -50}, {"set_flag": "trade_decided"}, {"station": {"id": "town_apprentice", "years": 7, "note": "進城拜師"}}],
+        "ai": {"base": 2, "traits": {"ambitious": 6, "content": -4}, "if": [{"cond": {"heir_apparent": true}, "add": -12}, {"cond": {"money_ge": 150}, "add": 4}]}},
+       {"text": "送去鎮上當學徒（50 便士，外加 15 便士給領主，准他離開莊園）", "conditions": {"free": false, "money_ge": 65}, "log": "{name} 家付了領主 15 便士，把他送進城拜了一個織布師傅，要學七年。",
+        "effects": [{"money": -65}, {"set_flag": "trade_decided"}, {"station": {"id": "town_apprentice", "years": 7, "note": "進城拜師"}}],
+        "ai": {"base": 2, "traits": {"ambitious": 6, "content": -4}, "if": [{"cond": {"heir_apparent": true}, "add": -12}, {"cond": {"money_ge": 150}, "add": 4}]}},
+       {"text": "送去讀文法學校（40 便士，{odds}）", "conditions": {"flag": "schooled", "money_ge": 40},
+        "log": "",
+        "effects": [{"set_flag": "trade_decided"},
+                    {"odds": {"base": 25, "skill": {"learning": 8}, "traits": {"literate": 20, "clever": 15, "dull": -20}, "free": 10, "depends": "認字的底子，農奴還要看領主肯不肯",
+                              "effects": [{"money": -40}, {"tell": "文法學校的先生考了 {name} 幾句拉丁文，收下了他。"}, {"station": {"id": "scholar", "years": [3, 4], "note": "進了文法學校"}}],
+                              "else": [{"tell": "文法學校的先生考了 {name} 幾句拉丁文，搖了搖頭，叫他回家。"}]}}],
+        "ai": {"base": 3, "traits": {"pious": 6, "ambitious": 4, "clever": 8}, "if": [{"cond": {"heir_apparent": true}, "add": -10}, {"cond": {"tradition": "lettered"}, "add": 15}]}}
+     ]},
+
+    {"id": "path_youth_f", "title": "出路", "prompt": "{name} {age} 歲了，往後走哪條路，家裡得拿個主意。", "scope": "anyone", "pulse": "yearly", "chance": 0.6, "parent_decides": true,
+     "conditions": {"sex": "female", "age": [11, 14], "station": "home", "no_flag": "trade_decided", "is_head": false, "married": false},
+     "options": [
+       {"text": "在家學持家", "log": "", "effects": [{"set_flag": "trade_decided"}], "ai": {"base": 12}},
+       {"text": "去莊園或大戶幫傭", "conditions": {"any_place": "service"}, "log": "{name} 被送去幫傭。",
+        "effects": [{"set_flag": "trade_decided"}, {"take_any_place": "service"}],
+        "ai": {"base": 4, "if": [{"cond": {"money_lt": 20}, "add": 6}]}},
+       {"text": "跟村裡的釀酒婦學釀酒", "log": "{name} 跟著村裡的釀酒婦學釀麥酒。", "effects": [{"set_flag": "trade_decided"}, {"skill": {"craft": 2}}],
+        "ai": {"base": 4, "traits": {"diligent": 4, "gregarious": 3}}},
+       {"text": "去鎮上幫傭（盤纏 6 便士）", "conditions": {"money_ge": 6}, "log": "{name} 跟著同鄉進了城，在一戶人家幫傭。",
+        "effects": [{"money": -6}, {"set_flag": "trade_decided"}, {"station": {"id": "town_servant", "years": [3, 6], "note": "進城幫傭"}}],
+        "ai": {"base": 2, "traits": {"ambitious": 5, "shy": -3}, "if": [{"cond": {"money_lt": 30}, "add": 3}]}}
+     ]},
+
+    {"id": "path_grown_m", "title": "長大了", "prompt": "{name} {age} 歲了。家裡的地將來歸誰，大家心裡都有數。", "scope": "anyone", "pulse": "yearly", "chance": 0.5, "parent_decides": true,
+     "conditions": {"sex": "male", "age": [16, 22], "station": "home", "no_flag": "grown_decided", "is_head": false, "married": false},
+     "options": [
+       {"text": "留在家，等著接手或分地", "log": "", "effects": [{"set_flag": "grown_decided"}],
+        "ai": {"base": 10, "traits": {"content": 6}, "if": [{"cond": {"heir_apparent": true}, "add": 30}]}},
+       {"text": "出去給人當雇工，自己掙錢", "log": "{name} 出去給人當雇工，按天拿工錢。",
+        "effects": [{"set_flag": "grown_decided"}, {"station": {"id": "labourer", "note": "出去當雇工"}}],
+        "ai": {"base": 6, "traits": {"diligent": 3}, "if": [{"cond": {"heir_apparent": true}, "add": -15}, {"cond": {"acres_lt": 10}, "add": 6}]}},
+       {"text": "進城找活路", "conditions": {"free": true}, "log": "{name} 收拾了一個包袱，進城找活路去了。",
+        "effects": [{"set_flag": "grown_decided"}, {"station": {"id": "town_labourer", "note": "進城找活"}}],
+        "ai": {"base": 2, "traits": {"ambitious": 6, "content": -6}, "if": [{"cond": {"heir_apparent": true}, "add": -12}, {"cond": {"year": [1349, 1400]}, "add": 3}]}},
+       {"text": "逃到鎮上去（農奴私逃，被抓回來要罰）", "conditions": {"free": false}, "log": "{name} 聽說在城裡住滿一年零一天就是自由人，趁夜離開了村子。家裡只能對管家說不知道。",
+        "effects": [{"set_flag": "grown_decided"}, {"station": {"id": "fled", "note": "趁夜逃走"}}],
+        "ai": {"base": 1.5, "traits": {"brave": 6, "ambitious": 6, "content": -8}, "if": [{"cond": {"heir_apparent": true}, "add": -10}, {"cond": {"year": [1349, 1400]}, "add": 3}]}}
+     ]},
+
+    {"id": "path_grown_f", "title": "長大了", "prompt": "{name} {age} 歲了，還沒說親。", "scope": "anyone", "pulse": "yearly", "chance": 0.4, "parent_decides": true,
+     "conditions": {"sex": "female", "age": [15, 20], "station": "home", "no_flag": "grown_decided", "is_head": false, "married": false},
+     "options": [
+       {"text": "在家等人說媒", "log": "", "effects": [{"set_flag": "grown_decided"}], "ai": {"base": 12}},
+       {"text": "去鎮上幫傭，自己攢嫁妝", "log": "{name} 進城幫傭，想自己攢一份嫁妝。",
+        "effects": [{"set_flag": "grown_decided"}, {"station": {"id": "town_servant", "years": [3, 5], "note": "進城幫傭攢嫁妝"}}],
+        "ai": {"base": 3, "traits": {"ambitious": 5, "shy": -3}, "if": [{"cond": {"money_lt": 30}, "add": 4}]}},
+       {"text": "去莊園或大戶幫傭", "conditions": {"any_place": "service"}, "log": "{name} 去別人家幫傭。",
+        "effects": [{"set_flag": "grown_decided"}, {"take_any_place": "service"}], "ai": {"base": 4}}
+     ]},
+
+    {"id": "widow_suitor", "title": "有地的寡婦", "prompt": "{target} 守了寡，一個人撐著家裡的地。村裡人說，誰娶了她，誰就有地種。", "scope": "anyone", "pulse": "yearly", "chance": 0.25, "cooldown_years": 3,
+     "conditions": {"sex": "male", "age": [18, 35], "married": false, "is_head": false, "station": ["home", "labourer", "veteran"]},
+     "target": {"pick": "random_villager", "conditions": {"sex": "female", "widowed": true, "is_head": true, "acres_ge": 4, "age": [22, 48], "married": false}},
+     "options": [
+       {"text": "去提親（{odds}）", "log": "",
+        "effects": [{"odds": {"base": 20, "skill": {"charm": 3}, "traits": {"comely": 15, "gregarious": 6, "shy": -8, "strong": 6}, "target_opinion": 0.6, "reputation": 0.5, "depends": "她對他的印象和他的名聲",
+                              "effects": [{"tell": "{target} 點了頭。{name} 娶了她，搬進她家，接手了她的地。"}, {"marry_target": true}],
+                              "else": [{"tell": "{target} 回絕了 {name} 的提親。"}, {"need": {"spirit": -10}}]}}],
+        "ai": {"base": 6, "traits": {"ambitious": 8, "greedy": 6, "shy": -4}, "if": [{"cond": {"heir_apparent": true}, "add": -8}]}},
+       {"text": "算了", "log": "", "effects": [], "ai": {"base": 8, "traits": {"content": 4, "shy": 4}}}
+     ]},
+
+    {"id": "commission_of_array", "title": "點兵", "prompt": "國王又要用兵了。領主的管家在教堂門口點人去當弓兵：管吃，一天三便士，搶到的東西歸自己。他點到了 {name}。", "scope": "anyone", "pulse": "yearly", "chance": 0.12, "cooldown_years": 4, "parent_decides": true,
+     "conditions": {"sex": "male", "age": [16, 35], "is_head": false, "station": ["home", "labourer", "veteran"], "any": [{"year": [1333, 1360]}, {"year": [1369, 1389]}]},
+     "options": [
+       {"text": "去當弓兵", "log": "{name} 背上長弓，跟著點來的人走了。",
+        "effects": [{"station": {"id": "archer", "years": [2, 4], "note": "應徵出征"}}],
+        "ai": {"base": 3, "traits": {"brave": 10, "craven": -12, "ambitious": 5, "wrathful": 4}, "if": [{"cond": {"heir_apparent": true}, "add": -6}, {"cond": {"station": "veteran"}, "add": 6}]}},
+       {"text": "家裡出 20 便士，找人替他去", "conditions": {"money_ge": 20}, "log": "家裡湊了 20 便士，找了個沒地的人替 {name} 去。",
+        "effects": [{"money": -20}], "ai": {"base": 5, "traits": {"craven": 8}, "if": [{"cond": {"money_lt": 60}, "add": -4}]}},
+       {"text": "躲著不去", "log": "{name} 躲進了樹林，管家沒找到人，記了一筆。",
+        "effects": [{"lord_opinion": {"value": -6, "mod": "dodged_array", "years": 5}}], "ai": {"base": 4, "traits": {"craven": 4, "brave": -4}}}
+     ]},
+
+    {"id": "labourer_wages", "title": "工錢", "ask": false, "scope": "anyone", "pulse": "yearly", "chance": 1,
+     "conditions": {"station": "labourer"},
+     "options": [{"text": "好", "log": "", "effects": [{"money": 18}]}]},
+
+    {"id": "veteran_back", "title": "老兵", "prompt": "{name} 打完仗回來了，身上有點積蓄，也見過了世面。", "scope": "anyone", "pulse": "yearly", "chance": 0.8,
+     "conditions": {"station": "veteran", "is_head": false},
+     "options": [
+       {"text": "安心回田裡", "log": "", "effects": [{"station": {"id": "home", "note": "回田裡"}}], "ai": {"base": 10, "traits": {"content": 6}}},
+       {"text": "去求領主收他當護衛（{odds}）", "log": "",
+        "effects": [{"odds": {"base": 25, "skill": {"charm": 2}, "traits": {"brave": 15, "strong": 15, "veteran": 10}, "lord_opinion": 0.5, "depends": "領主看不看得上他",
+                              "effects": [{"tell": "領主收下了 {name} 當護衛。"}, {"station": {"id": "retainer", "note": "當上領主的護衛"}}],
+                              "else": [{"tell": "領主說不缺人。{name} 只好回田裡。"}, {"station": {"id": "home", "note": "沒當上護衛，回田裡"}}]}}],
+        "ai": {"base": 4, "traits": {"brave": 6, "ambitious": 6}}},
+       {"text": "再出征", "conditions": {"any": [{"year": [1333, 1360]}, {"year": [1369, 1389]}]}, "log": "{name} 在家待不住，又跟著出征了。",
+        "effects": [{"station": {"id": "archer", "years": [2, 4], "note": "再次出征"}}], "ai": {"base": 2, "traits": {"brave": 8, "wrathful": 4}}}
+     ]},
+
+    {"id": "clerk_road", "title": "書記的路", "prompt": "{name} 當書記有幾年了。往後是一輩子替人寫字，還是往上走？", "scope": "anyone", "pulse": "yearly", "chance": 0.4,
+     "conditions": {"station": "clerk", "station_years_ge": 2, "age": [18, 40], "no_flag": "clerk_decided"},
+     "options": [
+       {"text": "求神父舉薦，受神職（{odds}）", "conditions": {"married": false}, "log": "",
+        "effects": [{"set_flag": "clerk_decided"},
+                    {"odds": {"base": 20, "skill": {"learning": 2}, "traits": {"pious": 15, "cynical": -10}, "lord_opinion": 0.4, "depends": "學問和有沒有人舉薦",
+                              "effects": [{"tell": "主教替 {name} 授了神職，派他到外地一個教區當神父。"}, {"prestige": 8}, {"station": {"id": "priest_away", "note": "受了神職，到外地當神父"}}],
+                              "else": [{"tell": "主教沒有點頭。{name} 還是當他的書記。"}]}}],
+        "ai": {"base": 5, "traits": {"pious": 10, "lustful": -6}}},
+       {"text": "留下替領主管帳", "log": "{name} 留下替領主管帳。", "effects": [{"set_flag": "clerk_decided"}, {"lord_opinion": {"value": 6, "mod": "keeps_accounts", "years": 10}}],
+        "ai": {"base": 8, "traits": {"diligent": 4}}},
+       {"text": "還俗成家", "log": "{name} 不當書記了，回家種地，打算娶妻。",
+        "effects": [{"set_flag": "clerk_decided"}, {"set_occupation": "peasant"}, {"station": {"id": "home", "note": "還俗"}}],
+        "ai": {"base": 4, "traits": {"lustful": 8, "pious": -4}}}
+     ]},
+
+    {"id": "town_hard_master", "title": "狠心的師傅", "prompt": "從鎮上捎來口信：{name} 的師傅動不動就打人，飯也不給吃飽。", "scope": "away", "pulse": "yearly", "chance": 0.08, "cooldown_years": 3, "parent_decides": true,
+     "conditions": {"station": "town_apprentice"},
+     "options": [
+       {"text": "叫他忍到出師", "log": "家裡捎話叫 {name} 忍到出師。", "effects": [{"need": {"spirit": -15}}, {"health": -5}], "ai": {"base": 10, "traits": {"calm": 4}}},
+       {"text": "叫他回家", "log": "{name} 受不了師傅的打罵，跑回了村。", "effects": [{"station": {"id": "home", "note": "受不了師傅，回了家"}}], "ai": {"base": 5, "traits": {"kind": 6, "wrathful": 4}}}
+     ]},
+
+    {"id": "town_apprentice_done", "title": "出師", "prompt": "{name} 在鎮上學滿七年，出師了。", "scope": "away", "pulse": "yearly", "chance": 1, "parent_decides": true,
+     "conditions": {"station": "town_apprentice", "station_due": true},
+     "options": [
+       {"text": "在鎮上入行會當師傅（家裡出 60 便士）", "conditions": {"money_ge": 60}, "log": "家裡湊了 60 便士，{name} 在鎮上入了行會，自己開了舖子。",
+        "effects": [{"money": -60}, {"station": {"id": "town_master", "note": "入了行會當師傅"}}], "ai": {"base": 6, "traits": {"ambitious": 6}}},
+       {"text": "先當伙計，自己攢錢", "log": "{name} 出了師，留在鎮上當伙計，想自己攢錢入行會。",
+        "effects": [{"station": {"id": "town_journeyman", "years": [3, 5], "note": "出師當伙計"}}], "ai": {"base": 8, "traits": {"diligent": 4}}},
+       {"text": "回村當織工", "log": "{name} 學成回村，在家裡架起了織布機。",
+        "effects": [{"set_occupation": "weaver"}, {"station": {"id": "home", "note": "學成回村當織工"}}],
+        "ai": {"base": 5, "traits": {"content": 6}, "if": [{"cond": {"heir_apparent": true}, "add": 15}]}}
+     ]},
+
+    {"id": "journeyman_due", "title": "攢夠了沒有", "ask": false, "scope": "away", "pulse": "yearly", "chance": 1,
+     "conditions": {"station": "town_journeyman", "station_due": true},
+     "options": [{"text": "好", "log": "",
+       "effects": [{"odds": {"base": 35, "skill": {"craft": 3}, "traits": {"diligent": 10, "lazy": -10, "greedy": 5},
+                             "effects": [{"tell": "{name} 攢夠了錢，在鎮上入了行會，自己開了舖子。"}, {"station": {"id": "town_master", "note": "攢夠錢入了行會"}}],
+                             "else": [{"tell": "{name} 在鎮上當了幾年伙計，錢還是沒攢夠，回了村。"}, {"set_occupation": "weaver"}, {"station": {"id": "home", "note": "沒攢夠錢，回村當織工"}}]}}]}]},
+
+    {"id": "journeyman_widow", "title": "師傅的寡婦", "ask": false, "scope": "away", "pulse": "yearly", "chance": 0.06,
+     "conditions": {"station": "town_journeyman", "sex": "male", "married": false},
+     "options": [{"text": "好", "log": "", "effects": [{"tell": "{name} 在鎮上娶了過世師傅的寡婦，接下了她家的舖子。"}, {"station": {"id": "town_master", "note": "娶了師傅的寡婦，接下舖子"}}]}]},
+
+    {"id": "town_labourer_home", "title": "混不下去", "ask": false, "scope": "away", "pulse": "yearly", "chance": 0.15,
+     "conditions": {"station": "town_labourer"},
+     "options": [{"text": "好", "log": "", "effects": [{"tell": "{name} 在城裡打零工，混不下去，回了村。"}, {"station": {"id": "home", "note": "在城裡混不下去，回了村"}}]}]},
+
+    {"id": "town_labourer_settles", "title": "落腳", "ask": false, "scope": "away", "pulse": "yearly", "chance": 0.08,
+     "conditions": {"station": ["town_labourer", "fled"], "station_years_ge": 2},
+     "options": [{"text": "好", "log": "", "effects": [{"tell": "{name} 在鎮上娶了妻，落了戶，不回來了。"}, {"station": {"id": "elsewhere", "note": "在鎮上娶妻落戶"}}]}]},
+
+    {"id": "fled_caught", "title": "被抓回來", "ask": false, "scope": "away", "pulse": "yearly", "chance": 0.3,
+     "conditions": {"station": "fled", "free": false},
+     "options": [{"text": "好", "log": "", "effects": [{"tell": "{name} 在鎮上被領主的人認了出來，押回了村。家裡被罰了 20 便士。"}, {"money": -20}, {"station": {"id": "home", "note": "逃走被抓回來"}}]}]},
+
+    {"id": "fled_return", "title": "回村", "ask": false, "scope": "away", "pulse": "yearly", "chance": 0.1,
+     "conditions": {"station": ["fled", "town_labourer"], "free": true, "year": [1349, 1400]},
+     "options": [{"text": "好", "log": "", "effects": [{"tell": "瘟疫過後村裡缺人，已經是自由人的 {name} 回了村。"}, {"station": {"id": "home", "note": "疫後回村，已是自由人"}}]}]},
+
+    {"id": "town_servant_marries", "title": "嫁在鎮上", "ask": false, "scope": "away", "pulse": "yearly", "chance": 0.1,
+     "conditions": {"station": "town_servant", "sex": "female", "married": false, "age": [16, 30]},
+     "options": [{"text": "好", "log": "", "effects": [{"tell": "{name} 在鎮上嫁了一個手藝人，不回來了。"}, {"station": {"id": "town_wife", "note": "在鎮上嫁了人"}}]}]},
+
+    {"id": "town_servant_abused", "title": "跑回家", "ask": false, "scope": "away", "pulse": "yearly", "chance": 0.04,
+     "conditions": {"station": "town_servant"},
+     "options": [{"text": "好", "log": "", "effects": [{"tell": "{name} 受不了主人家的欺負，自己走回了村。"}, {"need": {"spirit": -15}}, {"station": {"id": "home", "note": "受了欺負跑回家"}}]}]},
+
+    {"id": "town_servant_done", "title": "期滿回家", "ask": false, "scope": "away", "pulse": "yearly", "chance": 1,
+     "conditions": {"station": "town_servant", "station_due": true},
+     "options": [{"text": "好", "log": "", "effects": [{"tell": "{name} 在鎮上幫傭期滿，帶著攢下的 30 便士回了家。"}, {"money": 30}, {"set_flag": "own_dowry"}, {"station": {"id": "home", "note": "攢了嫁妝回家"}}]}]},
+
+    {"id": "school_exam", "title": "考核", "ask": false, "scope": "away", "pulse": "yearly", "chance": 1,
+     "conditions": {"station": "scholar", "station_due": true},
+     "options": [{"text": "好", "log": "",
+       "effects": [{"add_trait": "literate"},
+                   {"odds": {"base": 15, "skill": {"learning": 6}, "traits": {"clever": 15, "dull": -20, "diligent": 8, "lazy": -8},
+                             "effects": [{"tell": "{name} 在文法學校考過了，受了剃髮，回村當書記。"}, {"prestige": 4}, {"station": {"id": "clerk", "note": "考上了，受了剃髮"}}],
+                             "else": [{"tell": "{name} 在文法學校沒考過，識了字回家。"}, {"station": {"id": "home", "note": "沒考上，識字回家"}}]}}]}]},
+
+    {"id": "archer_killed", "title": "噩耗", "ask": false, "scope": "away", "pulse": "yearly", "chance": 0.08, "npc_log": true,
+     "conditions": {"station": "archer"},
+     "options": [{"text": "好", "log": "", "effects": [{"kill": "戰死沙場"}]}]},
+
+    {"id": "archer_loot", "title": "戰利品", "ask": false, "scope": "away", "pulse": "yearly", "chance": 0.25, "cooldown_years": 1,
+     "conditions": {"station": "archer"},
+     "options": [{"text": "好", "log": "", "effects": [{"tell": "{name} 在法國搶到了戰利品，托同鄉捎回 60 便士。"}, {"money": 60}]}]},
+
+    {"id": "archer_wounded", "title": "負傷", "ask": false, "scope": "away", "pulse": "yearly", "chance": 0.07,
+     "conditions": {"station": "archer"},
+     "options": [{"text": "好", "log": "", "effects": [{"tell": "{name} 在戰場上受了傷，被同鄉抬了回來。"}, {"health": -30}, {"add_trait": "scarred"}, {"add_trait": "veteran"}, {"station": {"id": "veteran", "note": "受傷回家"}}]}]},
+
+    {"id": "archer_home", "title": "回村", "ask": false, "scope": "away", "pulse": "yearly", "chance": 1,
+     "conditions": {"station": "archer", "station_due": true},
+     "options": [{"text": "好", "log": "", "effects": [{"tell": "{name} 打完仗回來了，曬得黝黑，帶回 20 便士。"}, {"money": 20}, {"add_trait": "veteran"}, {"station": {"id": "veteran", "note": "期滿回村"}}]}]},
+
+    {"id": "priest_help", "title": "神父的心意", "ask": false, "scope": "away", "pulse": "yearly", "chance": 0.15,
+     "conditions": {"station": "priest_away"},
+     "options": [{"text": "好", "log": "", "effects": [{"tell": "在外地當神父的 {name} 捎回 15 便士，囑咐家裡給孩子買件冬衣。"}, {"money": 15}]}]}
+  ]
+}

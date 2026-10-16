@@ -18,6 +18,8 @@ public:
     bool eval(const Json& cond, const Person& p, Id target) const;
     void apply(const Json& effects, Person& p, Id target);
     std::string format(const std::string& tmpl, const Person& p, Id target) const;
+    std::string optionText(const OptionDef& o, const Person& p, Id target) const;
+    double odds(const Json& o, const Person& p, Id target) const;
 
     // Picks the option an AI (or the auto-played head) would choose.
     int chooseOption(const EventDef& ev, const Person& p, Id target = kNone);

@@ -29,6 +29,15 @@ struct OccupationDef {
     bool farms = false;        // works the household land
 };
 
+// 處境 (design/life-paths.md): where a person is in life. The forks between them are events (data/events/paths.json).
+struct StationDef {
+    std::string id;
+    std::string name;
+    std::string occupation;  // taken up on entering, if set
+    bool away = false;       // lives outside the village: off the map, followed only by yearly "away" events
+    bool lasting = false;    // away for good (settled in town, married there): nobody waits for them to come back
+};
+
 struct OptionDef {
     std::string text;
     std::string log;  // chronicle line, may be empty
@@ -192,6 +201,7 @@ struct Defs {
     std::map<std::string, TraitDef> traits;
     std::vector<std::string> traitOrder;  // deterministic iteration
     std::map<std::string, OccupationDef> occupations;
+    std::map<std::string, StationDef> stations;
     std::vector<EventDef> events;
     std::vector<HistoryDef> history;
     std::vector<AmbitionDef> ambitions;
@@ -212,6 +222,7 @@ struct Defs {
 
     const TraitDef* trait(const std::string& id) const;
     const OccupationDef* occupation(const std::string& id) const;
+    const StationDef* station(const std::string& id) const;
     const AmbitionDef* ambition(const std::string& id) const;
     const ItemDef* item(const std::string& id) const;
     const PlanDef* plan(const std::string& id) const;

@@ -203,11 +203,16 @@ void World::kill(Id id, const std::string& cause) {
     Id hid = p.household;
     bool family = isPlayerFamily(p);
     double age = ageYears(p);
+    bool away = isAway(p) || (p.deathDay >= 0 && hid == kNone && p.awayFrom != kNone);
     if (family || (hid != kNone && households_[hid].head == id))
-        log(family && inPlayerHouse(hid) ? 1 : 2,
+        log(family && (inPlayerHouse(hid) || (away && inPlayerHouse(p.awayFrom))) ? 1 : 2,
             age < 1 ? fullName(id) + " 出生沒多久就夭折了。"
-                    : fullName(id) + " 因" + cause + "去世，享年 " + std::to_string(int(age)) + " 歲。");
+                    : (away ? "從外頭傳來消息：" + fullName(id) + "（" + stationName(p) + "）" : fullName(id)) + " 因" + cause +
+                          "去世，享年 " + std::to_string(int(age)) + " 歲。");
     if (inPlayerHouse(hid) && hid != kNone && households_[hid].head == id) obituary(id);
+    // The road they walked, in one line (design/life-paths.md): what a life came to, forks and all.
+    if (family && age >= 12 && (inPlayerHouse(hid) || (away && inPlayerHouse(p.awayFrom))))
+        if (std::string line = lifeLine(id); !line.empty()) log(1, "  " + p.firstName + "這一生：" + line + "。");
 
     // Grief.
     bool male = p.sex == Sex::Male;
@@ -374,6 +379,7 @@ void World::onHeadDied(Household& h, Id dead) {
     }
 
     h.head = heir;
+    noteLife(heir, "當了家");
     // The house goes on, but to someone not of the player's blood (a widower who married in, a
     // stepchild): the family line ends here unless another branch carries it.
     if (player && people_[heir].dynasty != playerDynasty_ &&
@@ -462,10 +468,13 @@ void World::marry(Id man, Id woman) {
             x->home = kNone;
             x->serviceEnd = -1;
             x->flags.erase("in_service");
+            if (x->station == "servant") setStation(x->id, "home", 0, "成親");
             if (x == &m && x->household != kNone && households_[x->household].head != man && !households_[home].extinct)
                 moveTo(man, home);
         }
     recordDeed("married", man, woman);
+    noteLife(man, "娶了" + fullName(woman));
+    noteLife(woman, "嫁給" + fullName(man));
     // The match each house was after for either of them is settled: theirs, or another's who got there first.
     for (auto& wt : wants_) {
         if (!wt.open || wt.kind != "match") continue;
@@ -816,6 +825,7 @@ void World::yearlyAdulthood() {
                 }
             }
             p.occupation = occ;
+            if (p.station == "apprentice") setStation(p.id, "home", 0, "出師，當" + defs_.occupation(occ)->name);
             if (family && p.sex == Sex::Male)
                 log(inPlayerHouse(p.household) ? 1 : 2, fullName(p.id) + " 十四歲了，開始當" + defs_.occupation(occ)->name + "。");
         }

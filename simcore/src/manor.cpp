@@ -85,6 +85,7 @@ void World::sendToService(Id servant, Id master, int years) {
     s.serviceEnd = day_ + years * kDaysPerYear;
     moveTo(servant, people_[master].household);
     s.flags.insert("in_service");
+    setStation(servant, "servant", 0, "到" + fullName(master) + "家幫傭");
 }
 
 void World::recallServants(Id household) {
@@ -95,6 +96,7 @@ void World::recallServants(Id household) {
             p.flags.erase("in_service");
             if (households_[p.household].head == p.id) continue;  // heads their master's house now: stays
             moveTo(p.id, household);
+            if (p.station == "servant") setStation(p.id, "home", 0, "被家裡叫回來");
             if (inPlayerHouse(household)) log(1, "  " + fullName(p.id) + " 從主人家趕回來。");
         }
 }
@@ -128,6 +130,7 @@ void World::yearlyService() {
             p.flags.erase("in_service");
             if (p.spouse != kNone && people_[p.spouse].alive()) continue;  // married: stays where they are
             moveTo(p.id, h);
+            if (p.station == "servant") setStation(p.id, "home", 0, "幫傭期滿");
             if (family) log(1, fullName(p.id) + " 幫傭期滿，回到家裡。");
         }
     }

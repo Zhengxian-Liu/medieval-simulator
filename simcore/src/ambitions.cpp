@@ -36,8 +36,9 @@ bool World::kinInChurch(Id dyn) const {
 
 bool World::kinInTown(Id dyn) const {
     if (dyn == kNone) return false;
-    Id t = dynasties_[dyn].townKin;
-    return t != kNone && people_[t].alive();
+    for (const auto& p : people_)
+        if (isAway(p) && p.dynasty == dyn && p.station.rfind("town_", 0) == 0 && p.station != "town_servant") return true;
+    return false;
 }
 
 void World::chooseAmbition(Person& head) {
@@ -211,41 +212,16 @@ void World::checkStandings() {
 }
 
 void World::yearlyTown() {
-    for (auto& d : dynasties_) {
-        if (d.townKin == kNone) continue;
-        Person& t = people_[d.townKin];
-        if (!t.alive()) {
-            d.townKin = kNone;
-            continue;
-        }
-        bool player = d.id == playerDynasty_;
-        int years = (day_ - d.townSince) / kDaysPerYear;
-        // Away from the village the sim does not follow him day to day: old age is all that ends him.
-        if (ageYears(t) > 62 && rngMinds_.chance(0.15)) {
-            t.deathDay = day_;
-            t.deathCause = "年老";
-            if (player) log(1, "從鎮上傳來消息：" + t.firstName + " 在城裡過世了。");
-            d.townKin = kNone;
-            continue;
-        }
-        if (years == 1 && !t.free) {
-            t.free = true;
-            if (player) log(1, t.firstName + " 在鎮上住滿了一年零一天，從此是自由人。");
-        }
-        if (years == 7 && player) log(1, "【鎮上】" + t.firstName + " 學成出師，成了鎮上行會的師傅。");
-        // A master in town sends something home now and then.
-        if (years >= 7 && rngMinds_.chance(0.4)) {
-            Id home = kNone;
-            for (const auto& h : households_)
-                if (!h.extinct && h.dynasty == d.id && h.head != kNone && (!player || inPlayerHouse(h.id))) {
-                    home = h.id;
-                    break;
-                }
-            if (home == kNone) continue;
-            int gift = rngMinds_.range(10, 25);
-            households_[home].money += gift;
-            if (player) log(1, "鎮上的 " + t.firstName + " 托人捎回 " + std::to_string(gift) + " 便士。");
-        }
+    // A master in town sends something home now and then (the town stations themselves: paths.cpp).
+    for (Id id : livingAway()) {
+        const Person& t = people_[id];
+        if (t.station != "town_master" || !rngMinds_.chance(0.4)) continue;
+        Id home = t.awayFrom;
+        if (home == kNone || households_[home].extinct || households_[home].head == kNone) continue;
+        int gift = rngMinds_.range(10, 25);
+        households_[home].money += gift;
+        book(households_[home], "鎮上捎回", gift);
+        if (inPlayerHouse(home)) log(1, "鎮上的 " + t.firstName + " 托人捎回 " + std::to_string(gift) + " 便士。");
     }
 }
 
