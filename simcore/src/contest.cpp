@@ -104,7 +104,7 @@ void World::chooseOfficers() {
         if (old != kNone && people_[old].alive() && old != playerHead()) addCand(old);
         std::vector<std::pair<double, Id>> ranked;
         for (const auto& p : people_)
-            if (eligible(p) && p.household != playerHousehold_) ranked.push_back({merit(p) + rngContest_.range(0, 4), p.id});
+            if (eligible(p) && !inPlayerHouse(p.household)) ranked.push_back({merit(p) + rngContest_.range(0, 4), p.id});
         std::sort(ranked.rbegin(), ranked.rend());
         for (size_t i = 0; i < ranked.size() && cands.size() < 2; ++i) addCand(ranked[i].second);
         if (cands.empty()) continue;
@@ -132,7 +132,7 @@ void World::chooseOfficers() {
         bool familyIn = false;
         for (Id c : cands) familyIn = familyIn || isPlayerFamily(people_[c]);
         for (const auto& wt : wants_)
-            if (wt.open && wt.kind == "office" && wt.office == id && wt.house == playerHousehold_) familyIn = true;
+            if (wt.open && wt.kind == "office" && wt.office == id && inPlayerHouse(wt.house)) familyIn = true;
         const std::string& name = cur->name;
         setOffice(id, winner, "選上的");
         Household& wh = households_[people_[winner].household];
@@ -219,7 +219,7 @@ void World::fillPlaces() {
         double bestScore = -1e9;
         for (const auto& wt : wants_) {
             if (!wt.open || wt.kind != "place" || wt.object != pl.master || wt.office != pl.kind || wt.subject == kNone) continue;
-            if (wt.house == playerHousehold_) continue;  // the family asks for itself (開口)
+            if (inPlayerHouse(wt.house)) continue;  // the family asks for itself (開口)
             if (!people_[wt.subject].alive() || people_[wt.subject].home != kNone) continue;
             const Household& h = households_[wt.house];
             if (h.head == kNone || (pl.kind == "apprentice" && h.money < 24)) continue;
@@ -262,7 +262,7 @@ std::string World::wantThing(const Want& wt) const {
 }
 
 bool World::familyKnows(const Want& wt) const {
-    if (wt.house == playerHousehold_) return true;
+    if (inPlayerHouse(wt.house)) return true;
     return wt.news != kNone && news_[wt.news].heard.count(playerHousehold_) > 0;
 }
 
@@ -311,7 +311,7 @@ Id World::addWant(Id house, const std::string& kind, Id object, Id subject, cons
         const Want* rw = nullptr;
         for (const auto& x : wants_)
             if (x.open && x.house == r && x.kind == kind && (kind == "office" ? x.office == office : x.object == object)) rw = &x;
-        if (house == playerHousehold_ && rw && familyKnows(*rw))
+        if (inPlayerHouse(house) && rw && familyKnows(*rw))
             log(1, "  （" + dynasties_[households_[r].dynasty].surname + " 家也在打" + thing + "的主意。）");
     }
     return wt.id;
@@ -341,7 +341,7 @@ void World::settleWants(const std::string& kind, Id object, const std::string& o
     for (Want* wt : hit) {
         if (wt->house == winnerHouse) {
             dropWant(*wt, how);
-            if (wt->house == playerHousehold_ && hit.size() > 1) log(1, "  （" + thing + "，你家搶在別人前頭拿到了。）");
+            if (inPlayerHouse(wt->house) && hit.size() > 1) log(1, "  （" + thing + "，你家搶在別人前頭拿到了。）");
             continue;
         }
         std::string lost = winnerHouse == kNone ? "回到領主手上" : "讓" + surname(winnerHouse) + "家" + (kind == "match" ? "訂走了" : "搶走了");
@@ -351,7 +351,7 @@ void World::settleWants(const std::string& kind, Id object, const std::string& o
             addOpinion(loser, winnerHead, "took_our_want", -10, 8);
             addConcern(loser, "grievance", winnerHead, 12);
         }
-        if (wt->house == playerHousehold_) log(1, "  （你家看中的" + thing + "，" + lost + "。）");
+        if (inPlayerHouse(wt->house)) log(1, "  （你家看中的" + thing + "，" + lost + "。）");
     }
     if (contested && winnerHouse != kNone && winnerHouse != lordHouse)
         addNews("contest:won", winnerHead, kNone, winnerHouse, kNone, thing);
@@ -391,7 +391,7 @@ void World::yearlyWants() {
             const Office* o = office(wt.office);
             if (o && o->holder != kNone && people_[o->holder].household == wt.house) stale = true;
         }
-        if (stale) dropWant(wt, wt.house == playerHousehold_ ? "放下了" : "放下了");
+        if (stale) dropWant(wt, inPlayerHouse(wt.house) ? "放下了" : "放下了");
     }
     // Apprentices are journeymen at twenty-one: the place is free again.
     for (auto& p : people_)
@@ -404,7 +404,7 @@ void World::yearlyWants() {
                    }), favours_.end());
 
     for (auto& h : households_) {
-        if (h.extinct || h.members.empty() || h.head == kNone || h.id == playerHousehold_ || h.id == lordHouse) continue;
+        if (h.extinct || h.members.empty() || h.head == kNone || inPlayerHouse(h.id) || h.id == lordHouse) continue;
         Person& hp = people_[h.head];
         if (hp.occupation == "priest" || ageYears(hp) < 18) continue;
         int open = 0;
@@ -589,7 +589,7 @@ void World::allotVacant() {
         if (pick == kNone) continue;
         double fine = pc.acres * rate;
         Id id = pc.id;
-        bool family = pick == playerHousehold_;
+        bool family = inPlayerHouse(pick);
         std::string name = parcelName(pc);
         moveParcel(id, pick, "向領主租來");
         households_[pick].money -= fine;
@@ -642,7 +642,7 @@ void World::chargeEntryFine(Household& h, Id heir, Id dead) {
     double amount = std::round(customary * rate * factor);
     if (amount < 2) return;
     fines_.push_back({h.id, heir, amount, day_ + 6 * kDaysPerMonth, false});
-    if (h.id == playerHousehold_)
+    if (inPlayerHouse(h.id))
         log(1, "  領主的管家說，" + fullName(heir) + " 要接下這 " + std::to_string(static_cast<int>(std::round(customary))) + " 畝地，得先交 " +
                    pence(amount) + "入地費，限半年內付清。");
 }
@@ -656,7 +656,7 @@ void World::monthlyFines() {
             continue;
         }
         // Paid as soon as the money is there (a little kept back for bread); the family pays when it comes due.
-        bool early = f.house != playerHousehold_ && h.money >= f.amount + 20;
+        bool early = !inPlayerHouse(f.house) && h.money >= f.amount + 20;
         if (early || day_ >= f.due) {
             EntryFine copy = f;
             fines_.erase(fines_.begin() + static_cast<long>(i));
@@ -670,7 +670,7 @@ void World::monthlyFines() {
 void World::resolveFine(EntryFine& f) {
     Household& h = households_[f.house];
     Id lordHouse = people_[lord_].household;
-    bool family = f.house == playerHousehold_;
+    bool family = inPlayerHouse(f.house);
     if (h.money >= f.amount) {
         h.money -= f.amount;
         households_[lordHouse].money += f.amount;
@@ -822,7 +822,7 @@ void World::forfeitForFine(Household& h, double share) {
     to.erase(std::unique(to.begin(), to.end()), to.end());
     for (const auto& t : to) whom += (whom.empty() ? "" : "、") + t + " 家";
     addNews("fine:lost", h.head, kNone, h.id, kNone, names);
-    if (h.id == playerHousehold_)
+    if (inPlayerHouse(h.id))
         log(1, "【入地費】交不出入地費，領主收回了" + names + (whom.empty() ? "。" : "，轉手租給了" + whom + "。"));
     else if (h.head != kNone)
         log(2, fullName(h.head) + " 家交不出入地費，" + names + "被領主收回" + (whom.empty() ? "。" : "，租給了" + whom + "。"));

@@ -98,6 +98,23 @@ int main() {
         CHECK(a.chronicle().size() == b.chronicle().size(), "chronicle length differs");
         checkInvariants(a, "seed42");
     }
+    // The village lives 25 years on its own, then the family is handed over alive, in the start year.
+    {
+        Config c;
+        c.seed = 5;
+        c.prerun = 25;
+        World a(defs, c), b(defs, c);
+        CHECK(a.playerHead() != kNone && !a.gameOver(), "no family to hand over after the pre-run");
+        CHECK(a.year() == 1330 && a.handedOver() == a.today(), "hand-over not in the start year");
+        CHECK(a.config().startYear == 1305, "world did not begin before play");
+        int moved = 0;
+        for (const auto& pc : a.parcels()) moved += pc.since > 0;
+        CHECK(moved > 0, "no land changed hands before the hand-over");
+        a.runYears(10);
+        b.runYears(10);
+        CHECK(a.digest() == b.digest(), "pre-run worlds differ for one seed");
+        checkInvariants(a, "prerun");
+    }
     // A run driven by the auto-player replays exactly from its command log alone.
     {
         Config c;

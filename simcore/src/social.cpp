@@ -37,7 +37,7 @@ void World::monthlySocial() {
                 addOpinion(b, a, "quarrels", -4, 4);
             }
             double after = opinion(a, b);
-            bool family = pa.household == playerHousehold_ && ageYears(pa) >= 12;
+            bool family = inPlayerHouse(pa.household) && ageYears(pa) >= 12;
             if (!family) continue;
             std::string friendFlag = "friend_" + std::to_string(b);
             std::string rivalFlag = "rival_" + std::to_string(b);
@@ -137,7 +137,7 @@ void World::electReeve() {
     if (lord_ != kNone && people_[lord_].alive()) {
         Id fav = winner;
         // A lord overrides the vote once in his time, unless the man he picks is already his favourite.
-        bool canOverride = lordOverrode_ != lord_ || people_[head].flags.count("lord_favour");
+        bool canOverride = lordOverrode_ != lord_ || (head != kNone && people_[head].flags.count("lord_favour"));
         if (playerRuns && canOverride && people_[head].flags.count("campaign_lord") && opinion(lord_, head) >= 20 &&
             rngSocial_.chance(people_[head].flags.count("lord_favour") ? 0.7 : 0.35))
             fav = head;

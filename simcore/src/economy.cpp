@@ -74,7 +74,7 @@ void World::harvest() {
         }
         // The harvest is news when it falls short, when the year is unusual, and once a decade as a ledger.
         h.lastYield = yield / std::max(0.01, consumption(h));
-        if (h.id == playerHousehold_) {
+        if (inPlayerHouse(h.id)) {
             bool lean = yield < consumption(h) * 360;
             bool news = lean != h.lean;  // a house that is always short does not hear it as news each year
             h.lean = lean;
@@ -120,7 +120,7 @@ void World::payRent() {
             h.food -= sell;
             h.money += sell * price;
             book(h, "賣口糧湊租", sell * price);
-            if (h.id == playerHousehold_ && sell > daily * 20)
+            if (inPlayerHouse(h.id) && sell > daily * 20)
                 log(1, "為了交租，賣了大約 " + std::to_string(int(sell / daily)) + " 天的口糧給糧販。");
         }
         h.lastRent = rent;
@@ -141,7 +141,7 @@ void World::payRent() {
             };
             double before = owedLord();
             addDebt(h, std::min(rent - paid, std::max(0.0, rent - before)), lord_);
-            if (h.id == playerHousehold_ && (before <= 0.5 || owedLord() - before >= 20))
+            if (inPlayerHouse(h.id) && (before <= 0.5 || owedLord() - before >= 20))
                 log(1, "地租 " + std::to_string(int(rent)) + " 便士只交得出 " + std::to_string(int(paid)) +
                            "，差的記在莊園的帳上（欠莊園共 " + std::to_string(int(owedLord())) + " 便士）。");
         }
@@ -152,7 +152,7 @@ void World::payRent() {
         h.money -= 60;
         book(h, "買耕牛", -60);
         h.noOxUntil = -1;
-        if (h.id == playerHousehold_) log(1, "秋天的市集上，" + (h.head != kNone ? fullName(h.head) : std::string("家裡")) + " 花 60 便士又買了一頭耕牛。");
+        if (inPlayerHouse(h.id)) log(1, "秋天的市集上，" + (h.head != kNone ? fullName(h.head) : std::string("家裡")) + " 花 60 便士又買了一頭耕牛。");
     }
     if (lordHouse != kNone && lordHouse >= 0) households_[lordHouse].money += collected;
 }
@@ -197,12 +197,12 @@ void World::monthlyEconomy() {
         for (Id m : h.members)
             if (ageYears(people_[m]) >= 14 && people_[m].occupation == h.trade) working = true;
         if (working || h.trade.empty()) {
-            if (working && h.tradeLet && h.id == playerHousehold_)
+            if (working && h.tradeLet && inPlayerHouse(h.id))
                 log(1, "鋪子收回來了，自家人又掌起了" + defs_.occupation(h.trade)->name + "的活。");
             h.tradeLet = false;
             continue;
         }
-        if (!h.tradeLet && h.id == playerHousehold_)
+        if (!h.tradeLet && inPlayerHouse(h.id))
             log(1, "家裡沒人能掌" + defs_.occupation(h.trade)->name + "鋪，" + fullName(h.head) +
                        " 把鋪子租給了外村來的幫工，每月分一點錢，等孩子長大再收回來。");
         h.tradeLet = true;

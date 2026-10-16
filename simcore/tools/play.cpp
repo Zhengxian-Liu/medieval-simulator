@@ -267,6 +267,7 @@ void planMenu(World& w) {
 int main(int argc, char** argv) {
     std::string dataDir = "data", out, npcModel, npcLogPath, npcScope = "all";
     Config cfg;
+    cfg.prerun = 25;
     int years = 100;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
@@ -274,6 +275,7 @@ int main(int argc, char** argv) {
         if (a == "--data") dataDir = next();
         else if (a == "--seed") cfg.seed = std::stoull(next());
         else if (a == "--start") cfg.startYear = std::stoi(next());
+        else if (a == "--prerun") cfg.prerun = std::stoi(next());
         else if (a == "--years") years = std::stoi(next());
         else if (a == "--gentle") cfg.harshness = Harshness::Gentle;
         else if (a == "--origin") cfg.origin = next();
@@ -394,7 +396,7 @@ int main(int argc, char** argv) {
     if (!out.empty()) {
         std::ofstream f(out);
         for (const auto& e : w.chronicle())
-            if (e.importance != 2) f << "- " << cfg.startYear + e.day / kDaysPerYear << " 年　" << tidyText(e.text) << "\n";
+            if (e.importance != 2) f << "- " << w.config().startYear + e.day / kDaysPerYear << " 年　" << tidyText(e.text) << "\n";
     }
     return 0;
 }

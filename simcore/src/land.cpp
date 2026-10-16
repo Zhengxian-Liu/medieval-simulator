@@ -258,7 +258,7 @@ double World::moveLand(Id from, Id to, double acres, LandPick pick, const std::s
         lastMoved_ = moved;
     }
     double moved = acres - std::max(0.0, left);
-    if (moved > 1e-6 && (from == playerHousehold_ || to == playerHousehold_) && playerHousehold_ != kNone) {
+    if (moved > 1e-6 && (inPlayerHouse(from) || inPlayerHouse(to)) && playerHousehold_ != kNone) {
         auto who = [&](Id h) { return h == kNone ? std::string("領主手上") : dynasties_[households_[h].dynasty].surname + " 家"; };
         log(2, "  （" + movedText() + "從" + who(from) + "到了" + who(to) + "。）");
     }
@@ -279,7 +279,7 @@ void World::moveParcel(Id parcel, Id to, const std::string& how) {
     if (to != kNone && !households_[to].extinct) placeHouse(to);
     if (to != kNone) settleWants("parcel", parcel, "", to, "到手了");
     lastMoved_ = {parcel};
-    if ((from == playerHousehold_ || to == playerHousehold_) && playerHousehold_ != kNone) {
+    if ((inPlayerHouse(from) || inPlayerHouse(to)) && playerHousehold_ != kNone) {
         auto who = [&](Id h) { return h == kNone ? std::string("領主手上") : dynasties_[households_[h].dynasty].surname + " 家"; };
         log(2, "  （" + movedText() + "從" + who(from) + "到了" + who(to) + "。）");
     }

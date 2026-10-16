@@ -55,7 +55,7 @@ void World::chooseAmbition(Person& head) {
         weights.push_back(w);
     }
     if (pool.empty()) return;
-    bool player = head.household == playerHousehold_ && head.id == playerHead();
+    bool player = inPlayerHouse(head.household) && head.id == playerHead();
     const AmbitionDef* pick = nullptr;
     if (player) {
         // Five to choose from (Zhengxian, 2026-10-16), drawn by how much this person would want them.
@@ -106,7 +106,7 @@ void World::checkMilestones(Person& head, bool quiet) {
     const AmbitionDef* a = defs_.ambition(head.ambition);
     if (!a) return;
     EventRunner ev(*this);
-    bool player = head.household == playerHousehold_ && head.id == playerHead();
+    bool player = inPlayerHouse(head.household) && head.id == playerHead();
     while (head.ambitionStep < static_cast<int>(a->milestones.size()) && ev.eval(a->milestones[head.ambitionStep].goal, head, kNone)) {
         const auto& m = a->milestones[head.ambitionStep];
         ++head.ambitionStep;
@@ -129,7 +129,7 @@ void World::yearlyAmbitions() {
         if (h.extinct || h.head == kNone || h.members.empty()) continue;
         Person& head = people_[h.head];
         if (!head.alive() || ageYears(head) < 16) continue;
-        bool player = h.id == playerHousehold_;
+        bool player = inPlayerHouse(h.id);
         if (head.ambition.empty()) {
             chooseAmbition(head);
             continue;
@@ -174,7 +174,7 @@ void World::checkStandings() {
         int before = it == lastStanding_.end() ? now : it->second;
         lastStanding_[h.id] = now;
         if (now == before || now < 0 || before < 0) continue;
-        bool player = h.id == playerHousehold_;
+        bool player = inPlayerHouse(h.id);
         Person& head = people_[h.head];
         std::string surname = h.dynasty != kNone ? dynasties_[h.dynasty].surname : head.firstName;
         if (now < before) {
@@ -237,7 +237,7 @@ void World::yearlyTown() {
         if (years >= 7 && rngMinds_.chance(0.4)) {
             Id home = kNone;
             for (const auto& h : households_)
-                if (!h.extinct && h.dynasty == d.id && h.head != kNone && (!player || h.id == playerHousehold_)) {
+                if (!h.extinct && h.dynasty == d.id && h.head != kNone && (!player || inPlayerHouse(h.id))) {
                     home = h.id;
                     break;
                 }

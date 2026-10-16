@@ -29,7 +29,7 @@ std::vector<AskOption> World::asksFor(Id target) {
     if (head == kNone || target == kNone || target == head) return out;
     const Person& hp = people_[head];
     const Person& t = people_[target];
-    if (!t.alive() || t.household == kNone || t.household == playerHousehold_ || ageYears(t) < 16 || ageYears(hp) < 16) return out;
+    if (!t.alive() || t.household == kNone || inPlayerHouse(t.household) || ageYears(t) < 16 || ageYears(hp) < 16) return out;
     const Household& th = households_[t.household];
     const Household& ph = households_[playerHousehold_];
     Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
@@ -102,7 +102,7 @@ std::vector<AskOption> World::asksFor(Id target) {
     if (isHead && placeOpen(th.id, "apprentice"))
         for (Id c : hp.children) {
             const Person& cp = people_[c];
-            if (!cp.alive() || cp.household != playerHousehold_ || cp.sex != Sex::Male || cp.flags.count("trade_decided")) continue;
+            if (!cp.alive() || !inPlayerHouse(cp.household) || cp.sex != Sex::Male || cp.flags.count("trade_decided")) continue;
             double a = ageYears(cp);
             if (a < 11 || a > 14) continue;
             AskOption o = opt("apprentice", "請他收" + shortName(c) + "當學徒（拜師錢 24 便士）", th.id, c);
@@ -117,7 +117,7 @@ std::vector<AskOption> World::asksFor(Id target) {
         if (!wt.open || wt.house != th.id || !isHead) continue;
         bool both = false;
         for (const auto& mine : wants_)
-            if (mine.open && mine.house == playerHousehold_ && mine.kind == wt.kind &&
+            if (mine.open && inPlayerHouse(mine.house) && mine.kind == wt.kind &&
                 (wt.kind == "office" ? mine.office == wt.office : mine.object == wt.object))
                 both = true;
         if (!both) continue;
@@ -262,7 +262,7 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
     // What they would take in return: something they are after that the family holds, a vote, or money.
     for (const auto& wt : wants_) {
         if (!wt.open || wt.house != th.id || !demand.empty()) continue;
-        if (wt.kind == "parcel" && parcels_[wt.object].holder == playerHousehold_ && wt.object != object && what != "rent_vacant") {
+        if (wt.kind == "parcel" && inPlayerHouse(parcels_[wt.object].holder) && wt.object != object && what != "rent_vacant") {
             demand = "那你把" + parcelName(parcels_[wt.object]) + "讓給我";
             demandParcel = wt.object;
         } else if (wt.kind == "office" && what != "vote" && households_[playerHousehold_].head != kNone) {

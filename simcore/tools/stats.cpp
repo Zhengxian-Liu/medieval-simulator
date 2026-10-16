@@ -57,6 +57,7 @@ RunResult runOne(const Defs& defs, Config cfg, int years) {
     r.survived = !w.gameOver();
     r.endYear = w.year();
     r.seed = static_cast<int>(cfg.seed);
+    if (w.playerDynasty() == kNone) return r;  // nobody left to hand over after the pre-run
     const Dynasty& dyn = w.dynasties()[w.playerDynasty()];
     if (!r.survived && !dyn.heads.empty()) r.lastCause = w.person(dyn.heads.back()).deathCause;
     r.heads = static_cast<int>(dyn.heads.size());
@@ -81,13 +82,13 @@ RunResult runOne(const Defs& defs, Config cfg, int years) {
     }
     std::map<int, int> perYear;
     for (const auto& e : w.chronicle()) {
-        if (e.importance != 1) continue;
+        if (e.importance != 1 || e.day < w.handedOver()) continue;  // the years before the hand-over are not play
         ++r.familyLines;
         if (e.text.find("（選擇：") != std::string::npos) ++r.choiceLines;
         ++perYear[e.day / kDaysPerYear];
     }
     int lastYear = (w.today() - 1) / kDaysPerYear;
-    for (int y = 0; y <= lastYear; ++y) {
+    for (int y = w.handedOver() / kDaysPerYear; y <= lastYear; ++y) {
         int n = perYear.count(y) ? perYear[y] : 0;
         if (n == 0) ++r.quietYears;
         if (n >= 12) ++r.busyYears;
@@ -123,6 +124,7 @@ double pct(int a, int b) { return b ? 100.0 * a / b : 0; }
 int main(int argc, char** argv) {
     std::string dataDir = "data", out;
     Config base;
+    base.prerun = 25;
     base.startYear = 1340;
     int years = 100, seeds = 100, first = 1;
     unsigned threads = std::max(1u, std::thread::hardware_concurrency());
@@ -133,6 +135,7 @@ int main(int argc, char** argv) {
         else if (a == "--seeds") seeds = std::stoi(next());
         else if (a == "--first") first = std::stoi(next());
         else if (a == "--start") base.startYear = std::stoi(next());
+        else if (a == "--prerun") base.prerun = std::stoi(next());
         else if (a == "--years") years = std::stoi(next());
         else if (a == "--gentle") base.harshness = Harshness::Gentle;
         else if (a == "--origin") base.origin = next();

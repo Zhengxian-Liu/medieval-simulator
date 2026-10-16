@@ -489,6 +489,7 @@ private:
 int main(int argc, char** argv) {
     std::string dataDir = "data", out, npcModel, npcLogPath, npcScope = "all";
     Config cfg;
+    cfg.prerun = 25;
     int years = 100;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
@@ -496,6 +497,7 @@ int main(int argc, char** argv) {
         if (a == "--data") dataDir = nextArg();
         else if (a == "--seed") cfg.seed = std::stoull(nextArg());
         else if (a == "--start") cfg.startYear = std::stoi(nextArg());
+        else if (a == "--prerun") cfg.prerun = std::stoi(nextArg());
         else if (a == "--years") years = std::stoi(nextArg());
         else if (a == "--gentle") cfg.harshness = Harshness::Gentle;
         else if (a == "--origin") cfg.origin = nextArg();
@@ -521,7 +523,7 @@ int main(int argc, char** argv) {
         if (out.empty()) return;
         std::ofstream f(out);
         for (const auto& e : w.chronicle())
-            if (e.importance != 2) f << "- " << cfg.startYear + e.day / kDaysPerYear << " 年　" << tidyText(e.text) << "\n";
+            if (e.importance != 2) f << "- " << w.config().startYear + e.day / kDaysPerYear << " 年　" << tidyText(e.text) << "\n";
     };
     bool aiPlays = false;  // after quit: nobody is asked any more
     w.setChooser([&](const World::ChoicePrompt& c) {

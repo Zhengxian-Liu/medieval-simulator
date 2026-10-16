@@ -138,8 +138,8 @@ Id World::recordDeed(const std::string& type, Id actor, Id target, double scale,
                 std::find(told.begin(), told.end(), p.id) == told.end())
                 remember(p.id, actor, role("witness"));
     // Choices show their weight at once: when the family does something to another house, say how it landed.
-    if (actor != kNone && target != kNone && people_[actor].household == playerHousehold_ && playerHousehold_ != kNone &&
-        people_[target].household != playerHousehold_ && people_[target].alive()) {
+    if (actor != kNone && target != kNone && inPlayerHouse(people_[actor].household) && playerHousehold_ != kNone &&
+        !inPlayerHouse(people_[target].household) && people_[target].alive()) {
         double v = role("target");
         // Once per house and kind of deed every few years: the first time is news, the fifth is noise.
         auto& last = reacted_[{target, type}];
@@ -189,7 +189,7 @@ void World::inheritMemories(Id dead) {
             copy.aboutDynasty = dyn;
             copy.inherited = true;
             addMemory(h, copy);
-            toPlayer = toPlayer || people_[h].household == playerHousehold_;
+            toPlayer = toPlayer || inPlayerHouse(people_[h].household);
         }
         if (!toPlayer || dyn == kNone || dyn == playerDynasty_) continue;
         std::string line = (p.sex == Sex::Male ? "孩子們記著父親和 " : "孩子們記著母親和 ") + dynasties_[dyn].surname +

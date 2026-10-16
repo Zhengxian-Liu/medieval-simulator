@@ -60,7 +60,7 @@ void World::addBelief(Id holder, Id deed, Id culprit, double confidence, Id sour
         b = &list.back();
         // Word of a secret reaching the family: the head hears the whisper (unless it is said outright, below).
         Id head = playerHead();
-        if (source != kNone && people_[holder].household == playerHousehold_ && playerHousehold_ != kNone &&
+        if (source != kNone && inPlayerHouse(people_[holder].household) && playerHousehold_ != kNone &&
             ageYears(people_[holder]) >= 12 && deeds_[deed].actor != holder && !(holder == head && confidence >= 50))
             whisper(holder, deed, culprit, source);
     } else if (b->culprit == culprit) {
@@ -107,7 +107,7 @@ void World::actOnBelief(Id holder, Belief& b) {
     if (victimSide && holder != b.culprit) feudOnDeed(d, *def, b.culprit);
 
     // The chronicle only tells what the player's family knows.
-    if (people_[holder].household == playerHousehold_ && holder != b.culprit &&
+    if (inPlayerHouse(people_[holder].household) && holder != b.culprit &&
         toldPlayer_.insert({d.id, b.culprit}).second) {
         std::string year = std::to_string(cfg_.startYear + d.day / kDaysPerYear);
         std::string how = b.source == kNone ? " 親眼看見" : " 聽 " + fullName(b.source) + " 說";
@@ -203,7 +203,7 @@ Id World::unsolvedDeed(Id asker) const {
 Id World::investigate(Id asker, Id informant) {
     const Person& a = people_[asker];
     Id deed = unsolvedDeed(asker);
-    bool player = a.household == playerHousehold_;
+    bool player = inPlayerHouse(a.household);
     if (deed == kNone) return kNone;
     const Deed& d = deeds_[deed];
     Id victim = d.target;
@@ -392,7 +392,7 @@ void World::accuse(Id accuser, Id accused, Id deedId) {
     const DeedDef* def = defs_.deed(d.type);
     bool guilty = d.actor == accused;
     bool family = isPlayerFamily(people_[accuser]) || isPlayerFamily(people_[accused]);
-    int imp = people_[accuser].household == playerHousehold_ || people_[accused].household == playerHousehold_ ? 1 : 2;
+    int imp = inPlayerHouse(people_[accuser].household) || inPlayerHouse(people_[accused].household) ? 1 : 2;
     std::string what = def ? def->name : d.type;
     Household* ah = people_[accused].household != kNone ? &households_[people_[accused].household] : nullptr;
     Household* uh = people_[accuser].household != kNone ? &households_[people_[accuser].household] : nullptr;

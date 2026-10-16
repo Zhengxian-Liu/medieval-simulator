@@ -211,7 +211,7 @@ void World::monthlyDebts() {
         if (h.debt <= 0.5) {
             h.debt = 0;
             h.debtYears = 0;
-            if (h.id == playerHousehold_)
+            if (inPlayerHouse(h.id))
                 log(1, h.creditor == lord_ ? std::string("總算還清了欠領主的債。") : "總算還清了欠 " + fullName(h.creditor) + " 的債。");
             if (h.head != kNone) addStress(h.head, -15, "");
             h.creditor = kNone;
@@ -236,7 +236,7 @@ void World::yearlyDebts() {
             h.debt = 0;
             continue;
         }
-        bool home = h.id == playerHousehold_;
+        bool home = inPlayerHouse(h.id);
         if (h.debtYears == 1) {
             runEventById(lordIsCreditor ? "debt_steward" : "debt_neighbour", h.head, lordIsCreditor ? lord_ : h.creditor);
             continue;
@@ -350,7 +350,7 @@ void World::reletVacant() {
     allotVacant();
     for (auto& h : households_) {
         if (vacantAcres() < 3) return;
-        if (h.extinct || h.members.empty() || h.id == playerHousehold_ || h.id == lordHouse || h.head == kNone) continue;
+        if (h.extinct || h.members.empty() || inPlayerHouse(h.id) || h.id == lordHouse || h.head == kNone) continue;
         if (people_[h.head].occupation == "priest" || h.debt > 0) continue;
         double hands = 0;
         for (Id m : h.members) {

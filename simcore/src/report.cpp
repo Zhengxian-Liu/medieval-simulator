@@ -132,7 +132,7 @@ Id World::actingHead() const {
     if (head == kNone || ageYears(people_[head]) >= 14) return head;
     const Household& h = households_[playerHousehold_];
     Id mother = people_[head].mother;
-    if (mother != kNone && people_[mother].alive() && people_[mother].household == playerHousehold_) return mother;
+    if (mother != kNone && people_[mother].alive() && inPlayerHouse(people_[mother].household)) return mother;
     Id best = head;
     for (Id m : h.members)
         if (ageYears(people_[m]) >= 16 && (best == head || people_[m].birthDay < people_[best].birthDay)) best = m;
@@ -182,12 +182,12 @@ std::string World::familyReport() const {
     o << "家人：";
     bool firstMember = true;
     for (const auto& m : people_) {
-        if (!m.alive() || m.id == head || (m.household != playerHousehold_ && m.home != playerHousehold_)) continue;
+        if (!m.alive() || m.id == head || (!inPlayerHouse(m.household) && !inPlayerHouse(m.home))) continue;
         std::string t;
         for (const auto& tr : m.traits)
             if (defs_.traits.at(tr).category == "personality") t += (t.empty() ? "" : "、") + defs_.traits.at(tr).name;
         o << (firstMember ? "" : "；") << shortName(m.id) << "（" << relation(m) << "，" << int(ageYears(m)) << " 歲"
-          << (t.empty() ? "" : "，" + t) << (m.household != playerHousehold_ ? "，在別家幫傭" : "")
+          << (t.empty() ? "" : "，" + t) << (!inPlayerHouse(m.household) ? "，在別家幫傭" : "")
           << "）";
         firstMember = false;
     }
@@ -252,7 +252,7 @@ std::string World::familyReport() const {
     std::vector<std::pair<double, Id>> houses;
     Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
     for (const auto& oh : households_) {
-        if (oh.extinct || oh.members.empty() || oh.id == playerHousehold_ || oh.id == lordHouse || oh.head == kNone) continue;
+        if (oh.extinct || oh.members.empty() || inPlayerHouse(oh.id) || oh.id == lordHouse || oh.head == kNone) continue;
         houses.push_back({opinion(head, oh.head), oh.head});
     }
     std::sort(houses.begin(), houses.end(), [](auto& a, auto& b) { return std::abs(a.first) > std::abs(b.first); });
@@ -285,7 +285,7 @@ std::string World::familyReport() const {
             const DeedDef* def = defs_.deed(d.type);
             if (!def || def->visibility != "secret" || b.culprit == m) continue;
             seen.insert(b.deed);
-            bool ours = d.target != kNone && (people_[d.target].household == playerHousehold_ || people_[d.target].dynasty == playerDynasty_);
+            bool ours = d.target != kNone && (inPlayerHouse(people_[d.target].household) || people_[d.target].dynasty == playerDynasty_);
             std::string line = "  " + describeDeed(b.deed) + "：認定是 " + fullName(b.culprit) + "（把握 " +
                                std::to_string(int(b.confidence)) + (b.source != kNone && b.source != m && b.source != head ? "，聽 " + fullName(b.source) + " 說的" : "") + "）";
             if (b.used) line += "　已經拿來用過了";
@@ -317,7 +317,7 @@ std::string World::familyReport() const {
 
     bool anyInquiry = false;
     for (const auto& [key, q] : inquiries_) {
-        if (key.first != playerHousehold_ || q.done || !q.started) continue;
+        if (!inPlayerHouse(key.first) || q.done || !q.started) continue;
         if (!anyInquiry) o << "\n還在追查的事：\n";
         anyInquiry = true;
         std::string s;
@@ -367,7 +367,7 @@ std::string World::kinWord(Id a, Id b) const {
 bool World::aimsKnown(const Person& p) const {
     Id head = playerHead();
     if (head == kNone) return true;
-    if (p.household == playerHousehold_ || closeKin(head, p.id)) return true;
+    if (inPlayerHouse(p.household) || closeKin(head, p.id)) return true;
     return opinion(p.id, head) >= 0 || hasTrait(p, "gregarious");
 }
 
@@ -378,7 +378,7 @@ std::string World::personLine(Id id) const {
     int st = head != kNone ? feudStage(id, head) : 0;
     if (st > 0) s += st == 3 ? "，世仇" : st == 2 ? "，結了怨" : "，有嫌隙";
     if (p.intent.kind == "none" || p.intent.why.empty()) return s;
-    bool aimedAtUs = p.intent.target != kNone && people_[p.intent.target].household == playerHousehold_;
+    bool aimedAtUs = p.intent.target != kNone && inPlayerHouse(people_[p.intent.target].household);
     if (!p.intent.secret && aimsKnown(p)) s += "。" + p.intent.why;
     else if (p.intent.secret && aimedAtUs) s += "。最近看你家的眼神不太對";
     return s;
@@ -418,7 +418,7 @@ std::string World::personReport(Id id) const {
         else o << pr << "這輩子想要什麼，你看不透。\n";
     }
     if (id != head && p.intent.kind != "none" && !p.intent.why.empty()) {
-        bool aimedAtUs = p.intent.target != kNone && people_[p.intent.target].household == playerHousehold_;
+        bool aimedAtUs = p.intent.target != kNone && inPlayerHouse(people_[p.intent.target].household);
         if (!p.intent.secret && known) o << "今年的打算：" << p.intent.why << "。\n";
         else if (p.intent.secret && aimedAtUs) o << pr << "心裡在盤算什麼，你看不出來。只是最近" << pr << "看你家的眼神不太對。\n";
         else o << pr << "今年在忙什麼，你不太清楚。\n";

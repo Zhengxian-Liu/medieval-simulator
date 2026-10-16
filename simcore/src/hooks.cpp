@@ -63,7 +63,7 @@ void World::deathbedConfession(Id dying) {
         if (before && before->culprit == dying && before->confidence >= 90) continue;
         ++told;
         Id wrong = before && before->culprit != dying && before->confidence >= 50 ? before->culprit : kNone;
-        if (people_[victim].household == playerHousehold_) {
+        if (inPlayerHouse(people_[victim].household)) {
             std::string line = "【臨終】" + fullName(dying) + " 臨死前派人把 " + fullName(victim) + " 叫到床前，承認 " +
                                describeDeed(d.id) + "是" + (p.sex == Sex::Male ? "他" : "她") + "幹的。";
             if (wrong != kNone) line += "原來這些年家裡一直錯怪了 " + fullName(wrong) + "。";

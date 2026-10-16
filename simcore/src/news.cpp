@@ -276,7 +276,7 @@ Id World::addNews(const std::string& kind, Id subject, Id other, Id house, Id de
     // A wake or a wedding: the houses close to it turn out, and the people who come meet one another.
     if (k->gathering) {
         for (Id h : close) {
-            if (h == playerHousehold_) continue;  // the family is asked, and decides (data/events/occasions.json)
+            if (inPlayerHouse(h)) continue;  // the family is asked, and decides (data/events/occasions.json)
             Id head = households_[h].head;
             if (head == kNone || !people_[head].alive() || ageYears(people_[head]) < 16) continue;
             if (feudStage(head, subject) >= 2) continue;  // not to the wake of an enemy's house
@@ -360,12 +360,12 @@ void World::learnNews(News& n, Id household, Id teller, double link) {
                 addMemory(m, mem);
             }
     }
-    bool aboutFamily = n.house == playerHousehold_ || (n.subject != kNone && people_[n.subject].household == playerHousehold_) ||
-                       (n.other != kNone && people_[n.other].household == playerHousehold_);
+    bool aboutFamily = inPlayerHouse(n.house) || (n.subject != kNone && inPlayerHouse(people_[n.subject].household)) ||
+                       (n.other != kNone && inPlayerHouse(people_[n.other].household));
     // The family's own births, deaths and weddings elsewhere are told in the chronicle already.
     bool ownKin = n.deed == kNone && ((n.subject != kNone && isPlayerFamily(people_[n.subject])) ||
                                       (n.other != kNone && isPlayerFamily(people_[n.other])));
-    if (household == playerHousehold_ && !aboutFamily && !ownKin) {
+    if (inPlayerHouse(household) && !aboutFamily && !ownKin) {
         Heard h;
         h.day = day_;
         h.news = n.id;
@@ -392,7 +392,7 @@ void World::learnNews(News& n, Id household, Id teller, double link) {
             emit({"news:" + k->invite, n.deed, head, n.subject, false, link});
     }
     // What the village says of the family: once most of it has heard, the family hears that it has.
-    if (aboutFamily && k->wide && !n.wideNoted && household != playerHousehold_) {
+    if (aboutFamily && k->wide && !n.wideNoted && !inPlayerHouse(household)) {
         int live = 0, knew = 0;
         for (const auto& h : households_)
             if (!h.extinct && !h.members.empty()) {

@@ -191,7 +191,7 @@ void World::seasonWants() {
     int formed = 0;
     for (Id m : members) {
         Person& p = people_[m];
-        if (m == head || !p.alive() || p.household != playerHousehold_ || ageYears(p) < 5) {
+        if (m == head || !p.alive() || !inPlayerHouse(p.household) || ageYears(p) < 5) {
             p.want.clear();
             continue;
         }
@@ -274,7 +274,7 @@ std::vector<Id> World::peopleToSee() const {
     // Family living elsewhere (children in service, married daughters), then the people who matter most to the head.
     std::vector<std::pair<double, Id>> others;
     for (const auto& p : people_) {
-        if (!p.alive() || p.household == kNone || p.household == playerHousehold_ || ageYears(p) < 12) continue;
+        if (!p.alive() || p.household == kNone || inPlayerHouse(p.household) || ageYears(p) < 12) continue;
         double s = std::abs(opinion(head, p.id)) + std::abs(opinion(p.id, head)) +
                    (p.id < static_cast<Id>(ringScore_.size()) ? ringScore_[p.id] * 0.5 : 0);
         if (isPlayerFamily(p) || closeKin(head, p.id)) s += 100;
@@ -293,7 +293,7 @@ std::vector<World::Interaction> World::interactionsWith(Id target) {
     if (head == kNone || target == kNone || target == head) return out;
     Person& tp = people_[target];
     if (!tp.alive() || tp.household == kNone) return out;
-    bool home = tp.household == playerHousehold_;
+    bool home = inPlayerHouse(tp.household);
     bool kin = home || isPlayerFamily(tp) || closeKin(head, target);
     EventRunner er(*this);
     int left = timeLeft();
@@ -385,7 +385,7 @@ std::string World::seasonChanges(const FamilySnapshot& before) const {
     lastSeasonNotes_.clear();
     for (const auto& [id, was] : before.people) {
         const Person& p = people_[id];
-        if (!p.alive() || p.household != playerHousehold_) continue;
+        if (!p.alive() || !inPlayerHouse(p.household)) continue;
         std::string who = id == head ? "你" : shortName(id);
         MoodView mv = moodView(p);
         if (mv.word != was.first) o += "  " + who + "從" + was.first + "變得" + mv.word + (mv.cause.empty() ? "" : "：" + mv.cause) + "。\n";

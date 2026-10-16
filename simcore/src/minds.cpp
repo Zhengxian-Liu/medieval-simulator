@@ -45,18 +45,18 @@ void World::computeRings() {
     std::vector<std::pair<double, Id>> spot;
     for (const auto& p : people_) {
         if (!p.alive() || p.household == kNone) continue;
-        if (p.household == playerHousehold_ || p.home == playerHousehold_) {
+        if (inPlayerHouse(p.household) || inPlayerHouse(p.home)) {
             ring_[p.id] = kHome;
             continue;
         }
         double s = 0, hidden = 0;
         for (const auto& ap : plans_) {
             bool secret = defs_.plan(ap.plan)->secret;
-            if (ap.actor == p.id && ap.target != kNone && people_[ap.target].household == playerHousehold_) {
+            if (ap.actor == p.id && ap.target != kNone && inPlayerHouse(people_[ap.target].household)) {
                 s += 100;
                 if (secret) hidden += 100;
             }
-            if (ap.target == p.id && people_[ap.actor].household == playerHousehold_) s += 100;
+            if (ap.target == p.id && inPlayerHouse(people_[ap.actor].household)) s += 100;
         }
         if (head != kNone && ageYears(p) >= 16) {
             int st = feudStage(p.id, head);
@@ -243,7 +243,7 @@ bool World::draftIntention(Person& p, IntentDraft& d) {
         static const std::set<std::string> taking = {"acquire_land", "slander", "blackmail", "expose", "revenge", "poach"};
         return taking.count(plan) > 0;
     };
-    auto towardFamily = [&](Id t) { return t != kNone && people_[t].household == playerHousehold_; };
+    auto towardFamily = [&](Id t) { return t != kNone && inPlayerHouse(people_[t].household); };
     bool spotlight = ringOf(p.id) == kSpotlight;
     std::vector<Cand> cands;
     auto add = [&](Intention in, double score) {
@@ -421,7 +421,7 @@ void World::yearlyIntentions() {
     // A couple of far villagers start to take notice of the family this year: surprises come from afar too.
     std::vector<Id> far;
     for (const auto& p : people_)
-        if (p.alive() && p.household != kNone && ringOf(p.id) == kFar && ageYears(p) >= 16 && p.household != playerHousehold_)
+        if (p.alive() && p.household != kNone && ringOf(p.id) == kFar && ageYears(p) >= 16 && !inPlayerHouse(p.household))
             far.push_back(p.id);
     for (int k = 0; k < 2 && !far.empty(); ++k) {
         int i = rngMinds_.range(0, static_cast<int>(far.size()) - 1);
@@ -528,7 +528,7 @@ void World::helpFriend(Person& p) {
             break;
         }
     std::string because = why.empty() ? "" : "（" + std::string(pron(p)) + "記著：" + why + " +" + std::to_string(int(whyV)) + "）";
-    if (mine.id == playerHousehold_) {
+    if (inPlayerHouse(mine.id)) {
         // One of the family wants to give away the family's grain or coin: the head has the say.
         int r = askPlayer("人情", fullName(p.id) + " 想給 " + fullName(t) + " 家送去" + gift + "：他們家今年日子難過" + because + "。",
                           {"答應", "不准"});
@@ -549,10 +549,10 @@ void World::helpFriend(Person& p) {
     }
     helpedUntil_[th.id] = day_ + kDaysPerYear;
     ++counters_["help_given"];
-    if (th.id == playerHousehold_) {
+    if (inPlayerHouse(th.id)) {
         ++counters_["help_to_player"];
         log(1, "【人情】" + fullName(p.id) + " 送來" + gift + "。" + because);
-    } else if (mine.id == playerHousehold_) {
+    } else if (inPlayerHouse(mine.id)) {
         log(1, "【人情】" + fullName(p.id) + " 給 " + fullName(t) + " 家送去" + gift + "。");
     } else {
         log(2, fullName(p.id) + " 給 " + fullName(t) + " 家送去" + gift + "。");

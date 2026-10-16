@@ -67,8 +67,8 @@ void World::monthlyHealth() {
     auto inLine = [&](const Person& p) {
         if (p.household == kNone) return false;
         const Household& hh = households_[p.household];
-        if (hh.id == playerHousehold_) return true;
-        return !hh.extinct && hh.dynasty == playerDynasty_ && hh.head != kNone &&
+        if (inPlayerHouse(hh.id)) return true;
+        return !hh.extinct && playerDynasty_ != kNone && hh.dynasty == playerDynasty_ && hh.head != kNone &&
                people_[hh.head].dynasty == playerDynasty_;
     };
     int dynastyAlive = 0;
@@ -174,7 +174,7 @@ void World::giveBirth(Person& mother) {
         if (isPlayerFamily(child) || isPlayerFamily(people_[motherId])) {
             std::string traits;
             for (const auto& t : child.traits) traits += "、" + defs_.traits.at(t).name;
-            log(people_[motherId].household == playerHousehold_ ? 1 : 2, fullName(motherId) + " 生下了" + (s == Sex::Male ? "兒子 " : "女兒 ") + fullName(c) +
+            log(inPlayerHouse(people_[motherId].household) ? 1 : 2, fullName(motherId) + " 生下了" + (s == Sex::Male ? "兒子 " : "女兒 ") + fullName(c) +
                        (traits.empty() ? "" : "（天生" + traits.substr(3) + "）") + "。");
         }
     }
@@ -204,10 +204,10 @@ void World::kill(Id id, const std::string& cause) {
     bool family = isPlayerFamily(p);
     double age = ageYears(p);
     if (family || (hid != kNone && households_[hid].head == id))
-        log(family && hid == playerHousehold_ ? 1 : 2,
+        log(family && inPlayerHouse(hid) ? 1 : 2,
             age < 1 ? fullName(id) + " 出生沒多久就夭折了。"
                     : fullName(id) + " 因" + cause + "去世，享年 " + std::to_string(int(age)) + " 歲。");
-    if (hid == playerHousehold_ && hid != kNone && households_[hid].head == id) obituary(id);
+    if (inPlayerHouse(hid) && hid != kNone && households_[hid].head == id) obituary(id);
 
     // Grief.
     bool male = p.sex == Sex::Male;
@@ -264,7 +264,8 @@ void World::kill(Id id, const std::string& cause) {
                 }
                 lord_ = h.head;
                 if (people_[lord_].sex == Sex::Male) people_[lord_].occupation = "lord";
-                log(1, "【領主】" + fullName(id) + " 去世了，" + fullName(lord_) + " 繼承了莊園，成了新的領主。");
+                log(1, "【領主】" + fullName(id) + " 去世了，" + (people_[lord_].father == id ? std::string(people_[lord_].sex == Sex::Male ? "他的兒子 " : "他的女兒 ") : std::string()) +
+                           fullName(lord_) + " 繼承了莊園，成了新的領主。");
             }
             return;
         }
@@ -272,6 +273,12 @@ void World::kill(Id id, const std::string& cause) {
             chargeHeriot(h, id);
             chargeEntryFine(h, h.head, id);
         }
+    }
+    // What was owed to the dead is owed to their house, to whoever heads it now (the manor's, if nobody is left).
+    Id to = !h.extinct && h.head != kNone && h.head != id ? h.head : kNone;
+    for (auto& oh : households_) {
+        if (oh.creditor == id) oh.creditor = to;
+        if (oh.heldCreditor == id) oh.heldCreditor = to;
     }
 }
 
@@ -346,7 +353,7 @@ void World::onHeadDied(Household& h, Id dead) {
     recallServants(h.id);
     Id heir = heirOf(h, dead);
 
-    bool player = h.id == playerHousehold_;
+    bool player = inPlayerHouse(h.id);
     if (heir == kNone) {
         h.extinct = true;
         h.head = kNone;
@@ -425,6 +432,7 @@ void World::onHeadDied(Household& h, Id dead) {
 }
 
 void World::followSurvivingBranch(bool lineEnded) {
+    if (playerHousehold_ == kNone) return;  // nobody plays the village yet (Config::prerun)
     const Household& cur = households_[playerHousehold_];
     if (!lineEnded && !cur.extinct && cur.head != kNone && !cur.members.empty()) return;
     // The player follows another branch of the same family, if one exists.
@@ -473,7 +481,7 @@ void World::marry(Id man, Id woman) {
             Id loser = households_[wt.house].head;
             Id winner = ohh != kNone ? households_[ohh].head : kNone;
             if (loser != kNone && winner != kNone && winner != loser) addOpinion(loser, winner, "took_our_want", -6, 6);
-            if (wt.house == playerHousehold_) log(1, "  （你家看中的" + thing + "，" + lost + "。）");
+            if (inPlayerHouse(wt.house)) log(1, "  （你家看中的" + thing + "，" + lost + "。）");
         } else if (wt.subject == man || wt.subject == woman) {
             dropWant(wt, "另結了親");
         }
@@ -496,12 +504,12 @@ void World::marry(Id man, Id woman) {
         if (op > -5) addConcern(a, "joy", b, std::clamp(30 + op * 0.5, 20.0, 70.0));
     }
     bool family = isPlayerFamily(m) || isPlayerFamily(w);
-    int imp = m.household == playerHousehold_ || w.household == playerHousehold_ ? 1 : 2;
+    int imp = inPlayerHouse(m.household) || inPlayerHouse(w.household) ? 1 : 2;
 
     Id oldHouse = w.household;
     bool heiress = oldHouse != kNone && households_[oldHouse].head == woman;
     // A family with no son keeps one daughter at home; her husband marries in to carry the land.
-    if (!heiress && oldHouse == playerHousehold_ && households_[m.household].head != man) {
+    if (!heiress && inPlayerHouse(oldHouse) && households_[m.household].head != man) {
         bool heirAtHome = false;
         for (Id x : households_[oldHouse].members) {
             const Person& q = people_[x];
@@ -512,13 +520,13 @@ void World::marry(Id man, Id woman) {
         heiress = !heirAtHome;
     }
     // The player's only heir does not marry away, even to a man with his own holding: he brings it to her.
-    if (!heiress && oldHouse == playerHousehold_ && households_[oldHouse].head != kNone &&
+    if (!heiress && inPlayerHouse(oldHouse) && households_[oldHouse].head != kNone &&
         heirOf(households_[oldHouse], households_[oldHouse].head) == woman)
         heiress = true;
     if (heiress && households_[m.household].head == man) {
         // Two heads marry: her household, land and goods join his, unless hers is the player's,
         // in which case he brings his into hers so the player's line goes on.
-        bool intoHers = oldHouse == playerHousehold_;
+        bool intoHers = inPlayerHouse(oldHouse);
         Household& from = households_[intoHers ? m.household : oldHouse];
         Household& to = households_[intoHers ? oldHouse : m.household];
         for (Id x : from.members) {
@@ -685,7 +693,7 @@ void World::yearlyMarriages() {
         if (best != kNone && bestScore > -25) {
             // A match for one of the player's unmarried children goes through the head.
             Id acting = actingHead();
-            Id ours = people_[best].household == playerHousehold_ ? best : m.household == playerHousehold_ ? mid : kNone;
+            Id ours = inPlayerHouse(people_[best].household) ? best : inPlayerHouse(m.household) ? mid : kNone;
             if (ours != kNone && ours != acting) {
                 Id other = ours == best ? mid : best;
                 const Household& oh = households_[people_[other].household];
@@ -745,7 +753,7 @@ void World::yearlyMarriages() {
         if (w.sex != Sex::Female || !available(w) || ageYears(w) < 22 || ageYears(w) > 35) continue;
         if (w.household != kNone && households_[w.household].head == w.id) continue;
         if (!rngSocial_.chance(0.3)) continue;
-        if (w.household == playerHousehold_ && w.id != actingHead() &&
+        if (inPlayerHouse(w.household) && w.id != actingHead() &&
             askPlayer("外村來的媒人", "外村有戶人家託媒人來說，想娶 " + fullName(w.id) + "。嫁過去就很少回來了。",
                       {"答應", "留她在家"}) == 1)
             continue;
@@ -754,7 +762,7 @@ void World::yearlyMarriages() {
         double dowry = std::min(from.money * 0.15, 80.0);
         from.money -= dowry;
         from.members.erase(std::remove(from.members.begin(), from.members.end(), w.id), from.members.end());
-        if (isPlayerFamily(w)) log(w.household == playerHousehold_ ? 1 : 2, fullName(w.id) + " 嫁到了外村。");
+        if (isPlayerFamily(w)) log(inPlayerHouse(w.household) ? 1 : 2, fullName(w.id) + " 嫁到了外村。");
         w.household = kNone;
         w.flags.insert("married_away");
     }
@@ -783,7 +791,7 @@ void World::yearlyAdulthood() {
                         Id by = static_cast<Id>(std::stoi(f.substr(10)));
                         why = "（小時候常挨" + (by == p.father ? std::string("父親") : by == p.mother ? std::string("母親") : fullName(by)) + "的打）";
                     }
-                log(p.household == playerHousehold_ ? 1 : 2, fullName(p.id) + " 長成了一個" + ts.substr(3) + "的孩子" + why + "。");
+                log(inPlayerHouse(p.household) ? 1 : 2, fullName(p.id) + " 長成了一個" + ts.substr(3) + "的孩子" + why + "。");
             }
         }
         if (age >= 25 && personality == 2 && rngLife_.chance(0.3)) rollPersonality(p, 1);
@@ -809,10 +817,10 @@ void World::yearlyAdulthood() {
             }
             p.occupation = occ;
             if (family && p.sex == Sex::Male)
-                log(p.household == playerHousehold_ ? 1 : 2, fullName(p.id) + " 十四歲了，開始當" + defs_.occupation(occ)->name + "。");
+                log(inPlayerHouse(p.household) ? 1 : 2, fullName(p.id) + " 十四歲了，開始當" + defs_.occupation(occ)->name + "。");
         }
         if (family && households_[p.household].head == p.id && p.ambition.empty() && age >= 16 &&
-            p.household == playerHousehold_)
+            inPlayerHouse(p.household))
             chooseAmbition(p);
     }
 }

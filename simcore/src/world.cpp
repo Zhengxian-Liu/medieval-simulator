@@ -35,6 +35,8 @@ World::World(const Defs& defs, Config cfg)
       rngNames_(cfg.seed, hashString("names")),
       rngPlans_(cfg.seed, hashString("plans")),
       rngKnow_(cfg.seed, hashString("knowledge")) {
+    cfg_.prerun = std::max(0, cfg_.prerun);
+    cfg_.startYear -= cfg_.prerun;  // the world begins before play does
     rngMinds_.reseed(cfg.seed, hashString("minds"));
     rngWants_.reseed(cfg.seed, hashString("wants"));
     rngNews_.reseed(cfg.seed, hashString("news"));
@@ -63,6 +65,10 @@ World::World(const Defs& defs, Config cfg)
     setupLand();
     setupOffices();
     seedAcquaintance();
+    if (cfg_.prerun > 0) {
+        prerun();
+        return;
+    }
     // Each game opens on one of a few situations the family is already in (data/events/openings.json).
     std::vector<std::string> openings;
     for (const auto& ev : defs_.events)

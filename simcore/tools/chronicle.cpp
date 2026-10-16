@@ -142,6 +142,7 @@ std::string recap(const World& w, Id dyn, Id head, int from, int to, const std::
 int main(int argc, char** argv) {
     std::string dataDir = "data", out;
     Config cfg;
+    cfg.prerun = 25;
     int years = 100;
     bool village = false;
     for (int i = 1; i < argc; ++i) {
@@ -150,6 +151,7 @@ int main(int argc, char** argv) {
         if (a == "--data") dataDir = next();
         else if (a == "--seed") cfg.seed = std::stoull(next());
         else if (a == "--start") cfg.startYear = std::stoi(next());
+        else if (a == "--prerun") cfg.prerun = std::stoi(next());
         else if (a == "--years") years = std::stoi(next());
         else if (a == "--gentle") cfg.harshness = Harshness::Gentle;
         else if (a == "--origin") cfg.origin = next();
@@ -205,8 +207,8 @@ int main(int argc, char** argv) {
         int from = chapters[c].first;
         int to = c + 1 < chapters.size() ? chapters[c + 1].first : w.today() + 1;
         std::string nick = nickname(w, head, from, to, reeveTerms[c]);
-        std::string years = std::to_string(cfg.startYear + from / kDaysPerYear) + "–" +
-                            (c + 1 < chapters.size() || w.gameOver() ? std::to_string(cfg.startYear + to / kDaysPerYear) : "");
+        std::string years = std::to_string(w.config().startYear + from / kDaysPerYear) + "–" +
+                            (c + 1 < chapters.size() || w.gameOver() ? std::to_string(w.config().startYear + to / kDaysPerYear) : "");
         return "## 第 " + std::to_string(c + 1) + " 代　" + (nick.empty() ? "" : "「" + nick + "」") + w.fullName(head) +
                "（家主 " + years + "）";
     };
@@ -229,7 +231,7 @@ int main(int argc, char** argv) {
             lastYear = -1;
         }
         chapterLines.push_back(e.text);
-        int y = cfg.startYear + e.day / kDaysPerYear;
+        int y = w.config().startYear + e.day / kDaysPerYear;
         if (y != lastYear) {
             md << "\n### " << y << " 年\n\n";
             lastYear = y;
@@ -309,7 +311,7 @@ int main(int argc, char** argv) {
         for (size_t k = chain.size(); k-- > 0;) {
             const Deed& d = deeds[chain[k]];
             const DeedDef* def = defs.deed(d.type);
-            md << (cfg.startYear + d.day / kDaysPerYear) << " 年 " << w.fullName(d.actor);
+            md << (w.config().startYear + d.day / kDaysPerYear) << " 年 " << w.fullName(d.actor);
             if (d.target != kNone) md << " → " << w.fullName(d.target);
             md << "：" << (def ? def->name : d.type);
             if (def && def->visibility == "secret") md << "（秘密）";
@@ -330,7 +332,7 @@ int main(int argc, char** argv) {
                 const Deed& d = w.deeds()[b.deed];
                 if (b.confidence < 50 || d.actor == m || !shownDeeds.insert(b.deed).second) continue;
                 const DeedDef* def = defs.deed(d.type);
-                md << "- " << (cfg.startYear + d.day / kDaysPerYear) << " 年 " << w.fullName(d.target) << " 遭「"
+                md << "- " << (w.config().startYear + d.day / kDaysPerYear) << " 年 " << w.fullName(d.target) << " 遭「"
                    << (def ? def->name : d.type) << "」：家裡相信是 " << w.fullName(b.culprit) << "（可信度 "
                    << int(b.confidence) << "）。事實：" << w.fullName(d.actor)
                    << (b.culprit == d.actor ? "，沒錯。" : "，認錯人了。") << "\n";

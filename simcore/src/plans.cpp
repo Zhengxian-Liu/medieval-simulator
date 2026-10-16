@@ -71,7 +71,7 @@ void World::processCommands() {
             // The family lets it be known it wants a parcel (plan "parcel") or a post (plan "office:<id>"), or drops it.
             if (c.plan == "parcel") addWant(playerHousehold_, "parcel", c.subject, kNone, "", "盯上了");
             else if (c.plan.rfind("office:", 0) == 0) addWant(playerHousehold_, "office", kNone, playerHead(), c.plan.substr(7), "想當");
-            else if (c.plan == "drop" && c.subject >= 0 && c.subject < static_cast<Id>(wants_.size()) && wants_[c.subject].house == playerHousehold_)
+            else if (c.plan == "drop" && c.subject >= 0 && c.subject < static_cast<Id>(wants_.size()) && inPlayerHouse(wants_[c.subject].house))
                 dropWant(wants_[c.subject], "放下了");
         } else if (c.type == "cancel_plan") {
             for (size_t k = 0; k < plans_.size(); ++k)
@@ -157,7 +157,7 @@ bool World::startPlan(Id actorId, const std::string& planId, Id target, Id subje
     if (isPlayerFamily(actor)) ++counters_["plan_family:" + planId + ":start"];
     // The head taking up a child's cause (a match for them) is what that child was waiting for.
     if (actorId == playerHead() && subject != kNone) answerWant(subject, "plan:" + planId);
-    bool home = actor.household == playerHousehold_;
+    bool home = inPlayerHouse(actor.household);
     if (home && !pd->startLog.empty()) {
         EventRunner ev(*this, &plans_.back());
         log(1, "【計畫】" + ev.format(pd->startLog, actor, target));
@@ -176,8 +176,8 @@ void World::endPlan(size_t index, const std::string& requested) {
     if (plan.subject != kNone) cooldowns_[{plan.subject, "plan:" + plan.plan}] = day_ + 2 * kDaysPerYear;
     Person& actor = people_[plan.actor];
     if (!actor.alive() || actor.household == kNone) return;
-    bool actorHome = actor.household == playerHousehold_;
-    bool victimHome = plan.target != kNone && people_[plan.target].household == playerHousehold_;
+    bool actorHome = inPlayerHouse(actor.household);
+    bool victimHome = plan.target != kNone && inPlayerHouse(people_[plan.target].household);
     EventRunner ev(*this, &plan);
 
     if (outcome == "cancel") {
@@ -269,8 +269,8 @@ void World::monthlyPlans() {
         gain *= 0.6 + rngPlans_.uniform() * 0.8;
         plan.progress += gain;
 
-        bool actorHome = actor.household == playerHousehold_;
-        bool victimHome = plan.target != kNone && people_[plan.target].household == playerHousehold_;
+        bool actorHome = inPlayerHouse(actor.household);
+        bool victimHome = plan.target != kNone && inPlayerHouse(people_[plan.target].household);
 
         // At most one beat a month.
         {
@@ -329,7 +329,7 @@ void World::npcStartPlans() {
         if (!p.alive() || p.household == kNone || p.id == head) continue;
         if (ageYears(p) < 16 || activePlan(p.id)) continue;
         // Beside what they mean to do (minds.cpp), people also act on impulse now and then.
-        double c = p.household == playerHousehold_ ? 0.006 : 0.006;
+        double c = inPlayerHouse(p.household) ? 0.006 : 0.006;
         if (!rngPlans_.chance(c)) continue;
         std::vector<PlanOption> opts = availablePlans(p.id);
         opts.erase(std::remove_if(opts.begin(), opts.end(), [&](const PlanOption& o) { return !defs_.plan(o.plan)->npc; }),

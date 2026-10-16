@@ -184,14 +184,15 @@ void World::setupVillage() {
             addOpinion(b, a, "old_acquaintance", val * 0.8, 0);
         }
 
+    villageName_ = v.stringOr("name", "村莊");
     Person& head = people_[households_[playerHousehold_].head];
-    log(1, "【開局】" + std::to_string(year()) + " 年，" + v.stringOr("name", "村莊") + "。" +
+    log(1, "【開局】" + std::to_string(year()) + " 年，" + villageName_ + "。" +
                fullName(head.id) + "（" + std::to_string(int(ageYears(head))) + " 歲，" +
                defs_.occupation(head.occupation)->name + "）是一家之主。");
     // Every head wants something; the player's head chooses on the first day, when there is someone to ask.
     pendingAmbition_ = true;
     for (const auto& hh : households_)
-        if (hh.id != playerHousehold_ && hh.head != kNone && ageYears(people_[hh.head]) >= 16) chooseAmbition(people_[hh.head]);
+        if (!inPlayerHouse(hh.id) && hh.head != kNone && ageYears(people_[hh.head]) >= 16) chooseAmbition(people_[hh.head]);
     for (const auto& hh : households_) lastStanding_[hh.id] = standing(hh.id);
 }
 

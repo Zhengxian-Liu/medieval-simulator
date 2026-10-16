@@ -31,7 +31,7 @@ void World::chargeMerchet(Id woman, bool outsideManor) {
     h.money -= paid;
     households_[people_[lord_].household].money += paid;
     if (h.head != kNone) addOpinion(h.head, lord_, "merchet", -3, 4);
-    if (h.id == playerHousehold_ && paid >= 1)
+    if (inPlayerHouse(h.id) && paid >= 1)
         log(1, "  照莊園的規矩，嫁 " + w.firstName + " 要先向領主繳 " + std::to_string(int(paid)) + " 便士婚姻稅" +
                    (outsideManor ? "（嫁出莊園，加倍）。" : "。"));
 }
@@ -55,7 +55,7 @@ void World::chargeHeriot(Household& h, Id dead) {
     }
     double owed = beast * 0.5 - heriot;
     if (owed > 1) addDebt(h, owed, lord_);
-    if (h.id != playerHousehold_) return;
+    if (!inPlayerHouse(h.id)) return;
     if (owed > 1) {
         log(1, "  領主的管家來收死後稅，家裡已經沒有像樣的牲口可牽，他在帳上記了 " + std::to_string(int(owed)) +
                    " 便士的欠款。");
@@ -95,7 +95,7 @@ void World::recallServants(Id household) {
             p.flags.erase("in_service");
             if (households_[p.household].head == p.id) continue;  // heads their master's house now: stays
             moveTo(p.id, household);
-            if (household == playerHousehold_) log(1, "  " + fullName(p.id) + " 從主人家趕回來。");
+            if (inPlayerHouse(household)) log(1, "  " + fullName(p.id) + " 從主人家趕回來。");
         }
 }
 
@@ -121,7 +121,7 @@ void World::yearlyService() {
         double wage = 6 * param("wage_mult", 1);
         home.money += wage;
         if (ageYears(p) >= 21 || day_ >= p.serviceEnd || p.spouse != kNone) {
-            bool family = p.home == playerHousehold_;
+            bool family = inPlayerHouse(p.home);
             Id h = p.home;
             p.home = kNone;
             p.serviceEnd = -1;

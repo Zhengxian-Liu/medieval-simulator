@@ -38,6 +38,11 @@ struct Config {
     int startYear = 1330;
     Harshness harshness = Harshness::Historical;
     std::string origin = "peasant";  // which starting household the player takes
+    // Years the village lives on its own before the family is handed over, so its quarrels, debts and
+    // matches are already there (design/contested.md 5). The world then starts that many years before
+    // startYear (config().startYear is moved back), and play begins in startYear. 0: start at once, on one
+    // of the opening situations (data/events/openings.json) instead.
+    int prerun = 0;
 };
 
 // What a villager means to do this year, and why (the NPC "backbone"). Chosen from their ambition,
@@ -444,6 +449,10 @@ public:
     const Household& household(Id id) const { return households_.at(id); }
     Id playerDynasty() const { return playerDynasty_; }
     Id playerHousehold() const { return playerHousehold_; }
+    // Whether h is the family's house. Nobody's is before the family is handed over (Config::prerun).
+    bool inPlayerHouse(Id h) const { return h != kNone && h == playerHousehold_; }
+    // The day the family was handed over to the player (0 without a pre-run); before it, nobody played them.
+    int handedOver() const { return handedOver_; }
     Id lordId() const { return lord_; }
     bool gameOver() const { return gameOver_; }
 
@@ -674,6 +683,7 @@ private:
     std::map<Id, int> noticed_;          // far villagers drawn closer for a while (until day)
     std::map<Id, int> lastStanding_;     // household -> rung last seen
     bool pendingAmbition_ = false;       // the first head picks an ambition on the first day
+    int handedOver_ = 0;                 // day the player took the family over (Config::prerun)
     Rng rngMinds_;
     std::string pendingOpening_;  // the opening situation, run on the first day
     int lastForeshadow_ = -100000;  // the family senses a plot against it at most once every few years
@@ -706,6 +716,9 @@ private:
 
     // setup.cpp
     void setupVillage();
+    void prerun();
+    void handOver(Id house, Id dynasty, int playYear);
+    std::string villageName_;
     Id addPerson(const std::string& name, Id dynasty, Sex sex, int birthDay, Id household);
     Id addHousehold(Id dynasty, double acres, double money);
     Id addDynasty(const std::string& surname);
