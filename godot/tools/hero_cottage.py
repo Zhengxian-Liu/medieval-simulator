@@ -187,10 +187,12 @@ def stagger_courses(obj, course=0.28):
     uv = me.uv_layers.active.data
     for poly in me.polygons:
         k = int(poly.center.y // course)
-        du, dv, sv = (k * 0.37) % 1.0, (k * 0.61) % 1.0, 0.85 + 0.3 * ((k * 0.43) % 1.0)
+        b = int((poly.center.x + 20.0) // 0.5)  # 0.5 m bundles along the course, each its own offset
+        # offsets only, no per-course scale: scaling v per course read as corduroy stripes (art review 2)
+        du, dv = (k * 0.37 + b * 0.53) % 1.0, (k * 0.11 + b * 0.29) % 1.0
         for li in poly.loop_indices:
             u, v = uv[li].uv
-            uv[li].uv = (u + du, v * sv + dv)
+            uv[li].uv = (u + du, v + dv)
 
 
 def thatch():
@@ -211,7 +213,7 @@ def thatch():
             for i in range(nu + 1):
                 x = -length / 2 + i / nu * length
                 n = noise.noise(Vector((x * 1.7, s * 2.3, side * 5.0)))
-                lift = thick * 0.55 + 0.07 * course + 0.04 * n
+                lift = thick * 0.55 + 0.03 * course + 0.05 * n  # shallow course steps: deep ones shaded into stripes
                 # no straight line over 2 m: the whole roof sags between the gables (more toward the eave), with a
                 # slow wave along the ridge, so ridge and eave silhouettes read as old, settled thatch
                 along = (x + length / 2) / length

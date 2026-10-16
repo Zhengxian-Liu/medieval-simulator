@@ -39,7 +39,12 @@ void fragment() {
 	float patchy = mix(0.78, 1.12, vnoise(world_pos.xz * 0.12));  // big soft colour patches in the grass
 	vec3 grass = texture(grass_albedo, uvg).rgb * grass_tint * patchy;
 	vec3 soil = texture(dirt_albedo, uvd).rgb;
+	// worn fringe beside paths and yards: yellowed, flattened grass before the bare dirt starts
+	float fringe = smoothstep(0.12, 0.3, m) * (1.0 - dirt);
+	grass = mix(grass, grass * vec3(1.15, 1.05, 0.7), fringe * 0.7);
 	vec3 col = mix(grass, soil, dirt);
+	// large damp/dry patches (several metres): the ground gets big tonal shapes instead of uniform speckle
+	col *= mix(0.72, 1.0, smoothstep(0.25, 0.75, vnoise(world_pos.xz * 0.05 + 7.0)));
 	// banks: pale sand from just outside the bank into the shallows, dark wet mud under deeper water
 	float rd = abs(world_pos.z - (river.x + river.y * sin(world_pos.x * river.z + river.w)));
 	float sand = 1.0 - smoothstep(river_half + 0.4, river_half + 1.8, rd + (n - 0.5) * 0.9);

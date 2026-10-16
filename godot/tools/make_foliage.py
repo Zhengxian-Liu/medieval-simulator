@@ -19,9 +19,9 @@ ATLAS_COLS, ATLAS_ROWS = 3, 2
 
 # name: (seed, height, crown radius, trunk radius, leaves, leaf size)
 VARIANTS = {
-    "oak_0": (1, 8.5, 3.6, 0.28, 9000, 0.2),   # many small leaves read as a dense crown, few big ones as confetti
-    "oak_1": (2, 7.0, 3.0, 0.24, 7500, 0.19),
-    "oak_2": (3, 9.5, 4.0, 0.32, 10500, 0.21),
+    "oak_0": (1, 8.5, 3.6, 0.28, 14000, 0.22),  # many small leaves read as a dense crown, few big ones as confetti
+    "oak_1": (2, 7.0, 3.0, 0.24, 11500, 0.21),
+    "oak_2": (3, 9.5, 4.0, 0.32, 16000, 0.23),
     "bush_0": (11, 1.3, 1.1, 0.0, 1400, 0.17),
     "bush_1": (12, 1.0, 0.9, 0.0, 1000, 0.16),
     "bush_2": (13, 1.6, 1.3, 0.0, 1800, 0.18),
@@ -121,7 +121,7 @@ def build(name, seed, height, crown, trunk_r, leaves, leaf_size):
                 tips.append(twig_end)
     if trunk_r:  # dark inner crown volume behind the leaves, so gaps show shade instead of sky (reads as one dense canopy)
         for c in [crown_center] + [crown_center + Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-0.3, 0.5))) * crown * 0.35 for _ in range(4)]:
-            inner(mesh, c, crown * rng.uniform(0.42, 0.52))
+            inner(mesh, c, crown * rng.uniform(0.28, 0.34))  # well inside the leaf shell: never visible as a facet
     # leaf clumps: points inside a lumpy ellipsoid, concentrated near its surface so the crown reads as masses
     lobes = [crown_center + Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-0.4, 0.6))) * crown * 0.45
              for _ in range(7)] + tips

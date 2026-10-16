@@ -68,6 +68,7 @@ func _material(grass_mat: StandardMaterial3D) -> ShaderMaterial:
 	m.set_shader_parameter("dirt_normal", load(dirt + "normal.jpg"))
 	m.set_shader_parameter("dirt_rough", load(dirt + "roughness.jpg"))
 	m.set_shader_parameter("mask", ImageTexture.create_from_image(_mask))
+	m.set_shader_parameter("dirt_tiles", 0.3)
 	m.set_shader_parameter("mask_rect", Vector4(MASK_RECT.position.x, MASK_RECT.position.y, MASK_RECT.size.x, MASK_RECT.size.y))
 	return m
 
@@ -79,16 +80,16 @@ func _tuft_mesh(rng: RandomNumberGenerator) -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	st.set_normal(Vector3.UP)
-	var blades := rng.randi_range(15, 25)
+	var blades := rng.randi_range(18, 30)
 	var dry := rng.randf() * 0.4
 	for i in blades:
 		var a := rng.randf() * TAU
-		var h := rng.randf_range(0.12, 0.28)
+		var h := rng.randf_range(0.05, 0.12)  # short: at the far view tufts must read as texture, not countable starbursts
 		var lean := Vector3(cos(a), 0, sin(a)) * rng.randf_range(0.02, 0.12)
 		var side := Vector3(-sin(a), 0, cos(a)) * 0.012
-		var base := Vector3(cos(a), 0, sin(a)) * rng.randf_range(0.0, 0.09)
-		var root_c := Color(0.3, 0.34, 0.16)  # sRGB, ~ the tinted grass ground, so tufts grow out of it instead of sitting on it
-		var tip_c := Color(0.44, 0.5, 0.22).lerp(Color(0.58, 0.52, 0.3), dry + rng.randf() * 0.2)
+		var base := Vector3(cos(a), 0, sin(a)) * rng.randf_range(0.0, 0.15)
+		var root_c := Color(0.42, 0.47, 0.22)  # sRGB, ~ the tinted grass ground, so tufts grow out of it instead of sitting on it
+		var tip_c := Color(0.52, 0.56, 0.27).lerp(Color(0.62, 0.56, 0.32), dry + rng.randf() * 0.2)  # a touch brighter than the ground
 		for v in [[base - side, root_c], [base + side, root_c], [base + lean + Vector3(0, h, 0), tip_c]]:
 			st.set_color(v[1])
 			st.add_vertex(v[0])
@@ -118,7 +119,7 @@ func _grass(root: Node3D, houses: Array, river_dist: Callable, river_half: float
 		var d := dirt_at(p)
 		if d > 0.3:
 			continue  # dead zone: no tufts on paths and their worn fringe
-		var keep := clampf(0.15 + noise.get_noise_2d(p.x, p.y) * 1.2, 0.0, 1.0)  # clusters and bare patches
+		var keep := clampf(0.45 + noise.get_noise_2d(p.x, p.y) * 1.2, 0.0, 1.0)  # clusters and bare patches
 		if rng.randf() > keep:
 			continue
 		var s := rng.randf_range(0.6, 1.3)
