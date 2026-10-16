@@ -572,9 +572,9 @@
             1080
           ],
           "min": 0.25,
-          "max": 0.4
+          "max": 0.46
         },
-        "why": "overall value structure"
+        "why": "overall value structure of the far daylight frame. Max 0.40 -> 0.46, user decision 2026-10-16 (“改成 0.46”): 0.40 had no reference; The Guild daylight frames measure 0.449 (guild3_3) and 0.348 (guild3_1), and the cap blocked grass, footing, thatch brightening and the reed thatch texture (docs/art-check-conflicts.md)"
       },
       "shadow_green": {
         "v": {
