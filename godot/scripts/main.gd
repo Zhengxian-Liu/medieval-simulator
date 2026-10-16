@@ -22,6 +22,7 @@ var player: Node3D
 var sun: DirectionalLight3D
 var moon: DirectionalLight3D
 var environment: Environment
+var focal: MeshInstance3D  # stylise.focal pass, null when off
 var camera: Camera3D
 var village: RefCounted
 
@@ -48,8 +49,24 @@ func _ready() -> void:
 		vp.add_child(camera)
 		_capture(vp, capture_dir)
 	camera.current = true
+	_build_focal()
 	_apply_camera()
 	_apply_time()
+
+# Disco Elysium study (art/look.json stylise.focal): full-screen pass on the camera, off when strength is 0.
+func _build_focal() -> void:
+	var spec: Dictionary = Look.v("stylise.focal")
+	if spec.strength <= 0.0:
+		return
+	var m := ShaderMaterial.new()
+	m.shader = load("res://shaders/focal.gdshader")
+	Look.apply(m, spec)
+	focal = MeshInstance3D.new()
+	focal.mesh = QuadMesh.new()
+	focal.material_override = m
+	focal.extra_cull_margin = 16384.0
+	focal.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	camera.add_child(focal)
 
 func _user_arg(prefix: String) -> String:
 	for arg in OS.get_cmdline_user_args():
@@ -224,6 +241,8 @@ func _capture(vp: SubViewport, dir: String) -> void:
 			# lighting-only pass (white albedo): the colour of the light itself, so shadow tint is measured without
 			# material colour mixed in
 			vp.debug_draw = Viewport.DEBUG_DRAW_LIGHTING
+			if focal:
+				focal.visible = false  # measure the light, not the stylised frame
 			# linear tonemap at reduced exposure: AgX capped lit light at ~0.89 and bleached its colour, which flattened
 			# key:fill and warmth (2026-10-16)
 			environment.tonemap_mode = Environment.TONE_MAPPER_LINEAR
@@ -233,6 +252,8 @@ func _capture(vp: SubViewport, dir: String) -> void:
 			if not _save_shot(vp, dir.path_join(shot[0] + "_light.png")):
 				return
 			vp.debug_draw = Viewport.DEBUG_DRAW_DISABLED
+			if focal:
+				focal.visible = true
 			environment.tonemap_mode = Environment.TONE_MAPPER_AGX
 			_apply_time()
 	get_tree().quit(0)

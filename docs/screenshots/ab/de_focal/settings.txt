@@ -1,0 +1,2 @@
+stylise.focal.strength=2.5
+stylise.focal.desaturate=0.3

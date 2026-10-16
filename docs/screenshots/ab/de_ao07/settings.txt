@@ -1,0 +1,1 @@
+materials.weathered_common.ao_strength=0.7

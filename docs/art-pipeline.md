@@ -16,8 +16,10 @@ number there, never in scene code or shaders. Update this document in the same c
    (or `-- prop barrel`, `-- building cottage` ...).
 3. `python3 godot/tools/art_check.py` → captures far/mid/dusk/river shots, writes greyscale copies, measures, writes
    `docs/art-check.md`, exits 1 on failure.
-4. Ask Fable to score the shots + `docs/art-check.md`; turn its findings into new `checks` entries where measurable.
-5. Commit with the shots.
+4. A/B a candidate change without committing it: `python3 godot/tools/ab.py <label> <path=value> ...` →
+   `docs/screenshots/ab/<label>/<shot>_ab.jpg` (current left, candidate right).
+5. Ask Fable to score the shots + `docs/art-check.md`; turn its findings into new `checks` entries where measurable.
+6. Commit with the shots.
 
 ## 2. Parameters (`godot/art/look.json`)
 
@@ -29,6 +31,7 @@ number there, never in scene code or shaders. Update this document in the same c
 | `materials` | triplanar tiling/tint, per-slot weathered params (`weathered.<slot>`), shared weathering, leaves, water, ground, flat placeholder colours |
 | `placement` | skirt decal, grass tufts, debris density, tree clearance, props kept off paths |
 | `checks` | measured regions + targets per shot, triangle budgets |
+| `stylise` | Disco Elysium study toggles (brush strokes, focal falloff), off by default; A/B with `tools/ab.py` |
 
 Read in code with `scripts/look.gd`: `Look.v("sun.energy_day")`, `Look.col(...)`, `Look.group(...)`,
 `Look.apply(shader_material, params)`.

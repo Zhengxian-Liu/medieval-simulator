@@ -3,6 +3,7 @@
 // splash dirt rising from the asset's base, and moss on upward-facing surfaces, both broken up by noise.
 shader_type spatial;
 render_mode cull_disabled;
+#include "res://shaders/brush.gdshaderinc"
 
 uniform sampler2D albedo_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D normal_tex : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
@@ -19,7 +20,12 @@ uniform float edge_wear = 0.6;   // lightening on baked convex edges
 uniform float roughness_min = 0.0;  // floor on the scanned roughness (straw, daub and rough stone are matte)
 uniform float specular = 0.5;       // F0 control; dry organic materials reflect little
 uniform float eave_age = 0.0;   // thatch: darkening toward the eave (vertex colour B = ridge..eave), wetter older straw
-uniform float detile = 0.0;  // blend in a second, rescaled sample: hides the texture repeat (thatch)
+uniform float course_height = 0.0;  // thatch: vertical spacing of the laid courses (m); 0 = off
+uniform float course_shadow = 0.0;  // darkening just below each course's butt ends
+uniform float course_var = 0.0;     // per-course tone variation (each course laid from a different batch of straw)
+uniform float detile = 0.0;
+uniform float brush = 0.0;        // painterly stroke texture strength (stylise.surface)
+uniform float brush_scale = 5.0;  // strokes per metre  // blend in a second, rescaled sample: hides the texture repeat (thatch)
 
 varying vec3 world_pos;
 varying vec3 world_normal;
@@ -39,7 +45,7 @@ void vertex() {
 	world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 	baked_ao = COLOR.r;
 	edge = COLOR.g;
-	slope_pos = COLOR.b;  // convexity baked by tools/blender/bake.py
+	slope_pos = COLOR.b;  // thatch ridge (0) -> eave (1), baked by tools/blender/bake.py; 0 on other slots
 }
 
 void fragment() {
@@ -63,6 +69,15 @@ void fragment() {
 	c *= mix(1.0, mix(0.45, 1.35, patches), step(0.001, slope_pos) * eave_age);
 	c = mix(c, c * 0.45, clamp(age, 0.0, 1.0));
 	c = mix(c, moss_color, clamp(age * moss * 0.8, 0.0, 1.0) * smoothstep(0.45, 0.75, patches));
+	if (course_height > 0.0 && slope_pos > 0.001) {
+		// horizontal courses: world-height bands, wobbling a few cm along the roof so they are not ruled lines
+		float y = (world_pos.y - NODE_POSITION_WORLD.y) / course_height
+				+ (vnoise(world_pos.xz * 0.9) - 0.5) * 0.35;
+		float k = floor(y);
+		c *= 1.0 + (hash(vec2(k, NODE_POSITION_WORLD.x + NODE_POSITION_WORLD.z)) - 0.5) * 2.0 * course_var;
+		c *= mix(1.0 - course_shadow, 1.0, smoothstep(0.0, 0.3, 1.0 - fract(y)));  // dark band just under the butt ends above
+	}
+	c *= 1.0 + (brush_stroke(world_pos, world_normal, brush_scale) - 0.5) * 2.0 * brush;
 	ALBEDO = c;
 	AO = mix(1.0, baked_ao, ao_strength);  // occludes ambient/GI light only, so direct sun still lands on the surface
 	AO_LIGHT_AFFECT = 0.25;                  // and a little on direct light: crevices stay dark at noon too

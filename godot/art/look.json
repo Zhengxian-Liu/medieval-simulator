@@ -261,9 +261,12 @@
           "detile": 0.6,
           "eave_age": 1.0,
           "roughness_min": 0.9,
-          "specular": 0.15
+          "specular": 0.15,
+          "course_height": 0.2,
+          "course_shadow": 0.3,
+          "course_var": 0.12
         },
-        "why": "straw-yellow aged thatch; detile hides the tile period; eave_age darkens and moss-greens the lower courses (review 4: roof was one flat plane)"
+        "why": "straw-yellow aged thatch; detile hides the tile period; eave_age darkens and moss-greens the lower courses (review 4: roof was one flat plane). Courses (coordinator default 2026-10-16): subtle horizontal bands every 0.2 m of height (~0.28 m along a 45 deg slope, matching roofs.py), dark under each butt edge, +-12% tone per course"
       },
       "cloth": {
         "v": {
@@ -775,6 +778,24 @@
         },
         "why": "red/blue of the key light on lit pixels: noon measures 1.05; a visibly orange morning would read > 1.15"
       }
+    }
+  },
+  "stylise": {
+    "_doc": "Disco Elysium study (coordinator defaults 2026-10-16): each item is a toggle, OFF by default; compared with tools/ab.py and judged by Fable before any is turned on. No Kuwahara filter.",
+    "surface": {
+      "v": {
+        "brush": 0.0,
+        "brush_scale": 5.0
+      },
+      "why": "world-space painterly stroke texture on buildings, props and ground (shaders/brush.gdshaderinc); A/B value 0.12"
+    },
+    "focal": {
+      "v": {
+        "strength": 0.0,
+        "radius": 0.55,
+        "desaturate": 0.0
+      },
+      "why": "detail and saturation fall off toward the frame edges (shaders/focal.gdshader); A/B value strength 2.5, desaturate 0.3"
     }
   }
 }
