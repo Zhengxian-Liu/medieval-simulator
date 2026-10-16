@@ -256,9 +256,9 @@
       "thatch": {
         "v": {
           "tint": [
-            1.57,
-            1.37,
-            0.91
+            1.53,
+            1.33,
+            0.88
           ],
           "dirt_height": 0.0,
           "moss": 0.45,
@@ -270,12 +270,12 @@
           "course_shadow": 0.6,
           "course_var": 0.12,
           "bundle_width": 0.3,
-          "bundle_var": 0.2,
+          "bundle_var": 0.25,
           "bundle_gap": 0.5,
           "ragged": 0.4,
           "bundle_relief": 0.6
         },
-        "why": "straw-yellow aged thatch; detile hides the tile period; eave_age darkens and moss-greens the lower courses (review 4: roof was one flat plane). Courses (coordinator default 2026-10-16): subtle horizontal bands every 0.2 m of height (~0.28 m along a 45 deg slope, matching roofs.py), dark under each butt edge, +-12% tone per course. Round 7: pale desaturated straw [0.85,0.75,0.5] (was orange-brown 0.8/0.62/0.36) and course_shadow 0.6 (0.3 barely visible); A/B ab/thatch_straw: roof_macro 0.057 -> 0.065. Round 8: tint 1.45/1.26/0.84 (> 1 lifts the dark scan): lit thatch 0.29 -> ~0.5, level with lit grass like The Guild (checks.far.thatch_vs_grass); A/B ab/thatch_bright*. Round 9: bundles 0.3 m wide along each course with own tone (bundle_var 0.2), dark gaps (0.5) and jagged butt ends (ragged 0.4): reads as laid straw, not fur. Stronger (0.35/0.8/0.6) read as shingles; the remaining bundle-scale gap to The Guild (checks.far.thatch_bundles) needs geometric depth. Tint 1.52/1.32/0.88 keeps thatch level with grass. bundle_relief 0.6 (round 9): shader normals round each bundle and step each course, so the sun lights one flank (A/B ab/relief*: thatch_bundles 0.037 -> 0.054); real geometry would cost ~30k tris per roof (longhouse at 95k of 100k). Tint 1.57/1.37/0.91 keeps it level with grass"
+        "why": "straw-yellow aged thatch; detile hides the tile period; eave_age darkens and moss-greens the lower courses (review 4: roof was one flat plane). Courses (coordinator default 2026-10-16): subtle horizontal bands every 0.2 m of height (~0.28 m along a 45 deg slope, matching roofs.py), dark under each butt edge, +-12% tone per course. Round 7: pale desaturated straw [0.85,0.75,0.5] (was orange-brown 0.8/0.62/0.36) and course_shadow 0.6 (0.3 barely visible); A/B ab/thatch_straw: roof_macro 0.057 -> 0.065. Round 8: tint 1.45/1.26/0.84 (> 1 lifts the dark scan): lit thatch 0.29 -> ~0.5, level with lit grass like The Guild (checks.far.thatch_vs_grass); A/B ab/thatch_bright*. Round 9: bundles 0.3 m wide along each course with own tone (bundle_var 0.2), dark gaps (0.5) and jagged butt ends (ragged 0.4): reads as laid straw, not fur. Stronger (0.35/0.8/0.6) read as shingles; the remaining bundle-scale gap to The Guild (checks.far.thatch_bundles) needs geometric depth. Tint 1.52/1.32/0.88 keeps thatch level with grass. bundle_relief 0.6 (round 9): shader normals round each bundle and step each course, so the sun lights one flank (A/B ab/relief*: thatch_bundles 0.037 -> 0.054); real geometry would cost ~30k tris per roof (longhouse at 95k of 100k). Tint 1.57/1.37/0.91 keeps it level with grass. Round 10: no hard bundle cells (Fable r9: read as shingles): bundle tone, gaps and the butt-end line vary smoothly along the course; relief keeps the stepped courses, only a slight along-course wobble. A/B ab/straw"
       },
       "cloth": {
         "v": {

@@ -86,21 +86,22 @@ void fragment() {
 		float a = dot(world_pos.xz, along_dir) / bundle_width + vnoise(world_pos.xz * 1.7) * 0.8;
 		float k0 = floor(y);
 		a += hash(vec2(k0, 3.1)) * 7.0;  // bundles of neighbouring courses don't line up
-		float b = floor(a);
-		y += (hash(vec2(b, k0)) - 0.5) * ragged;
+		// no hard cells: bundle tone and the butt-end line vary smoothly along the course (value noise), so straw reads as
+		// continuous down-slope fibre in feathered stripes, not tiles (round 9: hard seams + butt ends read as shingles)
+		y += (vnoise(vec2(a * 1.3, k0 * 5.7)) - 0.5) * ragged;
 		float k = floor(y);
 		float seed = NODE_POSITION_WORLD.x + NODE_POSITION_WORLD.z;
 		c *= 1.0 + (hash(vec2(k, seed)) - 0.5) * 2.0 * course_var;
-		c *= 1.0 + (hash(vec2(b + seed, k)) - 0.5) * 2.0 * bundle_var;
-		float fa = fract(a);
-		c *= 1.0 - bundle_gap * (1.0 - smoothstep(0.0, 0.18, min(fa, 1.0 - fa)));
+		float stripe = vnoise(vec2(a, k * 3.1 + seed));  // one feathered stripe per bundle width
+		c *= 1.0 + (stripe - 0.5) * 2.0 * bundle_var;
+		c *= 1.0 - bundle_gap * smoothstep(0.55, 0.0, stripe) * 0.5;  // the darkest stripes sink in: soft gaps
 		c *= mix(1.0 - course_shadow, 1.0, smoothstep(0.0, 0.3, 1.0 - fract(y)));  // dark band just under the butt ends above
 		if (bundle_relief > 0.0) {
 			// rounded bundles (normal turns across each one) and stepped courses (butt ends face down-slope): the
 			// sun lights one flank and shades the other, as real bundle depth does; geometry would cost ~30k tris a roof
 			vec3 along3 = vec3(along_dir.x, 0.0, along_dir.y);
 			vec3 down = normalize(vec3(0.0, -1.0, 0.0) - world_normal * dot(vec3(0.0, -1.0, 0.0), world_normal) + vec3(1e-4));
-			vec3 nw = world_normal + along3 * (fa - 0.5) * 2.0 * bundle_relief
+			vec3 nw = world_normal + along3 * (vnoise(vec2(a * 2.0, k)) - 0.5) * bundle_relief * 0.5
 					+ down * smoothstep(0.65, 1.0, fract(y)) * bundle_relief * 1.5;
 			relief_normal = normalize((VIEW_MATRIX * vec4(normalize(nw), 0.0)).xyz);
 			use_relief = true;
