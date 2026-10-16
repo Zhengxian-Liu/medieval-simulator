@@ -108,8 +108,8 @@
       "why": "sky fill (x day) when the sun is low (same ramp as the sun colour): the real sky dims with the sun; at full fill the 17 deg dusk sun barely showed (key:fill 1.4, 2026-10-16). Swept 2026-10-16: 0.45 -> dusk key:fill 2.0, 0.25 -> 3.8"
     },
     "exposure_low": {
-      "v": 3.5,
-      "why": "exposure (x tonemap_exposure) when the sun is low: the camera exposes up for golden hour instead of the frame going dark. 3.5 keeps the dusk frame at 0.22 with the dimmer sky (swept 2.5-3.5)"
+      "v": 4.0,
+      "why": "exposure (x tonemap_exposure) as the sun nears the horizon, daylight only: the camera exposes up for golden hour instead of the frame going dark. 4.0 keeps the dusk frame at 0.24 with the dimmer sky (swept 2.5-4.0)"
     }
   },
   "sun": {
@@ -178,8 +178,8 @@
       "why": "sun energy floor (x day energy) while low above the horizon: golden hour, not dusk-dark (review 5)"
     },
     "warm_below_elevation": {
-      "v": 50.0,
-      "why": "degrees; sun colour ramps from color_day to color_low below this. At 20 the 17 deg dusk shot was barely warm (key warmth 1.05, same as noon, 2026-10-16); the 11:00 noon shot (53 deg) stays above it, neutral"
+      "v": 45.0,
+      "why": "degrees; sun colour follows a smoothstep from color_low (horizon) to color_day at this elevation: flat near noon, fast near the horizon. Linear over 20 left the 17 deg dusk barely warm (key warmth 1.05, 2026-10-16); 45 + smoothstep: dusk 1.63, 9:00 1.09 (neutral, checks.morning)"
     }
   },
   "materials": {
@@ -764,6 +764,17 @@
     "light_pass_exposure": {
       "v": 0.15,
       "why": "exposure of the lighting-only measurement pass, rendered with the linear tonemapper so the brightest sunlit light stays below 1.0 (no clipping) and keeps its colour"
+    },
+    "morning": {
+      "_why": "godot_far_morning at 9:00 (sun ~39 deg): daylight must stay neutral (user: neutral grade); the golden-hour colour ramp must not tint it",
+      "key_warmth": {
+        "v": {
+          "measure": "key_warmth",
+          "min": 0.95,
+          "max": 1.15
+        },
+        "why": "red/blue of the key light on lit pixels: noon measures 1.05; a visibly orange morning would read > 1.15"
+      }
     }
   }
 }

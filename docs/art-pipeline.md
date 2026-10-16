@@ -104,6 +104,7 @@ Add it to `godot/tools/fetch_polyhaven.py` (Poly Haven / ambientCG, CC0 only, 1K
 - Roof macro structure: 16 px-blurred std dev on the barn roof ≥ 0.05.
 - Dusk (`godot_far_dusk`, 16:48, sun ~17 deg; user decision 2026-10-16): frame >= 0.22, key warmth (R/B of the key light
   on lit pixels, lighting-only pass) 1.5–2.5, key:fill 3–6.
+- Morning (`godot_far_morning`, 9:00): key warmth 0.95–1.15, daylight stays neutral under the golden-hour ramp.
 - Quick A/B of one value: `SHOTS=godot_mid godot/tools/capture.sh && python3 godot/tools/art_check.py --no-capture`.
 - Night (`godot_far_night`, hour 22): frame mean 0.10–0.20 (moonlit, readable), torch pool ≥ 1.8x the frame mean.
 - Every texture mipmapped; every GLB within its triangle budget.

@@ -160,7 +160,7 @@ def main():
             ok &= passed
             rows.append(("value", f"{shot}.{name}", f"{m:.3f}", f"{spec['min']}-{spec['max']}", passed, leaf["why"]))
 
-    for shot_name, png_name in (("night", "godot_far_night.png"), ("dusk", "godot_far_dusk.png")):
+    for shot_name, png_name in (("night", "godot_far_night.png"), ("dusk", "godot_far_dusk.png"), ("morning", "godot_far_morning.png")):
         png = SHOTS / png_name
         for name, leaf in CHECKS.get(shot_name, {}).items():
             if name.startswith("_"):

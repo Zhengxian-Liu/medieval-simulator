@@ -139,7 +139,7 @@ func _apply_time() -> void:
 	sun.rotation_degrees = Vector3(-elevation, Look.v("sun.yaw_at_noon") + (hour - 12.0) * Look.v("sun.yaw_per_hour"), 0)
 	# separate ramps (review 5): colour warms below sun.warm_below_elevation, but energy keeps a floor until the sun
 	# actually sets, so a low sun is golden hour, not night; sky fill, moon and torches follow sunset (elevation < 0)
-	var warm := clampf(elevation / Look.v("sun.warm_below_elevation"), 0.0, 1.0)
+	var warm := smoothstep(0.0, Look.v("sun.warm_below_elevation"), elevation)  # flat near noon, fast near the horizon
 	var day := clampf((elevation + 2.0) / 6.0, 0.0, 1.0)
 	sun.light_energy = Look.v("sun.energy_day") * lerpf(Look.v("sun.energy_low"), 1.0, warm) * day
 	sun.light_color = Look.col("sun.color_low").lerp(Look.col("sun.color_day"), warm)
@@ -198,7 +198,7 @@ func _capture(vp: SubViewport, dir: String) -> void:
 	DirAccess.make_dir_recursive_absolute(dir)
 	var home := player.position
 	var river := Vector3(4.0, home.y, Village.river_center(4.0) + 3.0)
-	for shot in [["godot_far", 0.0, 11.0, home], ["godot_mid", 1.0, 11.0, home], ["godot_far_dusk", 0.0, 16.8, home], ["godot_far_night", 0.0, 22.0, home],
+	for shot in [["godot_far", 0.0, 11.0, home], ["godot_mid", 1.0, 11.0, home], ["godot_far_dusk", 0.0, 16.8, home], ["godot_far_night", 0.0, 22.0, home], ["godot_far_morning", 0.0, 9.0, home],
 			["godot_river", 0.0, 11.0, river]]:
 		var only := _user_arg("--only=")
 		if not only.is_empty() and only != shot[0]:
