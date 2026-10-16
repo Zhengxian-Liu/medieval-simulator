@@ -181,9 +181,11 @@ bool seeMenu(World& w, const std::function<void()>& flush) {
     askWith("");
     // Not a yes: the levers the family has on them, if any; each costs another free day.
     const AskResult& r = w.lastAsk();
-    if (r.answer >= 2 && !r.levers.empty() && w.timeLeft() > 0) {
+    std::vector<std::string> lv;
+    for (const auto& l : r.levers)
+        if (w.leverOpen(l)) lv.push_back(l);
+    if (r.answer >= 2 && !lv.empty()) {
         static const std::map<std::string, std::string> name = {{"gift", "送點禮再說"}, {"favour", "提他欠的人情"}, {"hook", "拿把柄壓他"}, {"meet", "答應他的條件"}};
-        std::vector<std::string> lv = r.levers;
         for (size_t i = 0; i < lv.size(); ++i) std::cout << "  " << i + 1 << ". " << (name.count(lv[i]) ? name.at(lv[i]) : lv[i]) << "\n";
         int l = number(ask("再試一次（直接 Enter 算了）："));
         if (l >= 1 && l <= static_cast<int>(lv.size())) askWith(lv[static_cast<size_t>(l) - 1]);

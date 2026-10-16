@@ -190,7 +190,7 @@ void World::kill(Id id, const std::string& cause) {
     Id bedside = kNone;
     if (lingering && id == playerHead())
         for (Id c : p.children)
-            if (people_[c].alive() && ageYears(people_[c]) >= 14 && people_[c].home == kNone &&
+            if (people_[c].alive() && ageYears(people_[c]) >= 14 && people_[c].home == kNone && people_[c].household != kNone &&
                 (bedside == kNone || (people_[c].household == p.household && people_[bedside].household != p.household) ||
                  (people_[c].household == people_[bedside].household && people_[c].birthDay < people_[bedside].birthDay)))
                 bedside = c;
@@ -322,11 +322,16 @@ void World::obituary(Id id) {
 }
 
 // Who inherits from `dead`, head of `h`, by English custom: eldest son, then a dead son's son,
-// then eldest daughter, then a brother, then the widow, then anyone left in the house.
+// then eldest daughter, then a brother, then the widow, then anyone left in the house. A son or brother away
+// on the road (at war, at school, apprenticed in town) counts as if at home: he is called back for it.
 Id World::heirOf(const Household& h, Id dead) const {
     const Person& d = people_[dead];
     auto inHouse = [&](Id x) {
-        return x != kNone && people_[x].alive() && people_[x].household == h.id;
+        if (x == kNone || x == dead || !people_[x].alive()) return false;
+        const Person& q = people_[x];
+        if (q.household == h.id) return true;
+        const StationDef* sd = defs_.station(q.station);
+        return isAway(q) && q.awayFrom == h.id && !(sd && sd->lasting);
     };
     Id heir = kNone;
     auto eldest = [&](const std::vector<Id>& pool, Sex want) {
@@ -345,18 +350,25 @@ Id World::heirOf(const Household& h, Id dead) const {
     }
     if (heir == kNone) heir = eldest(d.children, Sex::Female);
     if (heir == kNone && d.father != kNone) heir = eldest(people_[d.father].children, Sex::Male);
-    if (heir == kNone && inHouse(d.spouse)) heir = d.spouse;
+    if (heir == kNone && d.spouse != kNone && people_[d.spouse].alive() && people_[d.spouse].household == h.id) heir = d.spouse;
     if (heir == kNone)
         for (Id m : h.members)
             if (m != dead && people_[m].alive() && people_[m].home == kNone &&
                 (heir == kNone || people_[m].birthDay < people_[heir].birthDay))
                 heir = m;
+    // Last, a child settled away for good (a master in town, a wife in town): better than the land going back.
+    if (heir == kNone)
+        for (Id c : d.children)
+            if (c != dead && isAway(people_[c]) && people_[c].awayFrom == h.id && people_[c].station != "priest_away" &&
+                (heir == kNone || people_[c].birthDay < people_[heir].birthDay))
+                heir = c;
     return heir;
 }
 
 void World::onHeadDied(Household& h, Id dead) {
     recallServants(h.id);
     Id heir = heirOf(h, dead);
+    if (heir != kNone && isAway(people_[heir])) setStation(heir, "home", 0, "回家接下家裡的地");
 
     bool player = inPlayerHouse(h.id);
     if (heir == kNone) {
@@ -374,12 +386,12 @@ void World::onHeadDied(Household& h, Id dead) {
         log(2, dynasties_[h.dynasty].surname + " 家絕戶了，" + std::to_string(int(lost)) +
                    " 畝地回到領主手上。");
         for (Id it : h.items) items_[it].lost = true;
+        rehomeAway(h.id, kNone);
         if (player) followSurvivingBranch();
         return;
     }
 
     h.head = heir;
-    noteLife(heir, "當了家");
     // The house goes on, but to someone not of the player's blood (a widower who married in, a
     // stepchild): the family line ends here unless another branch carries it.
     if (player && people_[heir].dynasty != playerDynasty_ &&
@@ -388,14 +400,17 @@ void World::onHeadDied(Household& h, Id dead) {
         // comes home to take it up.
         Id kin = kNone;
         for (const auto& q : people_) {
-            if (!q.alive() || q.id == dead || q.dynasty != playerDynasty_ || q.household == kNone || ageYears(q) < 12) continue;
-            if (q.household != h.id && households_[q.household].head == q.id) continue;  // heads their own house: a branch
+            if (!q.alive() || q.id == dead || q.dynasty != playerDynasty_ || ageYears(q) < 12) continue;
+            const StationDef* qs = defs_.station(q.station);
+            if (q.household == kNone && !(isAway(q) && !(qs && qs->lasting))) continue;  // away: only on the road
+            if (q.household != kNone && q.household != h.id && households_[q.household].head == q.id) continue;  // heads their own house: a branch
             bool child = q.father == dead || q.mother == dead;
             bool better = kin == kNone || (child && !(people_[kin].father == dead || people_[kin].mother == dead)) ||
                           ((child == (people_[kin].father == dead || people_[kin].mother == dead)) && q.birthDay < people_[kin].birthDay);
             if (better) kin = q.id;
         }
         if (kin != kNone) {
+            if (isAway(people_[kin])) setStation(kin, "home", 0, "回家接下家裡的地");
             if (people_[kin].household != h.id) {
                 people_[kin].home = kNone;
                 people_[kin].flags.erase("in_service");
@@ -406,6 +421,8 @@ void World::onHeadDied(Household& h, Id dead) {
             h.head = heir;
         }
     }
+    noteLife(heir, "當了家");
+    settleAsHead(heir);
     if (player && people_[heir].dynasty != playerDynasty_ &&
         dynasties_[people_[heir].dynasty].surname != dynasties_[playerDynasty_].surname) {
         log(1, "房子和地傳給了 " + fullName(heir) + "，可是" + fullName(heir) + "不姓 " + dynasties_[playerDynasty_].surname + "。");
@@ -468,7 +485,7 @@ void World::marry(Id man, Id woman) {
             x->home = kNone;
             x->serviceEnd = -1;
             x->flags.erase("in_service");
-            if (x->station == "servant") setStation(x->id, "home", 0, "成親");
+            if (x->station == "servant") setStation(x->id, "home", 0, "");  // the wedding itself is the note (noteLife below)
             if (x == &m && x->household != kNone && households_[x->household].head != man && !households_[home].extinct)
                 moveTo(man, home);
         }
@@ -554,6 +571,7 @@ void World::marry(Id man, Id woman) {
         from.money = from.food = 0;
         from.head = kNone;
         from.extinct = true;
+        rehomeAway(from.id, to.id);
         if (intoHers) {
             if (family) log(imp, fullName(man) + " 娶了 " + fullName(woman) + "，帶著家當搬進她家，兩家合為一戶。");
             return;
@@ -610,6 +628,7 @@ void World::marry(Id man, Id woman) {
         if (from.members.empty()) {
             from.head = kNone;
             from.extinct = true;
+            rehomeAway(from.id, kNone);
             moveLand(from.id, kNone, from.acres, LandPick::CustomaryFirst, "嫁出去後收回");
         }
     } else if (family) {
@@ -645,6 +664,7 @@ void World::marry(Id man, Id woman) {
             fresh.members.push_back(who);
         }
         fresh.head = man;
+        settleAsHead(man);
         fresh.food = consumption(fresh) * 120;
         oldHome.food = std::max(0.0, oldHome.food - fresh.food);
         fresh.firewood = 20;
@@ -772,6 +792,8 @@ void World::yearlyMarriages() {
         from.money -= dowry;
         from.members.erase(std::remove(from.members.begin(), from.members.end(), w.id), from.members.end());
         if (isPlayerFamily(w)) log(inPlayerHouse(w.household) ? 1 : 2, fullName(w.id) + " 嫁到了外村。");
+        w.station.clear();
+        noteLife(w.id, "嫁到了外村");
         w.household = kNone;
         w.flags.insert("married_away");
     }
@@ -808,7 +830,7 @@ void World::yearlyAdulthood() {
         if (age >= 14 && p.occupation.empty()) {
             std::string occ;
             for (const auto& f : p.flags)
-                if (f.rfind("apprentice_", 0) == 0) occ = f.substr(11);
+                if (f.rfind("apprentice_", 0) == 0 && f.rfind("apprentice_at_", 0) != 0) occ = f.substr(11);
             if (occ.empty()) {
                 if (p.sex == Sex::Female) {
                     occ = "housewife";
@@ -828,6 +850,15 @@ void World::yearlyAdulthood() {
             if (p.station == "apprentice") setStation(p.id, "home", 0, "出師，當" + defs_.occupation(occ)->name);
             if (family && p.sex == Sex::Male)
                 log(inPlayerHouse(p.household) ? 1 : 2, fullName(p.id) + " 十四歲了，開始當" + defs_.occupation(occ)->name + "。");
+        } else if (age >= 14 && p.station == "apprentice" && day_ - p.stationSince >= 3 * kDaysPerYear) {
+            // Apprenticed late, after already working: three years, then the trade is his.
+            std::string occ;
+            for (const auto& f : p.flags)
+                if (f.rfind("apprentice_", 0) == 0 && f.rfind("apprentice_at_", 0) != 0) occ = f.substr(11);
+            if (!occ.empty() && defs_.occupation(occ)) p.occupation = occ;
+            const OccupationDef* od = defs_.occupation(p.occupation);
+            setStation(p.id, "home", 0, "出師，當" + (od ? od->name : std::string("手藝人")));
+            if (family) log(inPlayerHouse(p.household) ? 1 : 2, fullName(p.id) + " 出師了，從此當" + (od ? od->name : std::string("手藝人")) + "。");
         }
         if (family && households_[p.household].head == p.id && p.ambition.empty() && age >= 16 &&
             inPlayerHouse(p.household))
@@ -837,12 +868,18 @@ void World::yearlyAdulthood() {
 
 void World::growSkills() {
     for (auto& p : people_) {
-        if (!p.alive() || p.household == kNone) continue;
+        if (!p.alive() || (p.household == kNone && !isAway(p))) continue;
         double age = ageYears(p);
         if (age < 5) continue;
         double learn = std::max(0.2, 1 + traitMod(p, "skill_gain"));
         const OccupationDef* od = defs_.occupation(p.occupation);
-        if (od && age >= 14) {
+        // Away at school or at a trade in town: years there are what the exams at the end weigh.
+        bool town = p.station == "town_apprentice" || p.station == "town_journeyman" || p.station == "town_master";
+        if (p.station == "scholar") {
+            p.skills[Learning] += 0.1 * learn;
+        } else if (town) {
+            p.skills[skillFromKey("craft")] += 0.08 * learn;
+        } else if (od && age >= 14) {
             int s = skillFromKey(od->skill);
             p.skills[s] += 0.07 * learn * (1 + traitMod(p, std::string("skill_") + od->skill));
         } else if (age < 14) {

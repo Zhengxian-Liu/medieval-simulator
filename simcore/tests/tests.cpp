@@ -46,7 +46,13 @@ static void checkInvariants(const World& w, const char* label) {
             CHECK(sd && sd->away, "away person on a home station");
             CHECK(!seen.count(p.id), "away person still listed in a household");
             CHECK(p.awayFrom >= 0 && p.awayFrom < static_cast<Id>(w.households().size()), "away person belongs nowhere");
+            // Their house still stands, or they have settled out there: money sent home reaches someone.
+            if (p.awayFrom >= 0 && p.awayFrom < static_cast<Id>(w.households().size()))
+                CHECK(!w.household(p.awayFrom).extinct || sd->lasting, "away person belongs to a house that is gone");
         }
+        if (p.alive() && p.household != kNone && w.household(p.household).head == p.id)
+            CHECK(p.station != "labourer" && p.station != "veteran" && p.station != "apprentice", "a head still on a youth's station");
+        if (p.alive() && p.household == kNone && !w.isAway(p)) CHECK(p.station.empty(), "married away but still on a station");
         if (p.alive() && p.household != kNone && !p.station.empty()) {
             const StationDef* sd = w.defs().station(p.station);
             CHECK(sd && !sd->away, "villager on an away station");
@@ -190,6 +196,7 @@ int main() {
         for (const char* st : {"servant", "apprentice", "labourer", "town_apprentice", "town_servant", "archer"})
             CHECK(walked[st] > 0, "nobody walked a common road");
         CHECK(cameBack > 0, "nobody who left ever came back");
+        CHECK(walked["labourer"] > 0, "nobody hired out as a labourer");
         std::printf("paths: %d servants, %d town apprentices, %d archers, %d came back\n", walked["servant"], walked["town_apprentice"],
                     walked["archer"], cameBack);
     }
@@ -212,13 +219,27 @@ int main() {
                         a.issue({a.today(), "ask", a.playerHead(), o.ask + "|" + o.office + "||" + sub, who, o.object});
                         a.runCommands();
                         const auto& lv = a.lastAsk().levers;
-                        if (a.lastAsk().answer < 2 || std::find(lv.begin(), lv.end(), "gift") == lv.end()) continue;
-                        for (double m = 0; m <= 400; m += 2) {
-                            World b = a;
-                            b.setMoneyForTest(b.playerHousehold(), m);
-                            b.issue({b.today(), "ask", b.playerHead(), o.ask + "|" + o.office + "|gift|" + sub, who, o.object});
-                            b.runCommands();
-                            CHECK(b.household(b.playerHousehold()).money > -0.01, "a gift left the family in the red");
+                        if (a.lastAsk().answer < 2 || std::find(lv.begin(), lv.end(), "gift") == lv.end() || a.timeLeft() < 1) continue;
+                        // Every lever the answer offers, pressed with every sum of money: a press the family cannot
+                        // pay for takes no day and changes nothing; one it can takes exactly one day; the front ends
+                        // (leverOpen) offer exactly the presses that go through.
+                        for (const std::string& lever : std::vector<std::string>(lv)) {
+                            for (double m = 0; m <= 400; m += 2) {
+                                World b = a;
+                                b.setMoneyForTest(b.playerHousehold(), m);
+                                bool offered = b.leverOpen(lever);
+                                int before = b.timeLeft();
+                                std::string said = b.lastAsk().text;
+                                b.issue({b.today(), "ask", b.playerHead(), o.ask + "|" + o.office + "|" + lever + "|" + sub, who, o.object});
+                                b.runCommands();
+                                bool pressed = b.timeLeft() != before;
+                                CHECK(b.household(b.playerHousehold()).money > -0.01, "a press left the family in the red");
+                                CHECK(!pressed || b.timeLeft() == before - 1, "a press took more than one day");
+                                CHECK(pressed || b.lastAsk().text == said, "a press that took no day still changed the answer");
+                                CHECK(pressed == offered, "the front ends offer a press the engine refuses, or hide one it takes");
+                                CHECK(!pressed || b.lastAsk().text.find("湊夠") == std::string::npos, "a press took the day only to say 湊夠");
+                                if (lever == "gift" && m < a.lastAsk().giftSum + a.lastAsk().dealCost) CHECK(!pressed, "a gift the family cannot afford took the day");
+                            }
                         }
                         giftTried = true;
                         World d = a;

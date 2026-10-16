@@ -295,12 +295,12 @@ bool EventRunner::remembers(const Json& v, const Person& p, Id target) const {
     return false;
 }
 
-double EventRunner::weight(const Json& ai, const Person& p, Id target) const {
+double EventRunner::weight(const Json& ai, const Person& p, Id target, const Person* traitsOf) const {
     if (ai.isNull()) return 10;
     double w = ai.numberOr("base", 10);
     if (ai["traits"].isObject())
         for (const auto& [t, v] : ai["traits"].asObject())
-            if (w_.hasTrait(p, t)) w += v.asNumber();
+            if (w_.hasTrait(traitsOf ? *traitsOf : p, t)) w += v.asNumber();
     if (ai["if"].isArray())
         for (const auto& c : ai["if"].asArray())
             if (eval(c["cond"], p, target)) w += c["add"].asNumber();
@@ -320,13 +320,22 @@ bool EventRunner::optionOpen(const OptionDef& o, const Person& p, Id target) con
 }
 
 int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
+    // A child's road is the parents' call (parent_decides), in every family: their temper weighs the options and,
+    // when a model decides, it decides as them. The child's own state (age, skills, flags) still sets what is open.
+    const Person* decider = nullptr;
+    if (ev.parentDecides && p.spouse == kNone) {
+        Id hid = p.household != kNone ? p.household : w_.isAway(p) ? p.awayFrom : kNone;
+        auto there = [&](Id x) { return x != kNone && x != p.id && w_.people_[x].alive() && w_.people_[x].household == hid && hid != kNone; };
+        Id d = there(p.father) ? p.father : there(p.mother) ? p.mother : hid != kNone && there(w_.households_[hid].head) ? w_.households_[hid].head : kNone;
+        if (d != kNone) decider = &w_.people_[d];
+    }
     std::vector<double> ws;
-    for (const auto& o : ev.options) ws.push_back(optionOpen(o, p, target) ? weight(o.aiWeight, p, target) : 0.0);
+    for (const auto& o : ev.options) ws.push_back(optionOpen(o, p, target) ? weight(o.aiWeight, p, target, decider) : 0.0);
     // Nothing affordable: fall back to the conditions alone, so the event still resolves.
     if (std::all_of(ws.begin(), ws.end(), [](double v) { return v <= 0; })) {
         ws.clear();
         for (const auto& o : ev.options)
-            ws.push_back(o.conditions.isNull() || eval(o.conditions, p, target) ? weight(o.aiWeight, p, target) : 0.0);
+            ws.push_back(o.conditions.isNull() || eval(o.conditions, p, target) ? weight(o.aiWeight, p, target, decider) : 0.0);
     }
     // The one keeping the house decides for themselves and for the young children in it.
     Id acting = w_.actingHead();
@@ -375,7 +384,8 @@ int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
         }
     }
     // A villager in scope (by default, the spotlight) may have a model decide among the options the rules allow.
-    if (!asks && ev.ask && w_.npcInScope(p.id)) {
+    const Person& chooser = decider ? *decider : p;
+    if (!asks && ev.ask && w_.npcInScope(chooser.id)) {
         std::vector<int> open;
         std::vector<std::string> texts;
         std::vector<double> weights;
@@ -387,7 +397,7 @@ int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
             }
         if (open.size() > 1) {
             std::string sit = ev.prompt.empty() ? ev.title : format(ev.prompt, p, target);
-            int r = w_.npcDecide(p, ev.title, sit, texts, weights, {target});
+            int r = w_.npcDecide(chooser, ev.title, sit, texts, weights, {decider ? p.id : kNone, target});
             if (r >= 0) return open[r];
         }
     }

@@ -289,6 +289,9 @@ struct AskResult {
     std::string demand;  // on a condition: what they want for it
     double demandMoney = 0;
     Id demandParcel = kNone;
+    std::string demandOffice;  // on a condition: the office they want the family's vote for
+    double dealCost = 0;       // what a yes costs the family outright (a parcel's price, a fee)
+    double giftSum = 0;        // what the gift lever would hand over
     std::vector<std::string> levers;  // what the head can still try: gift | favour | hook | meet
 };
 
@@ -629,6 +632,9 @@ public:
     const std::vector<EntryFine>& entryFines() const { return fines_; }
     std::vector<AskOption> asksFor(Id target);
     const AskResult& lastAsk() const { return lastAsk_; }
+    // Whether the last answer can be pressed with this lever now: same season, a free day, the money it takes,
+    // the secret still unused, the parcel asked for still the family's. The front ends show only these.
+    bool leverOpen(const std::string& lever) const;
 
     // --- player interface
     void issue(const Command& c);
@@ -788,6 +794,9 @@ private:
     void comeHome(Id who);
     void noteLife(Id who, const std::string& note);  // a turn on the road that is not a change of station
     void yearlyAway();
+    void monthlyAway();
+    void rehomeAway(Id from, Id to);
+    void settleAsHead(Id who);        // someone takes up a house: a youth's station (labourer, veteran, apprentice) ends  // the house the people away belong to is gone: re-point them
     void sendToService(Id servant, Id master, int years);
     void setFree(Id person);
 

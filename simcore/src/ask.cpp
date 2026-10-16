@@ -278,27 +278,35 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
         demand = what == "lend" ? "到時候多還 " + pence(demandMoney) : what == "match" ? "嫁妝（聘禮）得給 " + pence(demandMoney) : "再加 " + pence(demandMoney);
         if (what != "lend" && ph.money < price + demandMoney) demand.clear(), demandMoney = 0;
     }
-    if (what == "rent_vacant" && ph.money >= price + 10) demand = "再給管家 " + pence(10) + "茶水錢", demandMoney = 10;
+    if (what == "rent_vacant" && ph.money >= price + 10) {
+        // The steward's tea money replaces whatever else they were going to ask for.
+        demand = "再給管家 " + pence(10) + "茶水錢", demandMoney = 10;
+        demandParcel = kNone;
+        demandOffice.clear();
+    }
 
     // The lever, if pressing a first answer.
     std::string leverNote;
     // What a yes costs the family outright, so a gift never spends the money the deal itself needs.
     const double dealCost = what == "sell_parcel" || what == "rent_vacant" || what == "apprentice" ? price : 0;
-    // A loan's condition is paid later, when it is repaid; every other condition is paid now, with the deal.
+    const double giftSum = std::max(12.0, std::round(price * 0.1));
+    // What pressing with this lever takes from the family if it works: the deal, the gift, and a met condition's
+    // money (a loan's condition is paid later, when it is repaid). A press the family cannot pay for is never made,
+    // so it never takes the day only to end in "等你家湊夠".
+    const double pressCost = dealCost + (lever == "gift" ? giftSum : 0) +
+                             (lever == "meet" && what != "lend" ? lastAsk_.demandMoney : 0);
     auto canMeet = [&] {
-        return lastAsk_.answer == 2 && (what == "lend" || lastAsk_.demandMoney <= 0 || ph.money >= lastAsk_.demandMoney + price);
+        return lastAsk_.answer == 2 &&
+               (lastAsk_.demandParcel == kNone || inPlayerHouse(parcels_[lastAsk_.demandParcel].holder));
     };
     if (again) {
         // Every way a press can fail is checked before it takes the day.
-        bool ok = lever == "gift"   ? ph.money >= std::max(12.0, std::round(price * 0.1)) + dealCost
-                  : lever == "hook" ? hookDeed(head, who) != kNone
-                  : lever == "meet" ? canMeet()
-                                    : true;
+        bool ok = leverOpen(lever) && ph.money + 0.01 >= pressCost && (lever != "meet" || canMeet());
         if (!ok || !spendTime(1)) return;
     }
     if (lever == "gift") {
-        double g = std::max(12.0, std::round(price * 0.1));
-        if (ph.money < g + dealCost) return;
+        double g = giftSum;
+        if (ph.money + 0.01 < pressCost) return;
         ph.money -= g;
         th.money += g;
         book(ph, "送禮", -g);
@@ -319,10 +327,11 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
         hardNo = false;
         leverNote = "低聲提起那件見不得人的事，";
     } else if (lever == "meet") {
-        if (!canMeet()) return;
+        if (!canMeet() || ph.money + 0.01 < pressCost) return;
         demand = lastAsk_.demand;
         demandMoney = lastAsk_.demandMoney;
         demandParcel = lastAsk_.demandParcel;
+        demandOffice = lastAsk_.demandOffice;
         fs.push_back({100, ""});
         leverNote = "答應了" + shortName(who) + "的條件，";
     }
@@ -455,9 +464,7 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
         if (lever == "meet") {
             if (demandParcel != kNone) {
                 std::string pn = parcelName(parcels_[demandParcel]);
-                // Their house may have merged into another at the wedding just made: the parcel goes where they live now.
-                Id to = people_[who].household != kNone ? people_[who].household : thId;
-                moveParcel(demandParcel, to, "換來");
+                moveParcel(demandParcel, thId, "換來");
                 res.text += "你家把" + pn + "讓了出去。";
             }
             if (!demandOffice.empty()) promises_[{head, demandOffice}] = who;
@@ -469,6 +476,8 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
         res.demand = demand;
         res.demandMoney = demandMoney;
         res.demandParcel = demandParcel;
+        res.demandOffice = demandOffice;
+        res.dealCost = dealCost;
         res.levers.push_back("meet");
     } else if (answer == 3) {
         res.text = name + "搖了搖頭：「" + why + "。」";
@@ -481,7 +490,9 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
     if (!leverNote.empty()) res.text = "你" + leverNote + res.text;
     // A first no or a condition can be pressed once more, by whatever the family has to press with.
     if (lever.empty() && (answer == 2 || answer == 3)) {
-        if (households_[playerHousehold_].money >= std::max(12.0, std::round(price * 0.1)) + dealCost) res.levers.push_back("gift");
+        res.dealCost = dealCost;
+        res.giftSum = giftSum;
+        if (households_[playerHousehold_].money >= giftSum + dealCost) res.levers.push_back("gift");
         if (favourOwed(who, head) >= 5) res.levers.push_back("favour");
         if (hookDeed(head, who) != kNone) res.levers.push_back("hook");
     }
@@ -495,6 +506,17 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
     befriend(who, head, 6);
     lastAsk_ = res;
     ++counters_["ask:" + what + ":" + std::to_string(answer)];
+}
+
+bool World::leverOpen(const std::string& lever) const {
+    const AskResult& a = lastAsk_;
+    if (a.who == kNone || playerHousehold_ == kNone || timeLeft() <= 0 || a.season != year() * 4 + month() / 3) return false;
+    if (std::find(a.levers.begin(), a.levers.end(), lever) == a.levers.end()) return false;
+    double cost = a.dealCost + (lever == "gift" ? a.giftSum : 0) + (lever == "meet" && a.ask != "lend" ? a.demandMoney : 0);
+    if (households_[playerHousehold_].money + 0.01 < cost) return false;
+    if (lever == "hook") return hookDeed(playerHead(), a.who) != kNone;
+    if (lever == "meet") return a.answer == 2 && (a.demandParcel == kNone || inPlayerHouse(parcels_[a.demandParcel].holder));
+    return true;
 }
 
 }  // namespace sim

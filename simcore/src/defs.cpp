@@ -1,6 +1,7 @@
 #include "simcore/defs.h"
 
 #include <algorithm>
+#include <functional>
 #include <filesystem>
 
 namespace sim {
@@ -115,7 +116,30 @@ Defs Defs::loadFromDir(const std::string& dir) {
     for (const auto& entry : fs::directory_iterator(dir + "/events"))
         if (entry.path().extension() == ".json") eventFiles.push_back(entry.path());
     std::sort(eventFiles.begin(), eventFiles.end());
-    for (const auto& p : eventFiles) loadEvents(Json::parseFile(p.string()), d.events);
+    // Every station an event names must exist; a typo would otherwise surface only when the event fires.
+    std::function<void(const Json&, const std::string&)> checkStations = [&](const Json& j, const std::string& file) {
+        auto known = [&](const std::string& id) {
+            if (!d.stations.count(id)) throw JsonError(file + ": unknown station " + id);
+        };
+        if (j.isArray()) {
+            for (const auto& x : j.asArray()) checkStations(x, file);
+        } else if (j.isObject()) {
+            for (const auto& [k, v] : j.asObject()) {
+                if (k == "station") {
+                    if (v.isString()) known(v.asString());
+                    else if (v.isArray()) for (const auto& x : v.asArray()) known(x.asString());
+                    else if (v.isObject()) known(v["id"].asString());
+                } else {
+                    checkStations(v, file);
+                }
+            }
+        }
+    };
+    for (const auto& p : eventFiles) {
+        Json root = Json::parseFile(p.string());
+        checkStations(root, p.filename().string());
+        loadEvents(root, d.events);
+    }
 
     Json historyRoot = Json::parseFile(dir + "/history.json");
     for (const auto& h : historyRoot["history"].asArray()) {

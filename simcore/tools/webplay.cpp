@@ -398,12 +398,11 @@ public:
                                      .n("month", (f.due % kDaysPerYear) / kDaysPerMonth + 1).b("extended", f.extended).done());
             o.raw("contest", c.done());
             const AskResult& la = w.lastAsk();
-            // A no can be pressed only in the season it was given, and only with a free day left for it.
-            bool canPress = w.timeLeft() > 0 && la.season == w.year() * 4 + w.month() / 3;
+            // Only the levers that can work now: the season it was given, a free day, the money it takes.
             if (la.who != kNone && la.day >= w.today() - 2)
                 o.raw("last_ask", Obj().n("who", la.who).text("name", w.fullName(la.who)).text("ask", la.ask).text("office", la.office)
                                       .n("object", la.object).n("subject", la.subject).n("answer", la.answer).text("text", la.text)
-                                      .raw("levers", [&] { std::vector<std::string> v; if (canPress) for (const auto& l : la.levers) v.push_back(str(l)); return arr(v); }()).done());
+                                      .raw("levers", [&] { std::vector<std::string> v; for (const auto& l : la.levers) if (w.leverOpen(l)) v.push_back(str(l)); return arr(v); }()).done());
         }
 
         // What the family has heard, newest first.

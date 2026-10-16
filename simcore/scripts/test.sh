@@ -16,19 +16,20 @@ tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 echo "1/5 腳本在 $(basename "$BASH") ${BASH_VERSION} 下能跑"
 bad=$(LC_ALL=C grep -nE '\$[A-Za-z_][A-Za-z0-9_]*[^[:print:][:space:]]' scripts/*.sh || true)
 [ -z "$bad" ] || { echo "失敗：變數後面緊接中文，macOS bash 3.2 會把字吃進變數名（改用 \${名字}）："; echo "$bad"; exit 1; }
-# Run from a folder with a space in its name, like the user's "Medieval Simulator" (the same files, through a link).
-spaced="$tmp/有 空格 simcore"; ln -s "$PWD" "$spaced"
+# Run from a folder with a space in its name, like the user's "Medieval Simulator": a copy with its own build
+# (a link would make CMake re-point this folder's build at the temporary path).
+spaced="$tmp/有 空格 simcore"; mkdir -p "$spaced"
+cp -R CMakeLists.txt data include scripts src tools "$spaced/"
 smoke() {  # $1 = bash to use; plays one year without and with the model branch
   for key in "" dummy; do
     out=$(SIM_IGNORE_ENV_FILE=1 OPENROUTER_API_KEY="$key" DECIDER_URL=http://127.0.0.1:9/none "$1" "$spaced/scripts/play.sh" --seed 7 --years 1 </dev/null 2>&1) \
       || { echo "$out" | tail -5; echo "失敗：play.sh 在 $1 下出錯"; exit 1; }
     # With a key the decider must actually run (and fail to reach the model), not fail to start.
     if [ -n "$key" ]; then
-      echo "$out" | grep -q "連不上決策模型" || { echo "$out" | tail -5; echo "失敗：資料夾有空格時決策模型沒有跑起來"; exit 1; }
+      grep -q "連不上決策模型" <<<"$out" || { echo "$out" | tail -5; echo "失敗：資料夾有空格時決策模型沒有跑起來"; exit 1; }
     fi
     dir=$(echo "$out" | sed -n 's/.*記錄存在 \(saves\/[^ ]*\)\/.*/\1/p' | head -1)
-    [ -n "$dir" ] && [ -s "$dir/log.md" ] || { echo "$out" | tail -5; echo "失敗：play.sh 沒寫出記錄"; exit 1; }
-    rm -rf "$dir"
+    [ -n "$dir" ] && [ -s "$spaced/$dir/log.md" ] || { echo "$out" | tail -5; echo "失敗：play.sh 沒寫出記錄"; exit 1; }
   done
 }
 smoke "$BASH"

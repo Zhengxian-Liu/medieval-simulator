@@ -132,6 +132,7 @@ void World::stepDay() {
         monthlyStress();
         monthlyConcerns();
         growSkills();
+        monthlyAway();
         if (month() % 3 == 0) computeRings();
         monthlyPlans();
         npcStartPlans();

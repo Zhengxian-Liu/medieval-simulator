@@ -214,7 +214,7 @@ std::string World::familyReport() const {
         std::string branch;
         if (kinInChurch(playerDynasty_)) branch += "家裡有人在教會";
         for (Id id : livingAway())
-            if (people_[id].dynasty == playerDynasty_)
+            if (people_[id].dynasty == playerDynasty_ && !inPlayerHouse(people_[id].awayFrom))  // the house's own are listed above
                 branch += std::string(branch.empty() ? "" : "，") + people_[id].firstName + " " + stationName(people_[id]);
         if (!branch.empty()) o << branch << "。";
         o << "\n";

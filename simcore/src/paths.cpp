@@ -81,6 +81,32 @@ void World::comeHome(Id who) {
     moveTo(who, to);
 }
 
+// A house the family's people away belong to is gone (died out, or merged into another at a wedding): they
+// belong to where it went, else to another house of their blood, else nowhere and they stay where they are.
+void World::rehomeAway(Id from, Id to) {
+    for (auto& p : people_) {
+        if (!isAway(p) || p.awayFrom != from) continue;
+        Id dest = to;
+        if (dest == kNone)
+            for (const auto& h : households_)
+                if (dest == kNone && h.id != from && !h.extinct && h.head != kNone && p.dynasty != kNone && h.dynasty == p.dynasty) dest = h.id;
+        if (dest != kNone) {
+            p.awayFrom = dest;
+        } else if (p.station != "elsewhere") {
+            const StationDef* sd = defs_.station(p.station);
+            if (!(sd && sd->lasting)) setStation(p.id, "elsewhere", 0, "家裡已經沒人了，留在外地");
+        }
+    }
+}
+
+// A head works his own land: hired labour, the walk home from the wars and a village apprenticeship end
+// when someone takes up a house.
+void World::settleAsHead(Id who) {
+    if (who == kNone) return;
+    const std::string& st = people_[who].station;
+    if (st == "labourer" || st == "veteran" || st == "apprentice") setStation(who, "home", 0, "");
+}
+
 void World::noteLife(Id who, const std::string& note) {
     if (who == kNone) return;
     Person& p = people_[who];
@@ -99,8 +125,20 @@ std::string World::lifeLine(Id id) const {
     return out;
 }
 
-// Once a year, for everyone living away: they age and may die out there, and a villein who has lived a year
-// and a day in a town is free. What else befalls them comes from the "away" events.
+// A villein who has lived a year and a day in a town is free: checked every month, so it is a year and a day.
+void World::monthlyAway() {
+    for (Id id : livingAway()) {
+        Person& p = people_[id];
+        bool town = p.station.rfind("town_", 0) == 0 || p.station == "fled";
+        if (town && !p.free && day_ - p.stationSince >= kDaysPerYear + 1) {
+            p.free = true;
+            if (inPlayerHouse(p.awayFrom)) log(1, "從鎮上捎來消息：" + fullName(id) + " 在城裡住滿了一年零一天，從此是自由人。");
+        }
+    }
+}
+
+// Once a year, for everyone living away: they age and may die out there. What else befalls them comes from
+// the "away" events.
 void World::yearlyAway() {
     for (Id id : livingAway()) {
         Person& p = people_[id];
@@ -110,11 +148,6 @@ void World::yearlyAway() {
         if (rngLife_.chance(annual)) {
             kill(id, age >= 60 ? "年老" : "病");
             continue;
-        }
-        bool town = p.station.rfind("town_", 0) == 0 || p.station == "fled";
-        if (town && !p.free && day_ - p.stationSince >= kDaysPerYear + 1) {
-            p.free = true;
-            if (inPlayerHouse(p.awayFrom)) log(1, "從鎮上捎來消息：" + fullName(id) + " 在城裡住滿了一年零一天，從此是自由人。");
         }
     }
 }

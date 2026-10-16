@@ -23,7 +23,7 @@ public:
 
     // Picks the option an AI (or the auto-played head) would choose.
     int chooseOption(const EventDef& ev, const Person& p, Id target = kNone);
-    double weight(const Json& ai, const Person& p, Id target = kNone) const;
+    double weight(const Json& ai, const Person& p, Id target = kNone, const Person* traitsOf = nullptr) const;  // traitsOf: whose temper weighs (a parent choosing)
     // The head goes to see `p` (an interaction event): p answers, the head's time is spent.
     void interact(const EventDef& ev, Person& p, Id head);
     void fireScheduled(const EventDef& ev, Person& p, Id target, Id deed);
