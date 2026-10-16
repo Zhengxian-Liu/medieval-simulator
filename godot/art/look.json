@@ -48,8 +48,8 @@
       "why": "neutral grade (user)"
     },
     "ambient_sky_contribution": {
-      "v": 0.5,
-      "why": "half the fill comes from a neutral grey instead of the blue HDRI sky, so shadows are not blue"
+      "v": 0.2,
+      "why": "mostly neutral grey fill: the blue HDRI sky cast blue shadows (b/r 1.1-1.3, review 3)"
     },
     "ambient_color": {
       "v": [
@@ -61,23 +61,23 @@
     },
     "ambient_energy_day": {
       "v": 1.0,
-      "why": "shadow floor ~0.24 with sun 3.2 (sun:fill ~4:1)"
+      "why": "only used where SDFGI does not reach; with SDFGI on, Godot ignores ambient energy/colour for GI-covered surfaces (measured: no effect)"
     },
     "ambient_energy_night": {
       "v": 0.08,
       "why": "moonless fill"
     },
     "sdfgi_energy": {
-      "v": 1.8,
-      "why": "bounce light; higher washed out the key/fill ratio"
+      "v": 2.4,
+      "why": "THE fill knob with SDFGI on (sky + bounce): shadow floor ~0.20-0.26 at far and mid (art check)"
     },
     "ssao_radius": {
       "v": 0.6,
       "why": "metres; tight contact occlusion at bases, crevices come from baked AO"
     },
     "ssao_intensity": {
-      "v": 3.5,
-      "why": "strong contact darkening"
+      "v": 2.0,
+      "why": "contact darkening; 3.5 stacked with the skirt into black halos (review 3)"
     },
     "ssao_power": {
       "v": 2.0,
@@ -102,8 +102,8 @@
       "why": "noon elevation; long enough shadows to model form"
     },
     "yaw_at_noon": {
-      "v": 75.0,
-      "why": "degrees; light from the upper left of the screen (classic iso key)"
+      "v": 50.0,
+      "why": "degrees; upper-left key light; at 75 the barn's camera-facing wall was edge-on to the sun (review 3)"
     },
     "yaw_per_hour": {
       "v": 10.0,
@@ -312,16 +312,16 @@
     "skirt": {
       "v": {
         "color": [
-          0.16,
-          0.12,
-          0.08
+          0.4,
+          0.34,
+          0.28
         ],
-        "mix": 1.0,
+        "mix": 0.6,
         "pad": 0.9,
         "pad_per_metre": 0.12,
         "fade_begin": 60.0
       },
-      "why": "dirt skirt decal under every placed building/prop (rule, applied automatically)"
+      "why": "dirt skirt decal under every placed building/prop (rule, automatic); mid-brown at 60% so contact reads as soil, not a black halo (review 3)"
     },
     "grass_points": {
       "v": 36000,
@@ -383,33 +383,39 @@
     }
   },
   "checks": {
-    "_why": "tools/art_check.py: measured on the captured shots (1920x1080, greyscale means of regions). Fails the run if out of range.",
+    "_why": "tools/art_check.py on the captured far/mid shots. Lit/shadow pixels are classified with a second, sun-off frame (godot_<shot>_fill.png), so checks follow the shadows wherever the sun puts them.",
     "far": {
-      "lit_ground": {
+      "lit_mean": {
         "v": {
-          "rect": [
-            650,
-            250,
-            200,
-            150
-          ],
+          "measure": "lit_mean",
           "min": 0.4,
           "max": 0.5
         },
-        "why": "sunlit dirt in the square"
+        "why": "mean value of sunlit pixels (sun adds >5x the sun-off frame)"
       },
-      "shadow_ground": {
+      "shadow_mean": {
         "v": {
-          "rect": [
-            800,
-            800,
-            200,
-            150
-          ],
+          "measure": "shadow_mean",
           "min": 0.2,
           "max": 0.26
         },
-        "why": "ground in the barn's shadow: ~4:1 against lit"
+        "why": "mean value of pixels in sun shadow (sun adds <3x, bounce only): ~4:1 linear against lit"
+      },
+      "shadow_tint": {
+        "v": {
+          "measure": "shadow_tint",
+          "min": 0.85,
+          "max": 1.05
+        },
+        "why": "blue/red in shadow: slightly cool skylight is natural; the fault was 1.1-1.3 (review 3)"
+      },
+      "contact_floor": {
+        "v": {
+          "measure": "contact_floor",
+          "min": 0.05,
+          "max": 0.5
+        },
+        "why": "1st percentile of the frame blurred 8 px: contacts dark but never black halos (reference measures 0.05-0.07)"
       },
       "whole_frame": {
         "v": {
@@ -423,48 +429,40 @@
           "max": 0.4
         },
         "why": "overall value structure"
-      },
-      "footing_contact": {
-        "v": {
-          "rect": [
-            1600,
-            900,
-            150,
-            100
-          ],
-          "min": 0.12,
-          "max": 0.4
-        },
-        "why": "barn footing/skirt: contact dark but not black (review 3: 0.038, black halo)"
-      },
-      "shadow_tint": {
-        "v": {
-          "rect": [
-            800,
-            800,
-            200,
-            150
-          ],
-          "min": 0.85,
-          "max": 1.0,
-          "measure": "blue_over_red"
-        },
-        "why": "neutral shadows: blue/red ratio in shadow (review 3: 1.11-1.28 = blue cast)"
       }
     },
     "mid": {
-      "lit_ground": {
+      "lit_mean": {
         "v": {
-          "rect": [
-            300,
-            150,
-            200,
-            150
-          ],
-          "min": 0.38,
-          "max": 0.52
+          "measure": "lit_mean",
+          "min": 0.4,
+          "max": 0.5
         },
-        "why": "sunlit grass/path"
+        "why": "mean value of sunlit pixels (sun adds >5x the sun-off frame)"
+      },
+      "shadow_mean": {
+        "v": {
+          "measure": "shadow_mean",
+          "min": 0.16,
+          "max": 0.26
+        },
+        "why": "mid-frame shadow pixels are half the barn's shaded dark timber wall; shadowed ground there measures 0.18-0.20 (2026-10-16)"
+      },
+      "shadow_tint": {
+        "v": {
+          "measure": "shadow_tint",
+          "min": 0.85,
+          "max": 1.05
+        },
+        "why": "blue/red in shadow: slightly cool skylight is natural; the fault was 1.1-1.3 (review 3)"
+      },
+      "contact_floor": {
+        "v": {
+          "measure": "contact_floor",
+          "min": 0.05,
+          "max": 0.5
+        },
+        "why": "1st percentile of the frame blurred 8 px: contacts dark but never black halos (reference measures 0.05-0.07)"
       },
       "whole_frame": {
         "v": {
@@ -478,33 +476,6 @@
           "max": 0.4
         },
         "why": "overall value structure"
-      },
-      "shadow_ground": {
-        "v": {
-          "rect": [
-            950,
-            800,
-            200,
-            120
-          ],
-          "min": 0.2,
-          "max": 0.26
-        },
-        "why": "ground in shadow at mid zoom (art review 3 measured 0.12)"
-      },
-      "shadow_tint": {
-        "v": {
-          "rect": [
-            950,
-            800,
-            200,
-            120
-          ],
-          "min": 0.85,
-          "max": 1.0,
-          "measure": "blue_over_red"
-        },
-        "why": "neutral shadows at mid zoom"
       }
     },
     "budgets": {

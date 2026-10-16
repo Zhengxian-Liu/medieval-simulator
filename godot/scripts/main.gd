@@ -185,13 +185,26 @@ func _capture(vp: SubViewport, dir: String) -> void:
 		_apply_time()
 		for i in SETTLE_FRAMES:
 			await RenderingServer.frame_post_draw
-		var path: String = dir.path_join(shot[0] + ".png")
-		var image := vp.get_texture().get_image()
-		image.resize(SHOT_SIZE.x, SHOT_SIZE.y, Image.INTERPOLATE_CUBIC)  # softer than Lanczos, like Cycles' 1.5 px pixel filter
-		var err := image.save_png(path)
-		if err != OK:
-			push_error("capture failed: %s (%s)" % [path, error_string(err)])
-			get_tree().quit(1)
+		if not _save_shot(vp, dir.path_join(shot[0] + ".png")):
 			return
-		print("captured ", path)
+		if _user_arg("--fill-pass=") == "1":
+			# Same frame with the sun off: tools/art_check.py divides the two to find which pixels are in shadow
+			# (no sun contribution) wherever the shadows fall, instead of fixed screen rectangles.
+			sun.visible = false
+			for i in SETTLE_FRAMES:
+				await RenderingServer.frame_post_draw
+			if not _save_shot(vp, dir.path_join(shot[0] + "_fill.png")):
+				return
+			_apply_time()
 	get_tree().quit(0)
+
+func _save_shot(vp: SubViewport, path: String) -> bool:
+	var image := vp.get_texture().get_image()
+	image.resize(SHOT_SIZE.x, SHOT_SIZE.y, Image.INTERPOLATE_CUBIC)  # softer than Lanczos, like Cycles' 1.5 px pixel filter
+	var err := image.save_png(path)
+	if err != OK:
+		push_error("capture failed: %s (%s)" % [path, error_string(err)])
+		get_tree().quit(1)
+		return false
+	print("captured ", path)
+	return true

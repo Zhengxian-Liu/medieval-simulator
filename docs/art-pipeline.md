@@ -86,9 +86,11 @@ Add it to `godot/tools/fetch_polyhaven.py` (Poly Haven / ambientCG, CC0 only, 1K
 
 ## 5. Checks (`tools/art_check.py`, targets in `look.json checks`)
 
-- Values: lit ground 0.40–0.50, shadowed ground 0.20–0.26 (~4:1), whole frame 0.25–0.40 (far).
-- Contact: footings dark but not black (≥ 0.12).
-- Neutral shadows: blue/red ratio in shadow 0.85–1.0.
+- Lit / shadow classification: each far/mid shot is rendered twice, sun on and sun off; a pixel is lit if the sun adds
+  > 5x, in shadow if < 3x (bounce only). Means of those sets are checked, so checks follow the shadows.
+- Values: lit 0.40–0.50; shadow 0.20–0.26 far (0.16 mid, dark timber wall in frame); whole frame 0.25–0.40 far.
+- Contact: 1st percentile of the 8 px-blurred frame ≥ 0.05 (dark contacts, never black halos).
+- Neutral shadows: blue/red in shadow 0.85–1.05.
 - Every texture mipmapped; every GLB within its triangle budget.
 - Screenshots: `godot/tools/capture.sh` renders each shot in its own Godot process at 3840×2160 → 1920×1080.
 
@@ -107,3 +109,5 @@ Add it to `godot/tools/fetch_polyhaven.py` (Poly Haven / ambientCG, CC0 only, 1K
 | crowns over the bridge/river | tree clearance smaller than crown radius | `placement.tree_clearance.river` ≥ crown radius |
 | captures hang after the first shot | macOS pauses a covered window | `capture.sh`: one process per shot, always-on-top, caffeinate, retry |
 | loud colours, hard edges | ACES + contrast boost | AgX, neutral contrast (user preferred the Cycles look) |
+| changing ambient energy did nothing | with SDFGI on, Godot takes sky/bounce light from SDFGI and ignores ambient energy/colour | the fill knob is `environment.sdfgi_energy` |
+| fixed check rectangles broke when the sun moved | shadows move with the sun | `capture.sh` also renders far/mid with the sun off; `art_check.py` classifies lit/shadow pixels from the pair |
