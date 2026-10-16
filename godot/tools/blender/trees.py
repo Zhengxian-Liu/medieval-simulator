@@ -1,18 +1,11 @@
-"""Generates fir trees procedurally in Blender and exports them as GLB into godot/assets/models/trees/.
-
-No downloads: trunk is a tapered cone, foliage is tiers of drooping branch "cards" (4 triangles each),
-coloured through a vertex colour layer (dark near the trunk, lighter at the tips).
-
-Run: /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python godot/tools/make_trees.py
-"""
+"""Background firs: tapered trunk plus tiers of drooping branch cards coloured by vertex colour. Used only beyond
+25 m from the village (art/look.json placement); broadleaf oaks (foliage.py) fill the near ground."""
 import math
-import pathlib
 import random
 
 import bmesh
 import bpy
 
-OUT = pathlib.Path(__file__).resolve().parent.parent / "assets" / "models" / "trees"
 VARIANTS = 4
 
 BARK = (0.16, 0.10, 0.06)
@@ -85,19 +78,3 @@ def fir(seed):
     obj = bpy.data.objects.new(f"fir_{seed}", mesh)
     bpy.context.scene.collection.objects.link(obj)
     return obj
-
-
-def main():
-    OUT.mkdir(parents=True, exist_ok=True)
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    for seed in range(VARIANTS):
-        obj = fir(seed)
-        for o in bpy.context.scene.objects:
-            o.select_set(o == obj)
-        path = OUT / f"fir_{seed}.glb"
-        bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB", use_selection=True, export_yup=True)
-        print(f"wrote {path} ({len(obj.data.polygons)} faces)")
-        bpy.data.objects.remove(obj)
-
-
-main()

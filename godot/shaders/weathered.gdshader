@@ -1,4 +1,4 @@
-// Shared material for scripted hero assets (tools/hero_cottage.py): a Poly Haven PBR set sampled through the
+// Shared material for scripted hero assets (tools/blender/buildings.py): a Poly Haven PBR set sampled through the
 // asset's own UVs, plus weathering every asset gets the same way so they read as one world:
 // splash dirt rising from the asset's base, and moss on upward-facing surfaces, both broken up by noise.
 shader_type spatial;
@@ -12,11 +12,11 @@ uniform float dirt_height = 1.0;  // metres above the asset origin that splash d
 uniform float moss = 0.0;         // 0..1 coverage on upward faces
 uniform vec3 dirt_color : source_color = vec3(0.2, 0.15, 0.1);
 uniform vec3 moss_color : source_color = vec3(0.1, 0.13, 0.05);
-uniform float ao_strength = 1.0;
+uniform float ao_strength = 1.0;  // vertex colour R = Cycles-baked AO, G = convexity (tools/blender/bake.py)
 uniform float splash = 0.4;      // strength of ground splash dirt
 uniform float grime = 0.15;      // grime in baked-AO crevices
 uniform float edge_wear = 0.6;   // lightening on baked convex edges
-uniform float detile = 0.0;  // blend in a second, rotated and rescaled sample: kills the visible repeat (thatch)  // vertex colour = Cycles-baked AO (tools/hero_cottage.py bake_ao)
+uniform float detile = 0.0;  // blend in a second, rescaled sample: hides the texture repeat (thatch)
 
 varying vec3 world_pos;
 varying vec3 world_normal;
@@ -34,7 +34,7 @@ void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 	baked_ao = COLOR.r;
-	edge = COLOR.g;  // convexity baked by tools/hero_cottage.py bake_edges
+	edge = COLOR.g;  // convexity baked by tools/blender/bake.py
 }
 
 void fragment() {

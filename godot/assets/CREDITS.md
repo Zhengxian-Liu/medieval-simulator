@@ -21,4 +21,4 @@ Downloaded assets are CC0 1.0 (public domain): [Poly Haven](https://polyhaven.co
 - `textures/grass_cards/`: [LeafSet026](https://ambientcg.com/a/LeafSet026) (ambientCG, CC0 1.0, 1K)
 - `sky.hdr`: [kloofendal_48d_partly_cloudy_puresky](https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky) (2K HDRI)
 
-Generated in this repo (no third-party source): `models/trees/` by `tools/make_trees.py`, `models/houses/` by `tools/make_houses.py`.
+Generated in this repo (no third-party source): `models/buildings/`, `models/props/`, `models/foliage/`, `models/trees/` by `tools/blender/build_asset.py`.

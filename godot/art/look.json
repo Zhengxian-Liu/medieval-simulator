@@ -370,6 +370,16 @@
         "max_dirt": 0.15
       },
       "why": "metres; crowns never hang over the river, houses or paths"
+    },
+    "keep_off_paths": {
+      "v": [
+        "wattle_fence",
+        "rail_fence",
+        "handcart",
+        "haystack",
+        "drying_rack"
+      ],
+      "why": "props that must never block a path or yard; dropped if placed on trampled ground (mask > 0.3)"
     }
   },
   "checks": {

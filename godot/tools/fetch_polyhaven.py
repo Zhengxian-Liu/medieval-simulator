@@ -74,7 +74,7 @@ def main():
     hdr = get_json(f"{API}/files/{HDRI}")["hdri"]["2k"]["hdr"]
     total += fetch(hdr["url"], ROOT / "sky.hdr")
     credits.append(f"- `sky.hdr`: [{HDRI}](https://polyhaven.com/a/{HDRI}) (2K HDRI)")
-    credits += ["", "Generated in this repo (no third-party source): `models/trees/` by `tools/make_trees.py`, `models/houses/` by `tools/make_houses.py`."]
+    credits += ["", "Generated in this repo (no third-party source): `models/buildings/`, `models/props/`, `models/foliage/`, `models/trees/` by `tools/blender/build_asset.py`."]
     (ROOT / "CREDITS.md").write_text("\n".join(credits) + "\n")
     print(f"downloaded {total / 1e6:.1f} MB into {ROOT}")
 

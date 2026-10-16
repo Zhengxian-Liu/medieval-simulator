@@ -1,15 +1,8 @@
-"""Broadleaf foliage: oak trees and bushes built from a branching skeleton with thousands of single-leaf cards.
-
-Leaves sample the ambientCG LeafSet016 atlas (3 x 2 oak leaves, textures/leaves_oak); Godot shades them with
-shaders/leaves.gdshader (opacity cut-out + back-lighting). Bark uses the Poly Haven pine bark set.
-Surfaces are named "bark" and "leaves"; Godot assigns the materials by name.
-
-Run: Blender -b --factory-startup --python godot/tools/make_foliage.py -- <out_dir>
-"""
+"""Broadleaf oaks and bushes: branching bark limbs plus thousands of single-leaf cards from the ambientCG oak
+atlas. Vertex colour R = canopy depth (dark interior), normals point out of the crown so it lights as one mass.
+Surfaces "bark" and "leaves" are shaded in Godot (shaders/leaves.gdshader, art/look.json materials.leaves)."""
 import math
-import pathlib
 import random
-import sys
 
 import bmesh
 import bpy
@@ -141,21 +134,3 @@ def build(name, seed, height, crown, trunk_r, leaves, leaf_size):
     obj = bpy.data.objects.new(name, me)
     bpy.context.scene.collection.objects.link(obj)
     return obj
-
-
-def main():
-    out = pathlib.Path(sys.argv[sys.argv.index("--") + 1])
-    out.mkdir(parents=True, exist_ok=True)
-    for name, spec in VARIANTS.items():
-        bpy.ops.wm.read_factory_settings(use_empty=True)
-        obj = build(name, *spec)
-        for o in bpy.context.scene.objects:
-            o.select_set(o == obj)
-        tris = sum(len(p.vertices) - 2 for p in obj.data.polygons)
-        path = out / f"{name}.glb"
-        bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB", use_selection=True, export_yup=True,
-                                  export_vertex_color="ACTIVE", export_image_format="NONE")
-        print(f"foliage: {name} {tris} triangles -> {path}")
-
-
-main()
