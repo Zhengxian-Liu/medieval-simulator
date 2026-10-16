@@ -54,7 +54,7 @@ Shared modules:
 | `roofs.py` | `thatch_roof` (layered courses, ragged eave, sag between gables, wavy ridge, lumpy ridge cap) |
 | `buildings.py` | `VARIANTS` spec per building + footing, walls, timber frame, openings, chimney |
 | `props.py` | one function per prop + `PROPS` table |
-| `leaf_atlas.py` | leaf-cluster atlas: 6 clumps of 24-30 CC0 oak leaves rendered in Cycles under sky + dark ground (AO, darker undersides) -> `assets/textures/leaf_clusters` (1K) |
+| `leaf_atlas.py` | leaf-cluster atlas: 6 clumps of 30 CC0 oak leaves rendered in Cycles under a 45 deg key + dim sky + dark ground (lit tops, self-shadow, dark undersides) -> `assets/textures/leaf_clusters` (1K) + `atlas.json` (mean opacity, read by foliage.py for the card count) |
 | `foliage.py` / `trees.py` | oaks + bushes (leaf-cluster cards, count from lobe surface x cover / card coverage) / background firs |
 
 **Material slots** are the contract with Godot: `stone, plaster, timber, thatch, cloth, iron, dark` (+ `bark`,

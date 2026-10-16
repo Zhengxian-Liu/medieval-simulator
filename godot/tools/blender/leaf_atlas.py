@@ -2,8 +2,9 @@
 writes a 3x2 atlas the foliage cards sample (Fable rounds 9-11: one flat unshaded leaf per card cannot make lit
 clusters with shadowed gaps; the cluster card itself must carry its light and shade).
 
-Light: a white sky over the upper hemisphere and a dark ground below, no sun, so the bake holds only what Godot cannot
-add per card: leaf-on-leaf occlusion (AO) and darker undersides. Godot still lights the card by its normal.
+Light: a hard key from 45 deg above and to the front plus a dimmer white sky, over a dark ground: each clump carries its
+own lit tops, self-shadowed gaps and dark undersides (Fable r12: an evenly lit atlas left the crowns flat mid-green).
+Godot still lights the card as a whole by its normal. The atlas's mean opacity goes to atlas.json for foliage.py.
 
   Blender -b --factory-startup --python godot/tools/blender/build_asset.py -- atlas
 -> godot/assets/textures/leaf_clusters/{color,opacity,normalgl}.jpg (1020x1024, cells 340x512)
@@ -58,11 +59,11 @@ def flat_material(name, rgb):
 def clump(rng, centre, leaf_mat, twig_mat):
     """15-30 leaves around a twig inside one cell, facing the camera (-Y) with random tilt; denser in the middle."""
     verts, faces, uvs = [], [], []
-    for _ in range(rng.randint(24, 30)):
-        p = centre + Vector((rng.gauss(0, CELL_W * 0.15), rng.uniform(-0.12, 0.12), rng.gauss(0, CELL_H * 0.14)))
+    for _ in range(30):
+        p = centre + Vector((rng.gauss(0, CELL_W * 0.13), rng.uniform(-0.12, 0.12), rng.gauss(0, CELL_H * 0.12)))
         p.x = max(min(p.x, centre.x + CELL_W * 0.22), centre.x - CELL_W * 0.22)  # leaves (up to 0.32 m) stay in the cell
         p.z = max(min(p.z, centre.z + CELL_H * 0.28), centre.z - CELL_H * 0.3)
-        size = rng.uniform(0.22, 0.32)  # a dense clump: leaves overlap, the card reads as a mass with gaps
+        size = rng.uniform(0.15, 0.22)  # real oak leaves ~8-12 cm long at ~1.3x card scale (Fable r12: 1.5x too big)  # a dense clump: leaves overlap, the card reads as a mass with gaps
         n = Vector((rng.uniform(-0.6, 0.6), -1.0, rng.uniform(-0.4, 0.8))).normalized()
         q = n.to_track_quat("Z", "Y") @ Matrix.Rotation(rng.uniform(0, math.tau), 3, "Z").to_quaternion()
         w, h = size * 0.75, size
@@ -99,7 +100,12 @@ def build():
     world = bpy.data.worlds.new("sky")
     world.use_nodes = True
     bg = world.node_tree.nodes["Background"]
-    bg.inputs["Strength"].default_value = 1.0
+    bg.inputs["Strength"].default_value = 0.45
+    sun = bpy.data.objects.new("key", bpy.data.lights.new("key", "SUN"))
+    sun.data.energy = 2.0  # x cos / pi on a Lambert leaf: lit ~1.1x, shaded ~0.45x albedo
+    sun.data.angle = math.radians(2.0)
+    sun.rotation_euler = (math.radians(45), 0, math.radians(20))  # from above and slightly in front of the camera
+    scene.collection.objects.link(sun)
     bg.inputs["Color"].default_value = (1, 1, 1, 1)
     scene.world = world
     # dark ground below (hidden from the camera): undersides darken, as under a real crown
@@ -133,4 +139,7 @@ def build():
     subprocess.run(["magick", str(rgba), "-alpha", "extract", "-quality", "95", str(OUT / "opacity.jpg")], check=True)
     subprocess.run(["magick", "-size", f"{PX_W * COLS}x{PX_H * ROWS}", "xc:rgb(128,128,255)", str(OUT / "normalgl.jpg")], check=True)
     rgba.unlink()
+    opacity = float(subprocess.run(["magick", str(OUT / "opacity.jpg"), "-format", "%[fx:mean]", "info:"],
+                                   capture_output=True, text=True, check=True).stdout)
+    (OUT / "atlas.json").write_text(f'{{"mean_opacity": {opacity:.3f}}}\n')
     print(f"leaf_atlas: {OUT}")

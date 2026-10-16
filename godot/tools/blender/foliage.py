@@ -2,7 +2,9 @@
 leaves with its own occlusion, tools/blender/leaf_atlas.py -> assets/textures/leaf_clusters). Vertex colour R = canopy
 depth (dark interior), normals point out of the crown so it lights as one mass.
 Surfaces "bark" and "leaves" are shaded in Godot (shaders/leaves.gdshader, art/look.json materials.leaves)."""
+import json
 import math
+import pathlib
 import random
 
 import bmesh
@@ -13,8 +15,8 @@ ATLAS_COLS, ATLAS_ROWS = 3, 2
 
 # name: (seed, height, crown radius, trunk radius, card cover, card height m). Single-leaf cards (11-16k per tree) could
 # not make lit clusters with shadowed gaps (Fable rounds 8-11). The card count follows from the lobes' surface: cover x
-# lobe area / (card area x ATLAS_OPACITY); 60-120 cards per tree left the crown see-through (round 12 A/Bs)
-ATLAS_OPACITY = 0.4  # mean opacity of a leaf_clusters cell (tools/blender/leaf_atlas.py)
+# lobe area / (card area x atlas mean opacity); 60-120 cards per tree left the crown see-through (round 12 A/Bs)
+ATLAS_JSON = pathlib.Path(__file__).resolve().parents[2] / "assets" / "textures" / "leaf_clusters" / "atlas.json"
 VARIANTS = {
     "oak_0": (1, 8.5, 3.6, 0.28, 1.3, 1.7),
     "oak_1": (2, 7.0, 3.0, 0.24, 1.3, 1.5),
@@ -133,7 +135,8 @@ def build(name, seed, height, crown, trunk_r, cover, leaf_size):
     # inner volume in every lobe, just under its leaf shell: gaps show leafy shade, not ground or sky (round 7)
     for c in lobes:
         inner(mesh, c, lobe_r * rng.uniform(0.5, 0.58))  # well behind the cards: fills gaps, never seen as a facet
-    cards = int(cover * len(lobes) * 4 * math.pi * lobe_r ** 2 / (leaf_size * leaf_size * 2 / 3 * ATLAS_OPACITY))
+    opacity = json.loads(ATLAS_JSON.read_text())["mean_opacity"]  # mean opacity of an atlas cell (leaf_atlas.py)
+    cards = int(cover * len(lobes) * 4 * math.pi * lobe_r ** 2 / (leaf_size * leaf_size * 2 / 3 * opacity))
     for _ in range(cards):  # cluster cards on each lobe surface
         c = rng.choice(lobes)
         d = Vector((rng.gauss(0, 1), rng.gauss(0, 1), rng.gauss(0.3, 0.8))).normalized()
@@ -141,7 +144,8 @@ def build(name, seed, height, crown, trunk_r, cover, leaf_size):
         p.z = max(p.z, 0.25 if not trunk_r else height * 0.38)
         out = (p - crown_center)
         depth = min(1.0, out.length / (crown * 0.75))
-        card(mesh, rng, p, leaf_size * rng.uniform(0.85, 1.15), d, 0.35 + 0.65 * depth ** 1.5)
+        up = d if d.z < 0.3 else (d + Vector((0, 0, 0.8))).normalized()  # upper cards face the sky: the crown's lit cap
+        card(mesh, rng, p, leaf_size * rng.uniform(0.85, 1.15), up, 0.35 + 0.65 * depth ** 1.5)
     me = bpy.data.meshes.new(name)
     mesh.to_mesh(me)
     for slot in ("bark", "leaves"):
