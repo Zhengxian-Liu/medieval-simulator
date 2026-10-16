@@ -272,6 +272,27 @@ bool World::draftIntention(Person& p, IntentDraft& d) {
                 add({"plan", pl, o->target, o->subject, "想「" + amb->name + "」，打算" + planText(*o) + about(o->target), defs_.plan(pl)->secret},
                     (25 + o->weight) * (takes(pl) ? scruple : 1));
 
+    // What the house is after (contest.cpp): a parcel another house holds, a match for one of the children.
+    if (h.head == p.id)
+        for (const auto& wt : wants_) {
+            if (!wt.open || wt.house != p.household) continue;
+            if (wt.kind == "parcel") {
+                const Parcel& pc = parcels_[wt.object];
+                if (pc.holder == kNone || pc.holder == p.household || households_[pc.holder].head == kNone) continue;
+                Id holder = households_[pc.holder].head;
+                if (const PlanOption* o = bestFor("acquire_land", holder))
+                    add({"plan", "acquire_land", holder, kNone, "看上了 " + fullName(holder) + " 家的" + parcelName(pc) + "（" + wt.why + "）" + about(holder), false},
+                        (30 + o->weight * 0.5) * scruple);
+            } else if (wt.kind == "match") {
+                for (const auto& o : opts)
+                    if (o.plan == "arrange_match" && o.target == wt.object && o.subject == wt.subject) {
+                        add({"plan", "arrange_match", o.target, o.subject, "替 " + fullName(o.subject) + " 說親，看中了 " + fullName(o.target) + "（" + wt.why + "）", false},
+                            28 + o.weight * 0.5);
+                        break;
+                    }
+            }
+        }
+
     // A grudge: the person they hate most, and whether there is a way to hurt them.
     Id foe = kNone;
     double worst = -30;
@@ -537,6 +558,7 @@ void World::helpFriend(Person& p) {
         log(2, fullName(p.id) + " 給 " + fullName(t) + " 家送去" + gift + "。");
     }
     recordDeed("kindness", p.id, t);
+    oweFavour(t, p.id, 15, "荒年接濟過");
 }
 
 }  // namespace sim

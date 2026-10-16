@@ -55,7 +55,7 @@
      "max_months": 12, "retry_years": 2,
      "progress": {"base": 4, "skill": {"charm": 0.6}, "opinion": 4, "traits": {"ambitious": 3, "greedy": 2}},
      "start_log": "{name} 看上了 {target} 家的地，開始盤算。",
-     "success_log": "{target} 把 5 畝地讓給了 {name}，換了 320 便士。", "success": [{"take_acres": {"acres": 5, "price": 320}}, {"deed": {"type": "land_bought"}}],
+     "success_log": "{target} 答應把地讓給 {name}。", "success": [{"take_acres": {"acres": 5, "price": 320}}, {"deed": {"type": "land_bought"}}],
      "fail_log": "{target} 說什麼也不肯賣祖上傳下來的地。", "fail": [{"opinion": {"value": -5, "mod": "land_dispute", "years": 5}}, {"deed": {"type": "refused_land", "doer": "target"}}],
      "ai": {"base": 6, "traits": {"ambitious": 8, "greedy": 6, "content": -6}, "if": [{"cond": {"ambition": "more_land"}, "add": 30}, {"cond": {"ambition": "big_landholder"}, "add": 30}]},
      "beats": [
@@ -206,7 +206,7 @@
      "actor": {"is_head": true},
      "subject": {"pick": "any_child", "conditions": {"age": [10, 16], "married": false, "in_service": false, "is_head": false}},
      "target": {"pick": "villager", "conditions": {"is_head": true, "not_kin": true, "age": [20, 80],
-                "any": [{"acres_ge": 25}, {"occupation": ["lord", "smith", "carpenter", "miller", "weaver"]}],
+                "any": [{"acres_ge": 25}, {"occupation": ["lord", "smith", "carpenter", "miller", "weaver"]}], "service_place": true,
                 "not": {"target": {"house": "manor"}}}},
      "max_months": 4,
      "progress": {"base": 30, "skill": {"charm": 1.0}, "opinion": 4, "reputation": 0.5},

@@ -182,6 +182,7 @@ std::string World::formatNews(const std::string& tmpl, const News& n) const {
         else if (key == "other_first") val = n.otherFirst;
         else if (key == "again") val = n.again ? "又" : "";
         else if (key == "age") val = std::to_string(n.age);
+        else if (key == "thing") val = n.thing;
         else if (key == "sexword") val = n.subject != kNone && people_[n.subject].sex == Sex::Male ? "兒子" : "女兒";
         else val = "{" + key + "}";
         out += val;
@@ -205,13 +206,13 @@ std::string World::newsText(const News& n) const {
     return k ? formatNews(k->text, n) : n.kind;
 }
 
-Id World::addNews(const std::string& kind, Id subject, Id other, Id house, Id deed) {
+Id World::addNews(const std::string& kind, Id subject, Id other, Id house, Id deed, const std::string& thing) {
     const NewsKindDef* k = defs_.newsKind(kind);
     if (!k || house == kNone || households_[house].extinct) return kNone;
     // The same thing told twice (both lovers' side of one affair) is one piece of news, and the same help given
     // again while the last time is still talked of is not news again.
     for (auto it = news_.rbegin(); it != news_.rend() && day_ - it->day < k->fadeMonths * kDaysPerMonth; ++it)
-        if (it->kind == kind && (it->day == day_ || deed != kNone) &&
+        if (it->kind == kind && it->thing == thing && (it->day == day_ || deed != kNone || !thing.empty()) &&
             ((it->subject == subject && it->other == other) || (it->subject == other && it->other == subject)))
             return it->id;
     News n;
@@ -221,6 +222,7 @@ Id World::addNews(const std::string& kind, Id subject, Id other, Id house, Id de
     n.other = other;
     n.deed = deed;
     n.house = house;
+    n.thing = thing;
     n.day = day_;
     if (subject != kNone) {
         n.cause = people_[subject].deathCause;

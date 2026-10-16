@@ -282,6 +282,13 @@ int main(int argc, char** argv) {
     md << "\n- 打算化成計畫：";
     for (const auto& [k, v] : counters)
         if (k.rfind("intent_acted:", 0) == 0) md << k.substr(13) << " " << v / n << "　";
+    // The contested ledger (design/contested.md): what houses set their hearts on, and how often two wanted the same.
+    md << "\n- 想要（其中跟別家撞上）：";
+    for (const char* k : {"parcel", "office", "match", "place"})
+        md << k << " " << cnt(std::string("want:") + k) << "（" << cnt(std::string("contest:") + k) << "）　";
+    md << "\n- 開口：";
+    for (const auto& [k, v] : counters)
+        if (k.rfind("ask:", 0) == 0) md << k.substr(4) << " " << v / n << "　";
     // The season turn (design/season-loop.md): what the head did with the free days, what was on people's minds.
     md << "\n\n## 季回合（每局平均）\n\n";
     double seasons = cnt("season");

@@ -19,6 +19,15 @@
     {"id": "marriage",     "text": "{subject}娶了{other}", "heat": 0.8, "fade_months": 4, "instant": 0.5, "log_link": 0.6,
      "invite": "wedding", "invite_link": 0.6, "gathering": true, "attend_mod": "came_to_wedding"},
 
+    // The contested ledger (contest.cpp): what a house is after, who got what others wanted, posts, the fine.
+    {"id": "want:parcel", "text": "{house}家在打{thing}的主意", "heat": 0.55, "fade_months": 8, "instant": 0.75, "log_link": 2},
+    {"id": "want:office", "text": "{subject}想當{thing}", "heat": 0.6, "fade_months": 8, "instant": 0.7, "log_link": 2},
+    {"id": "want:match",  "text": "{house}家想替{subject_first}向{thing}提親", "heat": 0.6, "fade_months": 8, "instant": 0.7, "log_link": 2},
+    {"id": "want:place",  "text": "{house}家想把{subject_first}送去{thing}", "heat": 0.45, "fade_months": 6, "instant": 0.8, "log_link": 2},
+    {"id": "contest:won", "text": "好幾家都想要{thing}，最後讓{house}家拿到了", "heat": 0.7, "fade_months": 5, "instant": 0.6},
+    {"id": "office:won",  "text": "{subject}當上了{thing}", "heat": 0.5, "fade_months": 4, "instant": 0.6},
+    {"id": "fine:lost",   "text": "{house}家交不出入地費，{thing}被領主收回去了", "heat": 0.8, "fade_months": 6, "instant": 0.5, "wide": true},
+
     {"id": "deed:brawl",             "text": "{subject}和{other}打了一架", "heat": 0.8, "fade_months": 3, "instant": 0.6, "wide": true},
     {"id": "deed:public_insult",     "text": "{subject}當著眾人的面羞辱了{other}", "heat": 0.85, "fade_months": 4, "instant": 0.6, "wide": true},
     {"id": "deed:exposed_plot",      "text": "{subject}暗算{other}的事被揭穿了", "heat": 0.95, "fade_months": 6, "instant": 0.5, "wide": true},

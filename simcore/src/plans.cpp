@@ -60,6 +60,19 @@ void World::processCommands() {
                     er.interact(ev, people_[c.target], playerHead());
                     break;
                 }
+        } else if (c.type == "ask") {
+            // plan = "<ask>|<office>|<lever>|<subject>", subject = the thing asked for (contest/ask.cpp).
+            std::vector<std::string> f;
+            size_t a = 0;
+            for (size_t b; (b = c.plan.find('|', a)) != std::string::npos; a = b + 1) f.push_back(c.plan.substr(a, b - a));
+            f.push_back(c.plan.substr(a));
+            if (f.size() == 4) ask(c.target, f[0], c.subject, f[3].empty() ? kNone : static_cast<Id>(std::stol(f[3])), f[1], f[2]);
+        } else if (c.type == "want") {
+            // The family lets it be known it wants a parcel (plan "parcel") or a post (plan "office:<id>"), or drops it.
+            if (c.plan == "parcel") addWant(playerHousehold_, "parcel", c.subject, kNone, "", "盯上了");
+            else if (c.plan.rfind("office:", 0) == 0) addWant(playerHousehold_, "office", kNone, playerHead(), c.plan.substr(7), "想當");
+            else if (c.plan == "drop" && c.subject >= 0 && c.subject < static_cast<Id>(wants_.size()) && wants_[c.subject].house == playerHousehold_)
+                dropWant(wants_[c.subject], "放下了");
         } else if (c.type == "cancel_plan") {
             for (size_t k = 0; k < plans_.size(); ++k)
                 if (plans_[k].actor == c.actor) {

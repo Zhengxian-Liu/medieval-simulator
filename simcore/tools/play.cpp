@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <map>
 #include <string>
@@ -110,7 +111,7 @@ void inspectMenu(World& w) {
 
 // 找人: pick someone, then what to do with them; they answer in their own way (design/season-loop.md).
 // Returns true when something was done, so the caller can show what came of it.
-bool seeMenu(World& w) {
+bool seeMenu(World& w, const std::function<void()>& flush) {
     Id head = w.playerHead();
     if (head == kNone) return false;
     if (w.timeLeft() <= 0) {
@@ -150,14 +151,43 @@ bool seeMenu(World& w) {
             std::cout << "  　 " << in.ev->title << "（" << in.why << "）\n";
         }
     }
-    if (open.empty()) {
+    // 開口: ask for something they hold or decide (design/contested.md 3), numbered after the interactions.
+    std::vector<AskOption> asks;
+    for (const auto& a : w.asksFor(who)) {
+        if (a.open) {
+            asks.push_back(a);
+            std::cout << "  " << open.size() + asks.size() << ". 開口：" << a.label << "\n";
+        } else {
+            std::cout << "  　 開口：" << a.label << "（" << a.why << "）\n";
+        }
+    }
+    if (open.empty() && asks.empty()) {
         std::cout << "現在跟" << w.shortName(wp.id) << "沒什麼能做的。\n";
         return false;
     }
     int k = number(ask("做什麼（直接 Enter 取消）："));
-    if (k < 1 || k > static_cast<int>(open.size())) return false;
-    w.issue({w.today(), "interact", head, open[k - 1]->id, who, kNone});
-    w.runCommands();
+    if (k < 1 || k > static_cast<int>(open.size() + asks.size())) return false;
+    if (k <= static_cast<int>(open.size())) {
+        w.issue({w.today(), "interact", head, open[k - 1]->id, who, kNone});
+        w.runCommands();
+        return true;
+    }
+    const AskOption& a = asks[static_cast<size_t>(k) - open.size() - 1];
+    auto askWith = [&](const std::string& lever) {
+        w.issue({w.today(), "ask", head, a.ask + "|" + a.office + "|" + lever + "|" + (a.subject == kNone ? "" : std::to_string(a.subject)), who, a.object});
+        w.runCommands();
+        flush();  // the answer, as the log has it
+    };
+    askWith("");
+    // Not a yes: the levers the family has on them, if any; each costs another free day.
+    const AskResult& r = w.lastAsk();
+    if (r.answer >= 2 && !r.levers.empty() && w.timeLeft() > 0) {
+        static const std::map<std::string, std::string> name = {{"gift", "送點禮再說"}, {"favour", "提他欠的人情"}, {"hook", "拿把柄壓他"}, {"meet", "答應他的條件"}};
+        std::vector<std::string> lv = r.levers;
+        for (size_t i = 0; i < lv.size(); ++i) std::cout << "  " << i + 1 << ". " << (name.count(lv[i]) ? name.at(lv[i]) : lv[i]) << "\n";
+        int l = number(ask("再試一次（直接 Enter 算了）："));
+        if (l >= 1 && l <= static_cast<int>(lv.size())) askWith(lv[static_cast<size_t>(l) - 1]);
+    }
     return true;
 }
 
@@ -326,7 +356,7 @@ int main(int argc, char** argv) {
             while (!eof) {
                 std::string a = ask("Enter 過這一季　t 找人　p 定計畫　k 家裡知道什麼　i 看一個人　c 放棄計畫　y 過一年　q 結束：");
                 if (a == "t") {
-                    if (seeMenu(w)) {
+                    if (seeMenu(w, flush)) {
                         flush();
                         std::cout << "（這一季還有 " << w.timeLeft() << " 段空閒）\n";
                     }

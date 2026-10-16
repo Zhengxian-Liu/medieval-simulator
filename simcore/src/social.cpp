@@ -83,8 +83,14 @@ void World::electReeve() {
     std::sort(ranked.rbegin(), ranked.rend());
     std::vector<Id> cands;
     for (size_t i = 0; i < ranked.size() && cands.size() < 3; ++i) cands.push_back(ranked[i].second);
+    // Those who let it be known they want it stand too (contest.cpp).
+    for (const auto& wt : wants_) {
+        if (!wt.open || wt.kind != "office" || wt.office != "reeve" || cands.size() >= 4) continue;
+        Id c = wt.subject != kNone ? wt.subject : households_[wt.house].head;
+        if (c != kNone && eligible(people_[c]) && std::find(cands.begin(), cands.end(), c) == cands.end() && c != playerHead()) cands.push_back(c);
+    }
     Id head = playerHead();
-    bool playerRuns = false;
+    bool playerRuns = head != kNone && eligible(people_[head]) && wantOf(playerHousehold_, "office", kNone, "reeve");
     for (size_t i = 0; i < ranked.size() && i < 5; ++i)
         if (ranked[i].second == head) playerRuns = true;
     if (playerRuns && std::find(cands.begin(), cands.end(), head) == cands.end()) cands.push_back(head);
@@ -105,6 +111,9 @@ void World::electReeve() {
         for (Id c : cands) {
             double s = c == voter.id ? 1e6 : opinion(voter.id, c) + merit(people_[c]) * 2 + rngSocial_.range(0, 5);
             if (people_[c].flags.count("campaign_ale")) s += 10;
+            auto pr = promises_.find({voter.id, "reeve"});
+            if (pr != promises_.end() && pr->second == c) s += 40;  // gave his word (開口)
+            if (c != voter.id && people_[c].household != kNone && wantOf(people_[c].household, "office", kNone, "reeve") && opinion(voter.id, c) >= 20) s += 6;
             // After two terms the village tires of the same man collecting its rents.
             auto t = reeveTerms_.find(c);
             if (c == old && t != reeveTerms_.end() && t->second >= 2) s -= 6 * (t->second - 1);
@@ -145,7 +154,8 @@ void World::electReeve() {
         }
     }
     Person& r = people_[winner];
-    r.flags.insert("reeve");
+    setOffice("reeve", winner, imposed ? "領主指派的" : "選上的");
+    for (auto it = promises_.begin(); it != promises_.end();) it = it->first.second == "reeve" ? promises_.erase(it) : std::next(it);
     if (playerRuns && cands.size() == 1 && winner == head) {
         log(winner == old ? 2 : 1, "【選莊頭】沒有人出來爭，" + fullName(head) + (winner == old ? " 又當了三年莊頭。" : " 當上了莊頭，這一任三年。"));
     } else if (playerRuns) {
@@ -169,6 +179,7 @@ void World::electReeve() {
     }
     if (winner != old) r.reputation += 5;
     reeveTerms_[winner] = winner == old ? reeveTerms_[winner] + 1 : 1;
+    settleWants("office", kNone, "reeve", r.household, "當上了");
 }
 
 }  // namespace sim

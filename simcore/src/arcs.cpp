@@ -345,6 +345,9 @@ double World::forfeitLand(Household& h, bool lordIsCreditor) {
 void World::reletVacant() {
     bool landHungry = !worldFlags_.count("post_plague");
     Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
+    // Those already after a vacant parcel put in for it first (contest.cpp); then houses with hands to spare
+    // ask for some.
+    allotVacant();
     for (auto& h : households_) {
         if (vacantAcres() < 3) return;
         if (h.extinct || h.members.empty() || h.id == playerHousehold_ || h.id == lordHouse || h.head == kNone) continue;
@@ -357,11 +360,15 @@ void World::reletVacant() {
         double spare = hands * 12 - h.acres;
         if (spare < 5 || h.money < 15) continue;
         if (!rngEcon_.chance(landHungry ? 0.6 : 0.2)) continue;
-        double take = moveLand(kNone, h.id, std::min({5.0, vacantAcres(), std::floor(spare)}), LandPick::CustomaryFirst, "向領主租來");
-        double fine = take * 3;
-        h.money -= fine;
-        if (lordHouse != kNone) households_[lordHouse].money += fine;
+        // They put in for the vacant parcel that suits them best; the steward lets each to one of those asking.
+        Id pick = kNone;
+        double best = 1e9;
+        for (const auto& pc : parcels_)
+            if (!pc.gone && pc.holder == kNone && std::abs(pc.acres - std::min(5.0, std::floor(spare))) < best)
+                best = std::abs(pc.acres - std::min(5.0, std::floor(spare))), pick = pc.id;
+        if (pick != kNone) addWant(h.id, "parcel", pick, kNone, "", "家裡人手多，地不夠種");
     }
+    allotVacant();
 }
 
 void World::runEventById(const std::string& id, Id person, Id target, Id deed) {

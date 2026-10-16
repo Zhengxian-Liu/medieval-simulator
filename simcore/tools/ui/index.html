@@ -109,6 +109,19 @@ svg text.mpoin { font-size: 7.5px; font-weight: 600; pointer-events: none; paint
 .muted { color: var(--muted); }
 .steps span { display: inline-block; margin-right: 6px; font-size: 12px; }
 .steps .done { color: var(--good); }
+.asks { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; align-items: center; }
+.asks .lab { font-size: 12px; color: var(--muted); }
+.asks button { border-style: dashed; }
+.favour { font-size: 12px; color: var(--muted); }
+.answer { border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; margin-top: 10px; }
+.answer.yes { border-color: var(--good); } .answer.cond { border-color: var(--warn); } .answer.no { border-color: var(--bad); }
+.answer .verdict { font-weight: 600; }
+.contest .item { padding: 7px 0; border-bottom: 1px solid var(--line); }
+.contest .item.mine { background: var(--accent-soft); border-radius: 6px; padding: 7px 8px; }
+.contest .thing { font-weight: 600; }
+.contest .who { font-size: 13px; }
+.contest h3 { font-size: 13px; margin: 12px 0 4px; color: var(--muted); }
+.mwant { fill: none; stroke: var(--bad); stroke-width: 1.6; stroke-dasharray: 3 2; pointer-events: none; }
 </style>
 </head>
 <body>
@@ -200,6 +213,7 @@ function renderTop() {
     <span class="stat">存糧 <b>${h.food_days}</b> 天${h.lean ? ' <span class="lean">今年缺糧</span>' : ""}</span>
     <span class="stat">地 <b>${h.acres}</b> 畝${h.freehold > 0 ? `（自由地 ${h.freehold}）` : ""}</span>
     ${h.debt > 0 ? `<span class="stat lean">欠債 ${h.debt} 便士</span>` : ""}
+    ${s.contest && s.contest.fine ? `<span class="stat lean" title="家主過世，繼承要付給領主的入地費">入地費 ${s.contest.fine.amount} 便士，${s.contest.fine.year} 年 ${s.contest.fine.month} 月前${s.contest.fine.extended ? "（已寬限過）" : ""}</span>` : ""}
     ${amb}`;
   $("timeleft").textContent = seasonOpen() ? `這一季還有 ${s.time_left} 段空閒` : "";
 }
@@ -226,7 +240,7 @@ function renderTurn() {
         <button onclick="act({do:'year'})">一口氣過一年</button>
         <button onclick="look({do:'report'}, '家裡知道的事')">家裡知道什麼</button>
         <button class="link" onclick="if(confirm('結束這一局？'))act({do:'quit'})">結束這一局</button>
-      </div>`;
+      </div>${answerCard(s)}`;
   } else {
     $("turn").className = "panel";
     html = `<p class="running">日子在過……</p>`;
@@ -247,6 +261,33 @@ function actionButtons(p) {
     const tip = x.open ? (x.desc || "") + (x.money ? `（${x.money} 便士）` : "") : x.why;
     return `<button ${x.open && can ? "" : "disabled"} class="${x.wanted ? "wanted" : ""}" title="${esc(tip)}" onclick="act({do:'interact',who:${p.id},event:'${x.event}'})">${x.wanted ? "★ " : ""}${esc(x.title)}</button>`;
   }).join("")}</div>`;
+}
+// 開口: ask someone for a thing. Same buttons for a follow-up, with a lever on top.
+const LEVERS = { gift: "送點禮再說", favour: "提他欠的人情", hook: "拿把柄壓他", meet: "答應他的條件" };
+const ANSWER = { 1: ["yes", "答應了"], 2: ["cond", "有條件"], 3: ["no", "不肯"], 4: ["no", "惱了"] };
+function askCall(who, a, lever) {
+  return `act({do:'ask',who:${who},ask:'${a.ask}',object:${a.object},subject:${a.subject},office:'${esc(a.office || "")}',lever:'${lever || ""}'})`;
+}
+let askMore = new Set();
+function askButtons(p) {
+  const f = (p.owes > 0 ? `<span class="favour">欠你家人情 ${p.owes}</span> ` : "") + (p.owed > 0 ? `<span class="favour">你家欠他 ${p.owed}</span>` : "");
+  if (!p.asks || !p.asks.length) return f ? `<div>${f}</div>` : "";
+  const can = seasonOpen();
+  // Someone holding many parcels: one land ask shown, the rest behind a toggle.
+  const land = p.asks.filter((a) => a.ask === "sell_parcel");
+  const hidden = askMore.has(p.id) ? [] : land.slice(1);
+  const shown = p.asks.filter((a) => !hidden.includes(a));
+  const more = hidden.length ? `<button class="link" onclick="askMore.add(${p.id});renderTabs()">還有 ${hidden.length} 塊地…</button>` : "";
+  return `<div class="asks"><span class="lab">開口：</span>${shown.map((a) =>
+    `<button ${a.open && can ? "" : "disabled"} title="${esc(a.open ? "用一段空閒去問" : a.why)}" onclick="${askCall(p.id, a, "")}">${esc(a.label)}</button>`).join("")}${more}${f ? " " + f : ""}</div>`;
+}
+function answerCard(s) {
+  const a = s && s.last_ask;
+  if (!a) return "";
+  const [k, word] = ANSWER[a.answer] || ["", ""];
+  const more = a.answer >= 2 && a.levers.length && seasonOpen()
+    ? `<div class="actions">${a.levers.map((l) => `<button onclick="${askCall(a.who, a, l)}">${esc(LEVERS[l] || l)}</button>`).join("")}</div>` : "";
+  return `<div class="answer ${k}"><span class="verdict">${esc(a.name)}：${word}</span><div>${esc(a.text)}</div>${more}</div>`;
 }
 function reasonsLine(rs) {
   return rs && rs.length ? rs.map(([l, v]) => `${esc(l)} <span class="${cls(v)}">${signed(v)}</span>`).join("、") : "沒有特別的原因";
@@ -289,7 +330,7 @@ function renderFeed() {
   $("feed").innerHTML = html || '<p class="muted">還沒有事。</p>';
 }
 
-const TABS = [["talk", "村裡在說"], ["map", "地圖"], ["net", "關係網"], ["people", "村民"], ["plans", "計畫"]];
+const TABS = [["talk", "村裡在說"], ["contest", "在爭什麼"], ["map", "地圖"], ["net", "關係網"], ["people", "村民"], ["plans", "計畫"]];
 function renderTabs() {
   $("tabs").innerHTML = TABS.map(([k, n]) => `<button class="${tab === k ? "on" : ""}" onclick="tab='${k}';renderTabs()">${n}</button>`).join("");
   const s = view.state;
@@ -298,6 +339,7 @@ function renderTabs() {
   else if (tab === "net") renderNet(s);
   else if (tab === "map") renderMap(s);
   else if (tab === "people") renderPeople(s);
+  else if (tab === "contest") renderContest(s);
   else renderPlans(s);
 }
 
@@ -345,7 +387,7 @@ function renderMap(s) {
   m.cells.forEach((pi, c) => { if (pi >= 0) byParcel[pi].push(c); });
   m.parcels.forEach((p, pi) => {
     const dim = sel != null && p.house !== sel && !(sel === -2 && p.mine);
-    const tip = `${p.name}${p.free ? "（自由地）" : ""}\n${p.house < 0 ? "沒人租，在領主手上" : p.lord ? "領主自營" : p.mine ? "你家的" : p.holder + "家的"}　${parcelSince(p)}`;
+    const tip = `${p.name}${p.free ? "（自由地）" : ""}\n${p.house < 0 ? "沒人租，在領主手上" : p.lord ? "領主自營" : p.mine ? "你家的" : p.holder + "家的"}　${parcelSince(p)}${p.wanted && p.wanted.length ? `\n想要這塊的：${p.wanted.join("、")}` : ""}`;
     g += `<g class="parcel${dim ? " dim" : ""}" ${p.house >= 0 && !p.lord ? `onclick="selectedHouse=${p.mine ? -2 : p.house};renderTabs()" style="cursor:pointer"` : ""}><title>${esc(tip)}</title>${byParcel[pi].map((c) => `<rect x="${(c % m.w) * C}" y="${Math.floor(c / m.w) * C}" width="${C}" height="${C}" fill="${parcelFill(p)}"/>`).join("")}</g>`;
   });
   // Lines between different parcels, so neighbouring strips of one house still read as separate pieces.
@@ -356,6 +398,19 @@ function renderMap(s) {
     if (y + 1 < m.h) { const b = m.cells[(y + 1) * m.w + x]; if (a !== b && (a >= 0 || b >= 0)) edges += `M${x * C} ${(y + 1) * C}h${C}`; }
   }
   g += `<path d="${edges}" class="medge"/>`;
+  // Parcels the family knows someone is after: a dashed outline round the whole piece.
+  let want = "";
+  const wanted = (i) => i >= 0 && m.parcels[i].wanted && m.parcels[i].wanted.length;
+  for (let y = 0; y < m.h; y++) for (let x = 0; x < m.w; x++) {
+    const a = m.cells[y * m.w + x];
+    if (!wanted(a)) continue;
+    const at = (xx, yy) => (xx < 0 || yy < 0 || xx >= m.w || yy >= m.h ? -1 : m.cells[yy * m.w + xx]);
+    if (at(x - 1, y) !== a) want += `M${x * C} ${y * C}v${C}`;
+    if (at(x + 1, y) !== a) want += `M${(x + 1) * C} ${y * C}v${C}`;
+    if (at(x, y - 1) !== a) want += `M${x * C} ${y * C}h${C}`;
+    if (at(x, y + 1) !== a) want += `M${x * C} ${(y + 1) * C}h${C}`;
+  }
+  if (want) g += `<path d="${want}" class="mwant"/>`;
   for (const a of m.areas) {
     if (a.kind === "village") continue;
     g += `<text x="${(a.x + a.w / 2) * C}" y="${(a.y + a.h / 2) * C + 4}" text-anchor="middle" class="mlabel">${esc(a.name)}</text>`;
@@ -394,7 +449,7 @@ function renderMap(s) {
       + `<div class="mlist">${mineRows.map((p) => `<div>${esc(p.name)}${p.free ? "・自由地" : ""}　<span class="muted">${esc(parcelSince(p))}</span></div>`).join("")}</div>`;
   $("tab-body").innerHTML = `<div class="mapwrap${mapBig ? " big" : ""}"><button class="mapzoom" onclick="mapBig=!mapBig;renderTabs()">${mapBig ? "收起" : "放大"}</button><svg viewBox="-2 -14 ${W + 4} ${H + 18}" width="100%" role="img" aria-label="村子地圖：每塊地是哪一家的">
       <defs><pattern id="vacant" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" class="mvac"/><line x1="0" y1="0" x2="0" y2="6" class="mvacl"/></pattern></defs>${g}</svg>
-    <div class="mside"><div class="legend">三塊大田分成一條條，同一個顏色是同一家的地；你家是深色。斜線是沒人租、在領主手上的地。</div>
+    <div class="mside"><div class="legend">三塊大田分成一條條，同一個顏色是同一家的地；你家是深色。斜線是沒人租、在領主手上的地。紅虛線框：你聽說有人想要的地。</div>
     <div class="mlegend">${legend}</div>${detail}</div>`;
 }
 
@@ -428,7 +483,34 @@ function renderPeople(s) {
       <button class="link" onclick="look({do:'inspect',who:${p.id}}, '${esc(p.name)}')">詳情</button></div>
       <div class="op" onclick="toggle(this)">對你 <b class="${cls(p.opinion)}">${esc(p.opinion_word)} ${signed(p.opinion)}</b>　你對他們 <span class="${cls(p.yours)}">${signed(p.yours)}</span>${p.feud ? `　<span class="neg">${["", "嫌隙", "結怨", "世仇"][p.feud]}</span>` : ""} <span class="muted">▾</span><div class="reasons">${reasonsLine(p.reasons)}</div></div>
       <div class="muted" style="font-size:12px">${esc(p.line)}</div>
-      ${actionButtons(p)}</div>`).join("") : '<p class="muted">眼下沒有誰跟你家特別有關係。</p>';
+      ${actionButtons(p)}${askButtons(p)}</div>`).join("") : '<p class="muted">眼下沒有誰跟你家特別有關係。</p>';
+}
+
+// 村裡在爭什麼: the things more than one house is after, as far as the family has heard.
+const WANT_KIND = { parcel: "地", office: "差事", match: "親事", place: "名額" };
+function renderContest(s) {
+  const c = s.contest || { items: [], past: [], offices: [] };
+  const can = seasonOpen();
+  let html = "";
+  if (c.fine) html += `<div class="card wants"><b>入地費 ${c.fine.amount} 便士</b>，${c.fine.year} 年 ${c.fine.month} 月前要交給領主。交不出來要借、去求領主寬限，或讓出一塊地。</div>`;
+  const items = [...c.items].sort((a, b) => (b.mine >= 0) - (a.mine >= 0) || b.ours - a.ours || b.contested - a.contested || b.wanters.length - a.wanters.length);
+  html += items.length ? `<div class="contest">${items.map((it, i) => {
+    const head = i === 0 || (items[i - 1].contested || items[i - 1].mine >= 0 || items[i - 1].ours) !== (it.contested || it.mine >= 0 || it.ours)
+      ? (it.contested || it.mine >= 0 || it.ours ? "" : `<h3>還聽說誰家在打什麼主意</h3>`) : "";
+    const mine = it.mine >= 0;
+    const who = it.wanters.map((x) => `<b>${esc(x.house)}</b>${x.for ? `（替${esc(x.for)}）` : ""}${x.mine && x.why ? `<span class="muted">：${esc(x.why)}</span>` : ""} <span class="muted">${x.since} 年起</span>`).join("<br>");
+    const btn = mine ? `<button ${can ? "" : "disabled"} onclick="act({do:'want',what:'drop',object:${it.mine}})">不要了</button>`
+      : it.kind === "parcel" && !it.ours ? `<button ${can ? "" : "disabled"} onclick="act({do:'want',what:'parcel',object:${it.parcel}})">我家也想要</button>` : "";
+    return head + `<div class="item${mine ? " mine" : ""}"><div class="top" style="display:flex;justify-content:space-between;gap:6px"><span><span class="muted">${WANT_KIND[it.kind] || ""}</span> <span class="thing">${esc(it.thing)}</span>${it.contested ? ' <span class="neg" style="font-size:12px">撞上了</span>' : ""}</span>${btn}</div>
+      <div class="muted" style="font-size:12px">${esc(it.holder)}${it.ours && !mine ? "　<span class=\"neg\">有人在打你家的主意</span>" : ""}</div>
+      <div class="who">${who}</div></div>`;
+  }).join("")}</div>` : '<p class="muted">還沒聽說村裡有誰在爭什麼。</p>';
+  html += `<h3>村裡的差事</h3>` + c.offices.map((o) => `<div class="item" style="display:flex;justify-content:space-between;gap:6px;padding:4px 0">
+      <span><b>${esc(o.name)}</b>　${o.mine ? '<span class="pos">你家的人</span> ' : ""}${o.holder ? esc(o.holder) : '<span class="muted">空著</span>'}</span>
+      ${o.wanted ? '<span class="muted">你家想當</span>' : o.can && !o.mine ? `<button ${can ? "" : "disabled"} onclick="act({do:'want',what:'office:${o.id}',object:-1})">想當</button>` : ""}</div>`).join("");
+  if (c.past.length) html += `<h3>你家最近的結果</h3>` + c.past.map((p) => `<div style="font-size:13px">${p.year} 年　${esc(p.thing)}：<b>${esc(p.outcome)}</b></div>`).join("");
+  html += `<p class="legend">只列你家聽說的。去「村民」那一欄找人開口：買地、租地、請他投票、借錢、說親、收學徒。</p>`;
+  $("tab-body").innerHTML = html;
 }
 
 function renderPlans(s) {

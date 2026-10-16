@@ -51,6 +51,23 @@ private:
                     break;
                 }
         }
+        // Now and then ask someone for something (開口): land, a vote, a match, a place for a son.
+        if (spare > 0 && rng_.chance(0.3)) {
+            std::vector<Id> pool;
+            for (Id id : people)
+                if (w.people()[id].household != w.people()[head].household) pool.push_back(id);
+            if (!pool.empty()) {
+                Id who = pool[rng_.range(0, static_cast<int>(std::min<size_t>(pool.size(), 10)) - 1)];
+                std::vector<AskOption> asks;
+                for (const auto& a : w.asksFor(who))
+                    if (a.open) asks.push_back(a);
+                if (!asks.empty()) {
+                    const AskOption& a = asks[rng_.range(0, static_cast<int>(asks.size()) - 1)];
+                    w.issue({w.today(), "ask", head, a.ask + "|" + a.office + "||" + (a.subject == kNone ? "" : std::to_string(a.subject)), who, a.object});
+                    --spare;
+                }
+            }
+        }
         if (spare <= 0 || people.empty() || !rng_.chance(0.5)) return;
         Id who = people[rng_.range(0, static_cast<int>(std::min<size_t>(people.size(), 8)) - 1)];
         std::vector<std::string> ids;

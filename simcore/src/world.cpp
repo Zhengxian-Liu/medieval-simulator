@@ -39,6 +39,7 @@ World::World(const Defs& defs, Config cfg)
     rngWants_.reseed(cfg.seed, hashString("wants"));
     rngNews_.reseed(cfg.seed, hashString("news"));
     rngLand_.reseed(cfg.seed, hashString("land"));
+    rngContest_.reseed(cfg.seed, hashString("contest"));
     baseParams_ = {
         {"mortality_mult", 1.0}, {"harvest_mult", 1.0}, {"grain_price", 0.4},
         {"wage_mult", 1.0},      {"rent_mult", 1.0},    {"plague_monthly", 0.0},
@@ -60,6 +61,7 @@ World::World(const Defs& defs, Config cfg)
     }
     setupVillage();
     setupLand();
+    setupOffices();
     seedAcquaintance();
     // Each game opens on one of a few situations the family is already in (data/events/openings.json).
     std::vector<std::string> openings;
@@ -96,6 +98,7 @@ void World::stepDay() {
             yearlyAdulthood();
             yearlyAmbitions();
             yearlyTown();
+            yearlyWants();
             yearlyIntentions();
             yearlyService();
             yearlyFeuds();
@@ -106,11 +109,14 @@ void World::stepDay() {
         if (month() == 7) electReeve();
         if (month() == 8) harvest();
         if (month() == 9) {
+            chooseOfficers();
+            fillPlaces();
             reletVacant();
             gatherFirewood();
             yearlyMarriages();
         }
         monthlyEconomy();
+        monthlyFines();
         monthlyHealth();
         monthlyBirths();
         monthlySocial();

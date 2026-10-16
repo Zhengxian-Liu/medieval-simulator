@@ -573,6 +573,22 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     if (k == "lodger") return (h && h->lodgerUntil > w.day_) == v.asBool();
     if (k == "no_ox") return (h && h->noOxUntil > w.day_) == v.asBool();
     if (k == "service_child") return h && (serviceChild(*h) != kNone) == v.asBool();
+    // The contested ledger (contest.cpp): a place free with a master of that trade, a servant's place in the
+    // person's house, and the entry fine.
+    if (k == "place_open") return w.openApprenticeship(v.asString(), p.household) != kNone;
+    if (k == "service_place") return p.household != kNone && w.placeOpen(p.household, "service") == v.asBool();
+    if (k == "fine_extended") {
+        const EntryFine* f = nullptr;
+        for (const auto& x : w.fines_)
+            if (x.house == p.household) f = &x;
+        return f && f->extended == v.asBool();
+    }
+    if (k == "fine_lender") {
+        double need = 0;
+        for (const auto& x : w.fines_)
+            if (x.house == p.household && h) need = std::max(0.0, x.amount - h->money);
+        return h && (w.fineLender(*h, need) != kNone) == v.asBool();
+    }
     if (k == "stress_ge") return p.stress >= v.asNumber();
     if (k == "stress_lt") return p.stress < v.asNumber();
     if (k == "same_class") return target != kNone && (w.gentry(p.id) == w.gentry(target)) == v.asBool();
@@ -783,9 +799,24 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 Json one = Json::parse("[{\"marry_target\": true}]");
                 apply(one, sub, target);
             } else if (k == "take_acres") {
-                // Buy land from the target's household.
+                // Buy land from the target's household: the parcel this house was after, if it is theirs.
                 if (!h || target == kNone || w.people_[target].household == kNone) continue;
                 Household& th = w.households_[w.people_[target].household];
+                Id wanted = kNone;
+                for (const auto& wt : w.wants_)
+                    if (wt.open && wt.house == h->id && wt.kind == "parcel" && w.parcels_[wt.object].holder == th.id) wanted = wt.object;
+                if (wanted != kNone) {
+                    double perAcre = v["price"].asNumber() / v["acres"].asNumber();
+                    double price = std::round(w.parcels_[wanted].acres * perAcre);
+                    if (h->money < price) continue;
+                    std::string name = w.parcelName(w.parcels_[wanted]);
+                    w.moveParcel(wanted, h->id, "買來");
+                    th.money += price;
+                    h->money -= price;
+                    if (h->id == w.playerHousehold_ || th.id == w.playerHousehold_)
+                        w.log(1, "  " + name + "換了 " + std::to_string(static_cast<long>(price)) + " 便士。");
+                    continue;
+                }
                 double acres = std::min(v["acres"].asNumber(), th.acres);
                 double price = v["price"].asNumber();
                 if (acres <= 0 || h->money < price) continue;
@@ -987,7 +1018,7 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 Id master = kNone;
                 double best = 0;
                 for (const auto& o : w.households_)
-                    if (!o.extinct && o.id != h->id && o.head != kNone && o.money > best &&
+                    if (!o.extinct && o.id != h->id && o.head != kNone && o.money > best && w.placeOpen(o.id, "service") &&
                         w.people_[o.head].occupation != "priest" && w.people_[o.head].occupation != "lord")
                         best = o.money, master = o.head;
                 if (child == kNone || master == kNone) continue;
@@ -1089,6 +1120,12 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 }
             } else if (k == "set_free") {
                 w.setFree(p.id);
+            } else if (k == "take_place") {
+                // The person (an apprentice) goes to the master of that trade who has a place free.
+                Id master = w.openApprenticeship(v.asString(), p.household);
+                if (master != kNone) w.takePlace(master, "apprentice", p.id);
+            } else if (k == "entry_fine") {
+                if (h) w.fineChoice(*h, v.asString());
             } else if (k == "send_subject_to_service") {
                 // The plan's subject goes to serve in the target's household for some years.
                 if (plan_ && plan_->subject != kNone && target != kNone)

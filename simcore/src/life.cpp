@@ -199,6 +199,7 @@ void World::kill(Id id, const std::string& cause) {
     p.deathDay = day_;
     p.deathCause = cause;
     p.pregnantDue = -1;
+    officeVacated(id);
     Id hid = p.household;
     bool family = isPlayerFamily(p);
     double age = ageYears(p);
@@ -267,7 +268,10 @@ void World::kill(Id id, const std::string& cause) {
             }
             return;
         }
-        if (!h.extinct && h.head != kNone) chargeHeriot(h, id);
+        if (!h.extinct && h.head != kNone) {
+            chargeHeriot(h, id);
+            chargeEntryFine(h, h.head, id);
+        }
     }
 }
 
@@ -454,6 +458,26 @@ void World::marry(Id man, Id woman) {
                 moveTo(man, home);
         }
     recordDeed("married", man, woman);
+    // The match each house was after for either of them is settled: theirs, or another's who got there first.
+    for (auto& wt : wants_) {
+        if (!wt.open || wt.kind != "match") continue;
+        bool ours = (wt.subject == man && wt.object == woman) || (wt.subject == woman && wt.object == man);
+        if (ours) {
+            dropWant(wt, "成了親");
+        } else if (wt.object == man || wt.object == woman) {
+            Id other = wt.object == man ? woman : man;
+            Id ohh = people_[other].household;
+            std::string thing = wantThing(wt);
+            std::string lost = ohh != kNone && households_[ohh].dynasty != kNone ? "讓" + dynasties_[households_[ohh].dynasty].surname + "家訂走了" : "許了別人";
+            dropWant(wt, lost);
+            Id loser = households_[wt.house].head;
+            Id winner = ohh != kNone ? households_[ohh].head : kNone;
+            if (loser != kNone && winner != kNone && winner != loser) addOpinion(loser, winner, "took_our_want", -6, 6);
+            if (wt.house == playerHousehold_) log(1, "  （你家看中的" + thing + "，" + lost + "。）");
+        } else if (wt.subject == man || wt.subject == woman) {
+            dropWant(wt, "另結了親");
+        }
+    }
     addNews("marriage", man, woman, m.household != kNone ? m.household : w.household);
     chargeMerchet(woman, false);
     // A wedding is a joy to those who wanted it; whoever they had longed for before becomes a heartbreak.

@@ -35,14 +35,14 @@
      "target": {"pick": "any_child", "conditions": {"sex": "male", "age": [11, 13], "no_flag": "trade_decided"}},
      "options": [
        {"text": "跟父親學", "log": "", "effects": [{"target": [{"set_flag": "trade_decided"}]}], "ai": {"base": 14, "if": [{"cond": {"occupation": "smith"}, "add": 20}, {"cond": {"tradition": "smith_line"}, "add": 25}]}},
-       {"text": "送去木匠那裡當學徒（24 便士）", "log": "{name} 花 24 便士把 {target} 送去木匠家當學徒。", "effects": [{"money": -24}, {"target": [{"set_flag": "trade_decided"}, {"set_flag": "apprentice_carpenter"}]}], "ai": {"base": 6, "traits": {"ambitious": 6}, "if": [{"cond": {"money_lt": 40}, "add": -20}]}},
-       {"text": "送去織工那裡學織布（16 便士）", "log": "{name} 把 {target} 送去學織布。", "effects": [{"money": -16}, {"target": [{"set_flag": "trade_decided"}, {"set_flag": "apprentice_weaver"}]}], "ai": {"base": 4, "if": [{"cond": {"money_lt": 30}, "add": -20}]}}
+       {"text": "送去木匠那裡當學徒（24 便士）", "conditions": {"place_open": "carpenter"}, "log": "{name} 花 24 便士把 {target} 送去木匠家當學徒。", "effects": [{"money": -24}, {"target": [{"take_place": "carpenter"}]}], "ai": {"base": 6, "traits": {"ambitious": 6}, "if": [{"cond": {"money_lt": 40}, "add": -20}]}},
+       {"text": "送去織工那裡學織布（16 便士）", "conditions": {"place_open": "weaver"}, "log": "{name} 把 {target} 送去學織布。", "effects": [{"money": -16}, {"target": [{"take_place": "weaver"}]}], "ai": {"base": 4, "if": [{"cond": {"money_lt": 30}, "add": -20}]}}
      ]},
     {"id": "smith_apprentice", "title": "鐵匠收徒", "prompt": "鐵匠願意收 {target} 當學徒，要 40 便士的拜師錢。", "scope": "player_head", "chance": 0.05, "cooldown_years": 3,
-     "conditions": {"age": [14, 120], "not": {"occupation": "smith"}, "money_ge": 40, "any_child": {"sex": "male", "age": [11, 13], "no_flag": "trade_decided"}},
+     "conditions": {"age": [14, 120], "not": {"occupation": "smith"}, "money_ge": 40, "place_open": "smith", "any_child": {"sex": "male", "age": [11, 13], "no_flag": "trade_decided"}},
      "target": {"pick": "any_child", "conditions": {"sex": "male", "age": [11, 13], "no_flag": "trade_decided"}},
      "options": [
-       {"text": "送去打鐵（40 便士）", "log": "鐵匠願意收 {target} 當學徒，{name} 咬牙付了 40 便士。", "effects": [{"money": -40}, {"target": [{"set_flag": "trade_decided"}, {"set_flag": "apprentice_smith"}]}], "ai": {"base": 8, "traits": {"ambitious": 8}}},
+       {"text": "送去打鐵（40 便士）", "log": "鐵匠願意收 {target} 當學徒，{name} 咬牙付了 40 便士。", "effects": [{"money": -40}, {"target": [{"take_place": "smith"}]}], "ai": {"base": 8, "traits": {"ambitious": 8}}},
        {"text": "太貴了", "log": "", "effects": [], "ai": {"base": 10, "traits": {"greedy": 8}}}
      ]},
     {"id": "courtship_m", "parent_decides": true, "title": "心上人", "prompt": "五朔節的舞會上，{name} 一直看著 {target}。", "scope": "player_family", "chance": 0.03, "cooldown_years": 2,

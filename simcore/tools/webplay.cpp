@@ -8,6 +8,8 @@
 // Out:  {"type":"state",...} then {"type":"ask","kind":"season"|"choice",...}; {"type":"person"|"report","text":...}
 //       answers a look; {"type":"end",...} when the game is over.
 // In:   {"do":"pass"} {"do":"year"} {"do":"quit"} {"do":"interact","who":12,"event":"talk_comfort"}
+//       {"do":"ask","who":12,"ask":"sell_parcel","object":30,"subject":-1,"office":"","lever":""}
+//       {"do":"want","what":"parcel"|"office:reeve"|"drop","object":30}
 //       {"do":"plan","plan":"arrange_match","target":3,"subject":5} {"do":"cancel"}
 //       {"do":"choose","index":0} {"do":"ai"} {"do":"inspect","who":12} {"do":"report"}
 #include <algorithm>
@@ -118,6 +120,27 @@ public:
         return arr(out);
     }
 
+    // The houses the family knows to be after this parcel.
+    std::string wantedBy(Id parcel) {
+        std::vector<std::string> out;
+        Id hh = w_.playerHousehold();
+        for (const auto& wt : w_.wants())
+            if (wt.open && wt.kind == "parcel" && wt.object == parcel && w_.familyKnows(wt)) {
+                Id d = w_.households()[wt.house].dynasty;
+                out.push_back(str(wt.house == hh ? "你家" : (d != kNone ? w_.dynasties()[d].surname : "") + "家"));
+            }
+        return arr(out);
+    }
+
+    // 開口: what the head could ask this person for (design/contested.md).
+    std::string asksFor(Id who) {
+        std::vector<std::string> out;
+        for (const auto& a : w_.asksFor(who))
+            out.push_back(Obj().text("ask", a.ask).text("label", a.label).n("object", a.object).n("subject", a.subject)
+                              .text("office", a.office).b("open", a.open).text("why", a.why).done());
+        return arr(out);
+    }
+
     std::string reasons(Id from, Id to) {
         std::vector<std::string> out;
         auto br = w_.opinionBreakdown(from, to);
@@ -212,6 +235,8 @@ public:
                 .text("familiarity", kin.empty() ? familiarity(close) : kin).n("feud", w.feudStage(head, id))
                 .b("busy", w.seemsBusy(id)).text("line", w.personLine(id)).raw("reasons", reasons(id, head));
             if (withActions && canSee.count(id)) q.raw("actions", actionsFor(id, hp));
+            if (withActions && (canSee.count(id) || id == w.lordId())) q.raw("asks", asksFor(id));
+            q.n("owes", std::lround(w.favourOwed(id, head))).n("owed", std::lround(w.favourOwed(head, id)));
             ppl.push_back(q.done());
         }
         o.raw("people", arr(ppl));
@@ -278,13 +303,87 @@ public:
                 parcels.push_back(Obj().n("id", pc.id).text("name", w.parcelName(pc)).n("acres", pc.acres).b("free", pc.free)
                                       .n("house", pc.holder == kNone ? -1 : pc.holder).text("holder", holder).text("how", pc.how)
                                       .n("since", w.config().startYear + pc.since / kDaysPerYear).b("mine", pc.holder == hh)
-                                      .b("lord", pc.holder != kNone && pc.holder == lordHouse).done());
+                                      .b("lord", pc.holder != kNone && pc.holder == lordHouse).raw("wanted", wantedBy(pc.id)).done());
             }
             std::string cs = "[";
             for (size_t i = 0; i < cells.size(); ++i) cs += (i ? "," : "") + std::to_string(cells[i]);
             cs += "]";
             o.raw("map", Obj().n("w", vm.width).n("h", vm.height).raw("areas", arr(areas)).raw("pois", arr(pois))
                              .raw("homes", arr(homes)).raw("parcels", arr(parcels)).raw("cells", cs).done());
+        }
+
+        // What the village is contending over, as far as the family knows (design/contested.md 4).
+        {
+            auto surname = [&](Id h) { return h != kNone && w.households()[h].dynasty != kNone ? w.dynasties()[w.households()[h].dynasty].surname : std::string(); };
+            std::vector<std::string> keys;
+            std::map<std::string, std::vector<const Want*>> by;
+            for (const auto& wt : w.wants()) {
+                if (!wt.open || !w.familyKnows(wt)) continue;
+                std::string k = wt.kind + "|" + (wt.kind == "office" ? wt.office : std::to_string(wt.object)) + "|" + (wt.kind == "place" ? wt.office : "");
+                if (!by.count(k)) keys.push_back(k);
+                by[k].push_back(&wt);
+            }
+            // The family's own things others are after count even when it wants nothing itself.
+            std::vector<std::string> items;
+            for (const auto& k : keys) {
+                const auto& ws = by[k];
+                const Want& first = *ws.front();
+                std::string holder;
+                bool ours = false;
+                Id parcel = kNone;
+                if (first.kind == "parcel") {
+                    const Parcel& pc = w.parcels()[first.object];
+                    parcel = pc.id;
+                    ours = pc.holder == hh;
+                    holder = pc.holder == kNone ? "領主手上，沒人租" : ours ? "你家的" : surname(pc.holder) + "家的";
+                } else if (first.kind == "office") {
+                    const Office* of = w.office(first.office);
+                    ours = of && of->holder != kNone && w.people()[of->holder].household == hh;
+                    holder = of && of->holder != kNone ? "現在是" + w.fullName(of->holder) : "空著";
+                } else if (first.kind == "match") {
+                    ours = w.people()[first.object].household == hh;
+                    holder = w.ageYears(w.people()[first.object]) >= 0 ? std::to_string(static_cast<int>(w.ageYears(w.people()[first.object]))) + " 歲，還沒說親" : "";
+                } else {
+                    ours = first.object == hh;
+                    holder = "名額 " + std::string(w.placeOpen(first.object, first.office) ? "還空著" : "已經滿了");
+                }
+                std::vector<std::string> who;
+                bool mine = false;
+                Id myWant = kNone;
+                for (const Want* wt : ws) {
+                    bool fam = wt->house == hh;
+                    mine = mine || fam;
+                    if (fam) myWant = wt->id;
+                    std::string sub = wt->subject != kNone && (first.kind != "parcel") ? w.shortName(wt->subject) : "";
+                    who.push_back(Obj().text("house", fam ? "你家" : surname(wt->house) + "家").text("why", fam ? wt->why : "")
+                                      .text("for", sub).b("mine", fam).n("since", w.config().startYear + wt->since / kDaysPerYear).done());
+                }
+                items.push_back(Obj().text("kind", first.kind).text("thing", w.wantThing(first)).text("holder", holder).b("ours", ours)
+                                    .b("contested", ws.size() >= 2)
+                                    .n("parcel", parcel).n("mine", myWant).raw("wanters", arr(who)).done());
+            }
+            std::vector<std::string> past;
+            for (auto it = w.wants().rbegin(); it != w.wants().rend() && past.size() < 8; ++it)
+                if (!it->open && it->ended >= w.today() - 3 * kDaysPerYear && it->house == hh && it->outcome != "放下了" && it->outcome != "家沒了")
+                    past.push_back(Obj().text("thing", w.wantThing(*it)).text("outcome", it->outcome).n("year", w.config().startYear + it->ended / kDaysPerYear).done());
+            std::vector<std::string> offs;
+            for (const auto& of : w.offices())
+                offs.push_back(Obj().text("id", of.id).text("name", of.name).text("holder", of.holder != kNone ? w.fullName(of.holder) : "")
+                                   .b("mine", of.holder != kNone && w.people()[of.holder].household == hh).n("until", of.until)
+                                   .b("can", w.officeEligible(head, of.id)).b("wanted", w.wants().end() != std::find_if(w.wants().begin(), w.wants().end(), [&](const Want& x) {
+                                       return x.open && x.house == hh && x.kind == "office" && x.office == of.id; })).done());
+            Obj c;
+            c.raw("items", arr(items)).raw("past", arr(past)).raw("offices", arr(offs));
+            for (const auto& f : w.entryFines())
+                if (f.house == hh)
+                    c.raw("fine", Obj().n("amount", f.amount).n("year", w.config().startYear + f.due / kDaysPerYear)
+                                     .n("month", (f.due % kDaysPerYear) / kDaysPerMonth + 1).b("extended", f.extended).done());
+            o.raw("contest", c.done());
+            const AskResult& la = w.lastAsk();
+            if (la.who != kNone && la.day >= w.today() - 2)
+                o.raw("last_ask", Obj().n("who", la.who).text("name", w.fullName(la.who)).text("ask", la.ask).text("office", la.office)
+                                      .n("object", la.object).n("subject", la.subject).n("answer", la.answer).text("text", la.text)
+                                      .raw("levers", [&] { std::vector<std::string> v; for (const auto& l : la.levers) v.push_back(str(l)); return arr(v); }()).done());
         }
 
         // What the family has heard, newest first.
@@ -465,6 +564,13 @@ int main(int argc, char** argv) {
                 Id head = w.playerHead();
                 if (what == "interact") {
                     w.issue({w.today(), "interact", head, m["event"], toInt(m, "who"), kNone});
+                    w.runCommands();
+                } else if (what == "ask") {
+                    w.issue({w.today(), "ask", head, m["ask"] + "|" + m["office"] + "|" + m["lever"] + "|" + (toInt(m, "subject") == kNone ? "" : m["subject"]),
+                             toInt(m, "who"), toInt(m, "object")});
+                    w.runCommands();
+                } else if (what == "want") {
+                    w.issue({w.today(), "want", head, m["what"], kNone, toInt(m, "object")});
                     w.runCommands();
                 } else if (what == "plan") {
                     w.issue({w.today(), "start_plan", w.actingHead(), m["plan"], toInt(m, "target"), toInt(m, "subject")});

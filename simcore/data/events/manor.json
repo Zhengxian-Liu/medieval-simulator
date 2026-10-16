@@ -1,6 +1,20 @@
 {
   // Life under the manor and the church calendar: service, flight, fasts and feasts.
   "events": [
+    // The entry fine has come due and the money is short (contest.cpp): beg the lord for time (once), borrow
+    // the rest from someone who will lend it, or let the lord take back the share of the land not paid for.
+    {"id": "entry_fine_due", "title": "入地費", "prompt": "入地費的期限到了，家裡的錢不夠。付不出來，領主會把付不起的那部分地收回去，轉租給盯著它的人家。", "scope": "player_head", "chance": 1,
+     "on": {"signal": "manual"},
+     "options": [
+       {"text": "去求領主再寬限半年", "conditions": {"fine_extended": false},
+        "log": "{name} 帶著一隻閹雞去莊園，求 {target} 再寬限些日子。", "effects": [{"entry_fine": "beg"}],
+        "ai": {"base": 10, "traits": {"craven": 4, "calm": 4}, "if": [{"cond": {"lord_opinion_lt": 0}, "add": -6}]}},
+       {"text": "向人借錢補上", "conditions": {"fine_lender": true},
+        "log": "{name} 硬著頭皮去借錢。", "effects": [{"entry_fine": "borrow"}],
+        "ai": {"base": 12, "traits": {"greedy": -4}}},
+       {"text": "交不出來，讓出一部分地", "log": "", "effects": [{"entry_fine": "forfeit"}],
+        "ai": {"base": 3, "traits": {"content": 4}}}
+     ]},
     {"id": "hard_master", "title": "苛刻的主人", "prompt": "{name} 在 {target} 家幫傭，常常挨打挨餓。期滿還有好幾年。", "scope": "player_family", "chance": 0.06, "cooldown_years": 6,
      "conditions": {"in_service": true},
      "target": {"pick": "head", "conditions": {"any": [{"trait": "cruel"}, {"trait": "wrathful"}, {"trait": "greedy"}]}},

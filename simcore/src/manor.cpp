@@ -79,7 +79,7 @@ void World::setFree(Id id) {
 
 void World::sendToService(Id servant, Id master, int years) {
     Person& s = people_[servant];
-    if (s.household == kNone || master == kNone || people_[master].household == kNone) return;
+    if (!s.alive() || s.household == kNone || master == kNone || people_[master].household == kNone) return;
     if (households_[s.household].head == servant || s.home != kNone) return;  // a head cannot leave to serve
     s.home = s.household;
     s.serviceEnd = day_ + years * kDaysPerYear;

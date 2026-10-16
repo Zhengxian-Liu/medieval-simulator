@@ -204,6 +204,75 @@ struct VillageMap {
 
 enum class LandPick { CustomaryOnly, CustomaryFirst, FreeFirst };
 
+// The contested ledger (design/contested.md): what only so many can have, what each house is after,
+// and who owes whom.
+// A village post: the reeve (elected every three years), the ale-taster and the hayward (every Michaelmas).
+struct Office {
+    std::string id, name;
+    Id holder = kNone;
+    int until = 0;       // year the term ends
+    std::string how;     // "選上的", "領主指派的"
+};
+// A place someone can be taken into: a craftsman's apprentice (one at a time) or a servant in a bigger house.
+struct Place {
+    std::string kind;    // apprentice | service
+    Id master = kNone;   // household
+    std::string trade;   // apprentice: the craft taught
+    int slots = 1;
+};
+// Something a household is after. kind: parcel (object = parcel id), office (office = its id),
+// match (object = the person they want for subject), place (object = master household, subject = who goes).
+struct Want {
+    Id id = kNone;
+    Id house = kNone;
+    std::string kind;
+    Id object = kNone;
+    Id subject = kNone;
+    std::string office;
+    std::string why;     // "兒子多，地不夠分"
+    int since = 0;
+    Id news = kNone;     // the talk of it going round the village
+    bool open = true;
+    std::string outcome; // how it ended: "到手了", "讓里夫家搶走了", "放下了"
+    int ended = -1;
+};
+// A good turn not yet repaid: the debtor owes the creditor. Fades over the years; spent when called in.
+struct Favour {
+    Id debtor = kNone, creditor = kNone;  // people
+    double weight = 0;
+    int day = 0;
+    std::string why;
+};
+// The entry fine a new holder owes the lord for taking up the land.
+struct EntryFine {
+    Id house = kNone;
+    Id heir = kNone;
+    double amount = 0;
+    int due = 0;
+    bool extended = false;  // the lord already gave more time once
+};
+// What the head asked someone for, and how they answered (design/contested.md 3).
+struct AskOption {
+    std::string ask;     // sell_parcel | vote | lend | match | apprentice | speak | stand_aside
+    std::string label;   // "請他把北田坡上那 3 畝賣給你（192 便士）"
+    Id object = kNone, subject = kNone;
+    std::string office;
+    bool open = true;
+    std::string why;     // when closed
+};
+struct AskResult {
+    int day = -1;
+    Id who = kNone;
+    std::string ask, office;
+    Id object = kNone, subject = kNone;
+    int answer = 0;      // 1 yes, 2 on a condition, 3 no, 4 offended
+    std::string text;    // what they said
+    std::string demand;  // on a condition: what they want for it
+    double demandMoney = 0;
+    Id demandParcel = kNone;
+    std::vector<std::string> levers;  // what the head can still try: gift | favour | hook | meet
+};
+
 struct Item {
     Id id = kNone;
     std::string type;
@@ -281,6 +350,7 @@ struct News {
     std::string cause;       // for a death
     int age = 0;
     std::string subjectName, otherName, subjectFirst, otherFirst;
+    std::string thing;       // what it is about, said as a phrase: "北田坡上那 3 畝" (wants, contests, posts)
     bool again = false;      // the same thing has happened to them before (a mother losing another baby)  // as they were called that day (no "老"/"已故的" for the newly dead)
     std::set<Id> heard;      // households that know
     std::vector<Id> came;    // who turned out for it (a wake, a wedding)
@@ -516,6 +586,20 @@ public:
     std::string newsText(const News& n) const;
     std::string villageTalk() const;  // what the family heard last season, for the glance
     std::string tellerName(Id teller) const;  // "兒子威廉" for the family's own, the full name for others
+    // contest.cpp: the contested ledger
+    const std::vector<Office>& offices() const { return offices_; }
+    const Office* office(const std::string& id) const;
+    const std::vector<Place>& places() const { return places_; }
+    int placeTaken(const Place& pl) const;  // how many of its slots are filled
+    bool placeOpen(Id master, const std::string& kind) const;
+    bool officeEligible(Id who, const std::string& id) const;
+    const std::vector<Want>& wants() const { return wants_; }
+    std::string wantThing(const Want& wt) const;   // "北田坡上那 3 畝", "莊頭的位子", "替威廉娶艾瑪"
+    bool familyKnows(const Want& wt) const;        // the family's own, or the talk of it reached them
+    double favourOwed(Id debtor, Id creditor) const;
+    const std::vector<EntryFine>& entryFines() const { return fines_; }
+    std::vector<AskOption> asksFor(Id target);
+    const AskResult& lastAsk() const { return lastAsk_; }
 
     // --- player interface
     void issue(const Command& c);
@@ -563,6 +647,15 @@ private:
     std::vector<Parcel> parcels_;
     VillageMap map_;
     std::vector<Id> lastMoved_;
+    std::vector<Office> offices_;
+    std::vector<Place> places_;
+    std::vector<Want> wants_;
+    std::vector<Favour> favours_;
+    std::vector<EntryFine> fines_;
+    std::map<std::pair<Id, std::string>, Id> promises_;  // (voter, office) -> the man they promised their vote
+    std::map<std::tuple<Id, std::string, Id>, int> asked_;  // (who, ask, object) -> day it may be asked again
+    AskResult lastAsk_;
+    Rng rngContest_;
     Id playerDynasty_ = kNone;
     Id playerHousehold_ = kNone;
     Id lord_ = kNone;
@@ -683,7 +776,7 @@ private:
     Id pickAcquaintance(Id who, Rng& rng) const;  // someone they know, the better known the likelier
     void seedAcquaintance();
     void fadeAcquaintance();
-    Id addNews(const std::string& kind, Id subject, Id other, Id house, Id deed = kNone);
+    Id addNews(const std::string& kind, Id subject, Id other, Id house, Id deed = kNone, const std::string& thing = "");
     void monthlyNews();
     void learnNews(News& n, Id household, Id teller, double link);
     void whisper(Id holder, Id deed, Id culprit, Id source);
@@ -730,6 +823,33 @@ private:
     Id findLender(const Household& h) const;
     void reletVacant();
 
+    void moveParcel(Id parcel, Id to, const std::string& how);  // one named parcel, whole
+    // contest.cpp
+    void setupOffices();
+    void chooseOfficers();       // Michaelmas: the ale-taster and the hayward
+    void setOffice(const std::string& id, Id holder, const std::string& how);
+    void officeVacated(Id person);
+    bool takePlace(Id master, const std::string& kind, Id who);
+    void yearlyWants();          // each head's wants: let go of the stale, take up new ones
+    Id addWant(Id house, const std::string& kind, Id object, Id subject, const std::string& office, const std::string& why);
+    void settleWants(const std::string& kind, Id object, const std::string& office, Id winnerHouse, const std::string& how);
+    void dropWant(Want& wt, const std::string& outcome);
+    Want* wantOf(Id house, const std::string& kind, Id object, const std::string& office);
+    std::vector<Id> rivalsFor(const std::string& kind, Id object, const std::string& office, Id except) const;
+    void allotVacant();          // the steward lets vacant parcels to those after them
+    void fillPlaces();           // masters take on whom they like from those asking
+    void oweFavour(Id debtor, Id creditor, double weight, const std::string& why);
+    void callInFavour(Id debtor, Id creditor);
+    void chargeEntryFine(Household& h, Id heir, Id dead);
+    void monthlyFines();
+    void resolveFine(EntryFine& f);
+    void forfeitForFine(Household& h, double share);
+    void ask(Id who, const std::string& what, Id object, Id subject, const std::string& office, const std::string& lever);
+    Id bestParcelWant(Id house) const;  // the parcel this house is most after, kNone if none
+    Id openApprenticeship(const std::string& trade, Id except) const;  // a master of that trade with a place free
+    EntryFine* fineOf(Id house);
+    Id fineLender(const Household& h, double amount) const;
+    void fineChoice(Household& h, const std::string& how);  // beg | borrow | forfeit (data/events/manor.json)
     // signals.cpp: typed signals and the delayed-event queue
     void emit(const Signal& s);
     void monthlyConcerns();

@@ -107,6 +107,8 @@ void World::payRent() {
         double rent = ((h.acres - h.freehold) * 5 + h.freehold + 10) * rentMult * h.rentFactor;
         if (h.head != kNone && people_[h.head].flags.count("lord_favour")) rent *= 0.7;
         if (h.head != kNone && people_[h.head].flags.count("reeve")) rent *= 0.6;  // the reeve's service is his rent
+        for (Id m : h.members)
+            if (people_[m].flags.count("hayward")) rent *= 0.85;  // and the hayward's part of his
         // Villeins pay part of their rent in labour on the lord's demesne; free tenants pay it all in coin.
         if (h.head != kNone) rent *= people_[h.head].free ? 1.15 : 0.8;
         // Short of coin, a family sells grain to the corn dealer to meet the rent, keeping enough to

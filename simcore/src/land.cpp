@@ -251,12 +251,38 @@ double World::moveLand(Id from, Id to, double acres, LandPick pick, const std::s
     syncLand(from);
     syncLand(to);
     if (to != kNone && households_[to].extinct == false) placeHouse(to);
+    // Whoever else was after these parcels has lost them (land falling back to the lord is still to be had).
+    if (to != kNone) {
+        std::vector<Id> moved = lastMoved_;
+        for (Id id : moved) settleWants("parcel", id, "", to, "到手了");
+        lastMoved_ = moved;
+    }
     double moved = acres - std::max(0.0, left);
     if (moved > 1e-6 && (from == playerHousehold_ || to == playerHousehold_) && playerHousehold_ != kNone) {
         auto who = [&](Id h) { return h == kNone ? std::string("領主手上") : dynasties_[households_[h].dynasty].surname + " 家"; };
         log(2, "  （" + movedText() + "從" + who(from) + "到了" + who(to) + "。）");
     }
     return moved;
+}
+
+void World::moveParcel(Id parcel, Id to, const std::string& how) {
+    Parcel& pc = parcels_[parcel];
+    Id from = pc.holder;
+    if (pc.gone || from == to) return;
+    pc.holder = to;
+    pc.since = day_;
+    pc.how = how;
+    if (to == kNone) pc.free = false;
+    lastMoved_ = {parcel};
+    syncLand(from);
+    syncLand(to);
+    if (to != kNone && !households_[to].extinct) placeHouse(to);
+    if (to != kNone) settleWants("parcel", parcel, "", to, "到手了");
+    lastMoved_ = {parcel};
+    if ((from == playerHousehold_ || to == playerHousehold_) && playerHousehold_ != kNone) {
+        auto who = [&](Id h) { return h == kNone ? std::string("領主手上") : dynasties_[households_[h].dynasty].surname + " 家"; };
+        log(2, "  （" + movedText() + "從" + who(from) + "到了" + who(to) + "。）");
+    }
 }
 
 void World::makeFree(Household& h, double acres) {
