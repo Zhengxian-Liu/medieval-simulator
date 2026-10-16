@@ -21,6 +21,7 @@ func build(root: Node3D, houses: Array, square: Vector2, bridge: Vector2, river_
 	_line(bridge + Vector2(0, -11), bridge + Vector2(0, -17), 0.9, 0.9)  # path continues on the far bank
 	var mat := _material(grass_mat)
 	_grass(root, houses, river_dist, river_half, rng)
+	_debris(root, houses, river_dist, river_half, rng)
 	return mat
 
 func _door(h: Array) -> Vector2:
@@ -133,3 +134,109 @@ func _grass(root: Node3D, houses: Array, river_dist: Callable, river_half: float
 		mmi.multimesh = mm
 		mmi.material_override = mat
 		root.add_child(mmi)
+
+# Ground debris (art direction round 3): pebbles, twigs, wood chips and dead leaves, one small "detail event" per
+# ~1 m², concentrated where real yards collect them: path edges, around houses, under the oaks. Tiny, low-poly,
+# coloured from the ground palette so they read as texture at the far view and as objects at the mid view.
+const DEBRIS_POINTS := 26000
+
+func _pebble_mesh(rng: RandomNumberGenerator) -> Mesh:
+	var s := SphereMesh.new()
+	s.radius = 0.05
+	s.height = 0.05
+	s.radial_segments = 6
+	s.rings = 3
+	var st := SurfaceTool.new()
+	st.create_from(s, 0)
+	var arr := st.commit_to_arrays()
+	var verts: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+	for i in verts.size():  # lumpy, flattened
+		verts[i] = verts[i] * Vector3(rng.randf_range(0.7, 1.3), 0.6, rng.randf_range(0.7, 1.3))
+	arr[Mesh.ARRAY_VERTEX] = verts
+	var m := ArrayMesh.new()
+	m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+	return m
+
+func _twig_mesh(rng: RandomNumberGenerator) -> Mesh:
+	var b := BoxMesh.new()
+	b.size = Vector3(rng.randf_range(0.15, 0.35), 0.015, 0.02)
+	return b
+
+func _chip_mesh(rng: RandomNumberGenerator) -> Mesh:
+	var b := BoxMesh.new()
+	b.size = Vector3(rng.randf_range(0.04, 0.09), 0.01, rng.randf_range(0.02, 0.04))
+	return b
+
+func _leaf_mesh(rng: RandomNumberGenerator) -> Mesh:
+	var q := QuadMesh.new()
+	q.size = Vector2(0.07, 0.05)
+	q.orientation = PlaneMesh.FACE_Y
+	return q
+
+func _debris_mat(c: Color, rough := 0.9) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = c
+	m.roughness = rough
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	return m
+
+func _debris(root: Node3D, houses: Array, river_dist: Callable, river_half: float, rng: RandomNumberGenerator) -> void:
+	var kinds := [
+		# [mesh factory, material, variants, weight on paths, weight on grass, weight near walls]
+		[_pebble_mesh, _debris_mat(Color(0.32, 0.3, 0.27)), 4, 0.55, 0.1, 0.35],
+		[_twig_mesh, _debris_mat(Color(0.22, 0.16, 0.1)), 2, 0.1, 0.3, 0.25],
+		[_chip_mesh, _debris_mat(Color(0.45, 0.36, 0.24)), 2, 0.2, 0.05, 0.3],
+		[_leaf_mesh, _debris_mat(Color(0.35, 0.25, 0.12)), 1, 0.15, 0.55, 0.1],
+	]
+	var buckets := []
+	for k in kinds:
+		var per := []
+		for v in k[2]:
+			per.append([])
+		buckets.append(per)
+	var noise := FastNoiseLite.new()
+	noise.seed = 11
+	noise.frequency = 0.2
+	for i in DEBRIS_POINTS:
+		var p := Vector2(rng.randf_range(-30, 30), rng.randf_range(-30, 30))
+		if river_dist.call(p) < river_half + 0.2:
+			continue
+		var near_wall := false
+		for h in houses:
+			var d := Vector2(p.x - h[0], p.y - h[1]).length()
+			if d < 2.6:
+				near_wall = false  # inside the footprint
+				break
+			near_wall = near_wall or d < 5.5
+		var dirt := dirt_at(p)
+		var edge := 1.0 - absf(dirt - 0.45) * 2.5  # strongest on the fringe of paths and yards
+		var density := clampf(0.25 + 0.6 * maxf(edge, 0.0) + (0.35 if near_wall else 0.0) + noise.get_noise_2d(p.x, p.y) * 0.4, 0.0, 1.0)
+		if rng.randf() > density:
+			continue
+		var w := []
+		for k in kinds:
+			w.append(k[5] if near_wall else (k[3] if dirt > 0.4 else k[4]))
+		var r: float = rng.randf() * (w[0] + w[1] + w[2] + w[3])
+		var ki := 0
+		while ki < 3 and r > w[ki]:
+			r -= w[ki]
+			ki += 1
+		var basis := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * rng.randf_range(0.6, 1.5))
+		buckets[ki][rng.randi() % kinds[ki][2]].append(Transform3D(basis, Vector3(p.x, 0.005, p.y)))
+	for ki in kinds.size():
+		for v in kinds[ki][2]:
+			var list: Array = buckets[ki][v]
+			if list.is_empty():
+				continue
+			var mm := MultiMesh.new()
+			mm.transform_format = MultiMesh.TRANSFORM_3D
+			mm.mesh = kinds[ki][0].call(rng)
+			mm.instance_count = list.size()
+			for i in list.size():
+				mm.set_instance_transform(i, list[i])
+			var mmi := MultiMeshInstance3D.new()
+			mmi.name = "Debris%d_%d" % [ki, v]
+			mmi.multimesh = mm
+			mmi.material_override = kinds[ki][1]
+			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF  # too small to matter; saves the shadow pass
+			root.add_child(mmi)
