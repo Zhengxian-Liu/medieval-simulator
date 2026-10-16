@@ -17,6 +17,9 @@ uniform float dirt_tiles = 0.4;
 global uniform float id_pass;
 uniform vec3 id_grass = vec3(0.0, 1.0, 0.0);
 uniform vec3 id_dirt = vec3(0.0, 0.0, 1.0);
+uniform float edge_width = 0.12;  // half-width of the grass->dirt blend in mask units
+uniform float edge_break = 0.55;  // noise breaking the edge into clumps
+uniform float edge_clumps = 0.0;  // share of a fine (~10 cm) octave: grass clumps / bare patches along the edge
 uniform float ground_value = 0.62;  // darkens the bright photo-scanned gravel/grass: ground should sit at ~0.25-0.35 value
 uniform vec4 river;  // centre z0, amplitude, frequency, phase (same curve as village.gd river_center)
 uniform float river_half = 3.5;
@@ -39,7 +42,8 @@ void fragment() {
 	vec2 uvd = world_pos.xz * dirt_tiles;
 	float m = texture(mask, (world_pos.xz - mask_rect.xy) / mask_rect.zw).r;
 	float n = vnoise(world_pos.xz * 0.9) * 0.6 + vnoise(world_pos.xz * 3.7) * 0.4;
-	float dirt = smoothstep(0.38, 0.62, m + (n - 0.5) * 0.55);
+	float ne = mix(n, vnoise(world_pos.xz * 9.0), edge_clumps);
+	float dirt = smoothstep(0.5 - edge_width, 0.5 + edge_width, m + (ne - 0.5) * edge_break);
 	float patchy = mix(0.78, 1.12, vnoise(world_pos.xz * 0.12));  // big soft colour patches in the grass
 	vec3 grass = texture(grass_albedo, uvg).rgb * grass_tint * patchy;
 	vec3 soil = texture(dirt_albedo, uvd).rgb * soil_tint;

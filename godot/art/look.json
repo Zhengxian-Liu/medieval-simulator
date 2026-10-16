@@ -359,9 +359,12 @@
           1.2,
           0.95,
           0.7
-        ]
+        ],
+        "edge_width": 0.2,
+        "edge_break": 0.75,
+        "edge_clumps": 0.4
       },
-      "why": "darkens bright scans so lit ground sits near 0.45; grass and soil tints carry the scene's chroma (grade stays neutral). grass_tint -8% (round 8): lit grass 0.50 -> ~0.46, inside The Guild lawn 0.45-0.60, lets thatch read level with it"
+      "why": "darkens bright scans so lit ground sits near 0.45; grass and soil tints carry the scene's chroma (grade stays neutral). grass_tint -8% (round 8): lit grass 0.50 -> ~0.46, inside The Guild lawn 0.45-0.60, lets thatch read level with it. Round 11: grass->dirt edge wider (edge_width 0.2) and broken into ~10 cm clumps (edge_clumps 0.4, edge_break 0.75): Fable r10 'hard mask with a gravel rim'. A/B ab/grass_edge"
     },
     "flat": {
       "v": {
