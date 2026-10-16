@@ -4,7 +4,7 @@
 # works in other windows, but a fresh run renders its shot. Each shot gets one retry. Exits non-zero on failure.
 cd "$(dirname "$0")/.." || exit 1
 OUT="${1:-$(cd .. && pwd)/docs/screenshots}"
-for shot in godot_far godot_mid godot_far_dusk godot_river; do
+for shot in godot_far godot_mid godot_far_dusk godot_far_night godot_river; do
 	rm -f "$OUT/$shot.png"
 	for attempt in 1 2; do
 		fill=0; case $shot in godot_far|godot_mid) fill=1;; esac  # sun-off frame for tools/art_check.py shadow masks

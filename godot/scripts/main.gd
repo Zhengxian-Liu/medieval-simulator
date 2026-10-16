@@ -20,6 +20,7 @@ var hour := 10.0
 
 var player: Node3D
 var sun: DirectionalLight3D
+var moon: DirectionalLight3D
 var environment: Environment
 var camera: Camera3D
 var village: RefCounted
@@ -125,6 +126,13 @@ func _build_lighting() -> void:
 	sun.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_AND_SKY
 	add_child(sun)
 
+	moon = DirectionalLight3D.new()
+	moon.shadow_enabled = true
+	moon.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
+	moon.rotation_degrees = Vector3(-55.0, Look.v("sun.yaw_at_noon") + 120.0, 0)
+	moon.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_ONLY
+	add_child(moon)
+
 # Sun path: rises in the east at 6:00, highest at 12:00, sets at 18:00; dims and warms near the horizon.
 func _apply_time() -> void:
 	var elevation: float = sin((hour - 6.0) / 12.0 * PI) * Look.v("sun.peak_elevation")
@@ -134,7 +142,13 @@ func _apply_time() -> void:
 	sun.light_color = Look.col("sun.color_low").lerp(Look.col("sun.color_day"), day)
 	sun.visible = elevation > -2.0
 	# The HDRI is a daytime sky: dim it (and the ambient light it gives) toward night.
-	environment.background_energy_multiplier = lerpf(0.04, 1.0, day)  # also scales the sky as GI fill
+	environment.background_energy_multiplier = lerpf(Look.v("environment.night_sky_energy"), 1.0, day)  # also scales the sky as GI fill
+	# moonlight: a dim blue key from high in the sky once the sun is down, so night stays readable
+	moon.visible = day < 0.05
+	for t in get_tree().get_nodes_in_group("torches"):
+		(t as Light3D).visible = day < float(Look.v("placement.torch").lit_below_day)
+	moon.light_energy = Look.v("sun.moon_energy")
+	moon.light_color = Look.col("sun.moon_color")
 	environment.ambient_light_energy = lerpf(Look.v("environment.ambient_energy_night"), Look.v("environment.ambient_energy_day"), day)
 
 func _apply_camera() -> void:
@@ -149,6 +163,7 @@ func _apply_camera() -> void:
 	var height: float = pose.distance * sin(deg_to_rad(pose.pitch))
 	var far_ground: float = height / sin(deg_to_rad(maxf(pose.pitch - pose.fov / 2.0, 5.0)))
 	sun.directional_shadow_max_distance = far_ground + Look.v("sun.shadow_margin")
+	moon.directional_shadow_max_distance = sun.directional_shadow_max_distance
 	camera.near = maxf(0.05, (height - 12.0) / sin(deg_to_rad(pose.pitch + pose.fov / 2.0)))  # start the depth range near the scene
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -177,7 +192,7 @@ func _capture(vp: SubViewport, dir: String) -> void:
 	DirAccess.make_dir_recursive_absolute(dir)
 	var home := player.position
 	var river := Vector3(4.0, home.y, Village.river_center(4.0) + 3.0)
-	for shot in [["godot_far", 0.0, 11.0, home], ["godot_mid", 1.0, 11.0, home], ["godot_far_dusk", 0.0, 17.6, home],
+	for shot in [["godot_far", 0.0, 11.0, home], ["godot_mid", 1.0, 11.0, home], ["godot_far_dusk", 0.0, 17.6, home], ["godot_far_night", 0.0, 22.0, home],
 			["godot_river", 0.0, 11.0, river]]:
 		var only := _user_arg("--only=")
 		if not only.is_empty() and only != shot[0]:

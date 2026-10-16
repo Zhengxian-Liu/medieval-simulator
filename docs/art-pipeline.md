@@ -95,6 +95,7 @@ Add it to `godot/tools/fetch_polyhaven.py` (Poly Haven / ambientCG, CC0 only, 1K
 - Saturation (HSL mean, whole frame) 0.28–0.35: colour from materials, neutral grade.
 - Grass speckle ≤ 2% of open-grass pixels brighter than median + 0.15.
 - Roof macro structure: 16 px-blurred std dev on the barn roof ≥ 0.05.
+- Night (`godot_far_night`, hour 22): frame mean 0.10–0.20 (moonlit, readable), torch pool ≥ 1.8x the frame mean.
 - Every texture mipmapped; every GLB within its triangle budget.
 - Screenshots: `godot/tools/capture.sh` renders each shot in its own Godot process at 3840×2160 → 1920×1080.
 
@@ -119,5 +120,6 @@ Add it to `godot/tools/fetch_polyhaven.py` (Poly Haven / ambientCG, CC0 only, 1K
 | grass tufts black / dark starbursts | culling off flips the normal on back faces, pointing them down | emit both windings with an up normal, cull back faces |
 | albedo changes barely showed on the thatch | glossy scanned roughness + specular 0.5: the roof's brightness was mostly sky reflection | per-slot `roughness_min` / `specular` in `materials.weathered` (straw 0.9 / 0.15) |
 | roof one flat plane | open-sky AO is uniform; noise patches cluster near 0.5 | bake ridge→eave position into vertex colour B (`roofs.py` "slope" → `bake.py`), shader `eave_age` + stretched bundle patches |
+| a check passed only because of an accident | the square's torch was lit all day and brightened the mid-view shadows | torches are lit only below `placement.torch.lit_below_day`; re-verify checks after any light change |
 | frame grey (saturation 0.17 vs 0.30-0.40 in references) | colour came only from desaturated scans + neutral grade | chroma lives in material tints (grass, soil, thatch, daub, timber, leaves); `checks.*.saturation` 0.28-0.35 |
 | fixed check rectangles broke when the sun moved | shadows move with the sun | `capture.sh` also renders far/mid with the sun off; `art_check.py` classifies lit/shadow pixels from the pair |

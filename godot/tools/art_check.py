@@ -131,6 +131,19 @@ def main():
             ok &= passed
             rows.append(("value", f"{shot}.{name}", f"{m:.3f}", f"{spec['min']}-{spec['max']}", passed, leaf["why"]))
 
+    night = SHOTS / "godot_far_night.png"
+    for name, leaf in CHECKS.get("night", {}).items():
+        if name.startswith("_"):
+            continue
+        spec = leaf["v"]
+        if spec.get("measure") == "torch_pool":
+            m = region_mean(night, spec["rect"]) / max(region_mean(night, [0, 0, 1920, 1080]), 1e-3)
+        else:
+            m = region_mean(night, spec["rect"])
+        passed = spec["min"] <= m <= spec["max"]
+        ok &= passed
+        rows.append(("value", f"night.{name}", f"{m:.3f}", f"{spec['min']}-{spec['max']}", passed, leaf["why"]))
+
     imports = list((GODOT / "assets").rglob("*.jpg.import")) + list((GODOT / "assets").rglob("*.png.import"))
     no_mips = [p for p in imports if "mipmaps/generate=true" not in p.read_text()]
     ok &= not no_mips

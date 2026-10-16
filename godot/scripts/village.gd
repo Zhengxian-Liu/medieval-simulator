@@ -173,8 +173,10 @@ func build(root: Node3D) -> Node3D:
 	_add(root, _cyl(0.05, 0.07, 1.6, 6), "iron", Vector3(1.5, 0.8, 1.5))
 	var torch := OmniLight3D.new()
 	torch.light_color = Color(1.0, 0.6, 0.25)
-	torch.light_energy = 2.0
-	torch.omni_range = 8.0
+	var tl: Dictionary = Look.v("placement.torch")
+	torch.light_energy = tl.energy
+	torch.add_to_group("torches")  # lit only when it gets dark (main.gd _apply_time)
+	torch.omni_range = tl.range
 	torch.shadow_enabled = true
 	torch.position = Vector3(1.5, 1.75, 1.5)
 	root.add_child(torch)

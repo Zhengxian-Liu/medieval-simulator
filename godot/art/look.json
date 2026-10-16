@@ -96,8 +96,12 @@
       "why": "HDRI sky partly desaturated: under SDFGI the sky IS the shadow fill; full blue gave shadows a blue cast (art check shadow_tint 1.25)"
     },
     "sky_energy": {
-      "v": 0.22,
+      "v": 0.26,
       "why": "sky brightness = shadow fill under SDFGI; tuned so shadowed ground sits at 0.20-0.26 (art check)"
+    },
+    "night_sky_energy": {
+      "v": 0.25,
+      "why": "sky (= GI fill) at night: readable moonlit night, not black (user default 2026-10-16)"
     }
   },
   "sun": {
@@ -148,6 +152,18 @@
     "shadow_margin": {
       "v": 3.0,
       "why": "metres added to the fitted shadow range beyond the farthest visible ground"
+    },
+    "moon_energy": {
+      "v": 0.7,
+      "why": "moonlight key at night; torches stay the brightest light"
+    },
+    "moon_color": {
+      "v": [
+        0.62,
+        0.72,
+        1.0
+      ],
+      "why": "cool moonlight"
     }
   },
   "materials": {
@@ -193,8 +209,8 @@
         "v": {
           "tint": [
             1.0,
-            0.9,
-            0.76
+            0.86,
+            0.68
           ],
           "dirt_height": 1.1,
           "moss": 0.0,
@@ -442,6 +458,14 @@
         ]
       },
       "why": "albedo before the ground_value darkening shared with the ground, so debris sits in the ground's value range (review 4: chips were bright orange flecks)"
+    },
+    "torch": {
+      "v": {
+        "energy": 6.0,
+        "range": 9.0,
+        "lit_below_day": 0.6
+      },
+      "why": "torches are lit from dusk (day factor < 0.6) and stay the brightest light at night; unlit by day (a lit torch brightened noon shadows)"
     }
   },
   "checks": {
@@ -619,6 +643,36 @@
         "foliage": 35000
       },
       "why": "max triangles per GLB on an M2 Pro"
+    },
+    "night": {
+      "_why": "godot_far_night (hour 22): readable night",
+      "mean": {
+        "v": {
+          "rect": [
+            0,
+            0,
+            1920,
+            1080
+          ],
+          "min": 0.1,
+          "max": 0.2
+        },
+        "why": "night readable like Baldur's Gate 2 (~0.15), not black (user default)"
+      },
+      "torch_brightest": {
+        "v": {
+          "measure": "torch_pool",
+          "rect": [
+            650,
+            300,
+            350,
+            350
+          ],
+          "min": 1.8,
+          "max": 10.0
+        },
+        "why": "mean of the torch's light pool / frame mean: the torch is clearly the brightest area at night"
+      }
     }
   }
 }
