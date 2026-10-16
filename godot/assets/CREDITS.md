@@ -19,4 +19,4 @@ All assets from [Poly Haven](https://polyhaven.com), licence CC0 1.0 (public dom
 - `models/pine_sapling_small/`: [pine_sapling_small](https://polyhaven.com/a/pine_sapling_small) (1K glTF)
 - `sky.hdr`: [kloofendal_48d_partly_cloudy_puresky](https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky) (2K HDRI)
 
-Generated in this repo (no third-party source): `models/trees/` by `tools/make_trees.py`.
+Generated in this repo (no third-party source): `models/trees/` by `tools/make_trees.py`, `models/houses/` by `tools/make_houses.py`.

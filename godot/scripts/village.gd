@@ -8,7 +8,7 @@ const BED_DEPTH := 1.5
 
 const COLORS := {
 	grass = Color("4a5a2a"), stone = Color("6b6862"), plaster = Color("cfc2a6"),
-	timber = Color("4a3220"), thatch = Color("8a6d3b"), iron = Color("222222"), cloth = Color("7a2e24"), riverbed = Color("4d4434"),
+	timber = Color("4a3220"), thatch = Color("8a6d3b"), iron = Color("222222"), cloth = Color("7a2e24"), riverbed = Color("4d4434"), dark = Color("15110d"),
 }
 
 # Poly Haven glTF sets: every mesh piece becomes one variant (see assets/CREDITS.md).
@@ -38,11 +38,21 @@ func _load_variants(sets: Array) -> Array:
 func _collect(n: Node, xf: Transform3D, out: Array) -> void:
 	var t: Transform3D = xf * n.transform if n is Node3D else xf
 	if n is MeshInstance3D:
+		_fix_cutout(n.mesh)
 		var box: AABB = t * n.get_aabb()
 		var base := Vector3(box.get_center().x, box.position.y, box.get_center().z)
 		out.append([n.mesh, Transform3D(t.basis, t.origin - base)])
 	for c in n.get_children():
 		_collect(c, t, out)
+
+# Leaf cards use alpha scissor 0.5; mipmapping averages alpha below that at a distance and the leaves vanish
+# (shrubs disappeared in the far view). A lower threshold plus alpha-to-coverage keeps them solid.
+func _fix_cutout(mesh: Mesh) -> void:
+	for i in mesh.get_surface_count():
+		var m := mesh.surface_get_material(i) as BaseMaterial3D
+		if m and m.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR:
+			m.alpha_scissor_threshold = 0.2
+			m.alpha_antialiasing_mode = BaseMaterial3D.ALPHA_ANTIALIASING_ALPHA_TO_COVERAGE
 
 func _place(root: Node3D, sets: Array, pos: Vector3, scale: float, material: Material = null) -> void:
 	var variants := _load_variants(sets)
@@ -52,6 +62,8 @@ func _place(root: Node3D, sets: Array, pos: Vector3, scale: float, material: Mat
 	var spin := Transform3D(Basis(Vector3.UP, _rng.randf() * TAU).scaled(Vector3.ONE * scale), pos)
 	mi.transform = spin * v[1]
 	mi.material_override = material
+	if material:  # foliage cards are single-sided geometry; cast from both faces or the shadow is mostly holes
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_DOUBLE_SIDED
 	root.add_child(mi)
 var _mats := {}
 
@@ -112,7 +124,7 @@ func build(root: Node3D) -> Node3D:
 	_river(root)
 	_add(root, _box(Vector3(2.4, 0.25, 9.0)), "timber", Vector3(3, 0.35, RIVER_Z))  # bridge
 
-	var houses := [[-9, 6, 10, "plaster"], [6, 9, -15, "timber"], [-3, 19, 80, "plaster"], [15, -3, 40, "plaster"]]
+	var houses := [[-9, 6, 10, "cottage_a"], [6, 9, -15, "barn"], [-3, 19, 80, "cottage_b"], [15, -3, 40, "cottage_a"]]
 	for h in houses:
 		_house(root, Vector3(h[0], 0, h[1]), h[2], h[3])
 
@@ -197,21 +209,18 @@ func _river(root: Node3D) -> void:
 	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(water)
 
-func _house(root: Node3D, pos: Vector3, yaw: float, wall: String) -> void:
-	var h := Node3D.new()
-	h.position = pos
-	h.rotation_degrees.y = yaw
-	root.add_child(h)
-	var w := 6.0
-	var d := 4.5
-	var ht := 3.2
-	_add(h, _box(Vector3(w + 0.3, 0.6, d + 0.3)), "stone", Vector3(0, 0.3, 0))
-	_add(h, _box(Vector3(w, ht, d)), wall, Vector3(0, 0.6 + ht / 2.0, 0))
-	# Closed gable roof: prism ridge along X with eaves overhang.
-	var roof := PrismMesh.new()
-	roof.size = Vector3(d + 0.8, d * 0.55, w + 0.6)
-	_add(h, roof, "thatch", Vector3(0, 0.6 + ht + d * 0.275, 0), 90)
-	_add(h, _box(Vector3(0.9, 1.8, 0.08)), "timber", Vector3(0, 1.5, d / 2.0 + 0.04))
+# Houses come from tools/make_houses.py; each surface is named after a material slot and gets our textured material.
+func _house(root: Node3D, pos: Vector3, yaw: float, variant: String) -> void:
+	var scene: Node3D = load("res://assets/models/houses/%s.glb" % variant).instantiate()
+	scene.position = pos
+	scene.rotation_degrees.y = yaw
+	root.add_child(scene)
+	for mi in scene.find_children("*", "MeshInstance3D", true, false):
+		var mesh: Mesh = mi.mesh
+		for i in mesh.get_surface_count():
+			var slot := mesh.surface_get_material(i).resource_name
+			assert(slot in COLORS, "house %s has unknown material slot %s" % [variant, slot])
+			mi.set_surface_override_material(i, _mat(slot))
 
 func _stall(root: Node3D, pos: Vector3) -> void:
 	_add(root, _box(Vector3(2.4, 0.08, 1.4)), "cloth", pos + Vector3(0, 2.2, 0))
