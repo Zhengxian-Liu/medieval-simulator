@@ -16,6 +16,7 @@ def thatch_roof(W, D, TOP, PITCH_RISE):
     pitch = math.atan2(PITCH_RISE, half)
     over_eave, over_gable, thick = 0.55, 0.45, 0.4
     slope = math.hypot(half, PITCH_RISE) + over_eave
+
     length = W + 2 * over_gable
     nu, nv = 56, 26
     for side in (-1, 1):
@@ -61,6 +62,11 @@ def thatch_roof(W, D, TOP, PITCH_RISE):
                 f.normal_flip()
         # local frame: x along ridge, y down-slope, z out of the roof; strands follow y (down-slope)
         rot = Euler((-pitch, 0, 0 if side > 0 else math.pi))  # tilt local +y down-slope, then face it to its side
+        # "slope" attribute: 0 at the ridge .. 1 at the eave, plus per-bundle lumps; baked into colour B (bake.py)
+        # so the shader can age the lower roof (darker, mossier) and give it bundle-scale relief (review 4)
+        slope_layer = bm.verts.layers.float.new("slope")
+        for v in bm.verts:
+            v[slope_layer] = min(1.0, max(0.0, v.co.y / slope)) * (0.85 + 0.15 * noise.noise(Vector((v.co.x * 2.2, v.co.y * 1.1, side))))
         obj = new_object(f"thatch_{side}", bm, "thatch", grain_axis=1, location=(0, 0, TOP + PITCH_RISE + 0.05), rotation=rot)
         # no per-course UV offsets: their seams read as corduroy stripes (review 3); the weathered shader's detile
         # sample and patch noise break the period instead

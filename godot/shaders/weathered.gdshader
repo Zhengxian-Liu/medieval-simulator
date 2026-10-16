@@ -16,12 +16,16 @@ uniform float ao_strength = 1.0;  // vertex colour R = Cycles-baked AO, G = conv
 uniform float splash = 0.4;      // strength of ground splash dirt
 uniform float grime = 0.15;      // grime in baked-AO crevices
 uniform float edge_wear = 0.6;   // lightening on baked convex edges
+uniform float roughness_min = 0.0;  // floor on the scanned roughness (straw, daub and rough stone are matte)
+uniform float specular = 0.5;       // F0 control; dry organic materials reflect little
+uniform float eave_age = 0.0;   // thatch: darkening toward the eave (vertex colour B = ridge..eave), wetter older straw
 uniform float detile = 0.0;  // blend in a second, rescaled sample: hides the texture repeat (thatch)
 
 varying vec3 world_pos;
 varying vec3 world_normal;
 varying float baked_ao;
 varying float edge;
+varying float slope_pos;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float vnoise(vec2 p) {
@@ -34,7 +38,8 @@ void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 	baked_ao = COLOR.r;
-	edge = COLOR.g;  // convexity baked by tools/blender/bake.py
+	edge = COLOR.g;
+	slope_pos = COLOR.b;  // convexity baked by tools/blender/bake.py
 }
 
 void fragment() {
@@ -50,6 +55,14 @@ void fragment() {
 	c = mix(c, dirt_color, dirt * splash);
 	float up = smoothstep(0.45, 0.9, world_normal.y);
 	c = mix(c, moss_color, moss * up * smoothstep(0.5, 0.78, n));
+	// ridge-to-eave ageing: lower courses darker and mossier, broken into bundle-size patches
+	// plus bundle-scale (~0.5-1 m) tonal patches: real thatch is laid in bundles of differing age and density
+	float patches = vnoise(world_pos.xz * 1.1 + world_pos.y * 0.7) * 0.65 + vnoise(world_pos.xz * 2.7 - world_pos.y) * 0.35;
+	patches = smoothstep(0.3, 0.7, patches);  // value noise clusters near 0.5: stretch to full range so patches read
+	float age = eave_age * smoothstep(0.15, 1.0, slope_pos) * mix(0.5, 1.2, patches);
+	c *= mix(1.0, mix(0.45, 1.35, patches), step(0.001, slope_pos) * eave_age);
+	c = mix(c, c * 0.45, clamp(age, 0.0, 1.0));
+	c = mix(c, moss_color, clamp(age * moss * 0.8, 0.0, 1.0) * smoothstep(0.45, 0.75, patches));
 	ALBEDO = c;
 	AO = mix(1.0, baked_ao, ao_strength);  // occludes ambient/GI light only, so direct sun still lands on the surface
 	AO_LIGHT_AFFECT = 0.25;                  // and a little on direct light: crevices stay dark at noon too
@@ -58,6 +71,7 @@ void fragment() {
 	// worn edges: lighter, drier, slightly rougher where beams, planks and stones turn a corner (breaks up flat shapes)
 	float wear = smoothstep(0.25, 0.8, edge) * smoothstep(0.3, 0.7, n);
 	ALBEDO = mix(ALBEDO, ALBEDO * 1.45 + vec3(0.03), wear * edge_wear);
-	ROUGHNESS = clamp(texture(rough_tex, UV).r * mix(0.85, 1.15, n) + wear * 0.1, 0.0, 1.0);
+	ROUGHNESS = clamp(max(texture(rough_tex, UV).r * mix(0.85, 1.15, n), roughness_min) + wear * 0.1, 0.0, 1.0);
+	SPECULAR = specular;
 	NORMAL_MAP = texture(normal_tex, UV).rgb;
 }

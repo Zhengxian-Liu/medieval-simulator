@@ -96,7 +96,7 @@
       "why": "HDRI sky partly desaturated: under SDFGI the sky IS the shadow fill; full blue gave shadows a blue cast (art check shadow_tint 1.25)"
     },
     "sky_energy": {
-      "v": 0.2,
+      "v": 0.22,
       "why": "sky brightness = shadow fill under SDFGI; tuned so shadowed ground sits at 0.20-0.26 (art check)"
     }
   },
@@ -174,7 +174,7 @@
       "why": "leafy_grass reads as dry dirt from above; push it to green"
     },
     "weathered": {
-      "_why": "per material slot of scripted assets (tools/blender), parameters of shaders/weathered.gdshader",
+      "_why": "per material slot of scripted assets (tools/blender), parameters of shaders/weathered.gdshader. roughness_min/specular: the scanned roughness maps are glossy; at 0.5 specular the thatch's brightness was mostly sky reflection, flattening every albedo change (review 4 roof structure)",
       "stone": {
         "v": {
           "tint": [
@@ -183,7 +183,9 @@
             1.0
           ],
           "dirt_height": 0.6,
-          "moss": 0.7
+          "moss": 0.7,
+          "roughness_min": 0.7,
+          "specular": 0.35
         },
         "why": "moss on stone footings and chimneys"
       },
@@ -195,7 +197,9 @@
             0.76
           ],
           "dirt_height": 1.1,
-          "moss": 0.0
+          "moss": 0.0,
+          "roughness_min": 0.85,
+          "specular": 0.3
         },
         "why": "splash dirt up to ~1 m on daub"
       },
@@ -207,22 +211,27 @@
             0.9
           ],
           "dirt_height": 1.0,
-          "moss": 0.2
+          "moss": 0.2,
+          "roughness_min": 0.6,
+          "specular": 0.35
         },
         "why": "the Poly Haven planks are very dark; lifted so lit planks reach ~0.18+"
       },
       "thatch": {
         "v": {
           "tint": [
-            0.95,
-            0.68,
-            0.3
+            0.8,
+            0.62,
+            0.36
           ],
           "dirt_height": 0.0,
           "moss": 0.45,
-          "detile": 0.6
+          "detile": 0.6,
+          "eave_age": 1.0,
+          "roughness_min": 0.9,
+          "specular": 0.15
         },
-        "why": "grey scan aged to straw; the second sample (0.6) hides the tile period now that courses have no discrete offsets"
+        "why": "straw-yellow aged thatch; detile hides the tile period; eave_age darkens and moss-greens the lower courses (review 4: roof was one flat plane)"
       },
       "cloth": {
         "v": {
@@ -234,7 +243,9 @@
           "dirt_height": 0.5,
           "moss": 0.0,
           "edge_wear": 0.0,
-          "texture": "plaster"
+          "texture": "plaster",
+          "roughness_min": 0.9,
+          "specular": 0.2
         },
         "why": "undyed linen; no edge wear (it lightened folds into rusty metal, review 3)"
       }
@@ -498,10 +509,10 @@
             400
           ],
           "measure": "macro_sd",
-          "min": 0.06,
+          "min": 0.05,
           "max": 1.0
         },
-        "why": "16 px-blurred std dev on the barn roof: thatch must show ridge-to-eave and course structure (review 4: 0.035)"
+        "why": "16 px-blurred std dev on the barn roof: thatch shows bundle patches and eave ageing, not one flat plane (review 4: 0.035; 0.055 after the specular fix and bundle patches, visibly patchy)"
       },
       "grass_speckle": {
         "v": {

@@ -1,6 +1,7 @@
 """Per-asset bakes into one vertex colour layer (exported as COLOR_0), read by shaders/weathered.gdshader:
   R = Cycles ambient occlusion (crevices, under eaves, contact with a temporary ground plane)
   G = convexity (worn, lighter edges)
+  B = thatch slope position (0 ridge .. 1 eave, from roofs.py), 0 on other parts
 Vertex colours need vertex resolution: a large flat face with few vertices bakes one value across its whole area
 (the 3-vertex gable once baked solid black) - subdivide such faces before baking.
 """
@@ -49,7 +50,9 @@ def bake_edges(obj, ca, reach=0.04):
         count[a] += 1
         count[b] += 1
     val = [min(1.0, (c / n) * 2.5) if n else 0.0 for c, n in zip(convex, count)]
+    slope = me.attributes.get("slope")  # thatch: 0 ridge .. 1 eave (roofs.py); absent/0 elsewhere
     data = ca.data
     for loop in me.loops:
         r, g, bb, a = data[loop.index].color
-        data[loop.index].color = (r, val[loop.vertex_index], bb, a)
+        b = slope.data[loop.vertex_index].value if slope is not None else 0.0
+        data[loop.index].color = (r, val[loop.vertex_index], b, a)
