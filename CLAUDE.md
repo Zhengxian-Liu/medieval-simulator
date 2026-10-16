@@ -36,3 +36,8 @@ Visual check: far-iso and close-third-person screenshots into `Saved/Screenshots
 ```
 "$UE/Engine/Binaries/Mac/UnrealEditor.app/Contents/MacOS/UnrealEditor" "$PWD/MedievalSim.uproject" -game -CaptureShots -windowed -ResX=1920 -ResY=1080 -unattended
 ```
+
+## Web version (`web/`, three.js) — candidate replacement for the UE project
+Decision 2026-10-16: moving toward Blender + three.js (lighter iteration); camera zooms from iso overview to mid range, not over-the-shoulder. UE files stay until the switch is confirmed.
+- Camera logic: `web/src/cameraZoom.ts` (pure, tested in `web/e2e/camera-zoom.spec.ts`).
+- Run: `cd web && npm run dev`. E2E + screenshots (`docs/screenshots/web_far.png`, `web_mid.png`): `cd web && npx playwright test`.
