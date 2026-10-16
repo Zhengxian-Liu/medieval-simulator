@@ -1,12 +1,12 @@
-// River surface: colour by water depth (shallow -> deep) plus foam where the water is shallow at the shore.
+// River surface: colour by water depth (shallow -> deep) over the visible bed. No shore foam: a constant-width
+// foam ribbon read as cheap real-time (art review 2026-10-16); the shore reads through the wet-mud ground band.
 shader_type spatial;
 render_mode cull_disabled;
 
 uniform sampler2D depth_tex : hint_depth_texture, filter_linear_mipmap;
-uniform vec3 shallow : source_color = vec3(0.30, 0.52, 0.48);
+uniform vec3 shallow : source_color = vec3(0.22, 0.34, 0.30);
 uniform vec3 deep : source_color = vec3(0.03, 0.13, 0.16);
 uniform float depth_scale = 1.4;  // metres to reach the deep colour
-uniform float foam_width = 0.12;  // metres of water depth that still shows foam; shallows are 0.35 m, so it hugs the waterline
 
 void fragment() {
 	float d = texture(depth_tex, SCREEN_UV).r;
@@ -14,14 +14,8 @@ void fragment() {
 	behind.xyz /= behind.w;
 	float depth = max(VERTEX.z - behind.z, 0.0);  // view space, metres of water along the view ray
 	float k = clamp(depth / depth_scale, 0.0, 1.0);
-
-	vec3 world = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
-	float ripple = 0.5 + 0.5 * sin(world.x * 2.3 + TIME * 1.6) * sin(world.z * 3.1 - TIME * 1.1);
-	// Broken band: noise from two ripples so the edge is not a clean line.
-	float foam = smoothstep(0.35, 0.9, (1.0 - depth / foam_width) + (ripple - 0.5) * 0.6);
-
-	ALBEDO = mix(mix(shallow, deep, k), vec3(0.92), foam);
-	ALPHA = mix(0.65, 0.97, k) + foam;
-	ROUGHNESS = mix(0.04, 0.6, foam);
+	ALBEDO = mix(shallow, deep, k);
+	ALPHA = mix(0.8, 0.97, k);
+	ROUGHNESS = 0.12;
 	SPECULAR = 0.6;
 }

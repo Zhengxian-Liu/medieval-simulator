@@ -90,7 +90,7 @@ func _build_lighting() -> void:
 	# The user preferred the Cycles look; ACES plus a contrast boost made colours loud and edges hard.
 	env.tonemap_mode = Environment.TONE_MAPPER_AGX
 	env.tonemap_white = 16.0
-	env.tonemap_exposure = 1.55
+	env.tonemap_exposure = 1.0
 	env.adjustment_enabled = true  # tuned to the Cycles frames by measurement (docs/screenshots/match_cycles_*)
 	env.adjustment_contrast = 1.1
 	env.adjustment_saturation = 1.0
@@ -98,12 +98,13 @@ func _build_lighting() -> void:
 	env.ssil_radius = 3.0
 	env.sdfgi_use_occlusion = true
 	env.sdfgi_enabled = true
-	env.sdfgi_energy = 4.0  # sky + bounce fill: matched by eye to the Cycles reference (docs/screenshots/render_compare_*), where shaded walls stay readable
+	env.sdfgi_energy = 1.8  # sun:ambient ~4:1 (Fable art review): strong key, modest fill, real darks under eaves
 	env.ssao_enabled = true
-	env.ssao_radius = 1.5
-	env.ssao_intensity = 2.5  # strong but soft contact darkening (art direction, iteration 1); baked AO covers crevices
-	env.glow_enabled = true
-	env.glow_intensity = 0.3
+	env.ssao_radius = 0.6
+	env.ssao_intensity = 3.5
+	env.ssao_power = 2.0  # tight contact occlusion at bases, not a wide haze; baked AO covers crevices
+	env.ambient_light_sky_contribution = 0.5  # half neutral-grey fill: the blue HDRI tinted every shadow blue-grey
+	env.ambient_light_color = Color(0.5, 0.5, 0.5)
 	var we := WorldEnvironment.new()
 	we.environment = env
 	environment = env
@@ -111,8 +112,11 @@ func _build_lighting() -> void:
 
 	sun = DirectionalLight3D.new()
 	sun.shadow_enabled = true
-	sun.light_angular_distance = 1.5  # sun disc size: soft penumbrae that widen with distance (PCSS)
-	sun.directional_shadow_max_distance = 120.0
+	sun.light_angular_distance = 0.5  # the real sun: crisp shadows that soften only with distance (PCSS)
+	sun.directional_shadow_max_distance = 40.0  # resolution where the 16 m view needs it
+	sun.directional_shadow_blend_splits = true
+	sun.shadow_bias = 0.02
+	sun.shadow_normal_bias = 1.0
 	sun.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_AND_SKY
 	add_child(sun)
 
@@ -121,12 +125,12 @@ func _apply_time() -> void:
 	var elevation := sin((hour - 6.0) / 12.0 * PI) * 55.0  # noon peak 55°: long enough shadows to model form
 	sun.rotation_degrees = Vector3(-elevation, 75.0 + (hour - 12.0) * 10.0, 0)  # from the upper left of the screen (classic iso key light), so the roofs and walls we see are lit
 	var day := clampf(elevation / 20.0, 0.0, 1.0)
-	sun.light_energy = lerpf(0.0, 1.4, day)
+	sun.light_energy = lerpf(0.0, 3.2, day)
 	sun.light_color = Color(1.0, 0.55, 0.3).lerp(Color(1.0, 0.96, 0.9), day)
 	sun.visible = elevation > -2.0
 	# The HDRI is a daytime sky: dim it (and the ambient light it gives) toward night.
 	environment.background_energy_multiplier = lerpf(0.04, 1.0, day)
-	environment.ambient_light_energy = lerpf(0.08, 1.5, day)  # the HDRI is bright; full strength washed out the sun shadows
+	environment.ambient_light_energy = lerpf(0.08, 0.7, day)  # the HDRI is bright; full strength washed out the sun shadows
 
 func _apply_camera() -> void:
 	var pose := CameraZoom.evaluate(zoom)

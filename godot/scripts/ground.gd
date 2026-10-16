@@ -5,7 +5,7 @@ extends RefCounted
 
 const MASK_PX := 512
 const MASK_RECT := Rect2(-40, -40, 80, 80)  # world x/z covered by the mask
-const GRASS_CLUMPS := 9000
+const GRASS_CLUMPS := 36000  # candidate points; noise clustering keeps roughly a third
 
 var _mask := Image.create(MASK_PX, MASK_PX, false, Image.FORMAT_RF)
 
@@ -70,30 +70,40 @@ func _material(grass_mat: StandardMaterial3D) -> ShaderMaterial:
 	m.set_shader_parameter("mask_rect", Vector4(MASK_RECT.position.x, MASK_RECT.position.y, MASK_RECT.size.x, MASK_RECT.size.y))
 	return m
 
-# One clump = a fan of tapered blades, dark at the root and lighter at the tip.
-func _clump_mesh(rng: RandomNumberGenerator) -> ArrayMesh:
+# Grass tufts (art review 2026-10-16): several low variants of many fine blades, root colour = the ground's, normals
+# forced up so tufts light like the ground they grow from, clustered by noise. Reads as texture at the far view.
+const TUFT_VARIANTS := 5
+
+func _tuft_mesh(rng: RandomNumberGenerator) -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for i in 11:
+	st.set_normal(Vector3.UP)
+	var blades := rng.randi_range(15, 25)
+	var dry := rng.randf() * 0.4
+	for i in blades:
 		var a := rng.randf() * TAU
-		var h := rng.randf_range(0.22, 0.5)
-		var lean := Vector3(cos(a), 0, sin(a)) * rng.randf_range(0.05, 0.2)
-		var side := Vector3(-sin(a), 0, cos(a)) * 0.025
-		var base := Vector3(cos(a), 0, sin(a)) * rng.randf_range(0.0, 0.06)
-		var root_c := Color(0.06, 0.09, 0.03)
-		var tip_c := Color(0.32, 0.38, 0.14).lerp(Color(0.42, 0.36, 0.16), rng.randf() * 0.5)
+		var h := rng.randf_range(0.12, 0.28)
+		var lean := Vector3(cos(a), 0, sin(a)) * rng.randf_range(0.02, 0.12)
+		var side := Vector3(-sin(a), 0, cos(a)) * 0.012
+		var base := Vector3(cos(a), 0, sin(a)) * rng.randf_range(0.0, 0.09)
+		var root_c := Color(0.17, 0.2, 0.09)  # ~ the tinted grass ground albedo, so tufts grow out of it instead of sitting on it
+		var tip_c := Color(0.26, 0.31, 0.13).lerp(Color(0.38, 0.33, 0.17), dry + rng.randf() * 0.2)
 		for v in [[base - side, root_c], [base + side, root_c], [base + lean + Vector3(0, h, 0), tip_c]]:
 			st.set_color(v[1])
 			st.add_vertex(v[0])
-	st.generate_normals()
 	return st.commit()
 
 func _grass(root: Node3D, houses: Array, river_dist: Callable, river_half: float, rng: RandomNumberGenerator) -> void:
 	var mat := StandardMaterial3D.new()
 	mat.vertex_color_use_as_albedo = true
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	mat.roughness = 0.9
-	var xforms: Array[Transform3D] = []
+	mat.roughness = 0.95
+	var noise := FastNoiseLite.new()
+	noise.seed = 3
+	noise.frequency = 0.12
+	var xforms := []
+	for v in TUFT_VARIANTS:
+		xforms.append([])
 	for i in GRASS_CLUMPS:
 		var p := Vector2(rng.randf_range(-34, 34), rng.randf_range(-34, 34))
 		if river_dist.call(p) < river_half + 1.8:  # bare sand along the banks
@@ -104,20 +114,22 @@ func _grass(root: Node3D, houses: Array, river_dist: Callable, river_half: float
 		if near_house:
 			continue
 		var d := dirt_at(p)
-		# none on bare dirt, many on the fringe of paths/yards, a moderate scatter in open grass
-		var keep := 0.0 if d > 0.55 else (0.9 if d > 0.12 else 0.35)
+		if d > 0.3:
+			continue  # dead zone: no tufts on paths and their worn fringe
+		var keep := clampf(0.15 + noise.get_noise_2d(p.x, p.y) * 1.2, 0.0, 1.0)  # clusters and bare patches
 		if rng.randf() > keep:
 			continue
-		var s := rng.randf_range(0.7, 1.4)
-		xforms.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * s), Vector3(p.x, 0, p.y)))
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.mesh = _clump_mesh(rng)
-	mm.instance_count = xforms.size()
-	for i in xforms.size():
-		mm.set_instance_transform(i, xforms[i])
-	var mmi := MultiMeshInstance3D.new()
-	mmi.name = "GrassClumps"
-	mmi.multimesh = mm
-	mmi.material_override = mat
-	root.add_child(mmi)
+		var s := rng.randf_range(0.6, 1.3)
+		xforms[rng.randi() % TUFT_VARIANTS].append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * s), Vector3(p.x, 0, p.y)))
+	for v in TUFT_VARIANTS:
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = _tuft_mesh(rng)
+		mm.instance_count = xforms[v].size()
+		for i in xforms[v].size():
+			mm.set_instance_transform(i, xforms[v][i])
+		var mmi := MultiMeshInstance3D.new()
+		mmi.name = "GrassTufts%d" % v
+		mmi.multimesh = mm
+		mmi.material_override = mat
+		root.add_child(mmi)
