@@ -64,6 +64,9 @@ def masked(full_png, fill_png):
             "shadow_tint": mean([light[i][2] / max(light[i][0], 1e-3) for i in shadow]),
             "shadow_green": mean([light[i][1] / max((light[i][0] + light[i][2]) / 2, 1e-3) for i in shadow]),
             "lit_saturation": mean([_sat(rgb_full[i]) for i in lit]),
+            # key:fill = light reaching sunlit vs shadowed surfaces, linear, on the lighting-only pass (albedo-free)
+            "key_fill": (mean([(sum(light[i]) / 3) ** 2.2 for i in lit])
+                         / max(mean([(sum(light[i]) / 3) ** 2.2 for i in shadow]), 1e-6)),
             "lit_share": len(lit) / len(full), "shadow_share": len(shadow) / len(full)}
 
 

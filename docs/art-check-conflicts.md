@@ -1,0 +1,13 @@
+# Conflicting art checks (2026-10-16)
+
+Why tuning one value kept breaking another check, with the measurements. Conclusion: three targets measured the
+wrong thing; one is physics; two are content work. No target was loosened to pass.
+
+| check(s) | evidence | verdict | change |
+|---|---|---|---|
+| far.shadow_mean 0.20-0.26 vs mid.shadow_mean 0.20-0.26 | one global fill knob (sky_energy): 0.26 -> far 0.254 / mid 0.182; 0.40 -> far 0.322 / mid 0.232. Separating light from albedo (lighting-only pass): shadowed pixels in mid are dark trampled soil at 0.51x the albedo of the lit pixels; in far they are 1.88x | **inconsistent**: a displayed-value target mixes material colour into a lighting rule; no single fill satisfies both | replaced by `key_fill` (light ratio on the lighting-only pass) |
+| far.key_fill vs mid.key_fill | identical lighting gives far 2.1, mid 4.0. SDFGI resolution (min cell 0.1, 6 cascades) changed nothing (deterministic, identical numbers). Far shadow pixels are mostly the barn roof slope facing away from the sun but open to the whole sky; mid shadow pixels are ground under the barn with the sky half blocked | **geometry, not a bug**: key:fill depends on how much sky a shaded surface sees | measure key:fill on shadowed **ground** only (open-ground region per shot) - next |
+| mid.saturation (lit pixels) vs fill | fill 0.26 -> 0.248, 0.40 -> 0.210: more fill desaturates through AgX; the lit pixels in mid are dominated by the white flaking-plaster barn wall | content: the plaster scan is near white | plaster texture swap (user default) then re-measure |
+| mid.contact_floor >= 0.05 vs fill | 0.039 at fill 0.26, 0.055 at 0.40, but 0.40 breaks far.lit_mean (0.296) | coupled through the one fill knob; the black pixels are under the barn footing (skirt + baked AO + SSAO stacked) | lower stacked darkening at contacts (vertex AO strength 0.7, SSAO light_affect) instead of raising global fill |
+| dusk.lit_mean >= 0.30 | sun 17 deg high: ground lit at cos(73 deg) = 0.29 of noon; sun energy floor 0.5 -> 0.85 moved the frame 0.235 -> 0.238 | **physics**: a low sun cannot light flat ground like noon; the target was set without that | needs a decision: golden hour judged by warmth/contrast, not brightness. Proposed: `dusk.lit_mean` >= 0.22 plus a warmth check. Reported, not changed |
+| far.roof_macro, far.empty_share | not coupled to lighting | content work | thatch courses (user default), more density |
