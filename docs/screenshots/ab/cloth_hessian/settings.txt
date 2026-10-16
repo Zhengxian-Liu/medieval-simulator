@@ -1,0 +1,1 @@
+materials.weathered.cloth.dirt_height=0.5

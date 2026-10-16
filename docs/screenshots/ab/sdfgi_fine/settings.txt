@@ -1,0 +1,2 @@
+environment.sdfgi_min_cell_size=0.08
+environment.sdfgi_cascades=6

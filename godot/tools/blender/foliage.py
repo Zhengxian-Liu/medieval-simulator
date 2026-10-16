@@ -94,7 +94,7 @@ def inner(mesh, center, radius, rings=6, segs=10):
     for r in range(rings):
         for i in range(segs):
             quad = [verts[r][i], verts[r + 1][i], verts[r + 1][i + 1], verts[r][i + 1]]
-            mesh.face(quad, [uv] * 4, 1, 0.12, (sum(quad, Vector()) / 4 - center).normalized())  # deep shade
+            mesh.face(quad, [uv] * 4, 1, 0.3, (sum(quad, Vector()) / 4 - center).normalized())  # shade, not black
 
 
 def build(name, seed, height, crown, trunk_r, leaves, leaf_size):
@@ -114,12 +114,14 @@ def build(name, seed, height, crown, trunk_r, leaves, leaf_size):
                 twig_end = end + Vector((rng.uniform(-1.2, 1.2), rng.uniform(-1.2, 1.2), rng.uniform(-0.4, 1.0)))
                 limb(mesh, rng, end, twig_end, trunk_r * 0.18, 0.02, sides=5)
                 tips.append(twig_end)
-    if trunk_r:  # dark inner crown volume behind the leaves, so gaps show shade instead of sky (reads as one dense canopy)
-        for c in [crown_center] + [crown_center + Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-0.3, 0.5))) * crown * 0.35 for _ in range(4)]:
-            inner(mesh, c, crown * rng.uniform(0.28, 0.34))  # well inside the leaf shell: never visible as a facet
     # leaf clumps: points inside a lumpy ellipsoid, concentrated near its surface so the crown reads as masses
     lobes = [crown_center + Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-0.4, 0.6))) * crown * 0.45
-             for _ in range(7)] + tips
+             for _ in range(7)]
+    # inner volume in every lobe, just under its leaf shell (leaves sit 0.4-0.6 crown out): gaps show leafy shade, not
+    # ground or sky (Fable round 7: oak canopy see-through, bushes near-black holes)
+    for c in [crown_center] + lobes:
+        inner(mesh, c, crown * rng.uniform(0.34, 0.38))
+    lobes += tips
     for _ in range(leaves):
         c = rng.choice(lobes)
         d = Vector((rng.gauss(0, 1), rng.gauss(0, 1), rng.gauss(0, 0.8))).normalized()

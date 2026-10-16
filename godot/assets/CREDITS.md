@@ -9,6 +9,7 @@ Downloaded assets are CC0 1.0 (public domain): [Poly Haven](https://polyhaven.co
 - `textures/timber/`: [weathered_planks](https://polyhaven.com/a/weathered_planks) (1K: albedo, normal GL, roughness)
 - `textures/thatch/`: [thatch_roof_angled](https://polyhaven.com/a/thatch_roof_angled) (1K: albedo, normal GL, roughness)
 - `textures/rock/`: [rock_face](https://polyhaven.com/a/rock_face) (1K: albedo, normal GL, roughness)
+- `textures/cloth/`: [hessian_230](https://polyhaven.com/a/hessian_230) (1K: albedo, normal GL, roughness)
 - `models/rock_moss_set_01/`: [rock_moss_set_01](https://polyhaven.com/a/rock_moss_set_01) (1K glTF)
 - `models/rock_moss_set_02/`: [rock_moss_set_02](https://polyhaven.com/a/rock_moss_set_02) (1K glTF)
 - `models/boulder_01/`: [boulder_01](https://polyhaven.com/a/boulder_01) (1K glTF)

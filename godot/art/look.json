@@ -275,18 +275,17 @@
       "cloth": {
         "v": {
           "tint": [
-            0.62,
-            0.55,
-            0.42
+            0.72,
+            0.65,
+            0.52
           ],
           "dirt_height": 0.5,
           "moss": 0.0,
           "edge_wear": 0.0,
-          "texture": "plaster",
           "roughness_min": 0.9,
           "specular": 0.2
         },
-        "why": "undyed linen; no edge wear (it lightened folds into rusty metal, review 3)"
+        "why": "undyed coarse burlap (hessian_230); no edge wear (it lightened folds into rusty metal, review 3). Round 8: own texture instead of the plaster scan, which made the stall canvas the brightest, plaster-like surface"
       }
     },
     "weathered_common": {
@@ -317,9 +316,10 @@
           0.2
         ],
         "variation": 0.35,
-        "backlight": 0.3
+        "backlight": 0.3,
+        "interior_value": 0.55
       },
-      "why": "summer oak (~10% reflectance); per-plant variation"
+      "why": "summer oak (~10% reflectance); per-plant variation. interior_value 0.35 -> 0.55 (round 8): crowns read as rounded green masses, not black holes"
     },
     "water": {
       "v": {
@@ -345,9 +345,9 @@
         "dirt_tiles": 0.3,
         "ground_value": 0.62,
         "grass_tint": [
-          0.34,
-          0.72,
-          0.16
+          0.31,
+          0.66,
+          0.15
         ],
         "soil_tint": [
           1.2,
@@ -355,7 +355,7 @@
           0.7
         ]
       },
-      "why": "darkens bright scans so lit ground sits near 0.45; grass and soil tints carry the scene's chroma (grade stays neutral)"
+      "why": "darkens bright scans so lit ground sits near 0.45; grass and soil tints carry the scene's chroma (grade stays neutral). grass_tint -8% (round 8): lit grass 0.50 -> ~0.46, inside The Guild lawn 0.45-0.60, lets thatch read level with it"
     },
     "flat": {
       "v": {
@@ -521,6 +521,10 @@
     "debris_min_dirt": {
       "v": 0.1,
       "why": "no debris on untrampled grass except along walls"
+    },
+    "bush_clear_of_props": {
+      "v": 1.1,
+      "why": "metres from a bush to any placed prop: bushes grew through barrels and crates (round 7). ~bush radius + barrel radius"
     }
   },
   "checks": {
@@ -656,6 +660,15 @@
           "max": 0.5
         },
         "why": "lit foliage reads as green masses, not near-black holes: >= 60/255 (Fable round 7, bushes measured ~39/255). Set before tuning"
+      },
+      "cloth_value": {
+        "v": {
+          "measure": "class_luma",
+          "class": "cloth",
+          "min": 0.3,
+          "max": 0.51
+        },
+        "why": "lit stall canvas / sacks no brighter than 130/255: the canvas was the brightest surface and pulled the eye off the well (Fable round 7). Set before tuning"
       }
     },
     "mid": {

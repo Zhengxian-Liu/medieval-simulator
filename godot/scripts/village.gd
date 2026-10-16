@@ -293,12 +293,18 @@ func _house(root: Node3D, pos: Vector3, yaw: float, variant: String) -> void:
 # Props come from tools/blender/props.py; same material slots as the buildings.
 static var KEEP_OFF_PATHS: Array = Look.v("placement.keep_off_paths")
 
+var _prop_spots: Array[Vector2] = []  # where props stand, so bushes keep clear of them
+
 func _prop(root: Node3D, name: String, pos: Vector3, yaw: float) -> void:
 	if name in KEEP_OFF_PATHS and _ground.dirt_at(Vector2(pos.x, pos.z)) > 0.3:
 		return  # never block a path or yard
+	_prop_spots.append(Vector2(pos.x, pos.z))
 	_instance(root, "res://assets/models/props/%s.glb" % name, pos, yaw + _rng.randf_range(-4.0, 4.0))
 
 func _bush(root: Node3D, p: Vector3) -> void:
+	for s in _prop_spots:
+		if s.distance_to(Vector2(p.x, p.z)) < float(Look.v("placement.bush_clear_of_props")):
+			return  # a bush grown through a barrel or crate (round 7)
 	_instance(root, FOLIAGE % ("bush_%d" % _rng.randi_range(0, 2)), p, _rng.randf() * 360.0, _rng.randf_range(0.8, 1.3))
 
 func _instance(root: Node3D, path: String, pos: Vector3, yaw: float, scale := 1.0) -> void:
