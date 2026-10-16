@@ -170,6 +170,40 @@ struct Dynasty {
     int townSince = -1;
 };
 
+// A named piece of land (design/contested.md). Every acre of the village's fields is in exactly one parcel;
+// a household's acres and freehold are the sums of the parcels it holds, kept in step by land.cpp.
+struct Parcel {
+    Id id = kNone;
+    std::string place;       // where it lies: "北田坡上", "東田河灣"
+    double acres = 0;
+    bool free = false;       // held by charter
+    Id holder = kNone;       // household; kNone = in the lord's hands, waiting for a tenant
+    int field = 0;           // index into VillageMap::fields
+    std::vector<int> cells;  // map cells, y * width + x
+    int since = 0;           // day it came to its holder
+    std::string how;         // how it came to them: 祖傳, 買來, 抵債收來...
+    bool gone = false;       // merged away
+};
+
+// The village drawn as blocks (data/village.json "map"): fields cut into parcels, the other ground as zones.
+struct MapArea {
+    std::string kind, name;  // field | river | meadow | wood | common | village
+    int x = 0, y = 0, w = 0, h = 0;
+};
+struct MapPoi {
+    std::string kind, name;  // church | manor | mill | alehouse | green | well | ...
+    int x = 0, y = 0;
+};
+struct VillageMap {
+    int width = 0, height = 0;
+    std::vector<MapArea> fields, zones;
+    std::vector<MapPoi> pois;
+    MapArea houses;               // where the cottages stand
+    std::map<Id, int> houseCell;  // household -> cell
+};
+
+enum class LandPick { CustomaryOnly, CustomaryFirst, FreeFirst };
+
 struct Item {
     Id id = kNone;
     std::string type;
@@ -472,6 +506,11 @@ public:
     double closeness(Id a, Id b) const;
     double houseLink(Id ha, Id hb) const;
     const std::vector<News>& news() const { return news_; }
+    // land.cpp: the village's parcels and its map
+    const std::vector<Parcel>& parcels() const { return parcels_; }
+    const VillageMap& villageMap() const { return map_; }
+    std::string parcelName(const Parcel& pc) const;  // "北田坡上那 3 畝"
+    double vacantAcres() const;
     const std::vector<Heard>& heard() const { return heard_; }
     std::string newsText(const News& n) const;
     std::string villageTalk() const;  // what the family heard last season, for the glance
@@ -520,7 +559,9 @@ private:
     std::map<std::string, double> baseParams_;
     std::vector<ChronicleEntry> chronicle_;
     std::map<std::string, int> counters_;
-    double vacantAcres_ = 0;
+    std::vector<Parcel> parcels_;
+    VillageMap map_;
+    std::vector<Id> lastMoved_;
     Id playerDynasty_ = kNone;
     Id playerHousehold_ = kNone;
     Id lord_ = kNone;
@@ -549,6 +590,7 @@ private:
     mutable std::vector<std::string> lastSeasonNotes_;  // the ended season's, until the summary shows them
     Rng rngWants_;
     Rng rngNews_;
+    Rng rngLand_;
     std::vector<News> news_;
     std::vector<Heard> heard_;
     std::set<Id> whispered_;  // deeds whose whisper the family has already been told
@@ -671,6 +713,16 @@ private:
     void monthlyDebts();
     void yearlyDebts();
     double forfeitLand(Household& h, bool lordIsCreditor);  // acres taken; 0 if the holding is too small
+
+    // land.cpp: parcels change hands only through these, so acres and freehold always match the parcels.
+    // from/to are households, kNone for the lord's untenanted land. Returns the acres moved.
+    void setupLand();
+    double moveLand(Id from, Id to, double acres, LandPick pick, const std::string& how);
+    void makeFree(Household& h, double acres);  // turn customary acres into freehold
+    void syncLand(Id household);
+    Id splitParcel(Id parcel, double acres);    // cuts off a new parcel of `acres`; returns it
+    void placeHouse(Id household);
+    std::string movedText() const;              // the parcels the last moveLand moved, by name
     void clearDebt(Household& h);
     void promoteHeldDebt(Household& h);
     void runEventById(const std::string& id, Id person, Id target, Id deed = kNone);

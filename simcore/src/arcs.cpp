@@ -329,18 +329,12 @@ double World::forfeitLand(Household& h, bool lordIsCreditor) {
     // The lord's court cannot take back what he has granted by charter.
     if (lordIsCreditor) acres = std::min(acres, std::floor(h.acres - h.freehold));
     if (acres < 1 || h.acres < 12) return 0;
-    if (!lordIsCreditor && h.acres > 0) {
-        double fh = h.freehold * acres / h.acres;
-        h.freehold -= fh;
-        households_[people_[h.creditor].household].freehold += fh;
-    }
-    h.acres -= acres;
     if (lordIsCreditor) {
-        vacantAcres_ += acres;
-        if (lord_ != kNone) recordDeed("land_seized", lord_, h.head, acres / 4);
+        acres = moveLand(h.id, kNone, acres, LandPick::CustomaryOnly, "抵債被收回");
+        if (lord_ != kNone && acres > 0) recordDeed("land_seized", lord_, h.head, acres / 4);
     } else {
-        households_[people_[h.creditor].household].acres += acres;
-        recordDeed("land_seized", h.creditor, h.head, acres / 4);
+        acres = moveLand(h.id, people_[h.creditor].household, acres, LandPick::CustomaryFirst, "抵債收來");
+        if (acres > 0) recordDeed("land_seized", h.creditor, h.head, acres / 4);
     }
     return acres;
 }
@@ -352,7 +346,7 @@ void World::reletVacant() {
     bool landHungry = !worldFlags_.count("post_plague");
     Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
     for (auto& h : households_) {
-        if (vacantAcres_ < 3) return;
+        if (vacantAcres() < 3) return;
         if (h.extinct || h.members.empty() || h.id == playerHousehold_ || h.id == lordHouse || h.head == kNone) continue;
         if (people_[h.head].occupation == "priest" || h.debt > 0) continue;
         double hands = 0;
@@ -363,11 +357,9 @@ void World::reletVacant() {
         double spare = hands * 12 - h.acres;
         if (spare < 5 || h.money < 15) continue;
         if (!rngEcon_.chance(landHungry ? 0.6 : 0.2)) continue;
-        double take = std::min({5.0, vacantAcres_, std::floor(spare)});
+        double take = moveLand(kNone, h.id, std::min({5.0, vacantAcres(), std::floor(spare)}), LandPick::CustomaryFirst, "向領主租來");
         double fine = take * 3;
-        h.acres += take;
         h.money -= fine;
-        vacantAcres_ -= take;
         if (lordHouse != kNone) households_[lordHouse].money += fine;
     }
 }

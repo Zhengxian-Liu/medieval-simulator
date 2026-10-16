@@ -587,7 +587,7 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
             if ((ap.subject == p.id || ap.target == p.id) && ap.plan == "arrange_match") pending = true;
         return pending == v.asBool();
     }
-    if (k == "vacant_acres_ge") return w.vacantAcres_ >= v.asNumber();
+    if (k == "vacant_acres_ge") return w.vacantAcres() >= v.asNumber();
     if (k == "plague_active") return (w.param("plague_monthly", 0) > 0) == v.asBool();
     if (k == "household_size_ge") return h && h->members.size() >= v.asNumber();
     if (k == "remembers") return remembers(v, p, target);
@@ -695,8 +695,7 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 // pair of hands goes out for wages.
                 if (!h) continue;
                 double give = std::max(0.0, h->acres - std::max(1.0, h->freehold));
-                h->acres -= give;
-                w.vacantAcres_ += give;
+                w.moveLand(h->id, kNone, give, LandPick::CustomaryOnly, "交回領主");
                 w.clearDebt(*h);
             } else if (k == "clear_debt") {
                 if (h) w.clearDebt(*h);
@@ -724,11 +723,8 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
             } else if (k == "acres") {
                 if (!h) continue;
                 double d = v.asNumber();
-                if (d > 0) d = std::min(d, w.vacantAcres_);
-                d = std::max(d, -h->acres);
-                h->acres += d;
-                h->freehold = std::min(h->freehold, h->acres);
-                w.vacantAcres_ -= d;
+                if (d > 0) w.moveLand(kNone, h->id, d, LandPick::CustomaryFirst, "向領主租來");
+                else w.moveLand(h->id, kNone, -d, LandPick::CustomaryFirst, "交回領主");
             } else if (k == "house") {
                 if (h) h->house = v.asString();
             } else if (k == "target") {
@@ -742,7 +738,7 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
             } else if (k == "freehold") {
                 // Turn held acres into freehold (bought by charter).
                 if (!h) continue;
-                h->freehold = std::min(h->acres, h->freehold + v.asNumber());
+                w.makeFree(*h, v.asNumber());
             } else if (k == "to_town") {
                 // Off to a master in town: the family's town branch.
                 if (!h) continue;
@@ -793,12 +789,9 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 double acres = std::min(v["acres"].asNumber(), th.acres);
                 double price = v["price"].asNumber();
                 if (acres <= 0 || h->money < price) continue;
-                double fh = th.acres > 0 ? th.freehold * acres / th.acres : 0;
-                th.freehold -= fh;
-                h->freehold += fh;
-                th.acres -= acres;
+                acres = w.moveLand(th.id, h->id, acres, LandPick::CustomaryFirst, "買來");
+                price *= acres / v["acres"].asNumber();
                 th.money += price;
-                h->acres += acres;
                 h->money -= price;
             } else if (k == "deed") {
                 // {"type": "arson", "doer": "self"|"target", "scale": 1}; the other party is the victim.

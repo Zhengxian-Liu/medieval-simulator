@@ -354,10 +354,9 @@ void World::onHeadDied(Household& h, Id dead) {
                 people_[m].flags.erase("in_service");
                 moveTo(m, home);
             }
-        vacantAcres_ += h.acres;
-        log(2, dynasties_[h.dynasty].surname + " 家絕戶了，" + std::to_string(int(h.acres)) +
+        double lost = moveLand(h.id, kNone, h.acres, LandPick::CustomaryFirst, "絕戶後收回");
+        log(2, dynasties_[h.dynasty].surname + " 家絕戶了，" + std::to_string(int(lost)) +
                    " 畝地回到領主手上。");
-        h.acres = h.freehold = 0;
         for (Id it : h.items) items_[it].lost = true;
         if (player) followSurvivingBranch();
         return;
@@ -506,13 +505,12 @@ void World::marry(Id man, Id woman) {
             items_[it].household = to.id;
             to.items.push_back(it);
         }
-        to.acres += from.acres;
-        to.freehold += from.freehold;
+        moveLand(from.id, to.id, from.acres, LandPick::CustomaryFirst, "成親時帶進門");
         to.money += from.money;
         to.food += from.food;
         from.members.clear();
         from.items.clear();
-        from.acres = from.freehold = from.money = from.food = 0;
+        from.money = from.food = 0;
         from.head = kNone;
         from.extinct = true;
         if (intoHers) {
@@ -571,8 +569,7 @@ void World::marry(Id man, Id woman) {
         if (from.members.empty()) {
             from.head = kNone;
             from.extinct = true;
-            vacantAcres_ += from.acres;
-            from.acres = from.freehold = 0;
+            moveLand(from.id, kNone, from.acres, LandPick::CustomaryFirst, "嫁出去後收回");
         }
     } else if (family) {
         log(imp, fullName(man) + " 娶了外村的 " + w.firstName + "。");
@@ -593,10 +590,10 @@ void World::marry(Id man, Id woman) {
                 people_[c].birthDay < m.birthDay && people_[c].household == home.id)
                 isHeir = false;
         if (home.head == m.father && isHeir) return;  // the heir stays on the family holding
-        double land = std::min(vacantAcres_, rngSocial_.chance(0.5) ? 10.0 : 5.0);
+        double land = std::min(vacantAcres(), rngSocial_.chance(0.5) ? 10.0 : 5.0);
         if (land < 2 && !rngSocial_.chance(0.5)) return;
-        vacantAcres_ -= land;
-        Id nh = addHousehold(m.dynasty, std::max(land, 1.0), home.money * 0.15);
+        Id nh = addHousehold(m.dynasty, 0, home.money * 0.15);
+        moveLand(kNone, nh, land, LandPick::CustomaryFirst, "分家時向領主租來");
         Household& oldHome = households_[m.household];
         oldHome.money *= 0.85;
         Household& fresh = households_[nh];

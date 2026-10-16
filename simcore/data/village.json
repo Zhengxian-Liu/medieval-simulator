@@ -2,6 +2,38 @@
   "name": "阿什科姆村",
   "default_origin": "peasant",
   "vacant_acres": 12,
+  // The village drawn as blocks (design/contested.md): one cell is about an acre. The open fields are cut into
+  // named parcels at the start (each household's land in three to five pieces, scattered over the fields, as
+  // strips were); the rest is ground nobody holds alone. "places" name the parts of a field.
+  "map": {
+    "width": 44, "height": 30,
+    "fields": [
+      {"name": "北田", "x": 6, "y": 0, "w": 32, "h": 4,
+       "places": ["靠路", "坡上", "溝邊", "老橡樹下", "長條", "風口", "石堆旁", "籬笆邊", "窪地", "十字架旁", "羊道邊", "高地", "林邊", "井旁", "碎石地", "黑土"]},
+      {"name": "南田", "x": 6, "y": 26, "w": 32, "h": 4,
+       "places": ["河灣", "柳樹下", "低地", "老界石旁", "坡腳", "長條", "溝頭", "磨坊路邊", "沙地", "教堂後", "黏土地", "橋頭", "蘆葦邊", "水窪旁", "東頭", "西頭"]},
+      {"name": "東田", "x": 38, "y": 0, "w": 6, "h": 30,
+       "places": ["山坡", "林邊", "大路邊", "荊棘叢", "石牆內", "向陽坡", "長條", "老井旁", "頂上", "低窪", "沼地邊", "白石旁", "牛道邊", "坡下", "角落", "新開的"]}
+    ],
+    "zones": [
+      {"kind": "river", "name": "小河", "x": 0, "y": 0, "w": 2, "h": 30},
+      {"kind": "meadow", "name": "河邊草地", "x": 2, "y": 0, "w": 4, "h": 30},
+      {"kind": "common", "name": "公地牧場", "x": 6, "y": 4, "w": 12, "h": 22},
+      {"kind": "wood", "name": "領主的林子", "x": 28, "y": 4, "w": 10, "h": 9},
+      {"kind": "village", "name": "村子", "x": 18, "y": 9, "w": 10, "h": 11}
+    ],
+    "houses": {"x": 18, "y": 9, "w": 10, "h": 11},
+    "pois": [
+      {"kind": "church", "name": "聖瑪麗教堂", "x": 22, "y": 10},
+      {"kind": "manor", "name": "莊園大宅", "x": 26, "y": 10},
+      {"kind": "green", "name": "村中草地", "x": 22, "y": 14},
+      {"kind": "alehouse", "name": "酒館", "x": 20, "y": 16},
+      {"kind": "well", "name": "井", "x": 24, "y": 16},
+      {"kind": "mill", "name": "磨坊", "x": 2, "y": 15},
+      {"kind": "pound", "name": "牲口欄", "x": 27, "y": 18},
+      {"kind": "cross", "name": "路口十字架", "x": 18, "y": 19}
+    ]
+  },
   "households": [
     {"surname": "德·阿什科姆", "role": "lord", "origin": "noble", "occupation": "lord", "acres": 180, "money": 2400, "house": "manor",
      "head_age": [34, 44], "children": [2, 4], "items": ["family_sword", "tapestry", "silver_spoon"]},

@@ -38,6 +38,7 @@ World::World(const Defs& defs, Config cfg)
     rngMinds_.reseed(cfg.seed, hashString("minds"));
     rngWants_.reseed(cfg.seed, hashString("wants"));
     rngNews_.reseed(cfg.seed, hashString("news"));
+    rngLand_.reseed(cfg.seed, hashString("land"));
     baseParams_ = {
         {"mortality_mult", 1.0}, {"harvest_mult", 1.0}, {"grain_price", 0.4},
         {"wage_mult", 1.0},      {"rent_mult", 1.0},    {"plague_monthly", 0.0},
@@ -58,6 +59,7 @@ World::World(const Defs& defs, Config cfg)
                 if (e.has("world_flag")) worldFlags_.insert(e["world_flag"].asString());
     }
     setupVillage();
+    setupLand();
     seedAcquaintance();
     // Each game opens on one of a few situations the family is already in (data/events/openings.json).
     std::vector<std::string> openings;

@@ -169,7 +169,6 @@ void World::yearlyAmbitions() {
 void World::checkStandings() {
     for (auto& h : households_) {
         if (h.extinct || h.head == kNone || h.members.empty()) continue;
-        h.freehold = std::clamp(h.freehold, 0.0, h.acres);
         int now = standing(h.id);
         auto it = lastStanding_.find(h.id);
         int before = it == lastStanding_.end() ? now : it->second;

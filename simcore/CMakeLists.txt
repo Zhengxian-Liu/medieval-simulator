@@ -19,7 +19,7 @@ add_library(simcore
   src/events.cpp
   src/ambitions.cpp
   src/plans.cpp
-  src/memory.cpp src/manor.cpp src/knowledge.cpp src/signals.cpp src/stress.cpp src/arcs.cpp src/hooks.cpp src/report.cpp src/minds.cpp src/concerns.cpp src/news.cpp
+  src/memory.cpp src/manor.cpp src/knowledge.cpp src/signals.cpp src/stress.cpp src/arcs.cpp src/hooks.cpp src/report.cpp src/minds.cpp src/concerns.cpp src/news.cpp src/land.cpp
 )
 target_include_directories(simcore PUBLIC include)
 target_compile_options(simcore PRIVATE -Wall -Wextra)
