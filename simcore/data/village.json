@@ -1,0 +1,26 @@
+{
+  "name": "阿什科姆村",
+  "default_origin": "peasant",
+  "vacant_acres": 12,
+  "households": [
+    {"surname": "德·阿什科姆", "role": "lord", "origin": "noble", "occupation": "lord", "acres": 180, "money": 2400, "house": "manor",
+     "head_age": [34, 44], "children": [2, 4], "items": ["family_sword", "tapestry", "silver_spoon"]},
+    {"surname": "克萊門特", "role": "priest", "occupation": "priest", "acres": 10, "money": 200, "house": "timber",
+     "head_age": [38, 50], "married": false, "children": [0, 0], "items": ["psalter"]},
+    {"surname": "阿特伍德", "origin": "peasant", "occupation": "peasant", "acres": 15, "money": 60,
+     "head_age": [26, 30], "children": [1, 3], "elder": true, "items": ["oak_chest"]},
+    {"surname": "史密斯", "free": true, "origin": "artisan", "occupation": "smith", "acres": 4, "freehold": 4, "money": 160, "house": "timber",
+     "head_age": [30, 38], "children": [2, 3], "items": ["anvil"]},
+    {"surname": "卡特", "free": true, "occupation": "carpenter", "acres": 5, "money": 110, "head_age": [28, 40], "children": [1, 4]},
+    {"surname": "米勒", "occupation": "miller", "acres": 10, "money": 260, "house": "timber", "head_age": [35, 45], "children": [2, 4]},
+    {"surname": "里夫", "occupation": "peasant", "acres": 30, "money": 140, "house": "timber", "head_age": [36, 46], "children": [2, 4], "elder": true},
+    {"surname": "柴契爾", "occupation": "peasant", "acres": 15, "money": 50, "head_age": [24, 34], "children": [1, 3]},
+    {"surname": "謝帕德", "occupation": "shepherd", "acres": 8, "money": 40, "head_age": [30, 44], "children": [1, 4]},
+    {"surname": "布魯爾", "occupation": "peasant", "acres": 12, "money": 70, "head_age": [28, 40], "children": [1, 4]},
+    {"surname": "弗萊徹", "free": true, "occupation": "peasant", "acres": 15, "freehold": 8, "money": 55, "head_age": [22, 30], "children": [0, 2]},
+    {"surname": "科特", "occupation": "peasant", "acres": 3, "money": 15, "head_age": [25, 40], "children": [1, 4]},
+    {"surname": "伍德", "occupation": "peasant", "acres": 15, "money": 45, "head_age": [40, 50], "children": [2, 4], "elder": false},
+    {"surname": "格林", "free": true, "occupation": "weaver", "acres": 5, "money": 60, "head_age": [26, 36], "children": [1, 3]},
+    {"surname": "庫柏", "occupation": "peasant", "acres": 15, "money": 50, "head_age": [30, 42], "children": [2, 4]}
+  ]
+}

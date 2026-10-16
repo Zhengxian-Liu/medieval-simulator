@@ -1,0 +1,62 @@
+{
+  // Events that listen for signals ("on") and arrive months later. The person is the one named
+  // by "as"; the target is the other party of the deed, or the believed culprit.
+  "events": [
+    {"id": "accuse_culprit", "title": "討公道", "prompt": "{name} 認定 {deed_year} 年那次「{deed}」是 {target} 幹的。可是認定和證據是兩回事。", "chance": 0.8, "cooldown_years": 1,
+     "on": {"signal": "belief", "tag": "crime", "victim_side": true, "after_months": [0, 2]},
+     "conditions": {"age": [16, 75], "deed_tried": false},
+     "options": [
+       {"text": "告上莊園法庭", "log": "{name} 認定 {deed_year} 年那次「{deed}」是 {target} 幹的，決定在下次開庭時告{target_pron}。",
+        "effects": [{"accuse": true}],
+        "ai": {"base": 10, "traits": {"brave": 6, "wrathful": 6, "ambitious": 4, "craven": -6}}},
+       {"text": "當面質問", "log": "{name} 在教堂門口攔住 {target}，當著眾人的面質問{deed_year} 年那次「{deed}」。",
+        "effects": [{"deed": {"type": "public_insult"}}],
+        "ai": {"base": 6, "traits": {"wrathful": 12, "calm": -6}}},
+       {"text": "記在心裡", "log": "{name} 認定 {deed_year} 年那次「{deed}」是 {target} 幹的，什麼也沒說，只是從此不跟{target_pron}家來往。",
+        "effects": [],
+        "ai": {"base": 8, "traits": {"calm": 8, "craven": 8, "shy": 6, "vengeful": 6}}}
+     ]},
+
+    {"id": "guilty_conscience", "title": "良心不安", "prompt": "{deed_year} 年對 {target} 家做的事，{name} 一直放在心上，夜裡睡不著。", "chance": 0.3, "cooldown_years": 3,
+     "on": {"signal": "deed", "deed_type": ["arson", "slander"], "as": "actor", "after_months": [6, 30]},
+     "conditions": {"any": [{"trait": "pious"}, {"trait": "kind"}, {"trait": "melancholy"}]},
+     "options": [
+       {"text": "去向神父告解", "log": "{name} 夜裡睡不著，終於跪在告解亭裡，把{deed_year} 年對 {target} 家做的事全說了。",
+        "effects": [{"confess_to_priest": true}, {"need": {"spirit": 25}}],
+        "ai": {"base": 10, "traits": {"pious": 12}}},
+       {"text": "去找 {target} 認錯", "log": "{name} 敲開 {target} 家的門，承認{deed_year} 年那次「{deed}」是自己幹的。",
+        "effects": [{"confess_to_target": true}, {"need": {"spirit": 20}}, {"reputation": -3}],
+        "ai": {"base": 4, "traits": {"brave": 8, "kind": 8, "craven": -6}}},
+       {"text": "爛在肚子裡", "log": "{name} 把{deed_year} 年那件事爛在肚子裡，從此常做噩夢。",
+        "effects": [{"need": {"spirit": -15}}, {"trait_chance": {"trait": "melancholy", "chance": 20}}],
+        "ai": {"base": 8, "traits": {"craven": 8, "cynical": 8, "ambitious": 4}}}
+     ]},
+
+    {"id": "rejected_suitor", "title": "被拒之後", "prompt": "{target} 家回絕了這門親事，村裡已經有人在笑了。", "chance": 0.35, "cooldown_years": 2,
+     "on": {"signal": "deed", "deed_type": "refused_proposal", "as": "target", "after_months": [2, 12]},
+     "conditions": {"age": [16, 60]},
+     "options": [
+       {"text": "在酒館說她家壞話", "log": "被 {target} 家拒婚之後，{name} 逢人就說他們家眼高手低，女兒脾氣壞。",
+        "effects": [{"deed": {"type": "public_insult"}}],
+        "ai": {"base": 6, "traits": {"wrathful": 8, "cruel": 8, "vengeful": 10, "kind": -6}}},
+       {"text": "趕緊另說一門親", "log": "被 {target} 家拒婚的事傳開了，{name} 為了爭一口氣，趕緊託人另說親事。",
+        "effects": [{"need": {"social": -10}}],
+        "ai": {"base": 8, "traits": {"ambitious": 6}}},
+       {"text": "算了", "log": "", "effects": [], "ai": {"base": 8, "traits": {"calm": 8, "forgiving": 10}}}
+     ]},
+
+    {"id": "widow_pressed", "title": "寡婦再嫁", "prompt": "丈夫才走了幾個月，田沒人種。{target} 託人上門提親；不嫁的話，就得繳錢給領主才能守寡。", "chance": 0.7, "cooldown_years": 3,
+     "on": {"signal": "death", "as": "spouse", "was_head": true, "after_months": [2, 8]},
+     "conditions": {"sex": "female", "age": [20, 48], "is_head": true, "married": false, "acres_ge": 8},
+     "target": {"pick": "villager", "conditions": {"sex": "male", "age": [20, 50], "married": false, "is_head": false, "not_kin": true,
+                "not": {"occupation": ["lord", "priest"]}}},
+     "options": [
+       {"text": "嫁給 {target}", "log": "丈夫才走了幾個月，田沒人種，{target} 就託人上門提親。{name} 答應了，讓{target_pron}搬進來種地。",
+        "effects": [{"marry_target": true}],
+        "ai": {"base": 10, "traits": {"content": 4, "craven": 4}, "if": [{"cond": {"household_size_ge": 4}, "add": -4}]}},
+       {"text": "繳錢給領主，守寡", "log": "{name} 不肯再嫁，繳了 10 便士給領主，換來守寡持家的權利。",
+        "effects": [{"money": -10}, {"reputation": 2}, {"need": {"spirit": -5}}],
+        "ai": {"base": 8, "traits": {"pious": 6, "brave": 4, "ambitious": 4}}}
+     ]}
+  ]
+}

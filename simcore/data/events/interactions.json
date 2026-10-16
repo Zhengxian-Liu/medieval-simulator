@@ -1,0 +1,219 @@
+{
+  // 找人 (design/season-loop.md): what the head can go and do with someone, at the cost of a free day of the
+  // season. Each is an event about the person sought out ({name}/{first}), who answers by their nature, mood
+  // and feeling for the head ({target}/{target_first}); the options are their possible answers, never the
+  // player's. "interaction": who it is for (family | household | outsider | anyone), time, money (pence).
+  // Results go into opinions, memories and concerns, so they come back in later events.
+  "events": [
+    {"id": "talk_comfort", "title": "安慰", "scope": "interaction", "cooldown_months": 3,
+     "interaction": {"who": "family", "time": 1, "desc": "陪{pron}坐一坐，聽{pron}說說心裡的苦"},
+     "conditions": {"age": [6, 120], "any": [{"concern": {"kind": "grief", "min": 10}}, {"concern": {"kind": "heartbreak", "min": 10}},
+                                            {"concern": {"kind": "shame", "min": 10}}, {"concern": {"kind": "worry", "min": 10}}]},
+     "options": [
+      {"text": "靠著你哭了一場",
+       "log": ["{target_first}陪{first}坐到半夜，{first}終於靠在{target_pron}肩上哭了出來。", "{target_first}陪{first}說了一晚上的話，{first}說心裡好受些了。"],
+       "effects": [{"ease_concern": {"kind": "grief", "by": 25}}, {"ease_concern": {"kind": "heartbreak", "by": 30}}, {"ease_concern": {"kind": "shame", "by": 25}},
+                   {"ease_concern": {"kind": "worry", "by": 20}}, {"stress": -10}, {"mutual_opinion": {"value": 10, "mod": "comforted", "years": 12}}],
+       "ai": {"base": 10, "traits": {"gregarious":  4, "kind":  6}, "if": [{"cond": {"opinion_of_target_ge": 25}, "add": 10}, {"cond": {"opinion_of_target_lt": -10}, "add": -8}]}},
+      {"text": "推開你，想一個人待著",
+       "log": "{target_first}想陪{first}說說話，{first}別過臉去：「讓我一個人待著。」",
+       "effects": [{"ease_concern": {"kind": "grief", "by": 8}}, {"opinion": {"value": 2, "mod": "comforted", "years": 6}}],
+       "ai": {"base": 4, "traits": {"shy":  6, "wrathful":  4, "cynical":  3, "cruel":  3}, "if": [{"cond": {"opinion_of_target_lt": 0}, "add": 10}]}}
+     ]},
+
+    {"id": "talk_heart", "title": "談心", "scope": "interaction", "cooldown_months": 4,
+     "interaction": {"who": "family", "time": 1, "desc": "找{pron}好好說說話"},
+     "conditions": {"age": [12, 120]},
+     "options": [
+      {"text": "把心裡話都說了",
+       "log": ["{target_first}和{first}在灶邊聊到很晚，{first}把心裡的話都說了。", "{target_first}和{first}去田埂上走了一圈，兩人說了好多平常說不出口的話。"],
+       "effects": [{"mutual_opinion": {"value": 7, "mod": "confided", "years": 10}}, {"need": {"social": 25}}, {"stress": -4}],
+       "ai": {"base": 10, "traits": {"gregarious":  5, "kind":  4, "pious":  2}, "if": [{"cond": {"opinion_of_target_ge": 20}, "add": 8}, {"cond": {"opinion_of_target_lt": -10}, "add": -8}]}},
+      {"text": "隨口敷衍幾句",
+       "log": "{target_first}想跟{first}說說話，{first}嗯嗯啊啊應付了幾句就走了。",
+       "effects": [{"need": {"social": 5}}],
+       "ai": {"base": 5, "traits": {"shy":  6, "cynical":  4, "lazy":  2}, "if": [{"cond": {"opinion_of_target_lt": 0}, "add": 10}, {"cond": {"concern": "grievance"}, "add": 8}]}}
+     ]},
+
+    {"id": "talk_praise", "title": "誇獎", "scope": "interaction", "cooldown_months": 6,
+     "interaction": {"who": "household", "time": 1, "desc": "當著全家人的面誇{pron}"},
+     "conditions": {"age": [5, 30], "child_of_target": true},
+     "options": [
+      {"text": "高興得臉都紅了",
+       "log": "晚飯時{target_first}當著全家人誇了{first}，{first}高興得臉都紅了。",
+       "effects": [{"opinion": {"value": 9, "mod": "praised", "years": 10}}, {"stress": -6}, {"trait_chance": {"trait": "diligent", "chance": 6}}],
+       "ai": {"base": 12, "if": [{"cond": {"opinion_of_target_lt": -15}, "add": -8}]}},
+      {"text": "撇撇嘴，不當一回事",
+       "log": "{target_first}誇了{first}幾句，{first}撇撇嘴，好像沒聽見。",
+       "effects": [{"opinion": {"value": 2, "mod": "praised", "years": 5}}],
+       "ai": {"base": 3, "traits": {"cynical":  6, "cruel":  5}, "if": [{"cond": {"age": [14, 30]}, "add": 3}, {"cond": {"concern": "grievance"}, "add": 8}]}}
+     ]},
+
+    {"id": "talk_discipline", "title": "管教", "scope": "interaction", "cooldown_months": 4,
+     "interaction": {"who": "household", "time": 1, "desc": "把{pron}叫來好好訓一頓，該打就打"},
+     "conditions": {"age": [6, 20], "child_of_target": true, "married": false},
+     "options": [
+      {"text": "低頭認錯",
+       "log": "{target_first}把{first}叫到跟前狠狠訓了一頓，{first}低著頭認了錯。",
+       "effects": [{"opinion": {"value": -3, "mod": "scolded", "years": 5}}, {"trait_chance": {"trait": "diligent", "chance": 10}}, {"trait_chance": {"trait": "calm", "chance": 5}}],
+       "ai": {"base": 10, "traits": {"craven":  6, "content":  4, "pious":  3, "calm":  3}, "if": [{"cond": {"age": [6, 12]}, "add": 6}, {"cond": {"opinion_of_target_ge": 30}, "add": 5}]}},
+      {"text": "頂嘴，摔門出去",
+       "log": "{target_first}訓了{first}幾句，{first}頂了回去，摔門就走，一晚上沒回家。",
+       "effects": [{"mutual_opinion": {"value": -10, "mod": "defiant", "years": 8}}, {"concern": {"kind": "grievance", "about": "target", "strength": 30}},
+                   {"on_target": [{"stress": 4}]}],
+       "ai": {"base": 3, "traits": {"wrathful":  12, "cruel":  5, "brave":  3}, "if": [{"cond": {"age": [14, 20]}, "add": 6}, {"cond": {"opinion_of_target_lt": 0}, "add": 8}]}},
+      {"text": "挨了打，一聲不吭",
+       "log": "{target_first}拿棍子打了{first}一頓，{first}咬著牙一聲不吭，眼睛卻紅了。",
+       "effects": [{"opinion": {"value": -8, "mod": "scolded", "years": 10}}, {"concern": {"kind": "grievance", "about": "target", "strength": 25}}, {"trait_chance": {"trait": "diligent", "chance": 12}}, {"trait_chance": {"trait": "shy", "chance": 8}}],
+       "ai": {"base": 4, "traits": {"shy":  5, "wrathful":  3}, "if": [{"cond": {"age": [6, 13]}, "add": 3}]}}
+     ]},
+
+    {"id": "talk_fields", "title": "多下田", "scope": "interaction", "cooldown_months": 3,
+     "interaction": {"who": "household", "time": 1, "desc": "跟{pron}說這一季要多下田，家裡缺人手"},
+     "conditions": {"age": [12, 70], "health_ge": 40},
+     "options": [
+      {"text": "二話不說就去了",
+       "log": "{target_first}要{first}這一季多下田，{first}天不亮就扛著鋤頭出門。",
+       "effects": [{"work_bonus": 0.03}, {"need": {"rest": -15}}, {"skill": {"farming": 0.5}}],
+       "ai": {"base": 10, "traits": {"diligent":  8, "content":  6}, "if": [{"cond": {"opinion_of_target_ge": 20}, "add": 6}]}},
+      {"text": "嘴上答應，人卻常不見",
+       "log": "{target_first}要{first}多下田，{first}嘴上答應，卻常溜去酒館。",
+       "effects": [{"work_bonus": 0.005}, {"on_target": [{"opinion": {"value": -4, "mod": "shirker", "years": 4}}]}],
+       "ai": {"base": 3, "traits": {"lazy":  10, "drunkard":  3, "gregarious":  2}, "if": [{"cond": {"opinion_of_target_lt": 0}, "add": 6}, {"cond": {"mood_lt": 30}, "add": 5}]}},
+      {"text": "心裡難受，做不動",
+       "log": "{target_first}要{first}多下田，{first}去了幾天就做不動了，常一個人坐在田邊發呆。",
+       "conditions": {"mood_lt": 40},
+       "effects": [{"work_bonus": 0.005}, {"stress": 4}],
+       "ai": {"base": 12}}
+     ]},
+
+    {"id": "talk_church", "title": "一起上教堂", "scope": "interaction", "cooldown_months": 3,
+     "interaction": {"who": "family", "time": 1, "desc": "帶{pron}一起去望彌撒、點根蠟燭"},
+     "conditions": {"age": [6, 120]},
+     "options": [
+      {"text": "安安靜靜地跟著禱告",
+       "log": "{target_first}帶著{first}去望彌撒，{first}在聖母像前點了一根蠟燭。",
+       "effects": [{"need": {"spirit": 30}}, {"ease_concern": {"kind": "grief", "by": 12}}, {"ease_concern": {"kind": "shame", "by": 10}}, {"mutual_opinion": {"value": 4, "mod": "prayed_together", "years": 8}},
+                   {"on_target": [{"need": {"spirit": 25}}]}],
+       "ai": {"base": 10, "traits": {"pious":  8, "content":  2}}},
+      {"text": "坐不住，一直往外看",
+       "log": "{target_first}帶{first}去教堂，{first}一整場彌撒都在東張西望。",
+       "effects": [{"need": {"spirit": 8}}],
+       "ai": {"base": 4, "traits": {"cynical":  8, "lazy":  3, "gregarious":  2}, "if": [{"cond": {"age": [6, 12]}, "add": 4}]}}
+     ]},
+
+    {"id": "talk_ale", "title": "請喝酒", "scope": "interaction", "cooldown_months": 3,
+     "interaction": {"who": "outsider", "time": 1, "money": 2, "desc": "請{pron}去酒館喝幾杯（2 便士）"},
+     "conditions": {"age": [16, 120], "not": {"occupation": ["lord", "priest"]}},
+     "options": [
+      {"text": "爽快地坐下來喝",
+       "log": ["{target_first}請{first}在酒館喝了幾杯麥酒，兩人越聊越投機。", "{target_first}和{first}在酒館喝到打烊，勾肩搭背地唱著歌回家。"],
+       "effects": [{"mutual_opinion": {"value": 7, "mod": "good_times", "years": 6}}, {"need": {"social": 25}}, {"on_target": [{"need": {"social": 25}}]}],
+       "ai": {"base": 10, "traits": {"gregarious":  6, "drunkard":  4, "generous":  2}, "if": [{"cond": {"opinion_of_target_lt": -15}, "add": -10}]}},
+      {"text": "說沒空，冷冷地走了",
+       "log": "{target_first}想請{first}喝一杯，{first}冷冷地說沒空。",
+       "effects": [{"on_target": [{"opinion": {"value": -3, "mod": "slighted", "years": 4}}]}],
+       "ai": {"base": 3, "traits": {"shy":  5, "pious":  7, "cruel":  4}, "if": [{"cond": {"opinion_of_target_lt": -15}, "add": 12}]}}
+     ]},
+
+    {"id": "talk_gift", "title": "送禮", "scope": "interaction", "cooldown_months": 6,
+     "interaction": {"who": "outsider", "time": 1, "money": 6, "desc": "帶一籃蛋和一塊燻肉上門（6 便士）"},
+     "conditions": {"age": [16, 120]},
+     "options": [
+      {"text": "笑著收下",
+       "log": "{target_first}提著一籃蛋和一塊燻肉去看{first}，{first}笑著收下了。",
+       "effects": [{"opinion": {"value": 10, "mod": "gift", "years": 8}}],
+       "ai": {"base": 10, "traits": {"greedy":  6, "gregarious":  2}, "if": [{"cond": {"opinion_of_target_lt": -35}, "add": -8}]}},
+      {"text": "把東西退了回來",
+       "log": "{target_first}帶著禮物上門，{first}看了一眼就退了回來：「我們家不缺這個。」",
+       "effects": [{"opinion": {"value": 1, "mod": "gift", "years": 4}}, {"on_target": [{"stress": 3}]}],
+       "ai": {"base": 2, "traits": {"cruel":  6, "pious":  3, "cynical":  4}, "if": [{"cond": {"opinion_of_target_lt": -35}, "add": 14}]}}
+     ]},
+
+    {"id": "talk_help", "title": "求助", "scope": "interaction", "cooldown_months": 12,
+     "interaction": {"who": "anyone", "time": 1, "desc": "拉下臉去求{pron}借點糧"},
+     "conditions": {"age": [18, 120], "is_head": true, "same_household": false, "opinion_of_target_ge": 5},
+     "options": [
+      {"text": "借了一袋麥子",
+       "log": "{target_first}去求{first}，{first}二話不說扛了一袋麥子給{target_pron}。",
+       "effects": [{"food": -60}, {"on_target": [{"food": 60}, {"opinion": {"value": 8, "mod": "helped_me", "years": 15}}]}, {"opinion": {"value": 3, "mod": "helped_them", "years": 10}}],
+       "ai": {"base": 6, "traits": {"generous":  8, "kind":  6, "gregarious":  2, "greedy":  -8}, "if": [{"cond": {"opinion_of_target_ge": 35}, "add": 10}, {"cond": {"lean": true}, "add": -12}]}},
+      {"text": "推說自家也不夠吃",
+       "log": "{target_first}去求{first}借糧，{first}搖搖頭說自家也不夠吃。",
+       "effects": [{"on_target": [{"opinion": {"value": -5, "mod": "refused_help", "years": 6}}, {"concern": {"kind": "shame", "about": "none", "strength": 15}}]}],
+       "ai": {"base": 8, "traits": {"greedy":  8, "cynical":  3}, "if": [{"cond": {"lean": true}, "add": 10}]}}
+     ]},
+
+    {"id": "talk_apologize", "title": "賠罪", "scope": "interaction", "cooldown_months": 12,
+     "interaction": {"who": "anyone", "time": 1, "desc": "上門去低頭賠個不是"},
+     "conditions": {"age": [12, 120], "opinion_of_target_lt": -10},
+     "options": [
+      {"text": "嘆口氣，原諒了你",
+       "log": "{target_first}上門給{first}賠了不是，{first}嘆了口氣：「算了，都過去了。」",
+       "effects": [{"opinion": {"value": 14, "mod": "made_up", "years": 12}}, {"ease_concern": {"kind": "grievance", "by": 35, "about": "target"}}, {"on_target": [{"stress": -5}]}],
+       "ai": {"base": 8, "traits": {"forgiving":  10, "kind":  5, "pious":  3, "vengeful":  -8}, "if": [{"cond": {"opinion_of_target_lt": -45}, "add": -6}]}},
+      {"text": "當面把門摔上",
+       "log": "{target_first}上門賠罪，{first}當著{target_pron}的面把門摔上了。",
+       "effects": [{"on_target": [{"stress": 5}, {"concern": {"kind": "shame", "about": "none", "strength": 15}}]}],
+       "ai": {"base": 5, "traits": {"vengeful":  10, "wrathful":  6, "cruel":  4}, "if": [{"cond": {"opinion_of_target_lt": -45}, "add": 8}]}}
+     ]},
+
+    {"id": "talk_condole", "title": "弔唁", "scope": "interaction", "cooldown_months": 12,
+     "interaction": {"who": "outsider", "time": 1, "desc": "去{pron}家坐坐，說幾句安慰的話"},
+     "conditions": {"concern": {"kind": "grief", "min": 20}},
+     "options": [
+      {"text": "握著你的手說不出話",
+       "log": "{target_first}去{first}家弔唁{about:grief}，{first}握著{target_pron}的手，半天說不出話。",
+       "effects": [{"ease_concern": {"kind": "grief", "by": 10}}, {"mutual_opinion": {"value": 9, "mod": "condolence", "years": 15}}],
+       "ai": {"base": 10, "if": [{"cond": {"opinion_of_target_lt": -20}, "add": -8}]}},
+      {"text": "淡淡地道了聲謝",
+       "log": "{target_first}去{first}家弔唁，{first}淡淡地道了聲謝，沒留{target_pron}坐。",
+       "effects": [{"opinion": {"value": 2, "mod": "condolence", "years": 6}}],
+       "ai": {"base": 3, "traits": {"shy":  4, "cruel":  4}, "if": [{"cond": {"opinion_of_target_lt": -20}, "add": 10}]}}
+     ]},
+
+    {"id": "talk_confront", "title": "上門理論", "scope": "interaction", "cooldown_months": 12,
+     "interaction": {"who": "outsider", "time": 1, "desc": "去找{pron}把話說清楚，不怕撕破臉"},
+     "conditions": {"age": [16, 120], "opinion_of_target_lt": -15, "not": {"occupation": ["lord", "priest"]}},
+     "options": [
+      {"text": "理虧，低頭道歉",
+       "log": "{target_first}上門找{first}理論，{first}自知理虧，低頭道了歉。",
+       "effects": [{"concern": {"kind": "shame", "about": "none", "strength": 20}}, {"on_target": [{"ease_concern": {"kind": "grievance", "by": 30, "about": "target"}}, {"stress": -5}]}],
+       "ai": {"base": 5, "traits": {"craven":  8, "pious":  5, "shy":  4}}},
+      {"text": "吵起來，差點動手",
+       "log": "{target_first}上門找{first}理論，兩人在門口吵得整條街都聽見了。",
+       "effects": [{"deed": {"type": "public_insult", "doer": "target"}}, {"on_target": [{"stress": 3}]}],
+       "ai": {"base": 8, "traits": {"wrathful":  8, "brave":  4, "cruel":  4, "vengeful":  3}}}
+     ]},
+
+    {"id": "talk_priest", "title": "找神父", "scope": "interaction", "cooldown_months": 3,
+     "interaction": {"who": "anyone", "time": 1, "money": 1, "desc": "去找神父告解，說說心裡的事（捐 1 便士）"},
+     "conditions": {"occupation": "priest"},
+     "options": [
+      {"text": "替你祝福，讓你寬心",
+       "log": "{target_first}去找{first}告解，{first}替{target_pron}祝福，要{target_pron}把重擔交給上帝。",
+       "effects": [{"on_target": [{"need": {"spirit": 40}}, {"stress": -12}, {"ease_concern": {"kind": "grief", "by": 12}}, {"ease_concern": {"kind": "shame", "by": 20}}]},
+                   {"mutual_opinion": {"value": 4, "mod": "confided", "years": 8}}],
+       "ai": {"base": 10, "traits": {"kind":  4, "pious":  4}}},
+      {"text": "訓你少去酒館、多捐錢",
+       "log": "{target_first}去找{first}告解，{first}板著臉訓了{target_pron}一頓：少去酒館，多給教會捐錢。",
+       "effects": [{"on_target": [{"need": {"spirit": 15}}, {"stress": -3}]}],
+       "ai": {"base": 4, "traits": {"greedy":  8, "cruel":  5, "pious":  4}}}
+     ]},
+
+    {"id": "talk_lord", "title": "求見領主", "scope": "interaction", "cooldown_months": 12,
+     "interaction": {"who": "anyone", "time": 1, "desc": "帶一隻閹雞去莊園，求領主寬限欠租"},
+     "conditions": {"occupation": "lord"},
+     "options": [
+      {"text": "答應寬限一年",
+       "log": "{target_first}帶著閹雞去求見{first}，{first}揮揮手：「欠的租明年再說。」",
+       "conditions": {"target": {"in_debt": true}},
+       "effects": [{"on_target": [{"debt_grace": true}, {"ease_concern": {"kind": "worry", "by": 25}}, {"food": -5}]}],
+       "ai": {"base": 4, "traits": {"kind":  8, "generous":  6, "greedy":  -6}, "if": [{"cond": {"opinion_of_target_ge": 20}, "add": 10}]}},
+      {"text": "收了閹雞，什麼也沒答應",
+       "log": "{target_first}帶著閹雞去求見{first}，等了半天，管家出來收了雞，說老爺沒空。",
+       "effects": [{"on_target": [{"food": -5}, {"stress": 3}]}, {"opinion": {"value": 3, "mod": "gift", "years": 3}}],
+       "ai": {"base": 10, "traits": {"greedy":  6, "cruel":  6}}}
+     ]}
+  ]
+}

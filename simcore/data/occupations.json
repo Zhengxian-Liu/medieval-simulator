@@ -1,0 +1,17 @@
+{
+  "occupations": [
+    {"id": "peasant",   "name": "農夫",     "skill": "farming",  "farms": true,  "sex": "male"},
+    {"id": "housewife", "name": "主婦",     "skill": "farming",  "farms": true,  "sex": "female"},
+    {"id": "alewife",   "name": "釀酒婦",   "skill": "craft",    "farms": true,  "sex": "female", "monthly_income": 8},
+    {"id": "smith",     "name": "鐵匠",     "skill": "craft",    "sex": "male", "monthly_income": 20},
+    {"id": "carpenter", "name": "木匠",     "skill": "craft",    "sex": "male", "monthly_income": 16},
+    {"id": "miller",    "name": "磨坊主",   "skill": "craft",    "sex": "male", "monthly_income": 22},
+    {"id": "weaver",    "name": "織工",     "skill": "craft",    "sex": "any",  "monthly_income": 11},
+    {"id": "shepherd",  "name": "牧羊人",   "skill": "farming",  "farms": true, "sex": "male", "monthly_income": 6},
+    {"id": "priest",    "name": "神父",     "skill": "learning", "sex": "male", "monthly_income": 30},
+    {"id": "clerk",     "name": "書記",     "skill": "learning", "sex": "male", "monthly_income": 20},
+    {"id": "lord",      "name": "領主",     "skill": "charm",    "sex": "male", "monthly_income": 20},
+    {"id": "lady",      "name": "領主夫人", "skill": "charm",    "sex": "female"},
+    {"id": "soldier",   "name": "弓兵",     "skill": "charm",    "sex": "male", "monthly_income": 20}
+  ]
+}

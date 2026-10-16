@@ -1,0 +1,27 @@
+{
+  "events": [
+    {"id": "pilgrimage", "title": "朝聖", "prompt": "一群朝聖者路過村子，要往坎特伯雷去。這一趟要花上 50 便士和一個多月。", "scope": "player_head", "chance": 0.06, "cooldown_years": 3,
+     "conditions": {"money_ge": 70, "age": [22, 60], "no_flag": "pilgrim", "month": [3, 6]},
+     "options": [
+       {"text": "去坎特伯雷朝聖（50 便士）", "log": "{name} 跟著一群朝聖者走到坎特伯雷，在聖湯瑪斯的墓前跪了一整夜。",
+        "effects": [{"money": -50}, {"set_flag": "pilgrim"}, {"add_item": "pilgrim_badge"}, {"need": {"spirit": 40}}, {"reputation": 3},
+                    {"random": {"percent": 10, "effects": [{"health": -25}, {"log": "{name} 在回程路上染了病。"}], "else": []}}],
+        "ai": {"base": 3, "traits": {"pious": 15, "cynical": -5}, "if": [{"cond": {"ambition": "pious_life"}, "add": 50}]}},
+       {"text": "今年不去", "log": "", "effects": [], "ai": {"base": 10}}
+     ]},
+    {"id": "tithe", "title": "什一稅", "prompt": "{target} 來收什一稅：今年收成的十分之一歸教會。", "scope": "player_head", "chance": 0.04, "cooldown_years": 4,
+     "conditions": {"month": [8, 9]},
+     "target": {"pick": "priest", "conditions": {}},
+     "options": [
+       {"text": "照付", "log": "", "effects": [{"money": -10}, {"target_opinion": {"value": 5, "mod": "tithe", "years": 4}}], "ai": {"base": 12, "traits": {"pious": 10}}},
+       {"text": "拖欠", "log": "{name} 跟 {target} 吵什一稅，說教會比領主還貪。", "effects": [{"mutual_opinion": {"value": -15, "mod": "tithe_quarrel", "years": 6}}, {"trait_chance": {"trait": "cynical", "chance": 20}}], "ai": {"base": 4, "traits": {"greedy": 10, "cynical": 12}}}
+     ]},
+    {"id": "into_church", "title": "神職", "prompt": "修道院缺一個識字的書記，神父推薦了 {target}。書記拿現錢，在修士和領主面前都說得上話，只是家裡少了一雙手。", "scope": "player_head", "chance": 0.1, "cooldown_years": 5,
+     "conditions": {"age": [14, 120], "living_children_ge": 3, "any_child": {"sex": "male", "trait": "literate", "age": [14, 22], "married": false}},
+     "target": {"pick": "any_child", "conditions": {"sex": "male", "trait": "literate", "age": [14, 22], "married": false}},
+     "options": [
+       {"text": "讓他去當書記", "log": "識字的 {target} 被修道院聘去當書記，家裡臉上有光。", "effects": [{"prestige": 6}, {"target": [{"set_occupation": "clerk"}]}], "ai": {"base": 10, "traits": {"pious": 8, "ambitious": 6}}},
+       {"text": "留在家", "log": "", "effects": [], "ai": {"base": 8}}
+     ]}
+  ]
+}

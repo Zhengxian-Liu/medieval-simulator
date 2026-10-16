@@ -1,0 +1,121 @@
+{
+  // What big events leave behind, coming back as moments (design/season-loop.md). "bereaved:<relation>" fires for
+  // each mourner with the dead as {target}; "concern:<kind>" fires when a concern first takes hold, and with
+  // "as": "head" it comes to the head of the holder's house, the holder as {target}.
+  "events": [
+    {"id": "mourn_child", "title": "喪子", "scope": "player_family", "chance": 1,
+     "on": {"signal": "bereaved:child", "after_months": [0, 0]},
+     "conditions": {"age": [16, 120]},
+     "prompt": "{target}走了。{name}坐在{target_first}睡過的草墊旁，一整天沒說話。",
+     "options": [
+      {"text": "守靈三天，給孩子點長明燈（3 便士）",
+       "log": "{name}替{target}守了三天靈，長明燈一直沒熄。",
+       "effects": [{"money": -3}, {"ease_concern": {"kind": "grief", "by": 10}}, {"need": {"spirit": 20}}],
+       "ai": {"base": 10, "traits": {"pious": 6, "kind": 3}}},
+      {"text": "求神父替孩子做一場彌撒（6 便士）",
+       "log": "{name}求神父替{target}做了一場彌撒，願{target_first}的靈魂早日安息。",
+       "effects": [{"money": -6}, {"ease_concern": {"kind": "grief", "by": 18}}, {"need": {"spirit": 40}}, {"stress": -5}],
+       "ai": {"base": 8, "traits": {"pious": 10, "generous": 3, "greedy": -6}}},
+      {"text": "去酒館喝到不省人事",
+       "log": "埋了{target}那晚，{name}在酒館喝到不省人事，被人抬回了家。",
+       "effects": [{"money": -2}, {"ease_concern": {"kind": "grief", "by": 8}}, {"stress": -10}, {"health": -4}, {"trait_chance": {"trait": "drunkard", "chance": 10}}],
+       "ai": {"base": 4, "traits": {"drunkard": 12, "melancholy": 4, "wrathful": 3}}},
+      {"text": "第二天照樣下田，什麼也不說",
+       "log": "埋了{target}，{name}第二天照樣下田，一句話也沒說。",
+       "effects": [{"work_bonus": 0.02}, {"stress": 6}],
+       "ai": {"base": 6, "traits": {"diligent": 8, "calm": 4, "cruel": 3}}}
+     ]},
+
+    {"id": "mourn_spouse", "title": "喪偶", "scope": "player_family", "chance": 1,
+     "on": {"signal": "bereaved:spouse", "after_months": [0, 0]},
+     "prompt": "{target}走了。床的另一半空了，{name}夜裡還會伸手去摸。",
+     "options": [
+      {"text": "請神父做彌撒，好好送{target_pron}走（6 便士）",
+       "log": "{name}請神父替{target}做了彌撒，全村的人都來送了。",
+       "effects": [{"money": -6}, {"ease_concern": {"kind": "grief", "by": 15}}, {"need": {"spirit": 35}}, {"reputation": 1}],
+       "ai": {"base": 10, "traits": {"pious": 8, "generous": 3, "greedy": -6}}},
+      {"text": "把{target_pron}的衣服收進箱子，不讓人碰",
+       "log": "{name}把{target}的衣服疊好收進箱子，誰也不許碰。",
+       "effects": [{"ease_concern": {"kind": "grief", "by": 6}}, {"trait_chance": {"trait": "melancholy", "chance": 12}}],
+       "ai": {"base": 6, "traits": {"melancholy": 8, "shy": 4, "chaste": 3}}},
+      {"text": "咬牙撐起這個家",
+       "log": "埋了{target}，{name}咬著牙把家裡的活全扛了起來。",
+       "effects": [{"work_bonus": 0.02}, {"stress": 6}, {"skill": {"farming": 0.5}}],
+       "ai": {"base": 8, "traits": {"diligent": 8, "brave": 4, "calm": 3}}}
+     ]},
+
+    {"id": "mourn_parent", "title": "送終", "scope": "player_family", "chance": 0.7,
+     "on": {"signal": "bereaved:parent", "after_months": [0, 0]},
+     "conditions": {"age": [12, 120]},
+     "prompt": "{target}下葬了。{name}跪在墳前，想起{target_first}從前說過的話。",
+     "options": [
+      {"text": "在墳前發誓不讓家道中落",
+       "log": "{name}跪在{target}墳前發誓，絕不讓家道在自己手上中落。",
+       "effects": [{"ease_concern": {"kind": "grief", "by": 10}}, {"stress": 3}, {"trait_chance": {"trait": "ambitious", "chance": 8}}],
+       "ai": {"base": 8, "traits": {"ambitious": 8, "brave": 3}}},
+      {"text": "捐 2 便士給教堂，替{target_first}祈禱",
+       "log": "{name}捐了 2 便士給教堂，請神父在禱告時提{target}的名字。",
+       "effects": [{"money": -2}, {"ease_concern": {"kind": "grief", "by": 15}}, {"need": {"spirit": 30}}],
+       "ai": {"base": 8, "traits": {"pious": 8, "greedy": -4}}},
+      {"text": "哭一場，日子照過",
+       "log": "{name}在{target}墳前哭了一場，回家後日子照過。",
+       "effects": [{"ease_concern": {"kind": "grief", "by": 8}}],
+       "ai": {"base": 8, "traits": {"content": 6}}}
+     ]},
+
+    {"id": "grief_at_home", "title": "家裡的傷心人", "scope": "player_head", "chance": 0.8,
+     "on": {"signal": "concern:grief", "as": "head", "after_months": [1, 3]},
+     "conditions": {"target": {"concern": {"kind": "grief", "min": 25}, "age": [8, 120]}},
+     "target": {"conditions": {"same_household": true}},
+     "prompt": "這幾個月，{target_first}常一個人坐在{target_about:grief}的墳邊，飯也吃得很少。",
+     "options": [
+      {"text": "陪{target_pron}去墳前坐一下午",
+       "log": "{name}放下手上的活，陪{target_first}在{target_about:grief}的墳前坐了一下午。",
+       "effects": [{"on_target": [{"ease_concern": {"kind": "grief", "by": 25}}, {"stress": -8}]}, {"mutual_opinion": {"value": 10, "mod": "comforted", "years": 12}}],
+       "ai": {"base": 10, "traits": {"kind": 8, "gregarious": 3}}},
+      {"text": "叫{target_pron}振作起來，日子還得過",
+       "log": "{name}對{target_first}說：「人死不能復生，日子還得過。」{target_first}沒有回答。",
+       "effects": [{"on_target": [{"ease_concern": {"kind": "grief", "by": 6}}, {"opinion": {"value": -6, "mod": "hard_words", "years": 8}}]}],
+       "ai": {"base": 6, "traits": {"cruel": 6, "diligent": 3, "calm": 2}}},
+      {"text": "請神父來家裡跟{target_pron}說說話（2 便士）",
+       "log": "{name}請神父來家裡，神父陪{target_first}禱告了一個晚上。",
+       "effects": [{"money": -2}, {"on_target": [{"ease_concern": {"kind": "grief", "by": 18}}, {"need": {"spirit": 35}}]}, {"target_opinion": {"value": 4, "mod": "comforted", "years": 8}}],
+       "ai": {"base": 6, "traits": {"pious": 8}}}
+     ]},
+
+    {"id": "longing_at_home", "title": "孩子的心上人", "scope": "player_head", "chance": 0.7,
+     "on": {"signal": "concern:longing", "as": "head", "after_months": [1, 4]},
+     "conditions": {"target": {"child_of_target": true, "married": false, "age": [15, 40]}},
+     "prompt": "{target_first}吞吞吐吐地跟{name}說：心裡有了人，是{target_about:longing}。",
+     "options": [
+      {"text": "答應替{target_pron}去提親",
+       "log": "{name}答應替{target_first}去{target_about:longing}家提親。",
+       "effects": [{"start_plan": {"plan": "arrange_match", "subject": "target", "target": "target_about:longing"}}, {"target_opinion": {"value": 12, "mod": "promised_match", "years": 10}}],
+       "ai": {"base": 10, "traits": {"kind": 6, "gregarious": 3, "lustful": 2}}},
+      {"text": "門不當戶不對，不准",
+       "log": "{name}一口回絕：「那種人家，想都別想。」{target_first}紅著眼跑了出去。",
+       "effects": [{"on_target": [{"concern": {"kind": "heartbreak", "about": "about:longing", "strength": 50}}, {"ease_concern": {"kind": "longing", "by": 100}},
+                                  {"concern": {"kind": "grievance", "about": "target", "strength": 40}}, {"opinion": {"value": -12, "mod": "forbade_match", "years": 12}}]}],
+       "ai": {"base": 5, "traits": {"ambitious": 6, "cruel": 4, "greedy": 3}}},
+      {"text": "先放著，等收成好了再說",
+       "log": "{name}說這事等秋收以後再說，{target_first}低著頭沒吭聲。",
+       "effects": [{"target_opinion": {"value": -3, "mod": "put_off", "years": 4}}],
+       "ai": {"base": 6, "traits": {"calm": 4, "content": 3, "lazy": 3}}}
+     ]},
+
+    {"id": "grievance_at_home", "title": "家裡的冷臉", "scope": "player_head", "chance": 0.6,
+     "on": {"signal": "concern:grievance", "as": "head", "after_months": [1, 3]},
+     "conditions": {"target": {"concern": {"kind": "grievance", "about": "target", "min": 20}}},
+     "prompt": "{target_first}這陣子吃飯不說話，看都不看{name}一眼。",
+     "options": [
+      {"text": "主動找{target_pron}把話說開",
+       "log": "{name}把{target_first}叫到屋外，兩人把心裡的疙瘩說開了。",
+       "effects": [{"on_target": [{"ease_concern": {"kind": "grievance", "by": 30, "about": "target"}}]}, {"mutual_opinion": {"value": 8, "mod": "made_up", "years": 10}}],
+       "ai": {"base": 8, "traits": {"kind": 5, "forgiving": 6, "gregarious": 3}}},
+      {"text": "家裡我說了算，不理{target_pron}",
+       "log": "{name}當作沒看見：家裡{name}說了算。{target_first}的臉更冷了。",
+       "effects": [{"on_target": [{"concern": {"kind": "grievance", "about": "target", "strength": 15}}, {"opinion": {"value": -5, "mod": "cold_shoulder", "years": 6}}]}],
+       "ai": {"base": 8, "traits": {"cruel": 5, "wrathful": 4, "ambitious": 3}}}
+     ]}
+  ]
+}

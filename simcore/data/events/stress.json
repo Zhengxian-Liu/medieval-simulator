@@ -1,0 +1,56 @@
+{
+  // Breaking points (after Crusader Kings 3 stress). Stress comes from grief, hunger, deeds done
+  // to you, and most of all from choices that go against your own nature. Crossing 40 / 70 / 100
+  // brings one of these, and how a person breaks depends on who they are. Every outcome eases the
+  // stress but leaves a mark: a drinking habit, a confession someone may repeat, a frightened house.
+  "events": [
+    {"id": "stress_break", "title": "心事", "prompt": "{name} 心裡壓著{stress_cause}，再這樣下去要撐不住了。", "scope": "anyone", "chance": 0.9,
+     "on": {"signal": "stress", "min_level": 1, "max_level": 2, "after_months": [0, 2]},
+     "conditions": {"age": [14, 90]},
+     "options": [
+       {"text": "悶在心裡", "log": "{name} 心裡壓著{stress_cause}，整日不說話，人一天天消沉下去。",
+        "effects": [{"stress": -20}, {"trait_chance": {"trait": "melancholy", "chance": 30}}],
+        "ai": {"base": 4, "traits": {"shy": 4, "calm": 3, "melancholy": 10, "gregarious": -3}}},
+       {"text": "借酒澆愁", "log": ["{name} 心裡壓著{stress_cause}，天天泡在酒館裡。",
+                                "{name} 忘不了{stress_cause}，每晚都喝到被人架回家。"],
+        "effects": [{"stress": -35}, {"ale_debt": 6}, {"need": {"social": 20}}, {"trait_chance": {"trait": "drunkard", "chance": 30}}],
+        "ai": {"base": 5, "traits": {"gregarious": 6, "drunkard": 20, "lustful": 3, "pious": -6, "greedy": -4}}},
+       {"text": "向神父告解", "log": "{name} 心裡壓著{stress_cause}，跪在神父面前把話全說了出來。",
+        "effects": [{"stress": -40}, {"confess_secrets": "priest"}, {"need": {"spirit": 30}}],
+        "ai": {"base": 4, "traits": {"pious": 16, "cynical": -10}}},
+       {"text": "說給枕邊人聽", "conditions": {"married": true},
+        "log": "{name} 心裡壓著{stress_cause}，一天夜裡把憋了很久的話都告訴了 {spouse}。",
+        "effects": [{"stress": -35}, {"confess_secrets": "spouse"}, {"household_opinion": {"value": 4, "mod": "confided", "years": 5}}],
+        "ai": {"base": 4, "traits": {"gregarious": 6, "kind": 4, "shy": -3, "cynical": -3}}},
+       {"text": "拚命幹活", "log": "{name} 心裡壓著{stress_cause}，就沒日沒夜地下田，好像要把自己累垮。",
+        "effects": [{"stress": -30}, {"health": -5}, {"skill": {"farming": 1}}],
+        "ai": {"base": 3, "traits": {"diligent": 14, "lazy": -10}}},
+       {"text": "拿家裡人出氣", "log": ["{name} 心裡壓著{stress_cause}，回家就摔碗罵人，孩子們都躲著{pron}。",
+                                    "{name} 為了{stress_cause}憋了一肚子火，全發在家裡人身上。"],
+        "effects": [{"stress": -35}, {"household_opinion": {"value": -12, "mod": "lashed_out", "years": 5}}, {"beat_children": true}],
+        "ai": {"base": 2, "traits": {"wrathful": 14, "cruel": 10, "kind": -8, "calm": -8}}},
+       {"text": "一個人躲進林子", "log": "{name} 心裡壓著{stress_cause}，一個人跑到林子裡待了好幾天才回來。",
+        "effects": [{"stress": -30}, {"need": {"rest": -20, "social": -20}}],
+        "ai": {"base": 2, "traits": {"shy": 10, "melancholy": 6, "brave": 2}}},
+       {"text": "發願去朝聖（20 便士）", "conditions": {"money_ge": 30, "age": [16, 60]},
+        "log": "{name} 心裡壓著{stress_cause}，向聖母發願，走了兩個星期到沃爾辛厄姆朝聖。",
+        "effects": [{"stress": -55}, {"money": -20}, {"need": {"spirit": 40}}, {"health": -3}, {"reputation": 1}],
+        "ai": {"base": 2, "traits": {"pious": 12, "brave": 2, "cynical": -8, "greedy": -4}}}
+     ]},
+
+    {"id": "stress_collapse", "title": "撐不住了", "prompt": "{name} 被{stress_cause}壓得喘不過氣，終於垮了。", "scope": "anyone", "chance": 1.0,
+     "on": {"signal": "stress", "min_level": 3, "after_months": [0, 1]},
+     "conditions": {"age": [14, 90]},
+     "options": [
+       {"text": "病倒", "log": "{name} 被{stress_cause}壓垮了，病倒在床上好幾個月，醒來時頭髮白了一半。",
+        "effects": [{"stress": -55}, {"health": -15}, {"trait_chance": {"trait": "melancholy", "chance": 40}}],
+        "ai": {"base": 10}},
+       {"text": "成了酒鬼", "log": "{name} 再也扛不住{stress_cause}，把家裡的錢都拿去買酒，成了村裡出名的酒鬼。",
+        "effects": [{"stress": -65}, {"add_trait": "drunkard"}, {"ale_debt": 20}, {"reputation": -3}],
+        "ai": {"base": 6, "traits": {"drunkard": 20, "gregarious": 4, "pious": -6}}},
+       {"text": "當眾發狂", "log": "{name} 被{stress_cause}逼瘋了似的，在彌撒中途大吼大叫，被人拖了出去。",
+        "effects": [{"stress": -60}, {"reputation": -5}, {"need": {"spirit": -20}}, {"household_opinion": {"value": -8, "mod": "shamed_us", "years": 6}}],
+        "ai": {"base": 3, "traits": {"wrathful": 14, "cynical": 4, "calm": -8}}}
+     ]}
+  ]
+}

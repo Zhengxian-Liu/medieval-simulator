@@ -1,0 +1,152 @@
+{
+  "events": [
+    {"id": "child_bell_tower", "title": "爬上鐘樓", "prompt": "{name} 偷爬上教堂鐘樓，被大人揪了下來。", "scope": "player_family", "chance": 0.006, "once": true,
+     "conditions": {"age": [6, 11]},
+     "options": [
+       {"text": "狠狠罵一頓", "log": "{name} 偷爬上教堂鐘樓，被大人揪下來罵了一頓。", "effects": [{"set_flag": "childhood_craven"}], "ai": {"base": 10, "traits": {}}},
+       {"text": "誇孩子膽子大", "log": "{name} 爬上了教堂鐘樓，全村孩子都佩服得不得了。", "effects": [{"set_flag": "childhood_brave"}, {"reputation": 1}], "ai": {"base": 10}}
+     ]},
+    {"id": "child_helps", "title": "懂事的孩子", "prompt": "{name} 天沒亮就起來，想幫大人餵豬。", "scope": "player_family", "chance": 0.006, "once": true,
+     "conditions": {"age": [7, 11]},
+     "options": [
+       {"text": "給孩子一塊蜂蜜餅", "log": "{name} 天沒亮就起來幫忙餵豬，大人給了{pron}一塊蜂蜜餅。", "effects": [{"set_flag": "childhood_diligent"}, {"skill": {"farming": 1}}], "ai": {"base": 10}},
+       {"text": "叫孩子去河邊玩", "log": "{name} 想幫忙，大人笑著叫{pron}去河邊玩。", "effects": [{"set_flag": "childhood_content"}, {"need": {"social": 20}}], "ai": {"base": 8}}
+     ]},
+    {"id": "child_fight", "title": "孩子打架", "prompt": "{name} 和 {target} 在泥地裡打了起來。", "scope": "player_family", "chance": 0.005, "once": true,
+     "conditions": {"age": [7, 12]},
+     "target": {"pick": "random_villager", "conditions": {"age": [6, 13]}},
+     "options": [
+       {"text": "教孩子打回去", "log": "{name} 和 {target} 在泥地裡扭打成一團。", "effects": [{"set_flag": "childhood_wrathful"}, {"mutual_opinion": {"value": -15, "mod": "childhood_fight", "years": 15}}], "ai": {"base": 8}},
+       {"text": "拉著孩子去道歉", "log": "{name} 和 {target} 打了一架，大人拉著{pron}去道歉，兩個孩子後來倒成了朋友。", "effects": [{"set_flag": "childhood_calm"}, {"mutual_opinion": {"value": 15, "mod": "childhood_friend", "years": 20}}], "ai": {"base": 10}}
+     ]},
+    {"id": "send_to_priest", "title": "跟神父讀書", "prompt": "神父說 {target} 腦子靈，願意教{target_pron}認字，一年要 12 便士。家裡也正缺人手。", "scope": "player_head", "chance": 0.08, "cooldown_years": 2,
+     "conditions": {"age": [14, 120], "money_ge": 30, "any_child": {"age": [7, 10], "no_flag": "school_decided", "no_trait": "dull"}},
+     "target": {"pick": "any_child", "conditions": {"age": [7, 10], "no_flag": "school_decided", "no_trait": "dull"}},
+     "options": [
+       {"text": "送去讀書（每年 12 便士）", "log": "{name} 把 {target} 送去跟神父學認字。", "effects": [{"money": -12}, {"target": [{"set_flag": "schooled"}, {"set_flag": "school_decided"}]}],
+        "ai": {"base": 8, "traits": {"pious": 6, "ambitious": 6, "greedy": -6}, "if": [{"cond": {"ambition": "educate_child"}, "add": 40}, {"cond": {"tradition": "lettered"}, "add": 20}]}},
+       {"text": "留在家幫忙", "log": "", "effects": [{"target": [{"set_flag": "school_decided"}, {"skill": {"farming": 1}}]}], "ai": {"base": 12, "traits": {"greedy": 5}}}
+     ]},
+    {"id": "becomes_literate", "title": "識字了", "scope": "player_family", "chance": 0.12, "once": true,
+     "conditions": {"age": [10, 16], "flag": "schooled", "skill_ge": {"learning": 2.5}},
+     "options": [{"text": "好", "log": "{name} 跟神父學會了讀寫拉丁文的禱詞，往後能替家裡念契約、記帳了。", "effects": [{"add_trait": "literate"}, {"reputation": 3}]}]},
+    {"id": "apprenticeship", "title": "學一門手藝", "prompt": "{target} 到了學手藝的年紀。跟父親下田，還是花錢送出去當學徒？", "scope": "player_head", "chance": 0.1, "cooldown_years": 2,
+     "conditions": {"age": [14, 120], "any_child": {"sex": "male", "age": [11, 13], "no_flag": "trade_decided"}},
+     "target": {"pick": "any_child", "conditions": {"sex": "male", "age": [11, 13], "no_flag": "trade_decided"}},
+     "options": [
+       {"text": "跟父親學", "log": "", "effects": [{"target": [{"set_flag": "trade_decided"}]}], "ai": {"base": 14, "if": [{"cond": {"occupation": "smith"}, "add": 20}, {"cond": {"tradition": "smith_line"}, "add": 25}]}},
+       {"text": "送去木匠那裡當學徒（24 便士）", "log": "{name} 花 24 便士把 {target} 送去木匠家當學徒。", "effects": [{"money": -24}, {"target": [{"set_flag": "trade_decided"}, {"set_flag": "apprentice_carpenter"}]}], "ai": {"base": 6, "traits": {"ambitious": 6}, "if": [{"cond": {"money_lt": 40}, "add": -20}]}},
+       {"text": "送去織工那裡學織布（16 便士）", "log": "{name} 把 {target} 送去學織布。", "effects": [{"money": -16}, {"target": [{"set_flag": "trade_decided"}, {"set_flag": "apprentice_weaver"}]}], "ai": {"base": 4, "if": [{"cond": {"money_lt": 30}, "add": -20}]}}
+     ]},
+    {"id": "smith_apprentice", "title": "鐵匠收徒", "prompt": "鐵匠願意收 {target} 當學徒，要 40 便士的拜師錢。", "scope": "player_head", "chance": 0.05, "cooldown_years": 3,
+     "conditions": {"age": [14, 120], "not": {"occupation": "smith"}, "money_ge": 40, "any_child": {"sex": "male", "age": [11, 13], "no_flag": "trade_decided"}},
+     "target": {"pick": "any_child", "conditions": {"sex": "male", "age": [11, 13], "no_flag": "trade_decided"}},
+     "options": [
+       {"text": "送去打鐵（40 便士）", "log": "鐵匠願意收 {target} 當學徒，{name} 咬牙付了 40 便士。", "effects": [{"money": -40}, {"target": [{"set_flag": "trade_decided"}, {"set_flag": "apprentice_smith"}]}], "ai": {"base": 8, "traits": {"ambitious": 8}}},
+       {"text": "太貴了", "log": "", "effects": [], "ai": {"base": 10, "traits": {"greedy": 8}}}
+     ]},
+    {"id": "courtship_m", "parent_decides": true, "title": "心上人", "prompt": "五朔節的舞會上，{name} 一直看著 {target}。", "scope": "player_family", "chance": 0.03, "cooldown_years": 2,
+     "conditions": {"sex": "male", "age": [18, 30], "married": false, "widowed": false, "match_pending": false},
+     "target": {"pick": "random_villager", "conditions": {"sex": "female", "age": [16, 26], "married": false, "same_class": true, "match_pending": false, "not_kin": true}},
+     "options": [
+       {"text": "去提親", "log": "{name} 在五朔節的舞會上看上了 {target}，第二天就上門提親。", "effects": [{"marry_target": true}], "ai": {"base": 10, "traits": {"gregarious": 8, "lustful": 8, "shy": -6}}},
+       {"text": "再等等", "log": "", "effects": [{"opinion": {"value": 10, "mod": "crush", "years": 3}}], "ai": {"base": 10, "traits": {"shy": 10}}}
+     ]},
+    {"id": "courtship_f", "parent_decides": true, "title": "求親的人", "prompt": "{target} 託人來說媒，想娶 {name}。", "scope": "player_family", "chance": 0.03, "cooldown_years": 2,
+     "conditions": {"sex": "female", "age": [16, 26], "married": false, "widowed": false, "match_pending": false},
+     "target": {"pick": "random_villager", "conditions": {"sex": "male", "age": [18, 32], "married": false, "same_class": true, "match_pending": false, "not_kin": true}},
+     "options": [
+       {"text": "答應", "log": "{target} 託人來說媒，{name} 答應嫁給{target_pron}。", "effects": [{"marry_target": true}], "ai": {"base": 10, "if": [{"cond": {"opinion_of_target_ge": 20}, "add": 15}]}},
+       {"text": "拒絕", "log": "{target} 來說媒，被 {name} 一口回絕。", "effects": [{"deed": {"type": "refused_proposal"}}], "ai": {"base": 8, "if": [{"cond": {"opinion_of_target_lt": 0}, "add": 15}]}}
+     ]},
+    {"id": "spouse_quarrel", "title": "夫妻吵架", "prompt": "{name} 和 {target} 又吵起來了，話越說越難聽。", "scope": "player_family", "chance": 0.05, "cooldown_years": 3,
+     "conditions": {"married": true, "is_head": true, "stress_ge": 25},
+     "target": {"pick": "spouse", "conditions": {}},
+     "options": [
+       {"text": "先低頭", "log": ["{name} 和 {target} 為了錢吵了一架，{name} 先低了頭。",
+                               "{target} 嫌 {name} 把錢花在酒館裡，兩人吵到半夜，最後 {name} 認了錯。",
+                               "{name} 和 {target} 為了孩子的親事爭了好幾天，{name} 讓了步。",
+                               "{name} 心裡壓著{stress_cause}，一點小事就和 {target} 吵了起來，最後還是{pron}先低了頭。",
+                               "{target} 數落 {name} 不會跟管家說話，{name} 悶著頭聽完，第二天照{target_pron}說的去辦。"],
+        "effects": [{"mutual_opinion": {"value": 6, "mod": "made_up", "years": 4}}], "ai": {"base": 10, "traits": {"calm": 10, "kind": 6, "wrathful": -8}}},
+       {"text": "摔門出去", "log": ["{name} 和 {target} 大吵一架，摔門跑去酒館。",
+                                "{target} 嫌 {name} 沒出息，{name} 一拳捶在桌上，碗都震碎了。",
+                                "{name} 和 {target} 為了娘家的事吵翻了，好幾天誰也不跟誰說話。",
+                                "{name} 心裡壓著{stress_cause}，{target} 一句話不對，{pron}就摔門出去了。"],
+        "effects": [{"mutual_opinion": {"value": -12, "mod": "bitter_words", "years": 5}}, {"need": {"social": -10}}], "ai": {"base": 6, "traits": {"wrathful": 15, "cruel": 6}}}
+     ]},
+    {"id": "spouse_love", "title": "夏日黃昏", "scope": "player_family", "chance": 0.012, "cooldown_years": 6,
+     "conditions": {"married": true, "mood_ge": 55, "month": [4, 7]},
+     "target": {"pick": "spouse", "conditions": {}},
+     "options": [{"text": "好", "log": ["收工後，{name} 和 {target} 沿著麥田邊走回家。",
+                                       "{target} 從市集給 {name} 帶回一條藍色的髮帶，{name} 一直戴到秋天。",
+                                       "夏至夜裡全村點起篝火，{name} 和 {target} 跳到天亮。",
+                                       "{name} 病了幾天，{target} 守在床邊沒合過眼。"],
+                  "effects": [{"mutual_opinion": {"value": 8, "mod": "tender", "years": 6}}]}]},
+    {"id": "no_heir", "title": "後繼無人", "prompt": "{name} 年紀大了，家裡卻沒有能接手的孩子。地是莊園的，沒人接，就會收回去。", "scope": "player_head", "pulse": "yearly", "chance": 0.25, "cooldown_years": 3,
+     "conditions": {"age": [48, 90], "heir_at_home": false},
+     "options": [
+       {"text": "接遠房姪子來", "log": "{name} 年紀大了，家裡卻沒有能接手的孩子。{pron}託人捎信到鄰村的親戚家。",
+        "effects": [{"adopt_heir": {"min_age": 13, "max_age": 20}}],
+        "ai": {"base": 10}},
+       {"text": "聽天由命", "conditions": {"gentle": false},
+        "log": "{name} 年紀大了，家裡卻沒有能接手的孩子。{pron}嘆口氣：「地是領主的，誰種都一樣。」",
+        "effects": [{"stress": 10}],
+        "ai": {"base": 3, "traits": {"content": 6, "cynical": 4}}}
+     ]},
+    {"id": "widow_grief", "title": "喪偶", "prompt": "{name} 剛送走了另一半。家裡的活還得有人做。", "scope": "player_family", "chance": 0.3, "cooldown_years": 3,
+     "conditions": {"widowed": true, "age": [20, 70], "recently_widowed": true},
+     "options": [
+       {"text": "日日去墳前", "log": "{name} 天天去墓園，整個人消瘦了下去。", "effects": [{"trait_chance": {"trait": "melancholy", "chance": 50}}, {"health": -5}], "ai": {"base": 8, "traits": {"kind": 6}}},
+       {"text": "把心思放在孩子身上", "log": "{name} 把眼淚吞下去，照常下田。", "effects": [{"need": {"spirit": -10}}], "ai": {"base": 10, "traits": {"diligent": 8, "calm": 5}}}
+     ]},
+    {"id": "tavern", "title": "酒館", "prompt": "{name} 心裡煩，天黑了還不想回家。", "scope": "player_family", "chance": 0.04, "cooldown_years": 2,
+     "conditions": {"sex": "male", "age": [16, 70], "stress_ge": 30},
+     "options": [
+       {"text": "喝悶酒", "log": "{name} 心裡煩，在酒館一喝就是一整晚。", "effects": [{"money": -8}, {"need": {"social": 25}}, {"trait_chance": {"trait": "drunkard", "chance": 25}}], "ai": {"base": 10, "traits": {"gregarious": 6, "pious": -6}}},
+       {"text": "去教堂坐坐", "log": "{name} 心裡煩，一個人在教堂坐到天黑。", "effects": [{"need": {"spirit": 25}}], "ai": {"base": 8, "traits": {"pious": 12}}}
+     ]},
+    {"id": "sick_child", "title": "孩子病了", "prompt": "{name} 發起高燒，一夜沒退。", "scope": "player_family", "chance": 0.08, "cooldown_years": 2, "cooldown_scope": "household",
+     "conditions": {"age": [0, 8], "health_lt": 75},
+     "options": [
+       {"text": "請老婦人來看（8 便士）", "log": "{name} 發起高燒，家裡請來會草藥的老婦人。", "effects": [{"money": -8}, {"health": 18}], "ai": {"base": 10, "if": [{"cond": {"money_lt": 10}, "add": -10}]}},
+       {"text": "去求聖人保佑", "log": "{name} 病了，家人點了蠟燭向聖瑪格麗特祈禱。", "effects": [{"health": 6}, {"need": {"spirit": 10}}], "ai": {"base": 8}}
+     ]},
+    {"id": "teach_heir", "title": "傳授手藝", "scope": "player_head", "chance": 0.05, "cooldown_years": 4,
+     "conditions": {"age": [45, 80]},
+     "target": {"pick": "eldest_child", "conditions": {"sex": "male", "age": [14, 40]}},
+     "options": [{"text": "好", "log": "{name} 把自己幾十年的訣竅一點一點教給 {target}。", "effects": [{"target": [{"skill": {"craft": 1.5, "farming": 1.5}}]}, {"deed": {"type": "taught"}}]}]},
+    {"id": "rival_dispute", "title": "鄰里糾紛", "prompt": "{target} 又來找 {name} 家的麻煩，這回是豬拱壞了籬笆。", "scope": "player_family", "budget": "feud", "chance": 0.05, "cooldown_years": 3, "cooldown_scope": "household",
+     "conditions": {"age": [18, 70]},
+     "target": {"pick": "rival", "conditions": {"age": [16, 80], "other_dynasty": true}},
+     "options": [
+       {"text": "告上莊園法庭", "log": "{name} 告 {target} 的豬拱壞了籬笆，莊園法庭判對方賠錢。", "effects": [{"money": 6}, {"target": [{"money": -10}]}, {"deed": {"type": "court_case"}}, {"reputation": 1}], "ai": {"base": 10, "traits": {"ambitious": 5, "greedy": 5}}},
+       {"text": "忍下來", "log": "{target} 又來找麻煩，{name} 忍了下來。", "effects": [{"reputation": -1}, {"need": {"spirit": -10}}], "ai": {"base": 8, "traits": {"calm": 10, "craven": 8}}},
+       {"text": "打一架", "log": "{name} 和 {target} 在酒館外大打出手。", "effects": [{"health": -10}, {"target": [{"health": -10}]}, {"trait_chance": {"trait": "scarred", "chance": 20}}, {"deed": {"type": "brawl"}}], "ai": {"base": 4, "traits": {"wrathful": 15, "brave": 6}}}
+     ]},
+    {"id": "friend_help", "title": "朋友相助", "scope": "player_family", "chance": 0.04, "cooldown_years": 3, "cooldown_scope": "household",
+     "conditions": {"age": [16, 70], "month": [7, 8]},
+     "target": {"pick": "friend", "conditions": {"age": [16, 70], "not_kin": true}},
+     "options": [{"text": "好", "log": "{target} 來幫 {name} 搶收麥子，趕在下雨前收完了。", "effects": [{"food": 120}, {"deed": {"type": "helped_harvest", "doer": "target"}}]}]},
+    {"id": "neighbour_death_npc", "title": "村裡的怪事", "scope": "anyone", "chance": 0.002, "npc_log": true, "cooldown_years": 30,
+     "conditions": {"age": [30, 70], "trait": "cynical"},
+     "options": [{"text": "好", "log": "有人說 {name} 半夜在十字路口和人說話，村裡議論紛紛。", "effects": [{"reputation": -4}]}]},
+    {"id": "deathbed_wishes", "title": "床前", "prompt": "{name} 病得起不了床，神父已經來過了。{target} 守在床邊，等著聽最後的話。",
+     "scope": "player_head", "chance": 1, "once": true,
+     "on": {"signal": "manual"},
+     "options": [
+       {"text": "把藏了一輩子的事告訴 {target}", "log": "{name} 拉著 {target} 的手，把這輩子沒對人說過的事一件一件說了出來。",
+        "effects": [{"confess_secrets": "target"}, {"stress": -30}, {"target": [{"stress": 10}]}],
+        "ai": {"base": 4, "traits": {"pious": 3, "gregarious": 2, "shy": -2}}},
+       {"text": "請神父年年為自己做彌撒（40 便士）", "log": "{name} 把 40 便士交給神父，請他往後每年忌日為自己做一臺彌撒。",
+        "effects": [{"money": -40}, {"prestige": 4}, {"stress": -20}, {"need": {"spirit": 30}}],
+        "ai": {"base": 6, "traits": {"pious": 8, "greedy": -4}}},
+       {"text": "叮囑 {target} 守住這份地，別跟人結仇", "log": "{name} 對 {target} 說：「地是命根子，仇是包袱。別讓這個家散了。」",
+        "effects": [{"target": [{"stress": -10}, {"set_flag": "father_counsel"}]}, {"stress": -10}],
+        "ai": {"base": 6, "traits": {"calm": 4, "forgiving": 4, "vengeful": -4}}},
+       {"text": "叮囑 {target} 記住誰欠了這個家", "log": "{name} 撐著坐起來，對 {target} 說：「那幾家做過什麼，你給我記著。」",
+        "effects": [{"target": [{"set_flag": "father_grudges"}]}, {"stress": -10}],
+        "ai": {"base": 3, "traits": {"vengeful": 8, "wrathful": 4, "forgiving": -6}}}
+     ]}
+  ]
+}

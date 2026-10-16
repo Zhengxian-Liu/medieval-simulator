@@ -1,0 +1,57 @@
+{
+  // Deed types: what a person can do to another, and how each party remembers it.
+  // roles: opinion change about the doer for "target", "target_family" (target's household),
+  // "witness" (everyone, public deeds only); "actor" is the doer's own opinion of the target
+  // (positive for revenge: the grudge feels settled).
+  // half_life: years until the memory is half as strong (0 = never fades).
+  // inheritable: strong memories pass to the holder's children at half strength.
+  // family: the memory also colours opinion of the doer's whole family.
+  // stress: how much the deed weighs on the actor / target / target's household (negative eases).
+  "deeds": [
+    {"id": "married",          "name": "結為夫妻",   "tags": ["bond"],             "visibility": "public",  "roles": {"actor": 25, "target": 25}, "half_life": 0},
+    {"id": "refused_land",     "name": "不肯賣地",   "tags": ["honour"],           "visibility": "public",  "roles": {"target": -10}, "half_life": 8, "stress": {"target": 3}},
+    {"id": "refused_proposal", "name": "拒婚之辱",   "tags": ["honour"],           "visibility": "public",  "roles": {"target": -20, "target_family": -12}, "half_life": 12, "inheritable": true, "family": true, "stress": {"target": 8}},
+    {"id": "brawl",            "name": "打過一架",   "tags": ["violence"],         "visibility": "public",  "roles": {"target": -15, "actor": -10, "witness": -1}, "half_life": 6, "stress": {"actor": 4, "target": 6}},
+    {"id": "court_case",       "name": "法庭相告",   "tags": ["honour", "money"],  "visibility": "public",  "roles": {"target": -14, "target_family": -6, "actor": -5}, "half_life": 10, "inheritable": true, "family": true, "stress": {"target": 6}},
+    {"id": "public_insult",    "name": "當眾羞辱",   "tags": ["honour"],           "visibility": "public",  "roles": {"target": -20, "target_family": -10, "actor": -5, "witness": -1}, "half_life": 10, "inheritable": true, "family": true, "stress": {"target": 10}},
+    {"id": "arson",            "name": "燒了麥垛",   "tags": ["crime", "violence"],"visibility": "secret",  "roles": {"target": -45, "target_family": -35, "actor": 15}, "half_life": 25, "inheritable": true, "family": true, "stress": {"actor": 6, "target": 20, "target_family": 8}},
+    {"id": "slander",          "name": "造謠中傷",   "tags": ["crime", "honour"],  "visibility": "secret",  "roles": {"target": -25, "target_family": -12, "actor": 10}, "half_life": 15, "inheritable": true, "family": true, "stress": {"actor": 3, "target": 12}},
+    {"id": "exposed_plot",     "name": "暗算被揭穿", "tags": ["crime", "honour"],  "visibility": "public",  "roles": {"target": -30, "target_family": -18, "witness": -4}, "half_life": 20, "inheritable": true, "family": true, "stress": {"actor": 15}},
+    {"id": "affair_exposed",   "name": "私通醜聞",   "tags": ["honour", "church"], "visibility": "public",  "roles": {"witness": -4}, "half_life": 15, "stress": {"actor": 25}},
+    {"id": "forced_match",     "name": "逼婚",       "tags": ["family"],           "visibility": "private", "roles": {"target": -20}, "half_life": 15, "stress": {"target": 20}},
+    {"id": "kindness",         "name": "雪中送炭",   "tags": ["help"],             "visibility": "private", "roles": {"target": 15, "target_family": 10}, "half_life": 15, "inheritable": true, "family": true, "stress": {"target": -8}},
+    {"id": "helped_harvest",   "name": "幫忙搶收",   "tags": ["help"],             "visibility": "private", "roles": {"target": 6, "actor": 3}, "half_life": 6},
+    {"id": "taught",           "name": "傳授手藝",   "tags": ["family"],           "visibility": "private", "roles": {"target": 8, "actor": 5}, "half_life": 20},
+    {"id": "sworn_friend",     "name": "交心之交",   "tags": ["bond"],             "visibility": "private", "roles": {"target": 30, "actor": 30}, "half_life": 25, "inheritable": true, "family": true, "stress": {"actor": -6, "target": -6}},
+    {"id": "helped_in_plague", "name": "瘟疫中相助", "tags": ["help", "honour"],   "visibility": "public",  "roles": {"witness": 8}, "half_life": 30, "inheritable": true, "family": true},
+    {"id": "reconciled",       "name": "兩家和解",   "tags": ["bond", "peace"],             "visibility": "public",  "roles": {"target": 30, "target_family": 25, "actor": 30}, "half_life": 30, "inheritable": true, "family": true, "stress": {"actor": -15, "target": -15}},
+    {"id": "land_bought",      "name": "買走了地",   "tags": ["money"],            "visibility": "public",  "roles": {"target": -6, "target_family": -6}, "half_life": 20, "inheritable": true, "family": true, "stress": {"target": 5}},
+    {"id": "imposed_reeve",    "name": "領主硬塞的莊頭", "tags": ["honour"],   "visibility": "public",  "roles": {"target": -18, "target_family": -8, "witness": -4}, "half_life": 10, "inheritable": false, "stress": {"target": 6}},
+    {"id": "embezzled",        "name": "在帳本上做手腳", "tags": ["crime", "money"], "visibility": "secret", "roles": {"target": -30, "target_family": -10, "actor": 0}, "half_life": 20, "stress": {"actor": 6}},
+    {"id": "reeve_lenient",    "name": "莊頭網開一面", "tags": ["help"],       "visibility": "private", "roles": {"target": 15, "target_family": 10}, "half_life": 15, "inheritable": true, "family": true, "stress": {"target": -6}},
+    {"id": "reeve_strict",     "name": "莊頭上門逼租", "tags": ["money", "honour"], "visibility": "public", "roles": {"target": -14, "target_family": -8}, "half_life": 10, "inheritable": true, "family": true, "stress": {"target": 6}},
+    {"id": "worst_boonwork",   "name": "派最苦的勞役", "tags": ["honour"],     "visibility": "public",  "roles": {"target": -12, "target_family": -6}, "half_life": 8, "family": true, "stress": {"target": 4}},
+    {"id": "forgiven_by_lord", "name": "求領主免了欠租", "tags": ["money", "bond"], "visibility": "public", "roles": {"target": 10}, "half_life": 20, "stress": {"target": 10}},
+    {"id": "defaulted",        "name": "欠債不還",     "tags": ["money", "honour"], "visibility": "public", "roles": {"target": -25, "target_family": -15, "witness": -2}, "half_life": 20, "inheritable": true, "family": true, "stress": {"actor": 10}},
+    {"id": "beaten_child",     "name": "挨打",       "tags": ["family", "violence"], "visibility": "private", "roles": {"target": -15}, "half_life": 25, "stress": {"target": 8}},
+    {"id": "convicted",          "name": "告上法庭定罪", "tags": ["honour", "money"], "visibility": "public", "roles": {"target": -30, "target_family": -20, "actor": -5}, "half_life": 20, "inheritable": true, "family": true, "stress": {"target": 20}},
+    {"id": "wrongly_convicted",  "name": "被冤枉定罪",   "tags": ["honour", "money"], "visibility": "public", "roles": {"target": -45, "target_family": -30}, "half_life": 30, "inheritable": true, "family": true, "stress": {"target": 35, "target_family": 10}},
+    {"id": "accused_unproven",   "name": "被告查無實據", "tags": ["honour"], "visibility": "public", "roles": {"target": -15, "target_family": -8}, "half_life": 10, "inheritable": true, "family": true, "stress": {"target": 10}},
+    {"id": "false_accusation",   "name": "誣告",         "tags": ["honour"], "visibility": "public", "roles": {"target": -35, "target_family": -20, "witness": -2}, "half_life": 20, "inheritable": true, "family": true, "stress": {"target": 15}},
+    {"id": "confessed",          "name": "親口認錯",     "tags": ["bond"], "visibility": "private", "roles": {"target": 15, "target_family": 8}, "half_life": 15, "stress": {"actor": -25}},
+    {"id": "mistreated_servant", "name": "虐待幫傭", "tags": ["violence", "family"], "visibility": "private", "roles": {"target": -25, "target_family": -15}, "half_life": 20, "inheritable": true, "family": true, "stress": {"target": 15}},
+    {"id": "good_master",      "name": "善待幫傭",   "tags": ["help"],           "visibility": "private", "roles": {"target": 12, "target_family": 8, "actor": 6}, "half_life": 20, "inheritable": true, "family": true},
+    {"id": "granted_freedom",  "name": "准予自由",   "tags": ["help", "money"],  "visibility": "public",  "roles": {"target": 10, "witness": 0}, "half_life": 30},
+    {"id": "distrained",       "name": "扣押牲口抵債", "tags": ["money"],        "visibility": "public",  "roles": {"target": -15, "target_family": -8}, "half_life": 10, "stress": {"target": 10}},
+    {"id": "land_seized",      "name": "收走田地抵債", "tags": ["money", "honour"], "visibility": "public", "roles": {"target": -30, "target_family": -20}, "half_life": 25, "inheritable": true, "family": true},
+    {"id": "lent_money",       "name": "借錢解圍",   "tags": ["help", "money"],  "visibility": "private", "roles": {"target": 14, "target_family": 6, "actor": 4}, "half_life": 15, "inheritable": true, "family": true},
+    {"id": "mediated",         "name": "神父調解",   "tags": ["bond", "truce"],  "visibility": "public",  "roles": {"target": 10, "target_family": 8, "actor": 10}, "half_life": 20, "stress": {"actor": -10, "target": -10}},
+    {"id": "paid_compensation","name": "賠了錢",     "tags": ["bond", "truce"],  "visibility": "public",  "roles": {"target": 12, "target_family": 8}, "half_life": 15},
+    {"id": "trampled_crops",   "name": "放豬糟蹋莊稼", "tags": ["money"],      "visibility": "public",  "roles": {"target": -10, "target_family": -6}, "half_life": 8, "family": true},
+    {"id": "affair",           "name": "私通",       "tags": ["honour", "church", "affair"], "visibility": "secret", "roles": {"target": -40, "target_family": -15}, "half_life": 15, "stress": {"actor": 4}},
+    {"id": "blackmailed",      "name": "被拿把柄要脅", "tags": ["honour", "money"], "visibility": "private", "roles": {"target": -35, "target_family": -10, "actor": -5}, "half_life": 20, "inheritable": true, "family": true, "stress": {"target": 15}},
+    {"id": "hush_money",       "name": "收了封口費", "tags": ["money"],          "visibility": "private", "roles": {"target": 5, "actor": -5}, "half_life": 10},
+    {"id": "made_amends",      "name": "上門賠罪",   "tags": ["bond", "peace"],  "visibility": "public",  "roles": {"target": 25, "target_family": 18, "actor": 10}, "half_life": 20, "stress": {"actor": -15}},
+    {"id": "informed_lord",    "name": "向領主告密", "tags": ["honour"],           "visibility": "private", "roles": {"target": 30}, "half_life": 20}
+  ]
+}

@@ -1,0 +1,659 @@
+// SimCore world state and the coarse (one game day) step.
+#pragma once
+
+#include <array>
+#include <cstdint>
+#include <functional>
+#include <map>
+#include <tuple>
+#include <set>
+#include <string>
+#include <vector>
+
+#include "simcore/defs.h"
+#include "simcore/rng.h"
+
+namespace sim {
+
+using Id = int32_t;
+constexpr Id kNone = -1;
+
+// Calendar: 12 months of 30 days. Day 0 is 1 January of the start year.
+constexpr int kDaysPerMonth = 30;
+constexpr int kDaysPerYear = 360;
+
+enum class Sex : uint8_t { Male, Female };
+enum Skill { Farming, Craft, Learning, Charm, kSkillCount };
+enum Need { Hunger, Rest, Warmth, Social, Spirit, kNeedCount };
+
+const char* skillKey(int s);
+const char* needKey(int n);
+int skillFromKey(const std::string& k);
+int needFromKey(const std::string& k);
+
+enum class Harshness { Historical, Gentle };
+
+struct Config {
+    uint64_t seed = 1;
+    int startYear = 1330;
+    Harshness harshness = Harshness::Historical;
+    std::string origin = "peasant";  // which starting household the player takes
+};
+
+// What a villager means to do this year, and why (the NPC "backbone"). Chosen from their ambition,
+// grudges, friendships and hardship; it raises the odds of the matching plan or action.
+struct Intention {
+    std::string kind;   // plan | help | none
+    std::string plan;   // for kind == plan
+    Id target = kNone;
+    Id subject = kNone; // the child a match is for
+    std::string why;    // in words, for the player who looks at this person
+    bool secret = false;  // a scheme others cannot see
+    int since = -1;
+};
+
+// One thing on a person's mind (data/concerns.json): what it is, who it is about, how strongly.
+struct Concern {
+    std::string kind;
+    Id about = kNone;
+    double strength = 0;  // 0–100; fades monthly
+    int since = 0;
+};
+
+struct Person {
+    Id id = kNone;
+    std::string firstName;
+    Id dynasty = kNone;
+    Sex sex = Sex::Male;
+    int birthDay = 0;
+    int deathDay = -1;
+    std::string deathCause;
+    Id father = kNone, mother = kNone, spouse = kNone;
+    Id household = kNone;
+    std::string occupation;
+    std::vector<std::string> traits;
+    std::array<double, kSkillCount> skills{};
+    std::array<double, kNeedCount> needs{};
+    double health = 90;
+    double reputation = 0;
+    std::set<std::string> flags;
+    int pregnantDue = -1;
+    int lastBirthDay = -100000;
+    std::vector<Id> children;
+    std::string ambition;
+    int ambitionSince = 0;
+    int ambitionStep = 0;       // milestones of the ambition reached so far
+    Intention intent;
+    std::string lastReason;     // why they chose what they last chose, when a model decided for them
+    bool free = true;           // false = villein (unfree), bound to the manor
+    Id home = kNone;            // while in service: the household the servant belongs to
+    int serviceEnd = -1;        // day the service term ends
+    double stress = 0;          // CK-style stress: grief, hardship, and acting against one's nature
+    std::string stressCause;    // the biggest weight on their mind, for the chronicle
+    double stressCauseValue = 0;
+    int stressLevel = 0;        // 0–3; crossing a level brings a breaking point
+    int lastBreakDay = -100000; // breaking points come at most once a year
+    int breaks = 0;
+    std::string lastBreakCause;
+    Id lover = kNone;           // a standing affair: one secret, and a yearly chance it comes out
+    int loverSince = 0;
+    Id loverDeed = kNone;       // this person's betrayal of their spouse
+    std::vector<Concern> concerns;  // what is on their mind
+    double effort = 1;          // how much of themselves they put into the work, from their mood over recent months
+
+    bool alive() const { return deathDay < 0; }
+};
+
+struct Household {
+    Id id = kNone;
+    Id dynasty = kNone;
+    Id head = kNone;
+    std::vector<Id> members;
+    double acres = 0;
+    double freehold = 0;  // of those acres, held by charter: a small fixed rent, and the lord cannot take them back
+    double money = 0;     // pence
+    double food = 0;      // person-days of food
+    double firewood = 0;  // household-days of winter fuel
+    std::string house = "cottage";  // cottage | timber | stone | manor
+    std::vector<Id> items;
+    bool extinct = false;
+    // Debt (story arc): arrears to the lord, or a loan from a neighbour, escalating each year unpaid.
+    double debt = 0;
+    // A second debt to someone else waits behind the first (e.g. rent arrears while owing the miller).
+    double heldDebt = 0;
+    Id heldCreditor = kNone;
+    Id creditor = kNone;   // person owed; the lord for rent arrears
+    int debtYears = 0;     // rent days passed with the debt unpaid
+    int noOxUntil = -1;    // the plough ox was sold or seized: poorer harvests until then
+    double rentFactor = 1; // the lord raises the rent of households that do well
+    int boonUntil = -1;    // working off a debt on the lord's demesne: fewer days on their own land
+    int lodgerUntil = -1;  // a lodger pays for the corner by the hearth
+    std::string trade;     // the craft this house lives by, even while no one here can work it
+    bool tradeLet = false; // the shop is let to a journeyman until a son grows into it
+    bool lean = false;     // last harvest fell short of the household's needs
+    double lastYield = 0;  // last harvest, in days of the household's food
+    double lastRent = 0, lastRentPaid = 0;
+    // The head's time this season (design/season-loop.md): spent on people and plans, or else on the work.
+    std::map<std::string, double> ledger;  // the player's money, by what it came from or went on (running totals)
+    int timeSeason = -1;   // year * 4 + season the budget belongs to
+    int timeLeft = 0;
+    double workBonus = 0;  // seasons spent bent over the work: a slightly better harvest
+};
+
+// A quarrel between two families that grows by stages (Crusader Kings-style story arc).
+// It belongs to the families, so it outlives the people who started it.
+struct Feud {
+    Id a = kNone, b = kNone;  // dynasties, a < b
+    double heat = 0;
+    int stage = 0;            // 0 none, 1 嫌隙, 2 結怨, 3 世仇
+    int since = 0;
+    Id cause = kNone;         // the deed that started it
+    Id last = kNone;          // the latest deed that fed it
+    int truceUntil = -1;      // a priest's peace holds once a generation; a second one means less
+};
+
+struct Dynasty {
+    Id id = kNone;
+    std::string surname;
+    std::vector<std::string> traditions;
+    std::vector<Id> heads;  // for the player dynasty: every head in order
+    std::vector<int> headSince;  // day each of them became head
+    double prestige = 0;
+    std::string regret;          // the ambition the last head died without reaching; the next one may take it up
+    Id townKin = kNone;          // a son sent to town to learn a trade (the town branch of the ladder)
+    int townSince = -1;
+};
+
+struct Item {
+    Id id = kNone;
+    std::string type;
+    Id maker = kNone;
+    int madeDay = 0;
+    Id household = kNone;
+    std::vector<Id> owners;  // heads who held it, in order
+    bool lost = false;
+};
+
+// Something a person did, as it happened. Memories and (later) beliefs point at deeds.
+struct Deed {
+    Id id = kNone;
+    std::string type;
+    int day = 0;
+    Id actor = kNone;
+    Id target = kNone;
+    double scale = 1;
+    Id cause = kNone;  // the deed this one answered, if any
+};
+
+// How one person remembers someone. Opinion is the sum of a person's memories.
+struct Memory {
+    Id deed = kNone;          // kNone for small everyday impressions
+    Id about = kNone;         // the person remembered
+    Id aboutDynasty = kNone;  // set when the memory colours the whole family
+    std::string label;        // deed type or impression id
+    double value = 0;         // opinion contribution when fresh
+    int sinceDay = 0;
+    double halfLife = 0;      // years; 0 = does not fade
+    int expiresDay = -1;
+    bool inherited = false;
+};
+
+// What a person believes about a deed: who did it, and how sure they are. Beliefs can be wrong.
+struct Belief {
+    Id deed = kNone;
+    Id culprit = kNone;     // who they think did it (may not be the real doer)
+    double confidence = 0;  // 0–100
+    Id source = kNone;      // who told them; kNone = saw it or did it
+    int day = 0;
+    bool actedOn = false;   // already turned into a grudge (or an accusation)
+    int quietUntil = -1;    // paid (or frightened) to keep quiet until this day
+    bool used = false;      // already spent as leverage (blackmail, exposure)
+};
+
+// A typed state change other rules can listen to.
+struct Signal {
+    std::string type;  // deed | belief | death
+    Id deed = kNone;
+    Id a = kNone;      // deed: doer; belief: holder; death: the dead
+    Id b = kNone;      // deed: victim; belief: believed culprit; death: surviving spouse
+    bool flag = false; // death: the dead was head of a household
+    double value = 0;  // stress: the new level
+};
+
+// A signal-driven event waiting for its day.
+struct Scheduled {
+    int day = 0;
+    std::string event;
+    Id person = kNone;
+    Id target = kNone;
+    Id deed = kNone;
+    uint64_t seq = 0;
+};
+
+struct ChronicleEntry {
+    int day = 0;
+    int importance = 1;  // 1 family, 2 village, 3 history
+    std::string text;
+};
+
+// A player (or AI-player) instruction. The sim changes only through commands and its own rules,
+// so a run is fully reproducible from the start config plus the command log.
+struct Command {
+    int day = 0;
+    std::string type;  // start_plan | cancel_plan | interact (plan = the interaction's event id)
+    Id actor = kNone;
+    std::string plan;
+    Id target = kNone;
+    Id subject = kNone;
+};
+
+struct ActivePlan {
+    Id actor = kNone, target = kNone, subject = kNone;
+    std::string plan;
+    double progress = 0;
+    int startDay = 0;
+    std::vector<std::string> beatsSeen;  // each beat happens at most once per plan
+};
+
+struct PlanOption {
+    std::string plan;
+    Id target = kNone;
+    Id subject = kNone;
+    double weight = 0;      // how much the person wants this plan at all
+    double targetWeight = 1;  // preference among targets of the same plan
+};
+
+// A memory or modifier id as the player reads it ("refused_proposal" -> "拒婚之辱").
+std::string opinionLabel(const std::string& raw);
+// How a feeling reads in words: 非常親近 (60+), 有好感, 還算友善, 沒什麼感覺, 不太喜歡, 厭惡, 恨之入骨 (-60 and below).
+const char* opinionWord(double op);
+// For the reader: drops the spaces the text puts around names ("彼得·阿特伍德 開始") where both sides are
+// Chinese, keeping them next to numbers and Latin letters ("第 1 階", "好感 +23").
+std::string tidyText(const std::string& text);
+
+// Picks a plan first by its weight, then a target within it, so plans with many possible
+// targets are not chosen more often just because of that.
+int choosePlanOption(const std::vector<PlanOption>& opts, Rng& rng);
+
+struct ActiveEffect {
+    std::string param;
+    double value = 0;  // multiplier or absolute, see param
+    int untilDay = 0;
+};
+
+class World {
+public:
+    World(const Defs& defs, Config cfg);
+
+    void stepDay();
+    void runYears(int years);
+
+    // --- queries
+    int today() const { return day_; }
+    int year() const { return cfg_.startYear + day_ / kDaysPerYear; }
+    int month() const { return (day_ % kDaysPerYear) / kDaysPerMonth; }
+    int dayOfMonth() const { return day_ % kDaysPerMonth; }
+    bool isWinter() const { int m = month(); return m == 11 || m == 0 || m == 1; }
+    double ageYears(const Person& p) const { return (day_ - p.birthDay) / double(kDaysPerYear); }
+
+    const Defs& defs() const { return defs_; }
+    const Config& config() const { return cfg_; }
+    const std::vector<Person>& people() const { return people_; }
+    const std::vector<Household>& households() const { return households_; }
+    const std::vector<Dynasty>& dynasties() const { return dynasties_; }
+    const std::vector<Item>& items() const { return items_; }
+    const std::vector<ChronicleEntry>& chronicle() const { return chronicle_; }
+    const Person& person(Id id) const { return people_.at(id); }
+    const Household& household(Id id) const { return households_.at(id); }
+    Id playerDynasty() const { return playerDynasty_; }
+    Id playerHousehold() const { return playerHousehold_; }
+    bool gameOver() const { return gameOver_; }
+
+    std::string fullName(Id id) const;
+    std::string shortName(Id id) const;  // first name, with "小" when fullName gives one (younger namesake)
+
+    // Human play: when set, the player's head makes their own choices in events. The chooser gets
+    // the open options and returns the position of the one picked, or -1 to let the AI decide.
+    struct ChoicePrompt {
+        std::string title, situation;
+        std::vector<std::string> options;
+        std::vector<std::string> unavailable;  // shown but not choosable, with why (e.g. "請老婦人來看（錢不夠）")
+    };
+    using Chooser = std::function<int(const ChoicePrompt&)>;
+    void setChooser(Chooser c) { chooser_ = std::move(c); }
+    // Puts a decision the code makes (not an event) to the human player, if there is one: the
+    // option index they chose, or -1 to let the AI decide.
+    int askPlayer(const std::string& title, const std::string& situation, const std::vector<std::string>& options);
+    // What the family knows: opinions with their reasons, feuds, debts, believed secrets, inquiries.
+    std::string familyReport() const;
+    // One villager as the family sees them: what they want, what they mean to do, what they think of you and why.
+    std::string personReport(Id id) const;
+    // One line on a person: age, how they feel about the family, and what they are about (if known).
+    std::string personLine(Id id) const;
+    std::string kinWord(Id a, Id b) const;  // "兒子", "姊妹", "親戚"…: what b is to a
+    bool aimsKnown(const Person& p) const;
+
+    // The family ladder: 0 villein, 1 free tenant, 2 freeholder, 3 small landholder (-1: the lord's house).
+    int standing(Id household) const;
+    static const char* standingName(int rung);
+    // Branches off the ladder: a churchman in the family, a son in town.
+    bool kinInChurch(Id dynasty) const;
+    bool kinInTown(Id dynasty) const;
+
+    // Simulation level of detail: how closely each villager is simulated, by how close they are to
+    // the player's family in the web of relations. Recomputed every season.
+    enum Ring : uint8_t { kFar = 0, kNear = 1, kSpotlight = 2, kHome = 3 };
+    int ringOf(Id id) const { return id >= 0 && id < static_cast<Id>(ring_.size()) ? int(ring_[id]) : int(kFar); }
+    // People worth looking at, closest first (spotlight, then near).
+    std::vector<Id> peopleOfNote() const;
+    bool seemsBusy(Id id) const;  // the family can see this person has business with it right now
+
+    // A spotlight villager's choice can be handed to a model: the rules list the options, the decider
+    // picks one (or -1 for the rules to decide) and says why. Replays log its answers like the player's.
+    struct NpcChoice {
+        Id who = kNone;
+        std::string title, situation, mind;
+        std::string feelings;              // how they feel about each person the options touch
+        std::vector<std::string> options;
+        std::vector<double> weights;       // what the rules alone would weigh each option at
+        int fallback = -1;                 // the do-nothing option, which neither side may rule out
+    };
+    using NpcDecider = std::function<int(const NpcChoice&, std::string& reason)>;
+    void setNpcDecider(NpcDecider d) { npcDecider_ = std::move(d); }
+    // Optional: answers many choices at once (the whole village's yearly intentions), in the order given,
+    // so a model can be asked in parallel. Answers it leaves out go to the one-at-a-time decider.
+    using NpcBatchDecider = std::function<std::vector<std::pair<int, std::string>>(const std::vector<NpcChoice>&)>;
+    void setNpcBatchDecider(NpcBatchDecider d) { npcBatchDecider_ = std::move(d); }
+    // Who the decider is asked for: kSpotlight (default), kNear, or kFar for every villager.
+    void setNpcScope(Ring r) { npcScope_ = r; }
+    bool npcInScope(Id id) const {
+        int r = ringOf(id);
+        return npcDecider_ && r != kHome && r >= npcScope_;
+    }
+    const std::vector<Deed>& deeds() const { return deeds_; }
+    const std::vector<Memory>& memoriesOf(Id id) const { return memories_.at(id); }
+    double memoryValue(const Memory& m) const;
+    // Every contribution to `from`'s opinion of `to`, largest first: (label, value).
+    std::vector<std::pair<std::string, double>> opinionBreakdown(Id from, Id to) const;
+    double kinBase(Id from, Id to) const;
+    std::string kinBaseLabel(Id from, Id to) const;
+    // "有好感 +23（常一起說笑 +15、個性合得來 +8）": the word, the number, and what it adds up from.
+    std::string opinionText(Id from, Id to, int maxReasons = 3) const;
+    Id recordDeed(const std::string& type, Id actor, Id target, double scale = 1, Id cause = kNone);
+    const std::vector<Belief>& beliefsOf(Id id) const { return beliefs_.at(id); }
+    const Belief* beliefAbout(Id holder, Id deed) const;
+    const std::vector<Feud>& feuds() const { return feuds_; }
+    const Feud* feudBetween(Id dynA, Id dynB) const;
+    int feudStage(Id personA, Id personB) const;  // between the two people's families
+    std::string describeDeed(Id deed) const;      // "1414 年的「拒婚之辱」"
+    double opinion(Id from, Id to) const;
+    bool hasTrait(const Person& p, const std::string& t) const;
+    double traitMod(const Person& p, const std::string& key) const;  // sum over traits + traditions
+    double param(const std::string& name, double fallback) const;
+    double mood(const Person& p) const;  // 0–100: needs, stress and what is on their mind
+    // The mood in words, with its main cause: {"悲痛", "兒子威廉的死還壓在她心上"}.
+    struct MoodView {
+        double value = 50;
+        std::string word, cause;
+    };
+    MoodView moodView(const Person& p) const;
+    void addConcern(Id holder, const std::string& kind, Id about, double strength);
+    // Lessens a concern (about = kNone: whoever it is about); returns how much it eased.
+    double easeConcern(Id holder, const std::string& kind, double by, Id about = kNone);
+    const Concern* concernOf(const Person& p, const std::string& kind, Id about = kNone) const;
+    std::string concernText(const Person& p, const Concern& c, bool wish) const;
+    // The head's free time this season, and the people the head can go and see with what.
+    static int seasonBudget(int month);
+    int timeLeft() const;
+    struct Interaction {
+        const EventDef* ev = nullptr;
+        bool open = false;     // conditions hold and there is time (and money) for it
+        std::string why;       // when closed: why not
+    };
+    std::vector<Interaction> interactionsWith(Id target);
+    std::vector<Id> peopleToSee() const;  // family first, then those the head knows
+    void runCommands() { processCommands(); }  // carry out what the player just asked for, before the day runs
+    // The season at a glance, and what changed since a snapshot taken at its start.
+    std::string familyGlance() const;
+    struct FamilySnapshot {
+        std::map<Id, std::pair<std::string, double>> people;  // mood word, opinion of the head
+        double money = 0, food = 0, acres = 0;
+        Id head = kNone;
+        std::map<std::string, double> ledger;
+    };
+    FamilySnapshot snapshot() const;
+    std::string seasonChanges(const FamilySnapshot& before) const;
+    bool isPlayerFamily(const Person& p) const;
+    bool closeKin(Id a, Id b) const;
+    bool gentry(Id id) const;  // the lord's family: they do not marry tenants
+    int swornFriends(Id id) const;  // living people this person has sworn friendship with
+    int livingCount() const;
+
+    // --- player interface
+    void issue(const Command& c);
+    std::vector<PlanOption> availablePlans(Id actor);
+    const ActivePlan* activePlan(Id actor) const;
+    const std::vector<Command>& commandLog() const { return commandLog_; }
+    Id playerHead() const { return playerHousehold_ == kNone ? kNone : households_[playerHousehold_].head; }
+    // Who decides for the family: the head, or while the head is a child, whoever keeps the house
+    // for them (their mother if she is home, else the oldest grown member).
+    Id actingHead() const;
+
+    // Deterministic digest of the whole state, for replay tests.
+    uint64_t digest() const;
+
+    // Instrumentation for the stats tool (not part of the digest): event fires, plan outcomes.
+    const std::map<std::string, int>& counters() const { return counters_; }
+
+private:
+    friend class EventRunner;
+
+    const Defs& defs_;
+    Config cfg_;
+    int day_ = 0;
+    bool gameOver_ = false;
+
+    std::vector<Person> people_;
+    std::vector<Household> households_;
+    std::vector<Dynasty> dynasties_;
+    std::vector<Item> items_;
+    std::vector<Deed> deeds_;
+    std::vector<std::vector<Memory>> memories_;  // by person id
+    std::vector<std::vector<Belief>> beliefs_;   // by person id
+    std::vector<Scheduled> scheduled_;
+    std::set<std::pair<Id, Id>> toldPlayer_;
+    std::vector<Feud> feuds_;
+    std::set<std::pair<Id, std::string>> deedNotes_;  // (deed, key): this deed already led to that event
+    std::set<std::pair<Id, Id>> feudCounted_;  // (deed, dynasty) already added to a feud  // (deed, culprit) stories already in the chronicle
+    uint64_t scheduleSeq_ = 0;
+    std::map<std::pair<Id, std::string>, int> cooldowns_;  // (person, event) -> day allowed again
+    std::set<std::string> worldFlags_;
+    std::vector<ActiveEffect> effects_;
+    std::map<std::string, double> baseParams_;
+    std::vector<ChronicleEntry> chronicle_;
+    std::map<std::string, int> counters_;
+    double vacantAcres_ = 0;
+    Id playerDynasty_ = kNone;
+    Id playerHousehold_ = kNone;
+    Id lord_ = kNone;
+    Id priest_ = kNone;
+    int nextReeveYear_ = 0;
+    Chooser chooser_;
+    NpcDecider npcDecider_;
+    NpcBatchDecider npcBatchDecider_;
+    Ring npcScope_ = kSpotlight;
+    std::vector<uint8_t> ring_;          // by person id
+    std::vector<float> ringScore_;       // how much each villager has to do with the family right now
+    std::vector<float> shownScore_;      // the part of it the family can see
+    std::string pendingReason_;          // a model's reason for the choice being logged
+    std::map<std::pair<Id, std::string>, int> reacted_;  // (person, deed type) -> day the family last saw them take it in
+    std::map<Id, int> helpedUntil_;      // household -> day before which no one sends them help again
+    std::map<Id, int> noticed_;          // far villagers drawn closer for a while (until day)
+    std::map<Id, int> lastStanding_;     // household -> rung last seen
+    bool pendingAmbition_ = false;       // the first head picks an ambition on the first day
+    Rng rngMinds_;
+    std::string pendingOpening_;  // the opening situation, run on the first day
+    int lastForeshadow_ = -100000;  // the family senses a plot against it at most once every few years
+    std::map<Id, int> reeveTerms_;  // consecutive terms served
+    Id lordOverrode_ = kNone;       // the lord who last overrode the vote
+    mutable std::map<Id, std::string> bynames_;
+    std::map<std::tuple<Id, std::string, int>, int> budgetUsed_;  // (household, budget, year) -> events fired  // "（Rose 的丈夫）": fixed the first time it is needed  // the reeve serves three years unless the post falls vacant
+    size_t nextHistory_ = 0;
+
+    std::vector<Command> pending_, commandLog_;
+    std::vector<ActivePlan> plans_;
+
+    Rng rngLife_, rngEcon_, rngSocial_, rngEvents_, rngNames_, rngPlans_, rngKnow_;
+
+    // plans.cpp
+    void processCommands();
+    bool startPlan(Id actor, const std::string& plan, Id target, Id subject);
+    void monthlyPlans();
+    void npcStartPlans();
+    void endPlan(size_t index, const std::string& outcome);
+
+    // setup.cpp
+    void setupVillage();
+    Id addPerson(const std::string& name, Id dynasty, Sex sex, int birthDay, Id household);
+    Id addHousehold(Id dynasty, double acres, double money);
+    Id addDynasty(const std::string& surname);
+    Id addItem(const std::string& type, Id maker, Id household);
+    void rollPersonality(Person& p, int count);
+    void rollCongenital(Person& p);
+
+    // life.cpp
+    void dailyNeeds();
+    void monthlyHealth();
+    void monthlyBirths();
+    void yearlyMarriages();
+    void yearlyAdulthood();
+    void giveBirth(Person& mother);
+    void kill(Id id, const std::string& cause);
+    void onHeadDied(Household& h, Id deadHead);
+    void obituary(Id id);
+    void followSurvivingBranch(bool lineEnded = false);
+    void marry(Id a, Id b);
+    std::string pickName(Sex sex, Id father, Id mother);
+    void growSkills();
+
+    // economy.cpp
+    void monthlyEconomy();
+    void harvest();
+    void gatherFirewood();
+    void payRent();
+    double consumption(const Household& h) const;
+    void ensureFood(Household& h);
+
+    // social.cpp
+    void monthlySocial();
+    void addOpinion(Id from, Id to, const std::string& modId, double value, int years);
+    void addMemory(Id holder, const Memory& m);
+    void inheritMemories(Id dead);
+    void pruneOpinions();
+    void electReeve();
+
+    // manor.cpp: serfdom, manorial dues and life-cycle service
+    void moveTo(Id person, Id household);
+    void chargeMerchet(Id woman, bool outsideManor);
+    void chargeHeriot(Household& h, Id dead);
+    void recallServants(Id household);
+    void yearlyService();
+    void sendToService(Id servant, Id master, int years);
+    void setFree(Id person);
+
+    // knowledge.cpp: beliefs, rumours, investigation, accusation
+    void addBelief(Id holder, Id deed, Id culprit, double confidence, Id source);
+    void knowAtDeed(const Deed& d, const DeedDef& def);
+    void monthlyRumours();
+    void actOnBelief(Id holder, Belief& b);
+    Id investigate(Id asker, Id informant);  // returns the deed learned about, or kNone
+    Id unsolvedDeed(Id asker) const;         // the secret wrong this person's family most wants explained
+    struct Inquiry {
+        std::vector<Id> suspects;  // households with a reason to have done it, narrowed as people talk
+        bool started = false, done = false;
+    };
+    std::map<std::pair<Id, Id>, Inquiry> inquiries_;  // (household, deed)
+    void accuse(Id accuser, Id accused, Id deed);
+    bool deedTried(Id deed) const;
+    // The manor court's jury: neighbours who vote by what they believe and whom they like.
+    int juryVerdict(Id accuser, Id accused, Id deed, std::vector<Id>& guiltyVotes, int& panel);
+    int juryVote_ = -1;  // set by the jury_duty event: 1 guilty, 0 not guilty
+
+    // stress.cpp: grief, hardship and acting against one's nature, and the breaking points
+    void addStress(Id id, double amount, const std::string& cause);
+    void monthlyStress();
+    void confessSecrets(Id id, Id to);
+
+    // hooks.cpp: secrets as leverage, and the truth coming out at the end of a life
+    Id hookDeed(Id holder, Id culprit) const;  // a secret holder believes culprit did, usable as leverage
+    bool hasHook(Id holder) const;
+    void deathbedConfession(Id dying);
+
+    // arcs.cpp: story arcs that run for years: family feuds and debts
+    void feudHeat(Id dynA, Id dynB, double delta, Id deed);
+    void feudOnDeed(const Deed& d, const DeedDef& def, Id culprit);
+    void endFeud(Id dynA, Id dynB, const std::string& how);
+    void yearlyFeuds();
+    Id heirOf(const Household& h, Id dead) const;
+    void takeLover(Id a, Id b);
+    void endLiaison(Id a);
+    void yearlyLiaisons();
+    void addDebt(Household& h, double amount, Id creditor);
+    void monthlyDebts();
+    void yearlyDebts();
+    double forfeitLand(Household& h, bool lordIsCreditor);  // acres taken; 0 if the holding is too small
+    void clearDebt(Household& h);
+    void promoteHeldDebt(Household& h);
+    void runEventById(const std::string& id, Id person, Id target, Id deed = kNone);
+    Id findLender(const Household& h) const;
+    void reletVacant();
+
+    // signals.cpp: typed signals and the delayed-event queue
+    void emit(const Signal& s);
+    void monthlyConcerns();
+    void book(Household& h, const std::string& why, double amount) {
+        if (h.id == playerHousehold_ && amount != 0) h.ledger[why] += amount;
+    }
+    void rollSeason();          // starts the head's season budget, banking unspent days as work
+    bool spendTime(int n);
+    void runScheduled();
+
+    // ambitions.cpp
+    void chooseAmbition(Person& head);
+    void yearlyAmbitions();
+    void checkMilestones(Person& head, bool quiet);
+    void checkStandings();
+    void yearlyTown();
+
+    // minds.cpp: rings, yearly intentions, and acting on them
+    void computeRings();
+    void yearlyIntentions();
+    void chooseIntention(Person& p);
+    // What a villager might do this year, best first, and the question for the decider if it is asked.
+    struct IntentDraft {
+        std::vector<Intention> options;
+        std::vector<double> scores;
+        bool ask = false;
+        NpcChoice choice;
+    };
+    bool draftIntention(Person& p, IntentDraft& d);  // false: nothing to choose (a plan is under way)
+    void settleIntention(Person& p, const IntentDraft& d, int pick);  // pick < 0: the rules draw
+    bool npcChoiceFor(const Person& p, const std::string& title, const std::string& situation, const std::vector<std::string>& options,
+                      const std::vector<double>& weights, const std::vector<Id>& about, int fallback, NpcChoice& c) const;
+    int npcAnswer(const NpcChoice& c, int r, const std::string& reason);
+    void actOnIntentions();
+    void helpFriend(Person& p);
+    std::string mindOf(const Person& p) const;
+    std::string feelingOf(const Person& p, Id about) const;
+    int npcDecide(const Person& p, const std::string& title, const std::string& situation, const std::vector<std::string>& options,
+                  const std::vector<double>& weights, const std::vector<Id>& about, int fallback = -1);
+
+    // history / effects
+    void applyHistory();
+    void applyHistoryEffects(const Json& effects);
+
+    void log(int importance, const std::string& text);
+    std::vector<Id> livingInVillage() const;
+};
+
+}  // namespace sim

@@ -1,0 +1,41 @@
+{
+  "traits": [
+    // personality
+    {"id": "brave",     "name": "勇敢", "opposite": "craven",   "mods": {"mortality": 0.05, "charm": 0.2}, "against": "臨陣退縮的羞愧"},
+    {"id": "craven",    "name": "膽小", "opposite": "brave",    "mods": {"mortality": -0.05, "stress_gain": 0.15}, "against": "硬著頭皮冒的險"},
+    {"id": "diligent",  "name": "勤勞", "opposite": "lazy",     "mods": {"skill_gain": 0.3, "income": 0.15, "harvest": 0.08, "rest": -0.5}, "against": "荒廢了的活計"},
+    {"id": "lazy",      "name": "懶散", "opposite": "diligent", "mods": {"skill_gain": -0.3, "income": -0.15, "harvest": -0.08, "rest": 0.8}, "against": "沒日沒夜的苦差"},
+    {"id": "pious",     "name": "虔誠", "opposite": "cynical",  "mods": {"piety": 0.8, "stress_decay": 0.5}, "against": "愧對上帝的事"},
+    {"id": "cynical",   "name": "多疑", "opposite": "pious",    "mods": {"piety": -0.6}, "against": "在神父面前裝出來的虔誠"},
+    {"id": "generous",  "name": "慷慨", "opposite": "greedy",   "mods": {"charm": 0.3}, "against": "對人吝嗇的愧疚"},
+    {"id": "greedy",    "name": "貪婪", "opposite": "generous", "mods": {"income": 0.1, "charm": -0.2}, "against": "白白花出去的錢"},
+    {"id": "wrathful",  "name": "易怒", "opposite": "calm",     "mods": {"quarrel": 1.0, "stress_gain": 0.15}, "against": "一口嚥不下去的氣"},
+    {"id": "calm",      "name": "沉穩", "opposite": "wrathful", "mods": {"quarrel": -0.6, "stress_decay": 1.5}, "against": "一時衝動惹出的事"},
+    {"id": "gregarious","name": "健談", "opposite": "shy",      "mods": {"sociable": 1.0, "charm": 0.4, "marriage": 0.5}, "against": "憋悶的日子"},
+    {"id": "shy",       "name": "害羞", "opposite": "gregarious","mods": {"sociable": -0.5, "marriage": -0.6}, "against": "被逼著拋頭露面的事"},
+    {"id": "ambitious", "name": "有野心", "opposite": "content", "mods": {"skill_gain": 0.15, "quarrel": 0.3}, "against": "低聲下氣的屈辱"},
+    {"id": "content",   "name": "知足", "opposite": "ambitious", "mods": {"rest": 0.3, "stress_decay": 1.0}, "against": "勉強自己去爭的事"},
+    {"id": "kind",      "name": "善良", "opposite": "cruel",    "mods": {"charm": 0.3}, "against": "對人下的狠手"},
+    {"id": "cruel",     "name": "刻薄", "opposite": "kind",     "mods": {"charm": -0.4, "quarrel": 0.5}, "against": "不得不忍讓的窩囊"},
+    {"id": "vengeful",  "name": "記仇", "opposite": "forgiving","mods": {"grudge_memory": 1.0}, "against": "還沒報的仇"},
+    {"id": "forgiving", "name": "寬厚", "opposite": "vengeful", "mods": {"grudge_memory": -0.5}, "against": "對人記恨的不安"},
+    {"id": "lustful",   "name": "多情", "opposite": "chaste",   "mods": {"fertility": 0.25, "marriage": 0.6}, "against": "壓在心底的念想"},
+    {"id": "chaste",    "name": "持重", "opposite": "lustful",  "mods": {"fertility": -0.2}, "against": "做下的荒唐事"},
+
+    // congenital: inherited from parents
+    {"id": "strong",    "name": "強壯", "category": "congenital", "opposite": "frail", "inherit": 0.2, "weight": 1.5, "mods": {"health": 0.8, "mortality": -0.2, "harvest": 0.05}},
+    {"id": "frail",     "name": "體弱", "category": "congenital", "opposite": "strong", "inherit": 0.15, "weight": 1.2, "mods": {"health": -1.5, "mortality": 0.5}},
+    {"id": "clever",    "name": "聰慧", "category": "congenital", "opposite": "dull", "inherit": 0.15, "weight": 1.2, "mods": {"skill_gain": 0.4}},
+    {"id": "dull",      "name": "遲鈍", "category": "congenital", "opposite": "clever", "inherit": 0.12, "weight": 1.0, "mods": {"skill_gain": -0.35}},
+    {"id": "comely",    "name": "俊美", "category": "congenital", "inherit": 0.15, "weight": 1.2, "mods": {"attraction": 1.5, "marriage": 0.4}},
+    {"id": "fecund",    "name": "多子", "category": "congenital", "inherit": 0.15, "weight": 0.8, "mods": {"fertility": 0.5}},
+
+    // acquired through life
+    {"id": "literate",  "name": "識字", "category": "education", "mods": {"skill_learning": 0.3}},
+    {"id": "scarred",   "name": "帶疤", "category": "education", "mods": {"attraction": -0.5}},
+    {"id": "veteran",   "name": "老兵", "category": "education", "mods": {"charm": 0.2}},
+    {"id": "plague_survivor", "name": "瘟疫倖存者", "category": "education", "mods": {"mortality": -0.15}},
+    {"id": "drunkard",  "name": "酒鬼", "category": "education", "mods": {"income": -0.2, "health": -0.5, "sociable": 0.5, "stress_decay": 1.0}},
+    {"id": "melancholy","name": "憂鬱", "category": "education", "mods": {"sociable": -0.6, "skill_gain": -0.1, "stress_decay": -1.5, "stress_gain": 0.3}}
+  ]
+}
