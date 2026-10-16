@@ -24,7 +24,11 @@ var camera: Camera3D
 func _ready() -> void:
 	player = Village.new().build(self)
 	_build_lighting()
-	var capture_dir := _capture_dir()
+	var export_path := _user_arg("--export-gltf=")
+	if not export_path.is_empty():
+		_export_gltf(export_path)
+		return
+	var capture_dir := _user_arg("--capture=")
 	if capture_dir.is_empty():
 		camera = Camera3D.new()
 		add_child(camera)
@@ -41,11 +45,27 @@ func _ready() -> void:
 	_apply_camera()
 	_apply_time()
 
-func _capture_dir() -> String:
+func _user_arg(prefix: String) -> String:
 	for arg in OS.get_cmdline_user_args():
-		if arg.begins_with("--capture="):
-			return arg.trim_prefix("--capture=")
+		if arg.begins_with(prefix):
+			return arg.trim_prefix(prefix)
 	return ""
+
+# Writes the village, the sun and the far-iso camera to a .glb so Blender can render the same shot offline.
+func _export_gltf(path: String) -> void:
+	camera = Camera3D.new()
+	camera.name = "FarIsoCamera"
+	add_child(camera)
+	zoom = 0.0
+	_apply_camera()
+	_apply_time()
+	var doc := GLTFDocument.new()
+	var state := GLTFState.new()
+	var err := doc.append_from_scene(self, state)
+	if err == OK:
+		err = doc.write_to_filesystem(state, path)
+	print("export_gltf: ", path, " -> ", error_string(err))
+	get_tree().quit(0 if err == OK else 1)
 
 func _build_lighting() -> void:
 	var sky_mat := PanoramaSkyMaterial.new()

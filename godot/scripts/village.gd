@@ -93,6 +93,7 @@ func _mat(name: String) -> StandardMaterial3D:
 			m.albedo_color = TINT.get(slot, Color.WHITE)
 		else:
 			m.albedo_color = COLORS[name]
+		m.resource_name = name  # slot name survives glTF export (tools/render_cycles.py re-textures by it)
 		_mats[name] = m
 	return _mats[name]
 
@@ -201,6 +202,7 @@ func _river(root: Node3D) -> void:
 	var surface := PlaneMesh.new()
 	surface.size = Vector2(300, RIVER_HALF * 2.0)
 	var water := MeshInstance3D.new()
+	water.name = "Water"
 	water.mesh = surface
 	var sm := ShaderMaterial.new()
 	sm.shader = load("res://shaders/water.gdshader")
@@ -241,5 +243,6 @@ func _foliage_mat() -> StandardMaterial3D:
 		m.vertex_color_is_srgb = true  # make_trees.py authors colours as sRGB values; without this they render washed out
 		m.roughness = 0.85
 		m.cull_mode = BaseMaterial3D.CULL_DISABLED  # branch cards are single-sided
+		m.resource_name = "foliage"
 		_mats["foliage"] = m
 	return _mats["foliage"]
