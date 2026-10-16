@@ -1,0 +1,2 @@
+materials.weathered.thatch.texture="thatch_reed"
+materials.weathered.thatch.tint=[1.05,0.98,0.85]

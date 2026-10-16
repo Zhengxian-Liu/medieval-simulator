@@ -1,0 +1,1 @@
+materials.weathered.thatch.texture="thatch_reed"

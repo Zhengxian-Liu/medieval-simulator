@@ -18,7 +18,8 @@ TEXTURES = {  # material slot -> Poly Haven asset id
     "timber": "weathered_planks",
     "thatch": "thatch_roof_angled",
     "rock": "rock_face",
-    "cloth": "hessian_230",  # coarse burlap for stall canvas and sacks (the plaster scan read as a stained slab, round 7)
+    "cloth": "hessian_230",
+    "thatch_reed": "reed_roof_04",  # candidate straw with laid bundles (Fable r11: the angled reed scan has no bundle detail)  # coarse burlap for stall canvas and sacks (the plaster scan read as a stained slab, round 7)
 }
 MAPS = {"Diffuse": "albedo", "nor_gl": "normal", "Rough": "roughness"}  # Poly Haven key -> our suffix
 HDRI = "kloofendal_48d_partly_cloudy_puresky"
