@@ -132,11 +132,9 @@ func build(root: Node3D) -> Node3D:
 	for h in houses:
 		_house(root, Vector3(h[0], 0, h[1]), h[2], h[3])
 
-	for i in 5:
-		_add(root, _cyl(0.32, 0.35, 0.9, 12), "timber", Vector3(-4 + (i % 3) * 0.75, 0.45, 9.5 + (i / 3) * 0.75))
-	_stall(root, Vector3(4, 0, 2))
-	_fence(root, Vector3(-14, 0, 12), 8, 0)
-	_fence(root, Vector3(10, 0, 14), 6, 90)
+	for h in houses:
+		_dress_yard(root, h)
+	_dress_square(root)
 
 	_add(root, _cyl(0.05, 0.07, 1.6, 6), "iron", Vector3(1.5, 0.8, 1.5))
 	var torch := OmniLight3D.new()
@@ -217,7 +215,14 @@ func _river(root: Node3D) -> void:
 
 # Buildings come from tools/hero_cottage.py; each surface is named after a material slot.
 func _house(root: Node3D, pos: Vector3, yaw: float, variant: String) -> void:
-	var scene: Node3D = load("res://assets/models/buildings/%s.glb" % variant).instantiate()
+	_instance(root, "res://assets/models/buildings/%s.glb" % variant, pos, yaw)
+
+# Props come from tools/props.py; same material slots as the buildings.
+func _prop(root: Node3D, name: String, pos: Vector3, yaw: float) -> void:
+	_instance(root, "res://assets/models/props/%s.glb" % name, pos, yaw + _rng.randf_range(-4.0, 4.0))
+
+func _instance(root: Node3D, path: String, pos: Vector3, yaw: float) -> void:
+	var scene: Node3D = load(path).instantiate()
 	scene.position = pos
 	scene.rotation_degrees.y = yaw
 	root.add_child(scene)
@@ -226,6 +231,49 @@ func _house(root: Node3D, pos: Vector3, yaw: float, variant: String) -> void:
 		for i in mesh.get_surface_count():
 			var slot := mesh.surface_get_material(i).resource_name
 			mi.set_surface_override_material(i, _weathered(slot))
+
+# Footprints (x along the ridge, z through the door side) of the buildings from tools/hero_cottage.py.
+const FOOTPRINT := {cottage = Vector2(6.0, 4.5), longhouse = Vector2(9.5, 5.0), barn = Vector2(7.5, 5.5)}
+
+# Yard dressing in the house's local frame (door on +Z): woodpile on a gable, barrels and a crate by the door,
+# a wattle-fenced back yard; the barn gets a haystack and a handcart instead.
+func _dress_yard(root: Node3D, h: Array) -> void:
+	var size: Vector2 = FOOTPRINT[h[3]]
+	var origin := Vector3(h[0], 0, h[1])
+	var basis := Basis(Vector3.UP, deg_to_rad(h[2]))
+	var put := func(name: String, local: Vector3, yaw: float) -> void:
+		_prop(root, name, origin + basis * local, h[2] + yaw)
+	var hw := size.x / 2
+	var hd := size.y / 2
+	if h[3] == "barn":
+		put.call("haystack", Vector3(hw + 2.6, 0, -1.0), 0)
+		put.call("handcart", Vector3(-hw - 2.2, 0, 1.5), 35)
+		put.call("barrel", Vector3(-hw + 0.6, 0, hd + 0.7), 0)
+		put.call("crate", Vector3(-hw + 1.4, 0, hd + 0.8), 12)
+		put.call("crate", Vector3(-hw + 1.3, 0.7, hd + 0.8), -20)
+		for i in 3:
+			put.call("rail_fence", Vector3(-hw + 1.5 + i * 3.0, 0, -hd - 3.5), 0)
+		return
+	put.call("woodpile", Vector3(hw + 0.55, 0, 0.2), 90)
+	put.call("barrel", Vector3(-1.5, 0, hd + 0.6), 0)
+	put.call("barrel", Vector3(-2.1, 0, hd + 0.75), 0)
+	put.call("crate", Vector3(1.4, 0, hd + 0.7), 15)
+	put.call("drying_rack", Vector3(-0.5, 0, -hd - 2.0), 0)
+	var segs := int(ceil(size.x / 2.4))
+	for i in segs:
+		put.call("wattle_fence", Vector3(-hw + 1.2 + i * 2.4, 0, -hd - 3.6), 0)
+	for side in [-1, 1]:
+		put.call("wattle_fence", Vector3(side * (hw + 0.4), 0, -hd - 2.3), 90)
+
+func _dress_square(root: Node3D) -> void:
+	_prop(root, "well", Vector3(4.0, 0, 5.5), 20)
+	_prop(root, "handcart", Vector3(5.5, 0, 0.5), -60)
+	_prop(root, "crate", Vector3(4.2, 0, -0.6), 0)
+	_prop(root, "crate", Vector3(3.5, 0, -1.1), 25)
+	_prop(root, "barrel", Vector3(4.8, 0, -1.4), 0)
+	for i in 3:  # rail fence guarding the river bank by the bridge
+		_prop(root, "rail_fence", Vector3(-3.5 - i * 3.1, 0, RIVER_Z + RIVER_HALF + 1.2), 0)
+		_prop(root, "rail_fence", Vector3(9.5 + i * 3.1, 0, RIVER_Z + RIVER_HALF + 1.2), 0)
 
 # Per-slot look of the weathered shader; numbers match the Cycles materials in tools/hero_cottage.py.
 const WEATHER := {
@@ -252,18 +300,6 @@ func _weathered(slot: String) -> Material:
 				m.set_shader_parameter(k, WEATHER[slot][k])
 			_mats[key] = m
 	return _mats[key]
-
-func _stall(root: Node3D, pos: Vector3) -> void:
-	_add(root, _box(Vector3(2.4, 0.08, 1.4)), "cloth", pos + Vector3(0, 2.2, 0))
-	for c in [Vector2(-1.1, -0.6), Vector2(1.1, -0.6), Vector2(-1.1, 0.6), Vector2(1.1, 0.6)]:
-		_add(root, _cyl(0.05, 0.05, 2.2, 6), "timber", pos + Vector3(c.x, 1.1, c.y))
-
-func _fence(root: Node3D, start: Vector3, posts: int, yaw: float) -> void:
-	var dir := Vector3.RIGHT.rotated(Vector3.UP, deg_to_rad(yaw))
-	for i in posts:
-		_add(root, _cyl(0.06, 0.07, 1.1, 6), "timber", start + dir * i * 1.5 + Vector3(0, 0.55, 0))
-	for y in [0.45, 0.85]:
-		_add(root, _box(Vector3((posts - 1) * 1.5, 0.08, 0.06)), "timber", start + dir * (posts - 1) * 0.75 + Vector3(0, y, 0), yaw)
 
 func _foliage_mat() -> StandardMaterial3D:
 	if not _mats.has("foliage"):

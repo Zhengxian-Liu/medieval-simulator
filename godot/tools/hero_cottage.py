@@ -45,7 +45,7 @@ def set_variant(name):
     RNG.seed(hash(name) & 0xFFFF)
 
 # metres covered by one texture tile, and which local axis the texture's V (grain / strands) follows
-TILE = {"stone": 1.6, "plaster": 2.0, "timber": 1.4, "thatch": 1.8, "iron": 1.0, "dark": 1.0, "grass": 4.0}
+TILE = {"stone": 1.6, "plaster": 2.0, "timber": 1.4, "thatch": 1.8, "iron": 1.0, "dark": 1.0, "cloth": 1.0, "grass": 4.0}
 
 
 # ---------------------------------------------------------------- geometry helpers
@@ -307,8 +307,9 @@ def material(slot):
     nt = mat.node_tree
     nodes, links = nt.nodes, nt.links
     bsdf = nodes["Principled BSDF"]
-    if slot in ("iron", "dark"):
-        bsdf.inputs["Base Color"].default_value = (0.02, 0.019, 0.018, 1) if slot == "iron" else (0.005, 0.004, 0.003, 1)
+    if slot in ("iron", "dark", "cloth"):
+        bsdf.inputs["Base Color"].default_value = {"iron": (0.02, 0.019, 0.018, 1), "dark": (0.005, 0.004, 0.003, 1),
+                                                   "cloth": (0.45, 0.4, 0.32, 1)}[slot]
         bsdf.inputs["Metallic"].default_value = 0.8 if slot == "iron" else 0.0
         bsdf.inputs["Roughness"].default_value = 0.55 if slot == "iron" else 0.9
         _materials[slot] = mat
@@ -501,4 +502,5 @@ def main():
         render(args[1], int(args[2]) if len(args) > 2 else 64)
 
 
-main()
+if __name__ == "__main__":  # tools/props.py imports the helpers
+    main()
