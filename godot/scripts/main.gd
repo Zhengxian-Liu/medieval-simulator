@@ -83,6 +83,7 @@ func _build_lighting() -> void:
 	env.adjustment_contrast = 1.15
 	env.adjustment_saturation = 0.9
 	env.sdfgi_enabled = true
+	env.sdfgi_energy = 2.5  # bounce light: at 1.0 the shaded sides of buildings went near black
 	env.ssao_enabled = true
 	env.ssao_radius = 1.2
 	env.ssao_intensity = 2.0
@@ -101,7 +102,7 @@ func _build_lighting() -> void:
 
 # Sun path: rises in the east at 6:00, highest at 12:00, sets at 18:00; dims and warms near the horizon.
 func _apply_time() -> void:
-	var elevation := sin((hour - 6.0) / 12.0 * PI) * 55.0
+	var elevation := sin((hour - 6.0) / 12.0 * PI) * 65.0
 	sun.rotation_degrees = Vector3(-elevation, 75.0 + (hour - 12.0) * 10.0, 0)  # from the upper left of the screen (classic iso key light), so the roofs and walls we see are lit
 	var day := clampf(elevation / 20.0, 0.0, 1.0)
 	sun.light_energy = lerpf(0.0, 1.4, day)
@@ -109,7 +110,7 @@ func _apply_time() -> void:
 	sun.visible = elevation > -2.0
 	# The HDRI is a daytime sky: dim it (and the ambient light it gives) toward night.
 	environment.background_energy_multiplier = lerpf(0.04, 1.0, day)
-	environment.ambient_light_energy = lerpf(0.08, 0.6, day)  # the HDRI is bright; full strength washed out the sun shadows
+	environment.ambient_light_energy = lerpf(0.08, 1.0, day)  # the HDRI is bright; full strength washed out the sun shadows
 
 func _apply_camera() -> void:
 	var pose := CameraZoom.evaluate(zoom)
@@ -142,7 +143,7 @@ func _process(delta: float) -> void:
 
 func _capture(vp: SubViewport, dir: String) -> void:
 	DirAccess.make_dir_recursive_absolute(dir)
-	for shot in [["godot_far", 0.0, 10.0], ["godot_mid", 1.0, 10.0], ["godot_far_dusk", 0.0, 17.6]]:
+	for shot in [["godot_far", 0.0, 11.0], ["godot_mid", 1.0, 11.0], ["godot_far_dusk", 0.0, 17.6]]:
 		zoom = shot[1]
 		zoom_target = shot[1]
 		hour = shot[2]

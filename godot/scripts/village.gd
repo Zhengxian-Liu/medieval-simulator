@@ -123,7 +123,7 @@ func _cyl(top: float, bottom: float, height: float, sides := 8) -> CylinderMesh:
 
 func build(root: Node3D) -> Node3D:
 	_rng.seed = 7  # deterministic so screenshots are comparable between runs
-	var houses := [[-9, 6, 10, "cottage_a"], [6, 9, -15, "barn"], [-3, 19, 80, "cottage_b"], [15, -3, 40, "cottage_a"]]
+	var houses := [[-9, 6, 10, "cottage"], [6, 9, -15, "barn"], [-3, 19, 80, "longhouse"], [15, -3, 40, "cottage"]]
 	var ground_mat: Material = Ground.new().build(root, houses, Vector2(2, 3), Vector2(3, RIVER_Z + RIVER_HALF + 1.0), RIVER_Z, RIVER_HALF, _rng, _mat("grass"))
 	_ground(root, ground_mat)
 	_river(root)
@@ -215,9 +215,9 @@ func _river(root: Node3D) -> void:
 	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(water)
 
-# Houses come from tools/make_houses.py; each surface is named after a material slot and gets our textured material.
+# Buildings come from tools/hero_cottage.py; each surface is named after a material slot.
 func _house(root: Node3D, pos: Vector3, yaw: float, variant: String) -> void:
-	var scene: Node3D = load("res://assets/models/houses/%s.glb" % variant).instantiate()
+	var scene: Node3D = load("res://assets/models/buildings/%s.glb" % variant).instantiate()
 	scene.position = pos
 	scene.rotation_degrees.y = yaw
 	root.add_child(scene)
@@ -225,8 +225,33 @@ func _house(root: Node3D, pos: Vector3, yaw: float, variant: String) -> void:
 		var mesh: Mesh = mi.mesh
 		for i in mesh.get_surface_count():
 			var slot := mesh.surface_get_material(i).resource_name
-			assert(slot in COLORS, "house %s has unknown material slot %s" % [variant, slot])
-			mi.set_surface_override_material(i, _mat(slot))
+			mi.set_surface_override_material(i, _weathered(slot))
+
+# Per-slot look of the weathered shader; numbers match the Cycles materials in tools/hero_cottage.py.
+const WEATHER := {
+	stone = {tint = Color(1, 1, 1), dirt_height = 0.6, moss = 0.7},
+	plaster = {tint = Color(0.95, 0.92, 0.85), dirt_height = 1.1, moss = 0.0},
+	timber = {tint = Color(0.9, 0.85, 0.8), dirt_height = 1.0, moss = 0.2},
+	thatch = {tint = Color(0.78, 0.6, 0.38), dirt_height = 0.0, moss = 0.45},
+}
+
+func _weathered(slot: String) -> Material:
+	var key := "weathered_" + slot
+	if not _mats.has(key):
+		if not WEATHER.has(slot):
+			assert(slot in COLORS, "unknown material slot " + slot)
+			_mats[key] = _mat(slot)
+		else:
+			var m := ShaderMaterial.new()
+			m.shader = load("res://shaders/weathered.gdshader")
+			var dir := "res://assets/textures/%s/" % slot
+			m.set_shader_parameter("albedo_tex", load(dir + "albedo.jpg"))
+			m.set_shader_parameter("normal_tex", load(dir + "normal.jpg"))
+			m.set_shader_parameter("rough_tex", load(dir + "roughness.jpg"))
+			for k in WEATHER[slot]:
+				m.set_shader_parameter(k, WEATHER[slot][k])
+			_mats[key] = m
+	return _mats[key]
 
 func _stall(root: Node3D, pos: Vector3) -> void:
 	_add(root, _box(Vector3(2.4, 0.08, 1.4)), "cloth", pos + Vector3(0, 2.2, 0))
