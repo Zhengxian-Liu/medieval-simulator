@@ -12,7 +12,44 @@ const COLORS := {
 	leaves = Color("2f4a22"), iron = Color("222222"), cloth = Color("7a2e24"), riverbed = Color("4d4434"),
 }
 
+# Poly Haven glTF sets: every mesh piece becomes one variant (see assets/CREDITS.md).
+const ROCK_SETS := ["rock_moss_set_01", "rock_moss_set_02", "boulder_01"]
+const SHRUB_SETS := ["shrub_02"]
+const SAPLING_SETS := ["pine_sapling_small"]
+
 var _rng := RandomNumberGenerator.new()
+var _variants := {}
+
+# Each variant: [mesh, offset] where offset moves the piece's AABB bottom-centre to the origin.
+func _load_variants(sets: Array) -> Array:
+	var key := ",".join(sets)
+	if not _variants.has(key):
+		var out := []
+		for id in sets:
+			var scene: Node = load("res://assets/models/%s/%s.gltf" % [id, id]).instantiate()
+			_collect(scene, Transform3D.IDENTITY, out)
+			scene.free()
+		assert(not out.is_empty(), "no meshes in " + key)
+		_variants[key] = out
+	return _variants[key]
+
+func _collect(n: Node, xf: Transform3D, out: Array) -> void:
+	var t: Transform3D = xf * n.transform if n is Node3D else xf
+	if n is MeshInstance3D:
+		var box: AABB = t * n.get_aabb()
+		var base := Vector3(box.get_center().x, box.position.y, box.get_center().z)
+		out.append([n.mesh, Transform3D(t.basis, t.origin - base)])
+	for c in n.get_children():
+		_collect(c, t, out)
+
+func _place(root: Node3D, sets: Array, pos: Vector3, scale: float) -> void:
+	var variants := _load_variants(sets)
+	var v: Array = variants[_rng.randi() % variants.size()]
+	var mi := MeshInstance3D.new()
+	mi.mesh = v[0]
+	var spin := Transform3D(Basis(Vector3.UP, _rng.randf() * TAU).scaled(Vector3.ONE * scale), pos)
+	mi.transform = spin * v[1]
+	root.add_child(mi)
 var _mats := {}
 
 # Slots with a Poly Haven texture set (see assets/CREDITS.md); others stay flat colour placeholders.
@@ -96,22 +133,34 @@ func build(root: Node3D) -> Node3D:
 		var a := _rng.randf() * TAU
 		var dist := (8.0 + _rng.randf() * 10.0) if i < 14 else (20.0 + _rng.randf() * 30.0)
 		var p := Vector3(cos(a) * dist, 0, sin(a) * dist + 4.0)
-		var clear := absf(p.z - RIVER_Z) > RIVER_HALF + 1.5
-		for h in houses:
-			clear = clear and Vector2(p.x - h[0], p.z - h[1]).length() > 5.5  # keep trunks and crowns out of houses
-		if clear:
+		if absf(p.z - RIVER_Z) > RIVER_HALF + 1.5 and _clear_of_houses(p, houses, 5.5):
 			_tree(root, p)
-	for i in 50:
-		var along := i < 28
-		var p := Vector3(_rng.randf_range(-30, 30), 0.05, RIVER_Z + signf(_rng.randf() - 0.5) * _rng.randf_range(RIVER_HALF - 0.4, RIVER_HALF + 1.5)) if along \
-			else Vector3(_rng.randf_range(-22, 22), 0.05, _rng.randf_range(-6, 26))
-		_rock(root, p)
+	for i in 46:
+		var along := i < 24
+		var p := Vector3(_rng.randf_range(-30, 30), 0.0, RIVER_Z + signf(_rng.randf() - 0.5) * _rng.randf_range(RIVER_HALF - 0.6, RIVER_HALF + 1.2)) if along \
+			else Vector3(_rng.randf_range(-24, 24), 0.0, _rng.randf_range(-6, 28))
+		if _clear_of_houses(p, houses, 4.5):
+			_place(root, ROCK_SETS, p - Vector3(0, 0.15, 0), _rng.randf_range(0.3, 0.7))  # sunk a little so they sit in the ground
+	for i in 30:
+		var p := Vector3(_rng.randf_range(-26, 26), 0.0, _rng.randf_range(-8, 28))
+		if absf(p.z - RIVER_Z) > RIVER_HALF + 0.5 and _clear_of_houses(p, houses, 4.5):
+			_place(root, SHRUB_SETS, p, _rng.randf_range(0.35, 0.6))
+	for i in 18:
+		var p := Vector3(_rng.randf_range(-26, 26), 0.0, _rng.randf_range(-6, 28))
+		if _clear_of_houses(p, houses, 4.5):
+			_place(root, SAPLING_SETS, p, _rng.randf_range(0.8, 1.4))
 
 	var player := _add(root, CapsuleMesh.new(), "cloth", Vector3(1, 1.0, 4))
 	(player.mesh as CapsuleMesh).radius = 0.3
 	(player.mesh as CapsuleMesh).height = 1.7
 	player.position.y = 0.85
 	return player
+
+func _clear_of_houses(p: Vector3, houses: Array, radius: float) -> bool:
+	for h in houses:
+		if Vector2(p.x - h[0], p.z - h[1]).length() < radius:
+			return false
+	return true
 
 func _ground(root: Node3D) -> void:
 	var far_edge := 150.0
@@ -177,13 +226,3 @@ func _tree(root: Node3D, pos: Vector3) -> void:
 	var h := 3.5 + _rng.randf() * 3.0
 	_add(root, _cyl(0.14, 0.2, h * 0.4), "bark", pos + Vector3(0, h * 0.2, 0))
 	_add(root, _cyl(0.0, 1.1 + _rng.randf() * 0.6, h * 0.8, 9), "leaves", pos + Vector3(0, h * 0.8, 0))
-
-func _rock(root: Node3D, pos: Vector3) -> void:
-	var s := SphereMesh.new()
-	var r := 0.3 + _rng.randf() * 0.7
-	s.radius = r
-	s.height = r * 1.2
-	s.radial_segments = 6
-	s.rings = 3
-	var mi := _add(root, s, "stone_rock", pos, _rng.randf() * 360.0)
-	mi.scale = Vector3(1.0, 1.0, 0.7 + _rng.randf() * 0.5)
