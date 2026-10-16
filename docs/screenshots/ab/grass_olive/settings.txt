@@ -1,0 +1,2 @@
+materials.ground.grass_tint=[0.5,0.8,0.2]
+materials.ground.mottle=0.7

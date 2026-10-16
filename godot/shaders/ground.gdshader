@@ -20,7 +20,8 @@ uniform vec3 id_dirt = vec3(0.0, 0.0, 1.0);
 uniform float edge_width = 0.12;  // half-width of the grass->dirt blend in mask units
 uniform float edge_break = 0.55;  // noise breaking the edge into clumps
 uniform float edge_clumps = 0.0;  // share of a fine (~10 cm) octave: grass clumps / bare patches along the edge
-uniform float specular = 0.5;  // F0 control: grass and soil reflect little sky
+uniform float specular = 0.5;
+uniform float mottle = 0.0;  // 1-3 m patches of drier, olive-yellow grass (The Guild's lawns are never one green)  // F0 control: grass and soil reflect little sky
 uniform float ground_value = 0.62;  // darkens the bright photo-scanned gravel/grass: ground should sit at ~0.25-0.35 value
 uniform vec4 river;  // centre z0, amplitude, frequency, phase (same curve as village.gd river_center)
 uniform float river_half = 3.5;
@@ -47,6 +48,7 @@ void fragment() {
 	float dirt = smoothstep(0.5 - edge_width, 0.5 + edge_width, m + (ne - 0.5) * edge_break);
 	float patchy = mix(0.78, 1.12, vnoise(world_pos.xz * 0.12));  // big soft colour patches in the grass
 	vec3 grass = texture(grass_albedo, uvg).rgb * grass_tint * patchy;
+	grass = mix(grass, grass * vec3(1.18, 1.0, 0.7), mottle * smoothstep(0.35, 0.75, vnoise(world_pos.xz * 0.45 + 3.0)));
 	vec3 soil = texture(dirt_albedo, uvd).rgb * soil_tint;
 	// worn fringe beside paths and yards: yellowed, flattened grass before the bare dirt starts
 	float fringe = smoothstep(0.12, 0.3, m) * (1.0 - dirt);

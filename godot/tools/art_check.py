@@ -102,6 +102,8 @@ def masked(full_png, fill_png):
     def class_stat(spec):  # per-material measures (ID pass)
         if spec["measure"] == "class_luma":
             return mean([full[i] for i in of(spec["class"], lit)])
+        if spec["measure"] == "class_green":  # g / avg(r, b) of lit pixels of one material: green vs olive
+            return mean([rgb_full[i][1] / max((rgb_full[i][0] + rgb_full[i][2]) / 2, 1e-3) for i in of(spec["class"], lit)])
         if spec["measure"] == "class_saturation":
             return mean([_sat(rgb_full[i]) for i in of(spec["class"], lit)])
         if spec["measure"] == "class_bandpass":  # sd of bundle-scale detail on lit pixels of one material

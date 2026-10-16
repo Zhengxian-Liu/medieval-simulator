@@ -351,8 +351,8 @@
         "dirt_tiles": 0.3,
         "ground_value": 0.62,
         "grass_tint": [
-          0.42,
-          0.82,
+          0.5,
+          0.8,
           0.2
         ],
         "soil_tint": [
@@ -363,9 +363,10 @@
         "edge_width": 0.2,
         "edge_break": 0.75,
         "edge_clumps": 0.4,
-        "specular": 0.3
+        "specular": 0.3,
+        "mottle": 0.7
       },
-      "why": "darkens bright scans so lit ground sits near 0.45; grass and soil tints carry the scene's chroma (grade stays neutral). grass_tint -8% (round 8): lit grass 0.50 -> ~0.46, inside The Guild lawn 0.45-0.60, lets thatch read level with it. Round 11: grass->dirt edge wider (edge_width 0.2) and broken into ~10 cm clumps (edge_clumps 0.4, edge_break 0.75): Fable r10 'hard mask with a gravel rim'. A/B ab/grass_edge. Round 12: specular 0.5 -> 0.3 - the default F0 reflected the grey sky over all ground and was what kept grass (0.21) and mid frame saturation (0.26) below the reference; with tint 0.42/0.82/0.2 lit grass measures V 0.48 / S 0.32 (The Guild 0.44-0.54 / 0.31-0.36). A/B ab/grass_spec*"
+      "why": "darkens bright scans so lit ground sits near 0.45; grass and soil tints carry the scene's chroma (grade stays neutral). grass_tint -8% (round 8): lit grass 0.50 -> ~0.46, inside The Guild lawn 0.45-0.60, lets thatch read level with it. Round 11: grass->dirt edge wider (edge_width 0.2) and broken into ~10 cm clumps (edge_clumps 0.4, edge_break 0.75): Fable r10 'hard mask with a gravel rim'. A/B ab/grass_edge. Round 12: specular 0.5 -> 0.3 - the default F0 reflected the grey sky over all ground and was what kept grass (0.21) and mid frame saturation (0.26) below the reference; with tint 0.42/0.82/0.2 lit grass measures V 0.48 / S 0.32 (The Guild 0.44-0.54 / 0.31-0.36). A/B ab/grass_spec*. Round 13: olive tint 0.5/0.8/0.2 + mottle 0.7 (1-3 m drier olive-yellow patches): lawn green ratio 1.44 -> 1.34 (The Guild 1.03-1.35). A/B ab/grass_olive"
     },
     "flat": {
       "v": {
@@ -713,6 +714,15 @@
           "max": 0.4
         },
         "why": "lit grass HSL saturation. The Guild lawn 0.31-0.36 (same rects). Set before tuning"
+      },
+      "grass_green": {
+        "v": {
+          "measure": "class_green",
+          "class": "grass",
+          "min": 1.0,
+          "max": 1.35
+        },
+        "why": "lit lawn hue, g/avg(r,b) (ID pass): The Guild 1.03-1.35 (guild3_3 300x120+1450+330, 80x200+10+330, 200x100+1100+250); olive, not lime (Fable r12: mid lawn 1.46). Set before tuning"
       }
     },
     "mid": {
@@ -782,6 +792,24 @@
           "max": 5.0
         },
         "why": "light on sunlit vs shadowed surfaces (lighting-only pass, linear): ~4:1 key:fill. Replaces shadow_mean, which mixed albedo in: mid shadow pixels are dark soil (0.5x lit albedo), far ones 1.9x, so no single fill could satisfy both (2026-10-16 sweep)"
+      },
+      "grass_green": {
+        "v": {
+          "measure": "class_green",
+          "class": "grass",
+          "min": 1.0,
+          "max": 1.35
+        },
+        "why": "lit lawn hue, g/avg(r,b) (ID pass): The Guild 1.03-1.35 (guild3_3 300x120+1450+330, 80x200+10+330, 200x100+1100+250); olive, not lime (Fable r12: mid lawn 1.46). Set before tuning"
+      },
+      "grass_saturation": {
+        "v": {
+          "measure": "class_saturation",
+          "class": "grass",
+          "min": 0.3,
+          "max": 0.4
+        },
+        "why": "lit grass HSL saturation in the mid view: The Guild lawn 0.31-0.36 (same rects); the close lawn overshot to 0.445 (Fable r12). Set before tuning"
       }
     },
     "budgets": {
