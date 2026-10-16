@@ -1,0 +1,16 @@
+{
+  // What events leave on people's minds (design/season-loop.md). Each concern has a strength (0–100)
+  // that fades by `fade` a month; at full strength it moves the person's mood by `mood`. The strongest
+  // one names the mood (`word`) and its cause (`text`). What a concern makes someone want from the head
+  // of the house is in data/wants.json.
+  // {about}: the person it is about; {pron}: 他/她 for the holder.
+  "concerns": [
+    {"id": "grief",      "name": "喪親之痛", "text": "{about}的死還壓在{pron}心上",   "word": "悲痛", "mood": -45, "fade": 3},
+    {"id": "heartbreak", "name": "親事落空", "text": "跟{about}的親事沒成，{pron}還放不下", "word": "心碎", "mood": -25, "fade": 8},
+    {"id": "longing",    "name": "心上人",   "text": "{pron}一心想跟{about}成親",       "word": "心神不寧", "mood": -8, "fade": 2},
+    {"id": "grievance",  "name": "怨氣",     "text": "{pron}心裡還在怨{about}",         "word": "憤恨", "mood": -20, "fade": 4},
+    {"id": "worry",      "name": "憂慮",     "text": "{pron}擔心家裡撐不過去",           "word": "焦慮", "mood": -20, "fade": 6},
+    {"id": "shame",      "name": "羞愧",     "text": "{pron}在村裡抬不起頭",             "word": "羞愧", "mood": -25, "fade": 5},
+    {"id": "joy",        "name": "喜事",     "text": "{about}帶來的喜氣還在",           "word": "高興", "mood": 25,  "fade": 10}
+  ]
+}

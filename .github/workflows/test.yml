@@ -1,0 +1,15 @@
+name: test
+on: [push, pull_request]
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: simcore
+    steps:
+      - uses: actions/checkout@v4
+      # On macOS use the built-in /bin/bash (3.2), the one the player's Mac has; the runner's PATH bash is newer.
+      - run: ${{ matrix.os == 'macos-latest' && '/bin/bash' || 'bash' }} scripts/test.sh

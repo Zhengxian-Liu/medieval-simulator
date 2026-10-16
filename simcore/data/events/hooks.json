@@ -1,0 +1,121 @@
+{
+  // Secrets as leverage, and secrets that come home. "blackmail_terms" and "make_amends" are run by
+  // code (the blackmail plan, a deathbed confession); the others listen to belief signals.
+  "events": [
+    {"id": "blackmail_terms", "title": "把柄", "prompt": "{name} 提起 {hook}，{target} 臉色發白。現在要什麼，由 {name} 說了算。", "scope": "anyone", "chance": 1,
+     "on": {"signal": "manual"},
+     "options": [
+       {"text": "要錢", "log": "{name} 提起 {hook}，{target} 臉色發白，答應拿錢封口。",
+        "effects": [{"hook_payment": 50}, {"deed": {"type": "blackmailed"}}, {"use_hook": true}],
+        "ai": {"base": 8, "traits": {"greedy": 10, "generous": -6}}},
+       {"text": "要地", "conditions": {"target": {"acres_ge": 12}},
+        "log": "{name} 提起 {hook}，{target} 只好把河邊的 3 畝地「便宜」賣給了{pron}。",
+        "effects": [{"take_acres": {"acres": 3, "price": 15}}, {"deed": {"type": "blackmailed"}}, {"use_hook": true}],
+        "ai": {"base": 6, "traits": {"ambitious": 8, "greedy": 4}}},
+       {"text": "要一門親事", "conditions": {"peace_match": true},
+        "log": "{name} 提起 {hook}，{target} 只能點頭，答應把家裡的孩子許給 {name} 家。",
+        "effects": [{"peace_marriage": true}, {"deed": {"type": "blackmailed"}}, {"use_hook": true}],
+        "ai": {"base": 4, "traits": {"ambitious": 8, "lustful": 2}}},
+       {"text": "要他家別再找麻煩", "conditions": {"feud_ge": 1},
+        "log": "{name} 提起 {hook}，{target} 沉默了很久，答應兩家的事從此一筆勾銷。",
+        "effects": [{"end_feud": "對方的把柄在手上"}, {"use_hook": true}],
+        "ai": {"base": 6, "traits": {"calm": 6, "content": 4, "forgiving": 4}}}
+     ]},
+
+    {"id": "blackmail_refused", "title": "敲竹槓不成", "scope": "anyone", "chance": 1,
+     "on": {"signal": "manual"},
+     "options": [
+       {"text": "好", "log": "{target} 不吃這一套，一把揪住 {name} 的衣領拖到村口，大聲嚷嚷：「大家來聽聽，{name} 想拿閒話敲我的竹槓！」",
+        "effects": [{"deed": {"type": "exposed_plot"}}, {"reputation": -5}, {"stress": 12}]}
+     ]},
+
+    {"id": "someone_knows", "title": "有人知道", "prompt": "{name} 察覺 {target} 看{pron}的眼神不對勁。{deed_year} 年那次「{deed}」的事，{target_pron}好像知道了。", "scope": "player_family", "chance": 0.7,
+     "on": {"signal": "belief", "as": "culprit", "after_months": [1, 4]},
+     "conditions": {"age": [14, 90], "deed_actor": true, "not": {"deed_noted": "someone_knows"}},
+     "target": {"conditions": {"other_dynasty": true, "not_kin": true, "is_lover": false}},
+     "options": [
+       {"text": "塞錢封口", "conditions": {"money_ge": 15},
+        "log": "{name} 察覺 {target} 知道了 {deed_year} 年那次「{deed}」的事，偷偷塞了錢給{target_pron}，求{target_pron}別說出去。",
+        "effects": [{"note_deed": "someone_knows"}, {"hush_money": {"base": 15}}, {"silence_target": {"years": 6}}, {"deed": {"type": "hush_money"}}, {"signal": "hushed"}],
+        "ai": {"base": 8, "traits": {"craven": 6, "generous": 4, "greedy": -6}}},
+       {"text": "先下手，說他的閒話", "log": "{name} 察覺 {target} 知道了 {deed_year} 年那次「{deed}」的事，搶先在井邊說{target_pron}滿嘴謊話、手腳不乾淨。",
+        "effects": [{"note_deed": "someone_knows"}, {"deed": {"type": "slander"}}, {"target": [{"reputation": -4}]}],
+        "ai": {"base": 5, "traits": {"cruel": 10, "ambitious": 4, "wrathful": 4, "kind": -8}}},
+       {"text": "向神父告解", "log": "{name} 察覺 {target} 知道了 {deed_year} 年那次「{deed}」的事，夜裡睡不著，去向神父告解。",
+        "effects": [{"note_deed": "someone_knows"}, {"confess_secrets": "priest"}, {"stress": -20}, {"need": {"spirit": 20}}],
+        "ai": {"base": 4, "traits": {"pious": 14, "cynical": -8}}},
+       {"text": "裝作沒事", "log": "{name} 察覺 {target} 看{pron}的眼神不對勁。{deed_year} 年那次「{deed}」的事，難道有人知道了？",
+        "effects": [{"note_deed": "someone_knows"}, {"stress": 12}],
+        "ai": {"base": 6, "traits": {"calm": 6, "brave": 4}}}
+     ]},
+
+    {"id": "witness_returns", "title": "又找上門", "prompt": "收過封口費的 {target} 又找上門來，說最近手頭緊。{deed_year} 年那件事還攥在{target_pron}手裡。", "scope": "anyone", "chance": 0.45,
+     "on": {"signal": "hushed", "after_months": [12, 48]},
+     "conditions": {"age": [14, 90]},
+     "options": [
+       {"text": "再給一次", "conditions": {"money_ge": 10},
+        "log": "收過封口費的 {target} 又找上門來，說最近手頭緊。{name} 知道{target_pron}要的是什麼，{deed_year} 年那件事還攥在{target_pron}手裡。",
+        "effects": [{"hush_money": {"base": 12}}, {"silence_target": {"years": 6}}, {"stress": 10}, {"signal": "hushed"}],
+        "ai": {"base": 8, "traits": {"craven": 8, "calm": 2, "brave": -6, "wrathful": -4}}},
+       {"text": "不給了，隨他去說",
+        "log": "收過封口費的 {target} 又來要錢，{name} 把{target_pron}轟了出去。沒過幾天，{deed_year} 年那次「{deed}」的事就傳到了苦主家裡。",
+        "effects": [{"tell_victim": true}, {"stress": 6}],
+        "ai": {"base": 5, "traits": {"brave": 8, "greedy": 6, "content": 3, "craven": -8}}},
+       {"text": "反過來嚇唬他",
+        "log": "收過封口費的 {target} 又來要錢，{name} 抄起一把柴刀，說再來就讓{target_pron}好看。",
+        "effects": [{"random": {"percent": 50,
+                                "effects": [{"silence_target": {"years": 15}}, {"log": "  {target} 臉都白了，再也沒提過那件事。"}],
+                                "else": [{"tell_victim": true}, {"deed": {"type": "public_insult"}}, {"log": "  {target} 嚇得跑了，轉頭就把那件事全說了出去。"}]}}],
+        "ai": {"base": 3, "traits": {"wrathful": 10, "cruel": 8, "brave": 6, "kind": -6, "craven": -10}}}
+     ]},
+
+    {"id": "wrongly_suspected", "title": "背後的指點", "prompt": "{name} 聽說 {target} 到處說 {deed_year} 年那次「{deed}」是{pron}幹的。", "scope": "player_family", "chance": 0.6,
+     "on": {"signal": "belief", "as": "culprit", "after_months": [1, 6]},
+     "conditions": {"age": [14, 90], "deed_actor": false, "not": {"deed_noted": "wrongly_suspected"}},
+     "target": {"conditions": {"other_dynasty": true, "not_kin": true}},
+     "options": [
+       {"text": "上門說清楚", "log": "{name} 聽說 {target} 認定 {deed_year} 年那次「{deed}」是{pron}幹的，氣得上門去理論。",
+        "effects": [{"note_deed": "wrongly_suspected"}, {"random": {"percent": 40, "effects": [{"note_deed": "wrongly_suspected"}, {"clear_suspicion": {"to": 20}}, {"log": "  說了半天，{target} 總算半信半疑地鬆了口。"}],
+                                "else": [{"deed": {"type": "public_insult", "doer": "target"}}, {"log": "  {target} 根本不聽，當著鄰居的面把{pron}罵了出來。"}]}}],
+        "ai": {"base": 8, "traits": {"brave": 6, "wrathful": 6, "gregarious": 4, "shy": -6}}},
+       {"text": "請神父作證", "conditions": {"trait": "pious"},
+        "log": "{name} 被 {target} 冤枉是 {deed_year} 年那次「{deed}」的主使，請神父出面替{pron}的為人作保。",
+        "effects": [{"note_deed": "wrongly_suspected"}, {"clear_suspicion": {"to": 30}}, {"need": {"spirit": 10}}],
+        "ai": {"base": 8}},
+       {"text": "由他去說", "log": "{name} 聽說 {target} 到處說 {deed_year} 年那次「{deed}」是{pron}幹的，咬著牙不理會。",
+        "effects": [{"note_deed": "wrongly_suspected"}, {"stress": 10}],
+        "ai": {"base": 6, "traits": {"calm": 8, "content": 4, "craven": 4}}}
+     ]},
+
+    {"id": "make_amends", "title": "錯怪", "prompt": "{name} 終於知道，這些年錯怪了 {target}。", "scope": "player_head", "chance": 1,
+     "on": {"signal": "manual"},
+     "conditions": {"age": [14, 120]},
+     "options": [
+       {"text": "上門賠罪", "log": "{name} 帶著一壺麥酒去 {target} 家，為這些年的錯怪賠罪。",
+        "effects": [{"deed": {"type": "made_amends"}}, {"end_feud": "上門賠罪"}],
+        "ai": {"base": 8, "traits": {"kind": 8, "forgiving": 8, "pious": 6, "ambitious": -2}}},
+       {"text": "拉不下臉", "log": "{name} 知道錯怪了 {target}，卻怎麼也拉不下臉去道歉。",
+        "effects": [{"stress": 8}],
+        "ai": {"base": 5, "traits": {"vengeful": 8, "cruel": 6, "shy": 4}}}
+     ]},
+
+    {"id": "spouse_learns_affair", "title": "枕邊的背叛", "prompt": "{name} 知道了 {target} 背著{pron}和別人好過。", "scope": "anyone", "chance": 0.85,
+     "on": {"signal": "belief", "deed_type": "affair", "victim_side": true, "after_months": [0, 2]},
+     "conditions": {"married": true, "age": [16, 80]},
+     "target": {"conditions": {"is_spouse": true}},
+     "options": [
+       {"text": "原諒", "log": "{name} 知道了 {target} 背著{pron}和別人好過。哭了一夜之後，{name} 還是原諒了{target_pron}。",
+        "effects": [{"stress": 15}, {"opinion": {"value": -10, "mod": "betrayed", "years": 8}}],
+        "ai": {"base": 6, "traits": {"kind": 8, "forgiving": 10, "pious": 4, "vengeful": -8}}},
+       {"text": "大吵一架", "log": "{name} 知道了 {target} 背著{pron}和別人好過，兩人吵得整條街都聽見了。",
+        "effects": [{"mutual_opinion": {"value": -25, "mod": "betrayed", "years": 12}}, {"reputation": -1}],
+        "ai": {"base": 8, "traits": {"wrathful": 10, "gregarious": 4, "calm": -4}}},
+       {"text": "告到教會法庭", "log": "{name} 把 {target} 告到教會法庭，罪名是私通。",
+        "effects": [{"accuse": true}, {"opinion": {"value": -30, "mod": "betrayed", "years": 20}}],
+        "ai": {"base": 3, "traits": {"vengeful": 10, "pious": 6, "cruel": 4, "kind": -6}}},
+       {"text": "什麼也不說", "log": "{name} 知道了 {target} 背著{pron}和別人好過，從此再也沒有正眼看過{target_pron}。",
+        "effects": [{"opinion": {"value": -20, "mod": "betrayed", "years": 15}}, {"stress": 20}],
+        "ai": {"base": 6, "traits": {"shy": 8, "calm": 6, "melancholy": 6}}}
+     ]}
+  ]
+}

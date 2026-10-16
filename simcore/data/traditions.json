@@ -1,0 +1,18 @@
+{
+  "traditions": [
+    {"id": "free_born",     "name": "自由之家", "desc": "這家人記得祖上是怎麼贖的身，從不向人低頭。", "mods": {"charm": 0.2, "income": 0.05}},
+    {"id": "smith_line",    "name": "鐵匠世家", "desc": "家中男子打鐵的手藝學得特別快。", "mods": {"skill_craft": 0.4}},
+    {"id": "good_farmers",  "name": "好莊稼漢", "desc": "這家人的田總是收得比別家多。", "mods": {"harvest": 0.1}},
+    {"id": "pious_house",   "name": "虔誠之家", "desc": "主日的彌撒讓全家人心安。", "mods": {"piety": 0.5}},
+    {"id": "lettered",      "name": "識字之家", "desc": "孩子們跟著神父讀書，學得又快又好。", "mods": {"skill_learning": 0.5}},
+    {"id": "landholders",   "name": "有地之家", "desc": "村裡人都知道這家地多，說話有分量。", "mods": {"charm": 0.3, "income": 0.05}},
+    {"id": "well_married",  "name": "良緣之家", "desc": "這家的兒女總能說到好親事。", "mods": {"marriage": 0.4, "attraction": 0.5}},
+    {"id": "survivors",     "name": "熬得過的人", "desc": "飢荒、瘟疫都沒能打倒這一家。", "mods": {"mortality": -0.1}},
+    {"id": "stone_builders","name": "石屋人家", "desc": "全村第一棟石屋，冬天也暖和。", "mods": {"health": 0.3}},
+    {"id": "thrifty",       "name": "勤儉持家", "desc": "一分一毫都省下來。", "mods": {"income": 0.1}},
+    {"id": "village_voice", "name": "村裡的頭人", "desc": "莊頭的位子總落在這家人身上。", "mods": {"charm": 0.5}},
+    {"id": "freeholders",   "name": "自耕之家", "desc": "地是自己的，腰桿也是直的。", "mods": {"charm": 0.2, "income": 0.05}},
+    {"id": "franklins",     "name": "鄉紳人家", "desc": "村裡有事，大家先來問這一家。", "mods": {"charm": 0.4, "income": 0.05}},
+    {"id": "town_kin",      "name": "城裡有人", "desc": "家裡有人在鎮上落了腳，消息和門路都多一些。", "mods": {"income": 0.05}}
+  ]
+}

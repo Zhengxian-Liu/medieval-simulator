@@ -1,0 +1,142 @@
+{
+  "events": [
+    {"id": "rent_land", "title": "租地", "prompt": "領主有 5 畝地要出租，要 120 便士。", "scope": "anyone", "chance": 0.06, "cooldown_years": 2,
+     "conditions": {"is_head": true, "money_ge": 140, "vacant_acres_ge": 5, "acres_lt": 40, "occupation": ["peasant", "shepherd", "smith", "carpenter", "weaver", "miller"]},
+     "options": [
+       {"text": "向領主租下 5 畝（120 便士）", "log": "{name} 花 120 便士向領主租下了 5 畝地。", "effects": [{"money": -120}, {"acres": 5}],
+        "ai": {"base": 8, "traits": {"ambitious": 10, "content": -6}, "if": [{"cond": {"ambition": "more_land"}, "add": 40}, {"cond": {"ambition": "big_landholder"}, "add": 40}]}},
+       {"text": "不了，地夠種了", "log": "", "effects": [], "ai": {"base": 10, "traits": {"content": 8, "lazy": 6}}}
+     ]},
+    {"id": "empty_holdings", "title": "空出來的地", "prompt": "這些年村裡死了不少人，空出許多田地，領主只要 30 便士就肯把 10 畝地租出去。家裡的人手夠不夠種，是另一回事。", "scope": "anyone", "chance": 0.15, "cooldown_years": 2,
+     "conditions": {"is_head": true, "world_flag": "post_plague", "vacant_acres_ge": 10, "plague_active": false, "acres_lt": 50},
+     "options": [
+       {"text": "接下 10 畝（30 便士）", "log": "村裡空出許多田地，領主只收 30 便士就把 10 畝地租給 {name}。", "effects": [{"money": -30}, {"acres": 10}],
+        "ai": {"base": 12, "traits": {"ambitious": 10, "diligent": 6, "lazy": -6}, "if": [{"cond": {"money_lt": 30}, "add": -30}]}},
+       {"text": "人手不夠，算了", "log": "", "effects": [], "ai": {"base": 6, "traits": {"content": 6}}}
+     ]},
+    {"id": "build_timber_house", "title": "蓋木屋", "prompt": "泥牆茅屋又漏雨了。木匠說，250 便士能蓋一棟有橡木框架和閣樓的木屋。", "scope": "player_head", "chance": 0.15, "cooldown_years": 6, "cooldown_scope": "household",
+     "conditions": {"age": [14, 120], "money_ge": 320, "house": "cottage"},
+     "options": [
+       {"text": "請木匠來蓋（250 便士）", "log": "{name} 請木匠把漏雨的泥牆茅屋拆了，蓋起有橡木框架的木屋，屋頂還多了一間閣樓。", "effects": [{"money": -250}, {"house": "timber"}, {"prestige": 3}, {"reputation": 2}],
+        "ai": {"base": 10, "traits": {"ambitious": 6, "greedy": -4, "diligent": 3}, "if": [{"cond": {"ambition": "stone_house"}, "add": 30}]}},
+       {"text": "錢先留著", "log": "", "effects": [], "ai": {"base": 10, "traits": {"greedy": 8, "content": 4}}}
+     ]},
+    {"id": "build_stone_house", "title": "蓋石屋", "prompt": "石匠說，1300 便士能把木屋改成石屋。全村還沒幾家住得起。", "scope": "player_head", "chance": 0.1, "cooldown_years": 1,
+     "conditions": {"age": [14, 120], "money_ge": 1600, "house": "timber", "acres_ge": 35},
+     "options": [
+       {"text": "請石匠來蓋（1300 便士）", "log": "{name} 請來石匠，把木屋改建成石屋，全村都來看熱鬧。", "effects": [{"money": -1300}, {"house": "stone"}, {"prestige": 8}, {"reputation": 4}],
+        "ai": {"base": 8, "traits": {"ambitious": 8, "greedy": -4}, "if": [{"cond": {"ambition": "stone_house"}, "add": 50}]}},
+       {"text": "錢先留著", "log": "", "effects": [], "ai": {"base": 10, "traits": {"greedy": 8}}}
+     ]},
+    {"id": "start_brewing", "title": "釀麥酒", "prompt": "鄰居都說 {name} 釀的麥酒好喝，勸{pron}掛個招牌賣酒。賣酒要向莊園交執照錢，酒不好也會被罰。", "scope": "player_family", "chance": 0.02, "once": true,
+     "conditions": {"sex": "female", "age": [20, 45], "occupation": "housewife", "married": true},
+     "options": [
+       {"text": "掛起麥稈招牌賣酒", "log": "鄰居都說 {name} 釀的麥酒好喝，{pron}在門口掛起麥稈招牌開始賣酒。", "effects": [{"set_occupation": "alewife"}], "ai": {"base": 10, "traits": {"gregarious": 8, "diligent": 5}}},
+       {"text": "只給自家喝", "log": "", "effects": [{"need": {"social": 10}}], "ai": {"base": 8, "traits": {"shy": 8}}}
+     ]},
+    {"id": "ale_fine", "title": "麥酒罰款", "scope": "anyone", "chance": 0.008, "cooldown_years": 2,
+     "conditions": {"occupation": "alewife"},
+     "options": [{"text": "好", "log": "莊園法庭的品酒官說 {name} 的麥酒摻了水，罰款 6 便士。", "effects": [{"money": -6}, {"reputation": -2}]}]},
+    {"id": "smith_commission", "title": "領主的訂單", "scope": "anyone", "chance": 0.04, "cooldown_years": 2, "npc_log": false,
+     "conditions": {"occupation": "smith", "skill_ge": {"craft": 9}},
+     "target": {"pick": "lord", "conditions": {}},
+     "options": [{"text": "好", "log": "{target} 訂了一批馬蹄鐵和犁頭，{name} 賺了 50 便士。", "effects": [{"money": 50}, {"target_opinion": {"value": 8, "mod": "good_work", "years": 6}}, {"skill": {"craft": 0.5}}]}]},
+    {"id": "heirloom_smith", "title": "得意之作", "scope": "player_family", "chance": 0.006, "cooldown_years": 15,
+     "conditions": {"is_head": true, "occupation": "smith", "skill_ge": {"craft": 13}},
+     "options": [{"text": "好", "log": "{name} 打了一把好斧頭，說要留給子孫用。", "effects": [{"add_item": "fine_axe"}, {"reputation": 1}]}]},
+    {"id": "heirloom_carpenter", "title": "得意之作", "prompt": "冬天活少，{name} 想做一件能傳下去的東西。", "scope": "player_family", "chance": 0.006, "cooldown_years": 15,
+     "conditions": {"is_head": true, "occupation": "carpenter", "skill_ge": {"craft": 12}},
+     "options": [
+       {"text": "做一張雕花木桌", "log": "{name} 花了一整個冬天，做了一張雕花木桌。", "effects": [{"add_item": "carved_table"}], "ai": {"base": 10}},
+       {"text": "做一個搖籃", "log": "{name} 給家裡的孩子做了一個雕花搖籃。", "effects": [{"add_item": "carved_cradle"}], "ai": {"base": 10, "traits": {"kind": 8}}}
+     ]},
+    {"id": "market_day", "title": "市集日", "ask": false, "scope": "player_head", "chance": 0.06, "cooldown_years": 1,
+     "conditions": {"age": [16, 65], "month": [3, 9]},
+     "options": [
+       {"text": "去鎮上賣東西", "log": "", "effects": [{"need": {"social": 15}}, {"random": {"percent": 70,
+          "effects": [{"money": 20}],
+          "else": [{"money": -12}, {"log": "{name} 在鎮上的市集被扒了錢袋。"}]}}], "ai": {"base": 10, "traits": {"gregarious": 6, "greedy": 4}}},
+       {"text": "留在村裡", "log": "", "effects": [], "ai": {"base": 6, "traits": {"shy": 8, "lazy": 5}}}
+     ]},
+    {"id": "labour_service", "title": "領主的勞役", "prompt": "收割季節到了，天邊壓著雨雲。照規矩要先替領主割三天麥子；等割完回來，自家的麥子怕是要被雨打壞一些。", "scope": "player_head", "chance": 0.25, "cooldown_years": 4, "cooldown_scope": "household",
+     "conditions": {"occupation": "peasant", "month": [7, 8], "free": false},
+     "target": {"pick": "lord", "conditions": {}},
+     "options": [
+       {"text": "照做", "log": "收割季節，{name} 照規矩先去替領主割了三天麥子。", "effects": [{"need": {"rest": -25}}, {"food_days": -15}, {"target_opinion": {"value": 4, "mod": "dutiful", "years": 5}}], "ai": {"base": 12, "traits": {"calm": 5, "craven": 5}}},
+       {"text": "先搶收自家的，再去領主田裡", "log": "{name} 先把自家的麥子搶收進倉，晚了兩天才去領主田裡，管家記了一筆。",
+        "effects": [{"target_opinion": {"value": -5, "mod": "shirker", "years": 4}}, {"random": {"percent": 30, "effects": [{"money": -3}, {"log": "  莊園法庭罰了 3 便士。"}]}}],
+        "ai": {"base": 6, "traits": {"diligent": 4, "greedy": 4, "craven": -4}}},
+       {"text": "推託", "log": "{name} 推說家裡有病人，沒去替領主割麥子，被罰了 6 便士。", "effects": [{"money": -6}, {"target_opinion": {"value": -10, "mod": "shirker", "years": 5}}, {"reputation": 1}], "ai": {"base": 5, "traits": {"lazy": 8, "wrathful": 6, "brave": 4}}}
+     ]},
+    {"id": "reeve_temptation", "title": "莊頭的帳本", "prompt": "領主的帳本在 {name} 手上。少記幾筆，沒人看得出來。", "scope": "player_family", "chance": 0.08, "cooldown_years": 2,
+     "conditions": {"reeve": true},
+     "target": {"pick": "lord", "conditions": {}},
+     "options": [
+       {"text": "做點手腳", "log": "{name} 在領主的帳本上做了點手腳，多留了 40 便士。沒人看見，至少{pron}是這麼以為的。",
+        "effects": [{"money": 40}, {"deed": {"type": "embezzled"}}, {"trait_chance": {"trait": "greedy", "chance": 30}}],
+        "ai": {"base": 5, "traits": {"greedy": 15, "generous": -8, "pious": -4}}},
+       {"text": "清清白白", "log": "{name} 把帳記得清清楚楚，村民都信得過{pron}。", "effects": [{"reputation": 4}, {"lord_opinion": {"value": 6, "mod": "honest_reeve", "years": 8}}], "ai": {"base": 10, "traits": {"pious": 6, "kind": 4}}}
+     ]},
+    {"id": "sheep_rot", "title": "羊瘟", "scope": "anyone", "chance": 0.02, "cooldown_years": 4,
+     "conditions": {"occupation": "shepherd"},
+     "options": [{"text": "好", "log": "{name} 的羊群得了肝蛭病，死了一大半。", "effects": [{"money": -30}, {"need": {"spirit": -15}}]}]},
+    {"id": "hard_winter", "title": "難熬的冬天", "prompt": "糧食快吃完了，離開春還有好幾個月。", "scope": "player_head", "chance": 0.25, "cooldown_years": 1,
+     "conditions": {"winter": true, "food_days_lt": 30},
+     "options": [
+       {"text": "宰了豬", "log": "糧食快吃完了，{name} 只好把家裡的豬宰了。", "effects": [{"food": 120}, {"money": -10}], "ai": {"base": 10}},
+       {"text": "去求領主施捨", "log": "{name} 拉下臉去莊園討了些燕麥。", "effects": [{"food": 80}, {"reputation": -3}], "ai": {"base": 6, "traits": {"craven": 6, "ambitious": -6}}}
+     ]},
+    {"id": "empty_larder", "budget": "hunger", "title": "米缸見底", "prompt": "家裡的糧食只剩不到二十天了，離下一次收成還遠。再這樣下去，最先撐不住的是孩子。",
+     "scope": "player_head", "chance": 0.5, "cooldown_years": 1,
+     "conditions": {"food_days_lt": 20},
+     "options": [
+       {"text": "去市集買糧（20 便士）", "log": "{name} 數出 20 便士，去市集買了兩袋燕麥。",
+        "effects": [{"money": -20}, {"food_days": 45}], "ai": {"base": 12, "traits": {"greedy": -4}}},
+       {"text": "去求鄰居借糧（秋收後還 30 便士）",
+        "log": "{name} 拉下臉，挨家挨戶去問誰家還有餘糧。", "effects": [{"borrow_grain": {"days": 90, "debt": 30}}, {"stress": 4}],
+        "ai": {"base": 8, "traits": {"gregarious": 4, "shy": -4}}},
+       {"text": "送一個孩子去別家幫傭", "conditions": {"service_child": true},
+        "log": "家裡養不起這麼多張嘴，{name} 把一個孩子送去別家幫傭。", "effects": [{"service_for_food": {"years": 3}}, {"stress": 8}],
+        "ai": {"base": 6, "traits": {"cruel": 4, "kind": -4}}},
+       {"text": "夜裡去領主的林子下套子",
+        "log": "{name} 趁著夜色，去領主的林子裡下兔子套。",
+        "effects": [{"random": {"percent": 70,
+           "effects": [{"food_days": 40}, {"log": "  套到了兩隻兔子和一隻野雞，家裡又撐了一個多月。"}],
+           "else": [{"money": -6}, {"lord_opinion": {"value": -15, "mod": "poacher", "years": 10}}, {"reputation": -2},
+                    {"log": "  守林人在天亮前逮住了 {name}，莊園法庭罰了 6 便士。"}]}}],
+        "ai": {"base": 5, "traits": {"brave": 6, "craven": -6, "pious": -3, "greedy": 2}}},
+       {"text": "去教堂求濟貧", "log": "{name} 跟著寡婦和乞丐排在教堂門口，領了一袋發霉的豆子。",
+        "effects": [{"food_days": 25}, {"reputation": -2}, {"stress": 6}],
+        "ai": {"base": 5, "traits": {"pious": 4, "ambitious": -6}}},
+       {"text": "勒緊褲帶撐下去", "log": "{name} 讓全家一天只吃一頓，大人把麵包省給孩子。",
+        "effects": [{"food_days": 8}, {"stress": 10}],
+        "ai": {"base": 2, "traits": {"content": 4, "diligent": 2}}}
+     ]},
+    {"id": "empty_larder_dire", "budget": "hunger", "title": "斷糧", "prompt": "家裡已經斷糧了。孩子餓得哭不出聲，再不想辦法就要出人命。",
+     "scope": "player_head", "chance": 1, "cooldown_years": 1,
+     "conditions": {"food_days_lt": 3},
+     "options": [
+       {"text": "去市集買糧（20 便士）", "log": "{name} 數出 20 便士，去市集買了兩袋燕麥。",
+        "effects": [{"money": -20}, {"food_days": 45}], "ai": {"base": 12, "traits": {"greedy": -4}}},
+       {"text": "去求鄰居借糧（秋收後還 30 便士）",
+        "log": "{name} 拉下臉，挨家挨戶去問誰家還有餘糧。", "effects": [{"borrow_grain": {"days": 90, "debt": 30}}, {"stress": 4}],
+        "ai": {"base": 8, "traits": {"gregarious": 4, "shy": -4}}},
+       {"text": "送一個孩子去別家幫傭", "conditions": {"service_child": true},
+        "log": "家裡養不起這麼多張嘴，{name} 把一個孩子送去別家幫傭。", "effects": [{"service_for_food": {"years": 3}}, {"stress": 8}],
+        "ai": {"base": 6, "traits": {"cruel": 4, "kind": -4}}},
+       {"text": "夜裡去領主的林子下套子",
+        "log": "{name} 趁著夜色，去領主的林子裡下兔子套。",
+        "effects": [{"random": {"percent": 70,
+           "effects": [{"food_days": 40}, {"log": "  套到了兩隻兔子和一隻野雞，家裡又撐了一個多月。"}],
+           "else": [{"money": -6}, {"lord_opinion": {"value": -15, "mod": "poacher", "years": 10}}, {"reputation": -2},
+                    {"log": "  守林人在天亮前逮住了 {name}，莊園法庭罰了 6 便士。"}]}}],
+        "ai": {"base": 5, "traits": {"brave": 6, "craven": -6, "pious": -3, "greedy": 2}}},
+       {"text": "去教堂求濟貧", "log": "{name} 跟著寡婦和乞丐排在教堂門口，領了一袋發霉的豆子。",
+        "effects": [{"food_days": 25}, {"reputation": -2}, {"stress": 6}],
+        "ai": {"base": 5, "traits": {"pious": 4, "ambitious": -6}}},
+       {"text": "勒緊褲帶撐下去", "log": "{name} 讓全家一天只吃一頓，大人把麵包省給孩子。",
+        "effects": [{"food_days": 8}, {"stress": 10}],
+        "ai": {"base": 2, "traits": {"content": 4, "diligent": 2}}}
+     ]}
+  ]
+}

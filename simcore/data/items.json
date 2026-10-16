@@ -1,0 +1,18 @@
+{
+  "items": [
+    {"id": "oak_chest",    "name": "橡木箱", "value": 30, "dowry": true},
+    {"id": "dowry_chest",  "name": "嫁妝箱", "value": 25, "dowry": true},
+    {"id": "anvil",        "name": "鐵砧", "value": 80},
+    {"id": "fine_axe",     "name": "好斧頭", "value": 20},
+    {"id": "carved_table", "name": "雕花木桌", "value": 40},
+    {"id": "carved_cradle","name": "雕花搖籃", "value": 20, "dowry": true},
+    {"id": "psalter",      "name": "詩篇抄本", "value": 120},
+    {"id": "pewter_jug",   "name": "白鑞酒壺", "value": 25, "dowry": true},
+    {"id": "silver_spoon", "name": "銀湯匙", "value": 40, "dowry": true},
+    {"id": "longbow",      "name": "長弓", "value": 15},
+    {"id": "wool_cloak",   "name": "羊毛斗篷", "value": 18, "dowry": true},
+    {"id": "pilgrim_badge","name": "朝聖徽章", "value": 5},
+    {"id": "family_sword", "name": "家傳長劍", "value": 150},
+    {"id": "tapestry",     "name": "掛毯", "value": 200}
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  // How the game opens: one of these is picked at random for the player's head before the first
+  // day, so no two chronicles start the same. "opening_quiet" is a clean start.
+  "events": [
+    {"id": "opening_old_feud", "title": "上一代的官司", "scope": "player_head", "chance": 1,
+     "on": {"signal": "manual"},
+     "target": {"pick": "random_villager", "conditions": {"is_head": true, "other_dynasty": true, "same_class": true}},
+     "options": [
+       {"text": "好", "log": "{name} 的父親那一輩和 {target_house} 家為了田界打過官司，兩家到現在見了面還不說話。",
+        "effects": [{"deed": {"type": "court_case", "doer": "target", "scale": 2}}, {"feud_heat": 45}]}
+     ]},
+    {"id": "opening_miller_debt", "title": "磨坊的帳", "scope": "player_head", "chance": 1,
+     "on": {"signal": "manual"},
+     "target": {"pick": "random_villager", "conditions": {"is_head": true, "occupation": "miller"}},
+     "options": [
+       {"text": "好", "log": "去年冬天家裡斷了糧，{name} 跟磨坊的 {target} 借了 40 便士，到現在還沒還。",
+        "effects": [{"owe_target": 40}]}
+     ]},
+    {"id": "opening_youthful_crime", "title": "年輕時的事", "scope": "player_head", "chance": 1,
+     "on": {"signal": "manual"},
+     "target": {"pick": "random_villager", "conditions": {"is_head": true, "other_dynasty": true, "same_class": true}},
+     "options": [
+       {"text": "好", "log": "{name} 十幾歲時跟 {target} 家的小子結了仇，一時氣不過，夜裡燒了他家的麥垛。這件事到現在沒人知道是誰幹的。",
+        "effects": [{"deed": {"type": "arson"}}]}
+     ]},
+    {"id": "opening_promised_match", "title": "說好的親事", "scope": "player_head", "chance": 1,
+     "on": {"signal": "manual"},
+     "target": {"pick": "random_villager", "conditions": {"is_head": true, "other_dynasty": true, "same_class": true}},
+     "options": [
+       {"text": "好", "log": "{name} 和 {target} 是一起長大的朋友，兩人喝酒時說好了：等孩子們長大，就讓兩家結親。",
+        "effects": [{"mutual_opinion": {"value": 30, "mod": "promised_match", "years": 20}}, {"deed": {"type": "sworn_friend"}}]}
+     ]},
+    {"id": "opening_lords_eye", "title": "領主的眼色", "scope": "player_head", "chance": 1,
+     "on": {"signal": "manual"},
+     "target": {"pick": "lord", "conditions": {}},
+     "options": [
+       {"text": "好", "log": "去年 {name} 在領主的林子裡撿柴，被管家逮個正著，罰了錢。從此 {target} 看{pron}的眼神就不太對。",
+        "effects": [{"lord_opinion": {"value": -20, "mod": "poacher", "years": 12}}]}
+     ]},
+    {"id": "opening_quiet", "title": "平常的一年", "scope": "player_head", "chance": 1,
+     "on": {"signal": "manual"},
+     "options": [{"text": "好", "log": "", "effects": []}]}
+  ]
+}

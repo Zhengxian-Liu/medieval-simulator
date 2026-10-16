@@ -1,12 +1,18 @@
-# Unreal generated
-Binaries/
-Intermediate/
-Saved/
-DerivedDataCache/
-Build/
-.vs/
+.DS_Store
+__pycache__/
+
+# simcore (playtest sim)
+simcore/build/
+simcore/saves/
+
+# Unreal (kept for reference; anchored to the repo root so they never match simcore/ paths)
+/Binaries/
+/Intermediate/
+/Saved/
+/DerivedDataCache/
+/Build/
+/.vs/
 *.xcworkspace
 *.xcodeproj
-Plugins/*/Binaries/
-Plugins/*/Intermediate/
-.DS_Store
+/Plugins/*/Binaries/
+/Plugins/*/Intermediate/

@@ -1,0 +1,53 @@
+{
+  "events": [
+    {"id": "war_levy", "title": "徵兵", "prompt": "郡裡來徵弓兵，要去法蘭西打仗。{name} 被點了名。", "scope": "player_family", "chance": 0.012, "cooldown_years": 8,
+     "conditions": {"world_flag": "war", "sex": "male", "age": [18, 34], "occupation": ["peasant", "shepherd", "carpenter", "weaver", "smith"]},
+     "options": [
+       {"text": "去法蘭西當弓兵", "log": "郡裡來徵弓兵，{name} 背起長弓跟著隊伍去了法蘭西。",
+        "effects": [{"random": {"percent": 22, "effects": [{"kill": "戰死沙場"}],
+                     "else": [{"add_trait": "veteran"}, {"money": 70}, {"add_item": "longbow"}, {"reputation": 4}, {"health": -10}, {"log": "{name} 從法蘭西回來了，帶回軍餉和一身傷疤。"}]}}],
+        "ai": {"base": 8, "traits": {"brave": 12, "ambitious": 6, "craven": -8}}},
+       {"text": "花錢找人頂替（40 便士）", "log": "{name} 花 40 便士找人頂替去當兵。", "effects": [{"money": -40}], "ai": {"base": 8, "traits": {"craven": 8, "greedy": -6}, "if": [{"cond": {"money_lt": 40}, "add": -20}]}},
+       {"text": "躲進樹林", "log": "{name} 躲進樹林好幾天，等徵兵的人走了才回來。", "effects": [{"reputation": -5}, {"trait_chance": {"trait": "craven", "chance": 30}}], "ai": {"base": 4, "traits": {"craven": 10}}}
+     ]},
+    {"id": "plague_choice", "title": "瘟疫來了", "prompt": "大瘟疫傳到了村裡。隔壁一家已經死了三口，每天都有新墳。", "scope": "player_head", "chance": 1.0, "cooldown_years": 4, "cooldown_scope": "household",
+     "conditions": {"plague_active": true},
+     "options": [
+       {"text": "帶全家躲到樹林裡的小屋", "log": "{name} 帶著全家躲進樹林裡的小屋，不和任何人來往。", "effects": [{"set_flag": "plague_shelter"}, {"food": -150}, {"reputation": -3}], "ai": {"base": 10, "traits": {"craven": 10, "cynical": 5, "kind": -4}}},
+       {"text": "留下來照顧鄰居", "conditions": {"age": [14, 120]}, "log": "{name} 留在村裡幫鄰居挖墳、送水，村民一輩子記得這份情。", "effects": [{"reputation": 10}, {"prestige": 4}, {"need": {"spirit": 10}}, {"deed": {"type": "helped_in_plague", "to": "none"}}], "ai": {"base": 6, "traits": {"kind": 12, "brave": 8, "pious": 5}}},
+       {"text": "天天去教堂祈禱", "log": "{name} 每天到教堂祈禱，求上帝放過這個家。", "effects": [{"need": {"spirit": 30}}], "ai": {"base": 6, "traits": {"pious": 12}}}
+     ]},
+    {"id": "plague_survivor", "title": "活下來的人", "scope": "anyone", "chance": 0.6, "once": true,
+     "conditions": {"world_flag": "post_plague", "year": [1349, 1350], "plague_active": false, "age": [3, 90]},
+     "options": [{"text": "好", "log": "", "effects": [{"add_trait": "plague_survivor"}]}]},
+    {"id": "old_wages", "title": "勞工法令", "prompt": "瘟疫之後人手奇缺，鄰村有人出雙倍工錢。可是《勞工法令》規定只能拿老工錢。", "scope": "player_head", "chance": 0.12, "cooldown_years": 3,
+     "conditions": {"world_flag": "statute_labourers", "year": [1351, 1380], "occupation": ["peasant", "carpenter", "weaver", "shepherd"]},
+     "target": {"pick": "lord", "conditions": {}},
+     "options": [
+       {"text": "照舊工錢做", "log": "", "effects": [{"money": -8}, {"target_opinion": {"value": 5, "mod": "obedient", "years": 5}}], "ai": {"base": 10, "traits": {"craven": 6, "calm": 4}}},
+       {"text": "去鄰村賺高工錢", "log": "{name} 不顧《勞工法令》，跑到鄰村去幫人收割，工錢多了一倍。",
+        "effects": [{"money": 35}, {"target_opinion": {"value": -15, "mod": "defiant", "years": 8}},
+                    {"random": {"percent": 30, "effects": [{"money": -25}, {"log": "{name} 被治安官抓到，罰了 25 便士。"}], "else": []}}],
+        "ai": {"base": 8, "traits": {"ambitious": 8, "greedy": 6, "brave": 4}}}
+     ]},
+    {"id": "poll_tax", "title": "人頭稅", "prompt": "收人頭稅的人來了，家裡每個十五歲以上的人都要繳錢。", "scope": "player_head", "chance": 0.5, "cooldown_years": 2,
+     "conditions": {"world_flag": "poll_tax", "year": [1377, 1381]},
+     "options": [
+       {"text": "照實繳", "log": "", "effects": [{"money": -16}], "ai": {"base": 10, "traits": {"pious": 4, "craven": 4}}},
+       {"text": "少報幾口人", "log": "收人頭稅的人來了，{name} 把兩個孩子藏進穀倉。",
+        "effects": [{"money": -8}, {"random": {"percent": 30, "effects": [{"money": -30}, {"reputation": -4}, {"log": "{name} 少報人口被查出來，罰了 30 便士。"}], "else": []}}],
+        "ai": {"base": 8, "traits": {"greedy": 8, "brave": 4}}}
+     ]},
+    {"id": "peasants_revolt", "title": "農民起義", "prompt": "鄰村的人拿著草叉經過，說要去倫敦見國王，廢了農奴制、廢了人頭稅。", "scope": "player_family", "chance": 0.35, "once": true,
+     "conditions": {"world_flag": "revolt", "year": [1381, 1381], "month": [5, 7], "sex": "male", "age": [17, 50], "not": {"occupation": "lord"}},
+     "target": {"pick": "lord", "conditions": {}},
+     "options": [
+       {"text": "加入起義", "log": "{name} 拿起草叉，跟著鄰村的人一起去倫敦請願。",
+        "effects": [{"random": {"percent": 25, "effects": [{"kill": "起義失敗後被絞死"}],
+                     "else": [{"reputation": 10}, {"target_opinion": {"value": -40, "mod": "rebel", "years": 30}}, {"add_trait": "brave"}, {"log": "起義被鎮壓，{name} 逃回了村子，在村民眼裡成了英雄。"}]}}],
+        "ai": {"base": 6, "traits": {"brave": 12, "wrathful": 8, "ambitious": 4, "craven": -8}}},
+       {"text": "留在家裡", "log": "", "effects": [], "ai": {"base": 10, "traits": {"calm": 6, "content": 6}}},
+       {"text": "向領主告密", "log": "{name} 把鄰居密謀造反的事告訴了 {target}。", "effects": [{"money": 20}, {"reputation": -15}, {"deed": {"type": "informed_lord"}}], "ai": {"base": 3, "traits": {"greedy": 8, "cruel": 8, "craven": 5}}}
+     ]}
+  ]
+}

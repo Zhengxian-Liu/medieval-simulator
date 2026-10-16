@@ -1,0 +1,53 @@
+{
+  // Events that grow out of what families remember about each other, including what the
+  // previous generation left them. Targets are picked by memory ("pick": "remembered").
+  "events": [
+    {"id": "old_grudge_insult", "title": "舊帳", "prompt": "{target} 在市集上當眾嘲笑 {name}，說{pron}家的人沒一個好東西。兩家的舊帳還沒算完。", "scope": "player_head", "budget": "feud", "chance": 0.03, "cooldown_years": 5,
+     "conditions": {"age": [16, 70]},
+     "target": {"pick": "remembered", "remembers": {"holder": "target", "about": "other_family", "negative": true, "min": 10},
+                "conditions": {"age": [16, 75], "opinion_of_target_lt": -5}},
+     "options": [
+       {"text": "吞下去", "log": "{target} 在市集上當眾嘲笑 {name}，說{pron}家的人沒一個好東西。兩家的舊帳還沒算完，{name} 低著頭走開了。",
+        "effects": [{"deed": {"type": "public_insult", "doer": "target"}}, {"need": {"spirit": -10}}, {"reputation": -1}],
+        "ai": {"base": 8, "traits": {"calm": 10, "craven": 8, "pious": 4}}},
+       {"text": "當場回嘴，打起來", "log": "{target} 在市集上當眾嘲笑 {name} 的家人，{name} 揪住{target_pron}的衣領，兩人扭打成一團。",
+        "effects": [{"deed": {"type": "public_insult", "doer": "target"}}, {"deed": {"type": "brawl"}}, {"health": -8}, {"target": [{"health": -8}]}],
+        "ai": {"base": 6, "traits": {"wrathful": 14, "brave": 6, "calm": -6}}},
+       {"text": "告上莊園法庭", "log": "{target} 當眾辱罵 {name} 的家人，{name} 告上莊園法庭，對方被罰了 6 便士。",
+        "effects": [{"deed": {"type": "public_insult", "doer": "target"}}, {"deed": {"type": "court_case"}}, {"target": [{"money": -6}]}, {"reputation": 1}],
+        "ai": {"base": 8, "traits": {"ambitious": 4, "greedy": 4}}}
+     ]},
+
+    {"id": "star_crossed", "title": "仇家的孩子", "prompt": "{name} 愛上了仇家的 {target}，兩人偷偷在磨坊後面見面。", "scope": "player_family", "chance": 0.02, "cooldown_years": 6,
+     "conditions": {"age": [16, 26], "married": false, "widowed": false},
+     "target": {"pick": "remembered", "remembers": {"holder": "self", "about": "other_family", "negative": true, "min": 8},
+                "conditions": {"opposite_sex": true, "not_kin": true, "married": false, "age": [16, 28], "same_class": true, "other_dynasty": true}},
+     "options": [
+       {"text": "成全他們，兩家和解", "log": "{name} 愛上了仇家的 {target}。兩家長輩坐下來喝了一夜的酒，終於點頭，讓婚事化解多年的恩怨。",
+        "effects": [{"deed": {"type": "reconciled"}}, {"deed": {"type": "reconciled", "doer": "target"}}, {"marry_target": true}, {"prestige": 2}],
+        "ai": {"base": 8, "traits": {"kind": 10, "forgiving": 10, "gregarious": 4, "vengeful": -10}}},
+       {"text": "斷了這份念想", "log": "{name} 偷偷和仇家的 {target} 在磨坊後面見面，被家人發現後，再也不准{pron}出門。",
+        "effects": [{"trait_chance": {"trait": "melancholy", "chance": 25}}, {"need": {"spirit": -20}}],
+        "ai": {"base": 10, "traits": {"wrathful": 6, "cruel": 6, "vengeful": 10}}}
+     ]},
+
+    {"id": "remembered_kindness", "title": "當年的情分", "scope": "player_head", "chance": 0.15, "cooldown_years": 4,
+     "conditions": {"any": [{"food_days_lt": 120}, {"money_lt": 15}]},
+     "target": {"pick": "remembered", "remembers": {"holder": "target", "about": "other_family", "negative": false, "tag": "help", "min": 4},
+                "conditions": {"is_head": true}},
+     "options": [
+       {"text": "收下", "log": "{target} 記得當年 {name} 家的情分，趁天黑送來兩袋麥子。", "effects": [{"food": 150}, {"deed": {"type": "kindness", "doer": "target"}}]}
+     ]},
+
+    {"id": "grudge_sour_mill", "title": "刁難", "prompt": "{target} 記著兩家的舊怨，替 {name} 家幹活時開了雙倍的價。", "scope": "player_head", "budget": "feud", "chance": 0.05, "cooldown_years": 3,
+     "conditions": {"month": [9, 11]},
+     "target": {"pick": "remembered", "remembers": {"holder": "target", "about": "other_family", "negative": true, "min": 8},
+                "conditions": {"is_head": true, "occupation": ["miller", "smith", "carpenter"], "opinion_of_target_lt": -5}},
+     "options": [
+       {"text": "忍氣付錢", "log": "{target} 記著兩家的舊怨，替 {name} 家幹活時故意多收了一倍的錢。", "effects": [{"money": -12}, {"target": [{"money": 12}]}],
+        "ai": {"base": 10, "traits": {"calm": 6, "craven": 6}}},
+       {"text": "寧可走遠路找別人", "log": "{target} 記著舊怨刁難 {name}，{name} 寧可走到鄰村去找人幹活。", "effects": [{"need": {"rest": -20}}, {"money": -4}],
+        "ai": {"base": 8, "traits": {"brave": 4, "wrathful": 6, "diligent": 4}}}
+     ]}
+  ]
+}

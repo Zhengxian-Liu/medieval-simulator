@@ -1,0 +1,87 @@
+{
+  // Village politics. "jury_duty" is run by the court code when the player's head is empanelled
+  // (the target is the accused, the deed is the charge; the player's vote is one of six).
+  // "reeve_campaign" is run before the Lammas election when the player's head is a candidate.
+  "events": [
+    {"id": "jury_duty", "title": "坐陪審", "prompt": "莊園法庭開庭，{name} 被選進陪審。{target} 被告「{deed}」。", "scope": "player_head", "chance": 1,
+     "on": {"signal": "manual"},
+     "conditions": {"age": [14, 120]},
+     "options": [
+       {"text": "判有罪", "log": "莊園法庭開庭，{name} 被選進陪審。{target} 被告「{deed}」，{name} 舉手說有罪。",
+        "effects": [{"jury_vote": 1}],
+        "ai": {"base": 6, "traits": {"vengeful": 3, "cruel": 3}, "if": [{"cond": {"opinion_of_target_lt": 0}, "add": 10}, {"cond": {"feud_ge": 1}, "add": 10}]}},
+       {"text": "判無罪", "log": "莊園法庭開庭，{name} 被選進陪審。{target} 被告「{deed}」，{name} 說證據不夠。",
+        "effects": [{"jury_vote": 0}],
+        "ai": {"base": 6, "traits": {"kind": 4, "forgiving": 4}, "if": [{"cond": {"opinion_of_target_ge": 20}, "add": 10}]}},
+       {"text": "收被告的錢，判無罪", "conditions": {"target": {"money_ge": 15}},
+        "log": "莊園法庭開庭前一晚，被告「{deed}」的 {target} 偷偷塞給陪審的 {name} 10 便士。第二天 {name} 說證據不夠。",
+        "effects": [{"jury_vote": 0}, {"money": 10}, {"target": [{"money": -10}]}, {"stress": 6}],
+        "ai": {"base": 2, "traits": {"greedy": 12, "cynical": 4, "pious": -8, "kind": -2}}}
+     ]},
+
+    {"id": "reeve_campaign", "title": "選莊頭", "prompt": "又到了選莊頭的時候。當莊頭能免勞役、在管家面前說得上話，但收不齊租要自己賠。", "scope": "player_head", "chance": 1,
+     "on": {"signal": "manual"},
+     "conditions": {"age": [14, 120]},
+     "options": [
+       {"text": "請全村喝酒（15 便士）", "conditions": {"money_ge": 15},
+        "log": "選莊頭前一晚，{name} 在酒館請各家家主喝酒，拍著胸脯說今年一定替大家向管家說話。",
+        "effects": [{"money": -15}, {"set_flag": "campaign_ale"}, {"need": {"social": 20}}],
+        "ai": {"base": 8, "traits": {"gregarious": 8, "ambitious": 6, "shy": -6, "greedy": -4}, "if": [{"cond": {"ambition": "become_reeve"}, "add": 20}]}},
+       {"text": "求領主點名", "log": "選莊頭前，{name} 帶著一隻閹雞去莊園，請 {target} 替{pron}說句話。",
+        "effects": [{"set_flag": "campaign_lord"}, {"food": -10}],
+        "ai": {"base": 5, "traits": {"ambitious": 6, "craven": 2}, "if": [{"cond": {"flag": "lord_favour"}, "add": 15}, {"cond": {"ambition": "become_reeve"}, "add": 10}]}},
+       {"text": "順其自然", "log": "",
+        "effects": [],
+        "ai": {"base": 8, "traits": {"content": 8, "shy": 4, "lazy": 4}}}
+     ]},
+
+    {"id": "reeve_harass", "title": "莊頭作梗", "prompt": "莊頭 {target} 跟 {name} 家有過節，把最遠最爛的那塊地的勞役都派給了 {name} 家。", "scope": "player_head", "pulse": "yearly", "chance": 0.35, "cooldown_years": 2,
+     "conditions": {"age": [14, 120], "reeve": false},
+     "target": {"pick": "reeve", "conditions": {"opinion_of_target_lt": -15}},
+     "options": [
+       {"text": "送禮打點（10 便士）", "conditions": {"money_ge": 10},
+        "log": "莊頭 {target} 跟 {name} 家有過節，把最遠最爛的那塊地的勞役都派給了 {name} 家。{name} 只好送了 10 便士過去。",
+        "effects": [{"money": -10}, {"target": [{"money": 10}]}, {"target_opinion": {"value": 10, "mod": "greased", "years": 3}}],
+        "ai": {"base": 8, "traits": {"craven": 6, "content": 4, "greedy": -6}}},
+       {"text": "忍著做", "log": "莊頭 {target} 跟 {name} 家有過節，把最遠最爛的那塊地的勞役都派給了 {name} 家。{name} 咬著牙做完了。",
+        "effects": [{"food": -40}, {"need": {"rest": -25}}],
+        "ai": {"base": 8, "traits": {"diligent": 6, "calm": 6}}},
+       {"text": "告到領主那裡", "log": "莊頭 {target} 處處刁難 {name} 家，{name} 跑到莊園去告狀。",
+        "effects": [{"random": {"percent": 40,
+                                "effects": [{"target": [{"reputation": -5}]}, {"log": "  管家查了帳，狠狠訓了 {target} 一頓。"}],
+                                "else": [{"deed": {"type": "public_insult", "doer": "target"}}, {"log": "  管家根本不理，{target} 回村後當眾笑{pron}自不量力。"}]}}],
+        "ai": {"base": 4, "traits": {"brave": 8, "wrathful": 6, "ambitious": 3, "craven": -8}}}
+     ]},
+
+    {"id": "reeve_collect", "title": "莊頭收租", "prompt": "當莊頭的 {name} 要去 {target} 家收欠租。那家人看起來真的拿不出來。", "scope": "player_head", "pulse": "yearly", "chance": 0.35, "cooldown_years": 1,
+     "conditions": {"age": [14, 120], "reeve": true},
+     "target": {"conditions": {"is_head": true, "in_debt": true, "other_dynasty": true}},
+     "options": [
+       {"text": "網開一面", "log": "當莊頭的 {name} 去 {target} 家收欠租，看見一屋子餓得發慌的孩子，說今年先記在帳上。",
+        "effects": [{"deed": {"type": "reeve_lenient"}}, {"target": [{"debt_grace": true}]}, {"lord_opinion": {"value": -6, "mod": "soft_reeve", "years": 5}}],
+        "ai": {"base": 7, "traits": {"kind": 10, "generous": 6, "forgiving": 4, "cruel": -8, "greedy": -4}, "if": [{"cond": {"opinion_of_target_ge": 20}, "add": 8}, {"cond": {"feud_ge": 1}, "add": -10}]}},
+       {"text": "照章辦事", "log": "當莊頭的 {name} 帶著管家的人去 {target} 家收欠租，一個銅板也沒少要。",
+        "effects": [{"deed": {"type": "reeve_strict"}}, {"lord_opinion": {"value": 6, "mod": "firm_reeve", "years": 5}}],
+        "ai": {"base": 7, "traits": {"ambitious": 6, "diligent": 4, "cruel": 4, "kind": -6}, "if": [{"cond": {"feud_ge": 1}, "add": 10}]}},
+       {"text": "收點好處，替他瞞著", "conditions": {"target": {"money_ge": 8}},
+        "log": "當莊頭的 {name} 去 {target} 家收欠租，收了{target_pron} 8 便士，回去跟管家說這家今年實在拿不出來。",
+        "effects": [{"money": 8}, {"target": [{"money": -8}, {"debt_grace": true}]}, {"deed": {"type": "embezzled", "to": "lord"}}],
+        "ai": {"base": 3, "traits": {"greedy": 12, "cynical": 4, "pious": -6}}}
+     ]},
+
+    {"id": "reeve_boonwork", "title": "派勞役", "prompt": "收割前，當莊頭的 {name} 要排各家去領主田裡幹活的日子。{target_house} 家跟 {name} 家有舊怨。", "scope": "player_head", "chance": 0.3, "cooldown_years": 1,
+     "conditions": {"age": [14, 120], "reeve": true, "month": [6, 7]},
+     "target": {"pick": "feud", "min_stage": 1, "conditions": {"is_head": true}},
+     "options": [
+       {"text": "把最苦的活派給仇家", "log": "收割前，當莊頭的 {name} 把河邊那塊最爛的地的勞役全派給了 {target_house} 家。",
+        "effects": [{"deed": {"type": "worst_boonwork"}}, {"target": [{"food": -30}]}],
+        "ai": {"base": 6, "traits": {"vengeful": 10, "cruel": 6, "wrathful": 4, "forgiving": -8, "kind": -6}}},
+       {"text": "按規矩輪派", "log": "收割前，{name} 照著老規矩輪派勞役，連 {target_house} 家也沒多派一天。",
+        "effects": [{"reputation": 2}],
+        "ai": {"base": 8, "traits": {"calm": 4, "pious": 4, "forgiving": 4}}},
+       {"text": "自家多扛一點，給對方台階下", "log": "收割前，{name} 把最苦的勞役攬到自家頭上，還少派了 {target_house} 家兩天。",
+        "effects": [{"food": -25}, {"feud_heat": -12}, {"reputation": 2}],
+        "ai": {"base": 3, "traits": {"forgiving": 10, "kind": 8, "generous": 6, "vengeful": -10}}}
+     ]}
+  ]
+}

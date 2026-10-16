@@ -1,0 +1,93 @@
+{
+  // What each member of the head's household wants from the head this season (design/season-loop.md).
+  // Checked in order each season: the first whose `when` holds (and `chance` allows) becomes the want.
+  // Seeking the person out with one of `answered_by` (an interaction id, or "plan:<id>" for a plan about
+  // them) meets it: `fulfil` runs and `fulfil_note` goes into the season's summary. Unmet for `patience`
+  // seasons, it is let go: `neglect` runs. Effects are on the person, with the head as {target}.
+  "wants": [
+    {"id": "grave", "text": "希望你陪{pron}去{about:grief}的墳前",
+     "when": {"concern": {"kind": "grief", "min": 20}},
+     "answered_by": ["talk_comfort", "talk_church"], "patience": 3,
+     "fulfil": [{"opinion": {"value": 6, "mod": "heeded", "years": 10}}, {"ease_concern": {"kind": "grief", "by": 8}}],
+     "fulfil_note": "{first}一直盼著你陪{pron}，你來了。",
+     "neglect": [{"opinion": {"value": -6, "mod": "neglected", "years": 8}}],
+     "neglect_note": "{first}等了好幾個月，你一次也沒陪{pron}去{about:grief}的墳前。"},
+
+    {"id": "reckoning", "text": "等你給{pron}一個交代",
+     "when": {"concern": {"kind": "grievance", "about": "target", "min": 20}},
+     "answered_by": ["talk_heart", "talk_apologize", "talk_comfort"], "patience": 3,
+     "fulfil": [{"ease_concern": {"kind": "grievance", "by": 15, "about": "target"}}],
+     "fulfil_note": "你肯找{first}說話，{pron}心裡的疙瘩鬆了一點。",
+     "neglect": [{"concern": {"kind": "grievance", "about": "target", "strength": 10}}],
+     "neglect_note": "{first}等不到你一句話，心裡更怨了。"},
+
+    {"id": "match", "text": "盼你去{about:longing}家提親",
+     "when": {"concern": {"kind": "longing", "min": 15}, "married": false},
+     "answered_by": ["plan:arrange_match"], "patience": 4,
+     "fulfil": [{"opinion": {"value": 6, "mod": "heeded", "years": 10}}],
+     "fulfil_note": "你答應替{first}去說親，{pron}高興得一夜沒睡。",
+     "neglect": [{"opinion": {"value": -6, "mod": "put_off", "years": 8}}],
+     "neglect_note": "{first}盼了一年，你始終沒去{about:longing}家提親。"},
+
+    {"id": "heartache", "text": "想找你說說心裡的苦",
+     "when": {"any": [{"concern": {"kind": "heartbreak", "min": 20}}, {"concern": {"kind": "shame", "min": 20}}]},
+     "answered_by": ["talk_comfort", "talk_heart"], "patience": 2,
+     "fulfil": [{"opinion": {"value": 5, "mod": "heeded", "years": 8}}],
+     "fulfil_note": "{first}跟你說了心裡的苦，好受了些。",
+     "neglect": [{"opinion": {"value": -4, "mod": "neglected", "years": 6}}],
+     "neglect_note": "{first}心裡苦，你卻一直沒空聽{pron}說。"},
+
+    {"id": "hard_times", "text": "擔心家裡撐不下去，想跟你商量",
+     "when": {"concern": {"kind": "worry", "min": 20}, "age": [14, 120]},
+     "answered_by": ["talk_heart", "talk_fields"], "patience": 2,
+     "fulfil": [{"ease_concern": {"kind": "worry", "by": 15}}, {"opinion": {"value": 3, "mod": "heeded", "years": 6}}],
+     "fulfil_note": "你跟{first}商量了家裡的難處，{pron}心裡踏實了些。",
+     "neglect": [{"stress": 5}],
+     "neglect_note": "{first}擔心家裡撐不下去，你卻一句也沒跟{pron}商量。"},
+
+    {"id": "neglected", "text": "覺得你這陣子冷落了{pron}",
+     "when": {"is_spouse": true, "not_sought_months": 9},
+     "answered_by": ["talk_heart", "talk_church", "talk_comfort"], "patience": 2, "chance": 0.6,
+     "fulfil": [{"opinion": {"value": 5, "mod": "heeded", "years": 8}}],
+     "fulfil_note": "你總算抽空陪了{first}，{pron}臉上有了笑容。",
+     "neglect": [{"opinion": {"value": -6, "mod": "neglected", "years": 8}}],
+     "neglect_note": "{first}覺得在你心裡，田比{pron}重要。"},
+
+    {"id": "lonely", "one_at_a_time": true, "text": "悶得慌，想找你說說話",
+     "when": {"age": [12, 120], "need_lt": {"social": 40}},
+     "answered_by": ["talk_heart", "talk_church"], "patience": 2, "chance": 0.7,
+     "fulfil": [{"opinion": {"value": 4, "mod": "heeded", "years": 6}}],
+     "fulfil_note": "{first}跟你說了好一陣子話，人開朗多了。",
+     "neglect": [{"opinion": {"value": -3, "mod": "neglected", "years": 4}}],
+     "neglect_note": "{first}悶了好一陣子，你一直沒空跟{pron}說說話。"},
+
+    {"id": "mass", "one_at_a_time": true, "text": "想跟你一起上教堂",
+     "when": {"age": [8, 120], "need_lt": {"spirit": 35}},
+     "answered_by": ["talk_church"], "patience": 2, "chance": 0.6,
+     "fulfil": [{"opinion": {"value": 3, "mod": "heeded", "years": 6}}],
+     "neglect": []},
+
+    {"id": "show_work", "one_at_a_time": true, "text": "想讓你看看{pron}新學會的活",
+     "when": {"child_of_target": true, "age": [5, 13], "not_sought_months": 6},
+     "answered_by": ["talk_praise"], "patience": 2, "chance": 0.5,
+     "fulfil": [{"opinion": {"value": 4, "mod": "heeded", "years": 8}}],
+     "fulfil_note": "{first}把新學會的活做給你看，你點了點頭，{pron}樂了好幾天。",
+     "neglect": [{"opinion": {"value": -3, "mod": "neglected", "years": 5}}],
+     "neglect_note": "{first}想讓你看看{pron}會做的活，你連看都沒看。"},
+
+    {"id": "learn_fields", "one_at_a_time": true, "text": "想跟你下田學本事",
+     "when": {"child_of_target": true, "age": [12, 17], "health_ge": 40},
+     "answered_by": ["talk_fields"], "patience": 2, "chance": 0.35,
+     "fulfil": [{"opinion": {"value": 4, "mod": "heeded", "years": 8}}, {"skill": {"farming": 0.5}}],
+     "fulfil_note": "{first}跟著你下田，學會了怎麼看天、怎麼下種。",
+     "neglect": []},
+
+    {"id": "settle", "one_at_a_time": true, "text": "到了成家的年紀，盼你替{pron}留意人家",
+     "when": {"child_of_target": true, "age": [17, 30], "married": false, "no_concern": {"kind": "longing"}},
+     "answered_by": ["plan:arrange_match"], "patience": 6, "chance": 0.25,
+     "fulfil": [{"opinion": {"value": 5, "mod": "heeded", "years": 10}}],
+     "fulfil_note": "你開始替{first}張羅親事，{pron}嘴上不說，臉卻紅了。",
+     "neglect": [{"opinion": {"value": -4, "mod": "put_off", "years": 6}}],
+     "neglect_note": "{first}等了一年多，你始終沒替{pron}張羅親事。"}
+  ]
+}
