@@ -86,12 +86,14 @@ func _build_lighting() -> void:
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_white = 6.0
-	env.tonemap_exposure = 0.95
-	env.adjustment_enabled = true
-	env.adjustment_contrast = 1.08
-	env.adjustment_saturation = 1.0  # neutral grade (user's call): realism comes from light, not colour
+	# AgX, the same view transform as Blender/Cycles: rolls off bright saturated colours the way film does.
+	# The user preferred the Cycles look; ACES plus a contrast boost made colours loud and edges hard.
+	env.tonemap_mode = Environment.TONE_MAPPER_AGX
+	env.tonemap_white = 16.0
+	env.tonemap_exposure = 1.85
+	env.adjustment_enabled = true  # tuned to the Cycles frames by measurement (docs/screenshots/match_cycles_*)
+	env.adjustment_contrast = 1.1
+	env.adjustment_saturation = 1.0
 	env.ssil_enabled = true  # screen-space bounce light between nearby surfaces (walls onto ground, props onto walls)
 	env.ssil_radius = 3.0
 	env.sdfgi_use_occlusion = true
@@ -109,7 +111,7 @@ func _build_lighting() -> void:
 
 	sun = DirectionalLight3D.new()
 	sun.shadow_enabled = true
-	sun.light_angular_distance = 0.8  # sun disc size: soft penumbrae that widen with distance (PCSS)
+	sun.light_angular_distance = 1.5  # sun disc size: soft penumbrae that widen with distance (PCSS)
 	sun.directional_shadow_max_distance = 120.0
 	sun.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_AND_SKY
 	add_child(sun)
@@ -161,6 +163,9 @@ func _capture(vp: SubViewport, dir: String) -> void:
 	var river := Vector3(4.0, home.y, Village.river_center(4.0) + 3.0)
 	for shot in [["godot_far", 0.0, 11.0, home], ["godot_mid", 1.0, 11.0, home], ["godot_far_dusk", 0.0, 17.6, home],
 			["godot_river", 0.0, 11.0, river]]:
+		var only := _user_arg("--only=")
+		if not only.is_empty() and only != shot[0]:
+			continue
 		zoom = shot[1]
 		zoom_target = shot[1]
 		hour = shot[2]
@@ -170,7 +175,7 @@ func _capture(vp: SubViewport, dir: String) -> void:
 			await RenderingServer.frame_post_draw
 		var path: String = dir.path_join(shot[0] + ".png")
 		var image := vp.get_texture().get_image()
-		image.resize(SHOT_SIZE.x, SHOT_SIZE.y, Image.INTERPOLATE_LANCZOS)
+		image.resize(SHOT_SIZE.x, SHOT_SIZE.y, Image.INTERPOLATE_CUBIC)  # softer than Lanczos, like Cycles' 1.5 px pixel filter
 		var err := image.save_png(path)
 		if err != OK:
 			push_error("capture failed: %s (%s)" % [path, error_string(err)])

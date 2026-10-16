@@ -12,7 +12,7 @@ UE (`Source/`, `Content/`, `Config/`) and three.js (`web/`) attempts are kept in
 Commands (from repo root):
 ```
 godot --headless --path godot -s res://tests/test_camera_zoom.gd     # tests, exit 1 on failure
-caffeinate -d godot --path godot --always-on-top --resolution 480x270 --quit-after 100000 -- --capture="$PWD/docs/screenshots"  # far/mid/dusk/river, rendered 3840x2160 and downscaled to 1920x1080. macOS pauses rendering when the window is covered or the display sleeps (hence on-top + caffeinate); the frame cap stops a script error from hanging it. Expect 4 "captured" lines
+godot/tools/capture.sh                                                   # far/mid/dusk/river into docs/screenshots (3840x2160 -> 1920x1080), one process per shot; exits non-zero if a shot fails
 godot --path godot                                                      # play
 godot --editor --path godot                                             # editor
 ```
