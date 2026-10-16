@@ -464,7 +464,9 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
         if (lever == "meet") {
             if (demandParcel != kNone) {
                 std::string pn = parcelName(parcels_[demandParcel]);
-                moveParcel(demandParcel, thId, "換來");
+                // marry() above may have merged their house into the family's: then the parcel already sits there.
+                Id to = !households_[thId].extinct ? thId : people_[who].household;
+                if (to != kNone && !inPlayerHouse(to)) moveParcel(demandParcel, to, "換來");
                 res.text += "你家把" + pn + "讓了出去。";
             }
             if (!demandOffice.empty()) promises_[{head, demandOffice}] = who;
@@ -478,7 +480,7 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
         res.demandParcel = demandParcel;
         res.demandOffice = demandOffice;
         res.dealCost = dealCost;
-        res.levers.push_back("meet");
+        if (lever.empty()) res.levers.push_back("meet");  // a press is the one more try: its condition is not pressed again
     } else if (answer == 3) {
         res.text = name + "搖了搖頭：「" + why + "。」";
         asked_[{who, what, object}] = day_ + 90;

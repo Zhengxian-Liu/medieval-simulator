@@ -62,7 +62,18 @@ void World::setStation(Id who, const std::string& station, int years, const std:
         bool head = households_[hid].head == who;
         moveTo(who, kNone);
         p.awayFrom = from;
-        if (head) onHeadDied(households_[hid], who);
+        if (head) {
+            leaving_ = who;
+            onHeadDied(households_[hid], who);
+            leaving_ = kNone;
+            // Walked out of a house that ended with him: he belongs to another house of his blood, if any.
+            if (households_[hid].extinct)
+                for (const auto& h : households_)
+                    if (!h.extinct && h.head != kNone && p.dynasty != kNone && h.dynasty == p.dynasty) {
+                        p.awayFrom = h.id;
+                        break;
+                    }
+        }
     } else if (!sd->away && wasAway) {
         comeHome(who);
     }
@@ -85,7 +96,7 @@ void World::comeHome(Id who) {
 // belong to where it went, else to another house of their blood, else nowhere and they stay where they are.
 void World::rehomeAway(Id from, Id to) {
     for (auto& p : people_) {
-        if (!isAway(p) || p.awayFrom != from) continue;
+        if (!isAway(p) || p.awayFrom != from || p.id == leaving_) continue;
         Id dest = to;
         if (dest == kNone)
             for (const auto& h : households_)

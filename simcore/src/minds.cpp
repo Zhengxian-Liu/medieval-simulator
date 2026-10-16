@@ -165,7 +165,7 @@ bool World::npcChoiceFor(const Person& p, const std::string& title, const std::s
         c.feelings += feelingOf(p, a);
     }
     // The family's head only when they matter to this person; a far villager's choice is about their own circle.
-    if (std::find(seen.begin(), seen.end(), playerHead()) == seen.end() &&
+    if (playerHead() != kNone && playerHead() != p.id && std::find(seen.begin(), seen.end(), playerHead()) == seen.end() &&
         (ringOf(p.id) >= kNear || std::abs(opinion(p.id, playerHead())) >= 15))
         c.feelings += feelingOf(p, playerHead());
     c.options = options;

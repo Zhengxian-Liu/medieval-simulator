@@ -19,7 +19,7 @@ bad=$(LC_ALL=C grep -nE '\$[A-Za-z_][A-Za-z0-9_]*[^[:print:][:space:]]' scripts/
 # Run from a folder with a space in its name, like the user's "Medieval Simulator": a copy with its own build
 # (a link would make CMake re-point this folder's build at the temporary path).
 spaced="$tmp/有 空格 simcore"; mkdir -p "$spaced"
-cp -R CMakeLists.txt data include scripts src tools "$spaced/"
+cp -R CMakeLists.txt data include scripts src tests tools "$spaced/"
 smoke() {  # $1 = bash to use; plays one year without and with the model branch
   for key in "" dummy; do
     out=$(SIM_IGNORE_ENV_FILE=1 OPENROUTER_API_KEY="$key" DECIDER_URL=http://127.0.0.1:9/none "$1" "$spaced/scripts/play.sh" --seed 7 --years 1 </dev/null 2>&1) \
