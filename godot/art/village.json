@@ -1,0 +1,14 @@
+{
+  "_doc": "Village layout (content data, not look parameters). houses: x, z (metres), yaw (degrees), building type from tools/blender/buildings.py VARIANTS. footprints must match VARIANTS (w, d). Door faces local +Z; the back yard (fenced garden) is local -Z. Placement rules in scripts/village.gd dress every house automatically.",
+  "square": [2, 3],
+  "houses": [
+    [-9, 6, 10, "cottage"],
+    [6, 9, -15, "barn"],
+    [-3, 19, 80, "longhouse"],
+    [15, -3, 40, "cottage"],
+    [-13, -4, 100, "cottage"],
+    [13, 15, -40, "longhouse"],
+    [-16, 16, 30, "cottage"]
+  ],
+  "footprints": {"cottage": [6.0, 4.5], "longhouse": [9.5, 5.0], "barn": [7.5, 5.5]}
+}

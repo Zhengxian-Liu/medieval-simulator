@@ -137,9 +137,12 @@ func _build_lighting() -> void:
 func _apply_time() -> void:
 	var elevation: float = sin((hour - 6.0) / 12.0 * PI) * Look.v("sun.peak_elevation")
 	sun.rotation_degrees = Vector3(-elevation, Look.v("sun.yaw_at_noon") + (hour - 12.0) * Look.v("sun.yaw_per_hour"), 0)
-	var day := clampf(elevation / 20.0, 0.0, 1.0)
-	sun.light_energy = lerpf(0.0, Look.v("sun.energy_day"), day)
-	sun.light_color = Look.col("sun.color_low").lerp(Look.col("sun.color_day"), day)
+	# separate ramps (review 5): colour warms over the last 20° of elevation, but energy keeps a floor until the sun
+	# actually sets, so a low sun is golden hour, not night; sky fill, moon and torches follow sunset (elevation < 0)
+	var warm := clampf(elevation / 20.0, 0.0, 1.0)
+	var day := clampf((elevation + 2.0) / 6.0, 0.0, 1.0)
+	sun.light_energy = Look.v("sun.energy_day") * lerpf(Look.v("sun.energy_low"), 1.0, warm) * day
+	sun.light_color = Look.col("sun.color_low").lerp(Look.col("sun.color_day"), warm)
 	sun.visible = elevation > -2.0
 	# The HDRI is a daytime sky: dim it (and the ambient light it gives) toward night.
 	environment.background_energy_multiplier = lerpf(Look.v("environment.night_sky_energy"), 1.0, day)  # also scales the sky as GI fill
@@ -192,7 +195,7 @@ func _capture(vp: SubViewport, dir: String) -> void:
 	DirAccess.make_dir_recursive_absolute(dir)
 	var home := player.position
 	var river := Vector3(4.0, home.y, Village.river_center(4.0) + 3.0)
-	for shot in [["godot_far", 0.0, 11.0, home], ["godot_mid", 1.0, 11.0, home], ["godot_far_dusk", 0.0, 17.6, home], ["godot_far_night", 0.0, 22.0, home],
+	for shot in [["godot_far", 0.0, 11.0, home], ["godot_mid", 1.0, 11.0, home], ["godot_far_dusk", 0.0, 16.8, home], ["godot_far_night", 0.0, 22.0, home],
 			["godot_river", 0.0, 11.0, river]]:
 		var only := _user_arg("--only=")
 		if not only.is_empty() and only != shot[0]:

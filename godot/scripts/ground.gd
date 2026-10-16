@@ -17,6 +17,9 @@ func build(root: Node3D, houses: Array, square: Vector2, bridge: Vector2, river_
 		var door := _door(h)
 		_line(square, door, 0.9, 0.95)
 		_disc(door, 1.6, 0.8)
+		# tilled garden soil behind the house (village.gd _garden plants it)
+		var back := Vector2(h[0], h[1]) + Vector2(0, -3.0 - 2.0).rotated(-deg_to_rad(h[2]))
+		_disc(back, 2.2, 0.75)
 	_line(square, bridge, 1.0, 0.95)
 	_line(bridge + Vector2(0, -11), bridge + Vector2(0, -17), 0.9, 0.9)  # path continues on the far bank
 	var mat := _material(grass_mat)
@@ -223,7 +226,10 @@ func _debris(root: Node3D, houses: Array, river_dist: Callable, river_half: floa
 			near_wall = near_wall or d < 5.5
 		var dirt := dirt_at(p)
 		var edge := 1.0 - absf(dirt - 0.45) * 2.5  # strongest on the fringe of paths and yards
-		var density := clampf(0.25 + 0.6 * maxf(edge, 0.0) + (0.35 if near_wall else 0.0) + noise.get_noise_2d(p.x, p.y) * 0.4, 0.0, 1.0)
+		# debris lives where people work and walk (review 5: scattered on open grass it read as confetti)
+		var density := clampf(0.6 * maxf(edge, 0.0) + (0.35 if near_wall else 0.0) + noise.get_noise_2d(p.x, p.y) * 0.3, 0.0, 1.0)
+		if dirt < float(Look.v("placement.debris_min_dirt")) and not near_wall:
+			continue
 		if rng.randf() > density:
 			continue
 		var w := []

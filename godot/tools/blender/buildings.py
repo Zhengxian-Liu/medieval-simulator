@@ -16,21 +16,23 @@ FOOT = 0.55               # stone footing height
 
 # name: wall footprint (x, y), wall height above the footing, infill material, chimney, wide barn door, windows
 VARIANTS = {
-    "cottage": dict(w=6.0, d=4.5, h=2.7, wall="plaster", chimney=True, big_door=False, windows=True),
-    "longhouse": dict(w=9.5, d=5.0, h=2.9, wall="plaster", chimney=True, big_door=False, windows=True),
+    "cottage": dict(w=6.0, d=4.5, h=2.7, wall="plaster", chimney=True, big_door=False, windows=True, lean_to=True),
+    "longhouse": dict(w=9.5, d=5.0, h=2.9, wall="plaster", chimney=True, big_door=False, windows=True, lean_to=True),
     "barn": dict(w=7.5, d=5.5, h=3.3, wall="plaster", chimney=False, big_door=True, windows=False),  # English timber frame + daub (all-plank read American, review 4)
 }
 W = D = H = PITCH_RISE = TOP = 0.0
 WALL, CHIMNEY, BIG_DOOR, WINDOWS = "plaster", True, False, True
+LEAN_TO = False
 
 
 def set_variant(name):
-    global W, D, H, PITCH_RISE, TOP, WALL, CHIMNEY, BIG_DOOR, WINDOWS
+    global W, D, H, PITCH_RISE, TOP, WALL, CHIMNEY, BIG_DOOR, WINDOWS, LEAN_TO
     v = VARIANTS[name]
     W, D, H = v["w"], v["d"], v["h"]
     PITCH_RISE = D * 0.62  # ridge height above the wall plate (~51° thatch)
     TOP = FOOT + H
     WALL, CHIMNEY, BIG_DOOR, WINDOWS = v["wall"], v["chimney"], v["big_door"], v["windows"]
+    LEAN_TO = v.get("lean_to", False)
 
 
 def footing():
@@ -148,6 +150,33 @@ def chimney():
     new_object("chim_cap", bm, "stone", location=(x, y, top + 0.06))
 
 
+def lean_to(depth=1.6):
+    """Open lean-to (pentice) against the +x gable: two posts, a wall plate, rafters and a plank roof falling away
+    from the wall. Village placement puts the woodpile under it. (The Guild: buildings carry small attachments.)"""
+    x0 = W / 2 + 0.05
+    x1 = x0 + depth
+    y = D / 2 - 0.35
+    hi, lo = FOOT + H * 0.82, FOOT + H * 0.62
+    for sy in (-1, 1):
+        beam(f"lt_post_{sy}", (x1, sy * y, 0.0), (x1, sy * y, lo), section=0.13)
+    beam("lt_plate", (x1, -y - 0.15, lo), (x1, y + 0.15, lo), section=0.12)
+    beam("lt_ledger", (x0, -y - 0.15, hi), (x0, y + 0.15, hi), section=0.12)
+    n = 4
+    for i in range(n):
+        yy = -y + i * 2 * y / (n - 1)
+        beam(f"lt_rafter_{i}", (x0, yy, hi + 0.08), (x1 + 0.25, yy, lo - 0.02), section=0.08)
+    pitch = math.atan2(hi - lo, x1 + 0.25 - x0)
+    run = math.hypot(x1 + 0.35 - x0, hi - lo)
+    k, pos = 0, -y - 0.3
+    while pos < y + 0.3:
+        w = RNG.uniform(0.2, 0.28)
+        bm = cube_bm((run, w, 0.035), bevel=0.006, subdiv=1, jitter=0.004)
+        new_object(f"lt_plank_{k}", bm, "timber", grain_axis=0,
+                   location=((x0 + x1 + 0.25) / 2, pos + w / 2, (hi + lo) / 2 + 0.13), rotation=(0, pitch, 0))
+        pos += w + RNG.uniform(0.0, 0.02)
+        k += 1
+
+
 def build(name):
     set_variant(name)
     footing()
@@ -157,3 +186,5 @@ def build(name):
     door_and_windows()
     if CHIMNEY:
         chimney()
+    if LEAN_TO:
+        lean_to()

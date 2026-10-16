@@ -152,10 +152,12 @@ func _cyl(top: float, bottom: float, height: float, sides := 8) -> CylinderMesh:
 
 func build(root: Node3D) -> Node3D:
 	_rng.seed = 7  # deterministic so screenshots are comparable between runs
-	var houses := [[-9, 6, 10, "cottage"], [6, 9, -15, "barn"], [-3, 19, 80, "longhouse"], [15, -3, 40, "cottage"]]
+	var layout: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://art/village.json"))
+	var houses: Array = layout.houses
+	FOOTPRINT = layout.footprints
 	_ground = Ground.new()
 	var bridge_x := 3.0
-	var ground_mat: Material = _ground.build(root, houses, Vector2(2, 3), Vector2(bridge_x, river_center(bridge_x) + RIVER_HALF + 1.0),
+	var ground_mat: Material = _ground.build(root, houses, Vector2(layout.square[0], layout.square[1]), Vector2(bridge_x, river_center(bridge_x) + RIVER_HALF + 1.0),
 		river_dist, RIVER_HALF, _rng, _mat("grass"))
 	ground_mat.set_shader_parameter("river", Vector4(RIVER_Z, RIVER_AMP, RIVER_FREQ, RIVER_PHASE))
 	ground_mat.set_shader_parameter("river_half", RIVER_HALF)
@@ -211,8 +213,17 @@ func build(root: Node3D) -> Node3D:
 			else Vector3(bx, 0.0, river_center(bx) + signf(_rng.randf() - 0.5) * _rng.randf_range(RIVER_HALF + 1.6, RIVER_HALF + 3.0))
 		if river_dist(Vector2(p.x, p.z)) > RIVER_HALF + 1.4 and _clear_of_houses(p, houses, 4.2) and _ground.dirt_at(Vector2(p.x, p.z)) < 0.2:
 			_bush(root, p)
+	# a yard tree by every house (The Guild weaves trees between buildings; the clearance rule alone left none in frame)
+	var yt: Dictionary = Look.v("placement.yard_tree")
+	for h in houses:
+		var off := Vector3(yt.offset[0], 0, yt.offset[1]) * (1.0 if _rng.randf() < 0.5 else -1.0)
+		var p: Vector3 = Vector3(h[0], 0, h[1]) + Basis(Vector3.UP, deg_to_rad(h[2])) * Vector3(off.x, 0, yt.offset[1])
+		var sq := Vector2(layout.square[0], layout.square[1])
+		if river_dist(Vector2(p.x, p.z)) > RIVER_HALF + 3.0 and _ground.dirt_at(Vector2(p.x, p.z)) < 0.3 \
+				and Vector2(p.x, p.z).distance_to(sq) > float(yt.min_from_square):
+			_instance(root, FOLIAGE % ("oak_%d" % _rng.randi_range(0, 2)), p, _rng.randf() * 360.0, _rng.randf_range(yt.scale[0], yt.scale[1]))
 	for h in houses:  # a bush or two hugging each house corner
-		var size: Vector2 = FOOTPRINT[h[3]]
+		var size := Vector2(FOOTPRINT[h[3]][0], FOOTPRINT[h[3]][1])
 		for c in [Vector2(-1, -1), Vector2(1, -1)]:
 			var local := Vector3(c.x * (size.x / 2 + 0.6), 0, c.y * (size.y / 2 + 0.6))
 			var p: Vector3 = Vector3(h[0], 0, h[1]) + Basis(Vector3.UP, deg_to_rad(h[2])) * local
@@ -348,12 +359,12 @@ func _skirt_texture() -> Texture2D:
 	return _skirt
 
 # Footprints (x along the ridge, z through the door side) of the buildings from tools/blender/buildings.py.
-const FOOTPRINT := {cottage = Vector2(6.0, 4.5), longhouse = Vector2(9.5, 5.0), barn = Vector2(7.5, 5.5)}
+static var FOOTPRINT: Dictionary  # art/village.json footprints (w, d)
 
 # Yard dressing in the house's local frame (door on +Z): woodpile on a gable, barrels and a crate by the door,
 # a wattle-fenced back yard; the barn gets a haystack and a handcart instead.
 func _dress_yard(root: Node3D, h: Array) -> void:
-	var size: Vector2 = FOOTPRINT[h[3]]
+	var size := Vector2(FOOTPRINT[h[3]][0], FOOTPRINT[h[3]][1])
 	var origin := Vector3(h[0], 0, h[1])
 	var basis := Basis(Vector3.UP, deg_to_rad(h[2]))
 	var put := func(name: String, local: Vector3, yaw: float) -> void:
@@ -369,16 +380,30 @@ func _dress_yard(root: Node3D, h: Array) -> void:
 		for i in 3:
 			put.call("rail_fence", Vector3(-hw + 1.5 + i * 3.0, 0, -hd - 3.5), 0)
 		return
-	put.call("woodpile", Vector3(hw + 0.55, 0, 0.2), 90)
+	put.call("woodpile", Vector3(hw + 0.85, 0, 0.0), 90)  # under the lean-to (buildings.py lean_to)
 	put.call("barrel", Vector3(-1.5, 0, hd + 0.6), 0)
 	put.call("barrel", Vector3(-2.1, 0, hd + 0.75), 0)
 	put.call("crate", Vector3(1.4, 0, hd + 0.7), 15)
 	put.call("drying_rack", Vector3(-0.5, 0, -hd - 2.0), 0)
+	_garden(root, origin, basis, h[2], Vector3(0, 0, -hd - 2.0), size.x - 1.2)
 	var segs := int(ceil(size.x / 2.4))
 	for i in segs:
 		put.call("wattle_fence", Vector3(-hw + 1.2 + i * 2.4, 0, -hd - 3.6), 0)
 	for side in [-1, 1]:
 		put.call("wattle_fence", Vector3(side * (hw + 0.4), 0, -hd - 2.3), 90)
+
+# Kitchen garden behind each house (Guild density): rows of cabbages/greens on tilled soil (the ground mask marks
+# the soil, ground.gd), inside the back-yard wattle fence. Spacing from art/look.json placement.garden.
+func _garden(root: Node3D, origin: Vector3, basis: Basis, yaw: float, centre: Vector3, width: float) -> void:
+	var g: Dictionary = Look.v("placement.garden")
+	var rows := int(g.rows)
+	for r in rows:
+		var z: float = centre.z + (r - (rows - 1) / 2.0) * g.row_spacing
+		var x: float = -width / 2.0
+		while x < width / 2.0:
+			var p: Vector3 = origin + basis * Vector3(x + _rng.randf_range(-0.05, 0.05), 0, z)
+			_instance(root, FOLIAGE % ("bush_%d" % _rng.randi_range(0, 2)), p, _rng.randf() * 360.0, _rng.randf_range(g.scale[0], g.scale[1]))
+			x += g.plant_spacing
 
 func _dress_square(root: Node3D) -> void:
 	_prop(root, "well", Vector3(4.0, 0, 5.5), 20)

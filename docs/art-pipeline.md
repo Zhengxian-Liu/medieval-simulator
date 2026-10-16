@@ -58,10 +58,15 @@ Shared modules:
 `leaves` for foliage). Each slot's look is `materials.weathered.<slot>` in `look.json` (tint, dirt height, moss,
 detile, texture override) on top of `materials.weathered_common`.
 
+### Village layout
+`godot/art/village.json`: square position, houses (x, z, yaw, type) and footprints. Adding a house is one line; the
+placement rules dress it automatically (paths to the door, yard props, woodpile under the lean-to, kitchen garden
+behind, a yard tree, bushes at the corners).
+
 ### Add a building
-1. Add a line to `VARIANTS` in `buildings.py` (footprint, wall height, infill slot, chimney, door, windows).
+1. Add a line to `VARIANTS` in `buildings.py` (footprint, wall height, infill slot, chimney, door, windows, lean_to).
 2. `build_asset.py -- building <name>`; check triangles against `checks.budgets.building`.
-3. Place it in `scripts/village.gd` (`houses` list); add its footprint to `FOOTPRINT` for yard dressing.
+3. Place it in `godot/art/village.json` (`houses`), with its footprint under `footprints`.
 4. `art_check.py`.
 
 ### Add a prop
@@ -121,5 +126,7 @@ Add it to `godot/tools/fetch_polyhaven.py` (Poly Haven / ambientCG, CC0 only, 1K
 | albedo changes barely showed on the thatch | glossy scanned roughness + specular 0.5: the roof's brightness was mostly sky reflection | per-slot `roughness_min` / `specular` in `materials.weathered` (straw 0.9 / 0.15) |
 | roof one flat plane | open-sky AO is uniform; noise patches cluster near 0.5 | bake ridge→eave position into vertex colour B (`roofs.py` "slope" → `bake.py`), shader `eave_age` + stretched bundle patches |
 | a check passed only because of an accident | the square's torch was lit all day and brightened the mid-view shadows | torches are lit only below `placement.torch.lit_below_day`; re-verify checks after any light change |
+| checks fitted to the frame | lowering a threshold until it passes (roof_macro 0.06 -> 0.05, mid shadow 0.20 -> 0.16) | never relax a target to pass; change the frame, or fix the measure if it measures the wrong thing (e.g. saturation of lit pixels only) |
+| full-size yard trees hid the village | at 52° down a crown covers a quarter of the frame | `placement.yard_tree`: smaller oaks, behind houses, ≥ 10 m from the square |
 | frame grey (saturation 0.17 vs 0.30-0.40 in references) | colour came only from desaturated scans + neutral grade | chroma lives in material tints (grass, soil, thatch, daub, timber, leaves); `checks.*.saturation` 0.28-0.35 |
 | fixed check rectangles broke when the sun moved | shadows move with the sun | `capture.sh` also renders far/mid with the sun off; `art_check.py` classifies lit/shadow pixels from the pair |

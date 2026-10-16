@@ -88,8 +88,8 @@
       "why": "metres of screen-space bounce (walls onto ground)"
     },
     "ssil_intensity": {
-      "v": 0.25,
-      "why": "screen-space bounce; higher bounced magenta off the red-brown barn/soil into mid shadows (review 4, shadow_green 0.91)"
+      "v": 0.5,
+      "why": "screen-space bounce; was 0.25 against magenta bounce off the old plank barn (now daub); shadow_green guards it"
     },
     "sky_saturation": {
       "v": 0.35,
@@ -164,6 +164,10 @@
         1.0
       ],
       "why": "cool moonlight"
+    },
+    "energy_low": {
+      "v": 0.85,
+      "why": "sun energy floor (x day energy) while low above the horizon: golden hour, not dusk-dark (review 5)"
     }
   },
   "materials": {
@@ -309,10 +313,11 @@
           0.1,
           0.06
         ],
-        "depth_scale": 1.4,
-        "roughness": 0.35
+        "depth_scale": 0.9,
+        "roughness": 0.5,
+        "specular": 0.3
       },
-      "why": "dark green-brown river over a visible bed (review 4: milky teal, clipped glints)"
+      "why": "dark green river; rough, low-specular surface (review 5: glints read as white noise); shallower depth scale so the bed shows"
     },
     "ground": {
       "v": {
@@ -463,9 +468,39 @@
       "v": {
         "energy": 6.0,
         "range": 9.0,
-        "lit_below_day": 0.6
+        "lit_below_day": 0.3
       },
-      "why": "torches are lit from dusk (day factor < 0.6) and stay the brightest light at night; unlit by day (a lit torch brightened noon shadows)"
+      "why": "torches lit around sunset (day factor follows elevation -2..+4 deg) and the brightest light at night; unlit by day"
+    },
+    "garden": {
+      "v": {
+        "rows": 3,
+        "row_spacing": 0.7,
+        "plant_spacing": 0.55,
+        "scale": [
+          0.22,
+          0.32
+        ]
+      },
+      "why": "kitchen garden rows behind every house: fills back yards like The Guild (density check far.empty_share)"
+    },
+    "yard_tree": {
+      "v": {
+        "offset": [
+          6.5,
+          -6.5
+        ],
+        "scale": [
+          0.55,
+          0.7
+        ],
+        "min_from_square": 10.0
+      },
+      "why": "one smaller oak behind/beside every house, away from the square: trees among the buildings without the crowns covering the view (review 5; at 52° down a full-size crown hid a quarter of the frame)"
+    },
+    "debris_min_dirt": {
+      "v": 0.1,
+      "why": "no debris on untrampled grass except along walls"
     }
   },
   "checks": {
@@ -533,10 +568,10 @@
             400
           ],
           "measure": "macro_sd",
-          "min": 0.05,
+          "min": 0.06,
           "max": 1.0
         },
-        "why": "16 px-blurred std dev on the barn roof: thatch shows bundle patches and eave ageing, not one flat plane (review 4: 0.035; 0.055 after the specular fix and bundle patches, visibly patchy)"
+        "why": "16 px-blurred std dev on the barn roof >= 0.06 (review 5: lowering it to 0.05 was fitting the check; restored)"
       },
       "grass_speckle": {
         "v": {
@@ -560,11 +595,19 @@
             1920,
             1080
           ],
-          "measure": "saturation",
+          "measure": "lit_saturation",
           "min": 0.28,
           "max": 0.35
         },
-        "why": "mean HSL saturation: references sit at 0.30-0.40; colour comes from materials, the grade stays neutral (user default, 2026-10-16)"
+        "why": "mean HSL saturation of sunlit pixels (AgX correctly desaturates shade, review 5); colour from materials, grade neutral"
+      },
+      "empty_share": {
+        "v": {
+          "measure": "empty_share",
+          "min": 0.0,
+          "max": 0.1
+        },
+        "why": "share of ~1.3 m blocks with almost no detail: The Guild never shows an empty patch (2026-10-16: 0.26)"
       }
     },
     "mid": {
@@ -629,11 +672,11 @@
             1920,
             1080
           ],
-          "measure": "saturation",
+          "measure": "lit_saturation",
           "min": 0.28,
           "max": 0.35
         },
-        "why": "mean HSL saturation: references sit at 0.30-0.40; colour comes from materials, the grade stays neutral (user default, 2026-10-16)"
+        "why": "mean HSL saturation of sunlit pixels (AgX correctly desaturates shade, review 5); colour from materials, grade neutral"
       }
     },
     "budgets": {
@@ -672,6 +715,22 @@
           "max": 10.0
         },
         "why": "mean of the torch's light pool / frame mean: the torch is clearly the brightest area at night"
+      }
+    },
+    "dusk": {
+      "_why": "godot_far_dusk at 16:48 (sun ~16° high): golden hour. 17:36 had the sun at 6°, i.e. sunset, not golden hour",
+      "lit_mean": {
+        "v": {
+          "rect": [
+            0,
+            0,
+            1920,
+            1080
+          ],
+          "min": 0.3,
+          "max": 0.5
+        },
+        "why": "whole frame at golden hour stays a daylight frame (review 5)"
       }
     }
   }

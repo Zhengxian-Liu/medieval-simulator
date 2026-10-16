@@ -37,10 +37,17 @@ def pixels(png, size="480x270", channels="gray"):
     return [(out[i] / 255, out[i + 1] / 255, out[i + 2] / 255) for i in range(0, len(out), 3)]
 
 
+def _sat(c):
+    mx, mn = max(c), min(c)
+    l = (mx + mn) / 2
+    return 0.0 if mx == mn else (mx - mn) / (1 - abs(2 * l - 1) + 1e-6)
+
+
 def masked(full_png, fill_png):
     """Classify pixels by how much the sun adds, ratio = full / sun-off in linear light. Shadowed ground still gets
     some sun through bounce light (measured ratios ~1-3); sunlit ground 5-60. Pixels in between are left out."""
     full, fill = pixels(full_png), pixels(fill_png)
+    rgb_full = pixels(full_png, channels="rgb")
     light = pixels(str(full_png).replace(".png", "_light.png"), channels="rgb")
     lit, shadow = [], []
     for i, (f, s) in enumerate(zip(full, fill)):
@@ -56,6 +63,7 @@ def masked(full_png, fill_png):
             # light colour in shadow, measured on the lighting-only pass (white albedo), so material colour is excluded
             "shadow_tint": mean([light[i][2] / max(light[i][0], 1e-3) for i in shadow]),
             "shadow_green": mean([light[i][1] / max((light[i][0] + light[i][2]) / 2, 1e-3) for i in shadow]),
+            "lit_saturation": mean([_sat(rgb_full[i]) for i in lit]),
             "lit_share": len(lit) / len(full), "shadow_share": len(shadow) / len(full)}
 
 
@@ -87,6 +95,21 @@ def saturation(png, rect):
     out = subprocess.run(["magick", str(png), "-crop", f"{w}x{h}+{x}+{y}", "+repage", "-colorspace", "HSL", "-channel", "G",
                           "-separate", "-format", "%[fx:mean]", "info:"], capture_output=True, text=True, check=True)
     return float(out.stdout)
+
+
+def empty_share(png):
+    """Share of ~1.3 m x 1.3 m blocks (160 px at the far view) with almost no tonal detail: empty patches of ground."""
+    raw = subprocess.run(["magick", str(png), "-colorspace", "gray", "-blur", "0x3", "-resize", "480x270!", "-depth", "8",
+                          "gray:-"], capture_output=True, check=True).stdout
+    w, h, b, flat, tot = 480, 270, 40, 0, 0
+    for by in range(0, h - b + 1, b):
+        for bx in range(0, w - b + 1, b):
+            vals = [raw[(by + y) * w + bx + x] / 255 for y in range(b) for x in range(b)]
+            m = sum(vals) / len(vals)
+            sd = (sum((v - m) ** 2 for v in vals) / len(vals)) ** 0.5
+            tot += 1
+            flat += sd < 0.04
+    return flat / tot
 
 
 def blue_over_red(png, rect):
@@ -126,23 +149,25 @@ def main():
             m = (stats[kind] if kind in stats else contact_floor(png) if kind == "contact_floor"
                  else macro_sd(png, spec["rect"]) if kind == "macro_sd" else speckle(png, spec["rect"]) if kind == "speckle"
                  else saturation(png, spec["rect"]) if kind == "saturation"
+                 else empty_share(png) if kind == "empty_share"
                  else blue_over_red(png, spec["rect"]) if kind == "blue_over_red" else region_mean(png, spec["rect"]))
             passed = spec["min"] <= m <= spec["max"]
             ok &= passed
             rows.append(("value", f"{shot}.{name}", f"{m:.3f}", f"{spec['min']}-{spec['max']}", passed, leaf["why"]))
 
-    night = SHOTS / "godot_far_night.png"
-    for name, leaf in CHECKS.get("night", {}).items():
-        if name.startswith("_"):
-            continue
-        spec = leaf["v"]
-        if spec.get("measure") == "torch_pool":
-            m = region_mean(night, spec["rect"]) / max(region_mean(night, [0, 0, 1920, 1080]), 1e-3)
-        else:
-            m = region_mean(night, spec["rect"])
-        passed = spec["min"] <= m <= spec["max"]
-        ok &= passed
-        rows.append(("value", f"night.{name}", f"{m:.3f}", f"{spec['min']}-{spec['max']}", passed, leaf["why"]))
+    for shot_name, png_name in (("night", "godot_far_night.png"), ("dusk", "godot_far_dusk.png")):
+        png = SHOTS / png_name
+        for name, leaf in CHECKS.get(shot_name, {}).items():
+            if name.startswith("_"):
+                continue
+            spec = leaf["v"]
+            if spec.get("measure") == "torch_pool":
+                m = region_mean(png, spec["rect"]) / max(region_mean(png, [0, 0, 1920, 1080]), 1e-3)
+            else:
+                m = region_mean(png, spec["rect"])
+            passed = spec["min"] <= m <= spec["max"]
+            ok &= passed
+            rows.append(("value", f"{shot_name}.{name}", f"{m:.3f}", f"{spec['min']}-{spec['max']}", passed, leaf["why"]))
 
     imports = list((GODOT / "assets").rglob("*.jpg.import")) + list((GODOT / "assets").rglob("*.png.import"))
     no_mips = [p for p in imports if "mipmaps/generate=true" not in p.read_text()]

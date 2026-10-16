@@ -9,6 +9,7 @@ uniform vec3 shallow : source_color = vec3(0.22, 0.34, 0.30);
 uniform vec3 deep : source_color = vec3(0.03, 0.13, 0.16);
 uniform float depth_scale = 1.4;  // metres to reach the deep colour
 uniform float roughness = 0.08;
+uniform float specular = 0.3;
 uniform vec2 flow = vec2(0.25, 0.02);  // m/s, roughly along the river (+x)
 
 varying vec3 world_pos;
@@ -20,7 +21,7 @@ float vnoise(vec2 p) {
 	return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y);
 }
 float height(vec2 p) {
-	return vnoise(p * 1.3 - flow * TIME * 1.3) * 0.6 + vnoise(p * 3.7 + vec2(flow.y, flow.x) * TIME * 2.0) * 0.3 + vnoise(p * 9.0 - flow * TIME * 3.0) * 0.1;
+	return vnoise(p * 1.3 - flow * TIME * 1.3) * 0.6 + vnoise(p * 3.7 + vec2(flow.y, flow.x) * TIME * 2.0) * 0.4;  // no 9x octave: it sparkled as white noise (review 5)
 }
 
 void vertex() {
@@ -42,5 +43,5 @@ void fragment() {
 	ALBEDO = mix(shallow, deep, k) * mix(0.55, 1.0, smoothstep(0.0, 0.15, depth));  // dark wet edge at the waterline
 	ALPHA = mix(0.8, 0.97, k);
 	ROUGHNESS = roughness;
-	SPECULAR = 0.6;
+	SPECULAR = specular;
 }
