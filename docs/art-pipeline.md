@@ -94,10 +94,12 @@ Add it to `godot/tools/fetch_polyhaven.py` (Poly Haven / ambientCG, CC0 only, 1K
 
 - Lit / shadow classification: each far/mid shot is rendered twice, sun on and sun off; a pixel is lit if the sun adds
   > 5x, in shadow if < 3x (bounce only). Means of those sets are checked, so checks follow the shadows.
-- Values: lit 0.40–0.50; shadow 0.20–0.26 far (0.16 mid, dark timber wall in frame); whole frame 0.25–0.40 far.
+- Values: lit 0.40–0.50; whole frame 0.25–0.40 far. Shadow depth is checked as **key:fill 3–5** on the lighting-only pass
+  (lit light / shadow light), not as a displayed shadow value: that mixed material albedo into a lighting rule
+  (evidence: `docs/art-check-conflicts.md`).
 - Contact: 1st percentile of the 8 px-blurred frame ≥ 0.05 (dark contacts, never black halos).
 - Neutral shadow light (lighting-only pass): blue/red 0.85–1.2, green/avg(red,blue) 0.95–1.05.
-- Saturation (HSL mean, whole frame) 0.28–0.35: colour from materials, neutral grade.
+- Saturation (HSL mean, lit pixels) 0.28–0.35: colour from materials, neutral grade.
 - Grass speckle ≤ 2% of open-grass pixels brighter than median + 0.15.
 - Roof macro structure: 16 px-blurred std dev on the barn roof ≥ 0.05.
 - Night (`godot_far_night`, hour 22): frame mean 0.10–0.20 (moonlit, readable), torch pool ≥ 1.8x the frame mean.
@@ -130,3 +132,4 @@ Add it to `godot/tools/fetch_polyhaven.py` (Poly Haven / ambientCG, CC0 only, 1K
 | full-size yard trees hid the village | at 52° down a crown covers a quarter of the frame | `placement.yard_tree`: smaller oaks, behind houses, ≥ 10 m from the square |
 | frame grey (saturation 0.17 vs 0.30-0.40 in references) | colour came only from desaturated scans + neutral grade | chroma lives in material tints (grass, soil, thatch, daub, timber, leaves); `checks.*.saturation` 0.28-0.35 |
 | fixed check rectangles broke when the sun moved | shadows move with the sun | `capture.sh` also renders far/mid with the sun off; `art_check.py` classifies lit/shadow pixels from the pair |
+| far and mid shadow targets could not both pass with one fill knob | displayed shadow value = light × albedo; the shadowed materials differ per shot (0.51× vs 1.88× the lit albedo) | lighting rules are measured on the lighting-only pass (`key_fill`); write down conflicting checks with evidence before tuning |
