@@ -61,14 +61,20 @@ void World::placeHouse(Id household) {
     std::set<int> taken;
     for (const auto& [h, c] : map_.houseCell)
         if (!households_[h].extinct) taken.insert(c);
-    for (const auto& poi : map_.pois) taken.insert(poi.y * map_.width + poi.x);
+    std::set<int> nearPoi;  // a cottage right against the church or the well crowds it
+    for (const auto& poi : map_.pois) {
+        taken.insert(poi.y * map_.width + poi.x);
+        for (int dy = -1; dy <= 1; ++dy)
+            for (int dx = -1; dx <= 1; ++dx) nearPoi.insert((poi.y + dy) * map_.width + poi.x + dx);
+    }
     const MapArea& a = map_.houses;
-    // Every other cell, so the cottages stand apart; then the gaps.
-    for (int pass = 0; pass < 2; ++pass)
+    // Every other cell away from the landmarks, so the cottages stand apart; then the gaps.
+    for (int pass = 0; pass < 3; ++pass)
         for (int y = a.y; y < a.y + a.h; ++y)
             for (int x = a.x; x < a.x + a.w; ++x) {
-                if (((x + y) % 2 == 0) != (pass == 0)) continue;
                 int c = y * map_.width + x;
+                if (pass < 2 && (x + y) % 2 != 0) continue;
+                if (pass == 0 && nearPoi.count(c)) continue;
                 if (taken.count(c)) continue;
                 map_.houseCell[household] = c;
                 return;

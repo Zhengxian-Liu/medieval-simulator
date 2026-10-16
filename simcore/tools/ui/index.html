@@ -9,12 +9,14 @@
   --bg: #f4f1ea; --panel: #fffdf8; --ink: #2b2620; --muted: #7a7064; --line: #e2dbcf;
   --accent: #8a5a2b; --accent-soft: #f3e6d6; --good: #2f7d4f; --bad: #b23b3b; --warn: #b07a12;
   --news: #2d5e9e; --whisper: #7b4f9e; --history: #6b5a3a; --btn: #efe7da; --btn-hover: #e6dac6;
+  --map-field: #ebe3cf; --map-river: #8fb3d1; --map-meadow: #c5dba6; --map-common: #dcd6b4; --map-wood: #7f9c68; --map-village: #e2d2b4; --map-lord: #a9a398; --map-waste: #e3dcc2;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #1d1b18; --panel: #26231f; --ink: #ece6dc; --muted: #a3998b; --line: #3a352e;
     --accent: #d9a46b; --accent-soft: #3a2e22; --good: #6cc48f; --bad: #e87b7b; --warn: #e2b04f;
     --news: #82aee8; --whisper: #c39ae6; --history: #cdb88f; --btn: #332e28; --btn-hover: #3e382f;
+    --map-field: #3a362d; --map-river: #34506a; --map-meadow: #3c4a30; --map-common: #444032; --map-wood: #2f4128; --map-village: #4a4031; --map-lord: #6e6960; --map-waste: #3d3a30;
   }
 }
 * { box-sizing: border-box; }
@@ -79,6 +81,25 @@ button.link { background: none; border: none; color: var(--accent); padding: 0 2
 .busy { color: var(--accent); }
 svg text { fill: var(--ink); font-size: 12px; }
 svg .center text { font-weight: 700; }
+.mz { fill: var(--map-field); } .mz.river { fill: var(--map-river); } .mz.meadow { fill: var(--map-meadow); } .mz.common { fill: var(--map-common); }
+.mz.wood { fill: var(--map-wood); } .mz.waste { fill: var(--map-waste); } .mz.village { fill: var(--map-village); }
+.parcel.dim { opacity: .28; } .medge { stroke: var(--panel); stroke-width: 1; fill: none; }
+.mlabel { font-size: 11px; fill: var(--ink); opacity: .55; pointer-events: none; font-weight: 600; }
+.mhome { stroke: var(--ink); stroke-width: .8; } .mhome.on { stroke-width: 2.2; }
+svg text.mhname { font-size: 7px; font-weight: 700; pointer-events: none; paint-order: stroke; stroke: var(--map-village); stroke-width: 2.5px; }
+.mapwrap { position: relative; } .mapwrap:not(.big) .mpoin { display: none; }
+.mapzoom { position: absolute; right: 4px; top: 4px; font-size: 12px; padding: 1px 8px; z-index: 1; }
+.mapwrap.big { position: fixed; inset: 12px; z-index: 20; background: var(--panel); border: 1px solid var(--accent); border-radius: 10px; padding: 34px 14px 14px; overflow: auto;
+  display: grid; grid-template-columns: minmax(0, 2.6fr) minmax(260px, 1fr); gap: 14px; align-content: start; box-shadow: 0 8px 30px rgba(0,0,0,.3); }
+@media (max-width: 900px) { .mapwrap.big { grid-template-columns: 1fr; } }
+.mpoi { fill: var(--panel); stroke: var(--ink); stroke-width: 1; } svg text.mpoig { font-size: 8px; font-weight: 700; pointer-events: none; }
+svg text.mpoin { font-size: 7.5px; font-weight: 600; pointer-events: none; paint-order: stroke; stroke: var(--map-village); stroke-width: 2.5px; }
+.mvac { fill: var(--map-field); } .mvacl { stroke: var(--muted); stroke-width: 1.4; }
+.mlegend { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+.mlegend .mrow { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; font-size: 12px; }
+.mlegend .mrow.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.mlegend .mrow:disabled { opacity: 1; cursor: default; }
+.mlist { font-size: 13px; margin-top: 4px; }
 .legend { font-size: 12px; color: var(--muted); }
 .hdetail { margin-top: 8px; font-size: 13px; }
 .drawer { position: fixed; right: 16px; bottom: 16px; width: min(520px, calc(100vw - 32px)); max-height: 70vh; overflow: auto; background: var(--panel); border: 1px solid var(--accent); border-radius: 10px; padding: 12px 14px; box-shadow: 0 8px 30px rgba(0,0,0,.25); display: none; z-index: 10; }
@@ -268,13 +289,14 @@ function renderFeed() {
   $("feed").innerHTML = html || '<p class="muted">還沒有事。</p>';
 }
 
-const TABS = [["talk", "村裡在說"], ["net", "關係網"], ["people", "村民"], ["plans", "計畫"]];
+const TABS = [["talk", "村裡在說"], ["map", "地圖"], ["net", "關係網"], ["people", "村民"], ["plans", "計畫"]];
 function renderTabs() {
   $("tabs").innerHTML = TABS.map(([k, n]) => `<button class="${tab === k ? "on" : ""}" onclick="tab='${k}';renderTabs()">${n}</button>`).join("");
   const s = view.state;
   if (!s || !s.family) { $("tab-body").innerHTML = ""; return; }
   if (tab === "talk") renderTalk(s);
   else if (tab === "net") renderNet(s);
+  else if (tab === "map") renderMap(s);
   else if (tab === "people") renderPeople(s);
   else renderPlans(s);
 }
@@ -284,6 +306,96 @@ function renderTalk(s) {
   $("tab-body").innerHTML = items.length ? `<div class="talk">${items.map((h) => `<div class="item ${h.whisper ? "whisper" : ""} ${h.recent ? "" : "old"}">
       <div class="who">${h.year} 年　${h.whisper ? (h.teller ? esc(h.teller) + "悄悄說（不知真假）" : "有人悄悄說") : h.teller ? "聽" + esc(h.teller) + "說" : ""}</div>
       ${esc(h.text)}</div>`).join("")}</div>` : '<p class="muted">還沒聽到什麼。</p>';
+}
+
+function houseDetail(sel) {
+  return `<div class="hdetail"><b>${esc(sel.surname)}家</b>　${sel.acres} 畝　兩家 ${Math.round(sel.link * 100)} 分近${sel.feud ? `　<span class="neg">${["", "有嫌隙", "結了怨", "世仇"][sel.feud]}</span>` : ""}
+      <div class="muted">${esc(sel.tie)}</div>
+      <div>${sel.members.map((m) => `<span style="display:inline-block;margin-right:10px">${m.head ? "（家主）" : ""}<button class="link" onclick="look({do:'inspect',who:${m.id}}, '${esc(m.name)}')">${esc(m.name)}</button> ${m.age} 歲 <span class="${cls(m.opinion)}">${opWord(m.opinion)}</span></span>`).join("")}</div></div>`;
+}
+
+// The village from above: every parcel coloured by the house that holds it, the shared ground, the landmarks.
+const MAP_POI = { church: "✝", manor: "♜", green: "♣", alehouse: "酒", well: "◎", mill: "磨", pound: "欄", cross: "✚" };
+// Muted colours far apart from each other; a house keeps its colour while the set of houses stays the same.
+const MAP_COLORS = ["#c9876b", "#7fa6c6", "#d4b55f", "#8fb58a", "#b58cc0", "#e09a9a", "#6fb3a8", "#c7a27f", "#9a9ad6", "#b8c46e", "#d68fb8", "#86c0d9", "#c9a0a0", "#a8b8a0"];
+let mapColor = new Map();
+function houseColor(id) { return mapColor.get(id) || `hsl(${Math.round((id * 137.508) % 360)} 40% 62%)`; }
+let mapBig = false;
+function parcelFill(p) {
+  if (p.mine) return "var(--accent)";
+  if (p.lord) return "var(--map-lord)";
+  if (p.house < 0) return "url(#vacant)";
+  return houseColor(p.house);
+}
+// How the parcel came to its holder; land held since before the game began just says how.
+function parcelSince(p) { return p.how === "祖傳" || p.how === "領主自營" || p.how === "沒人租" ? p.how : `${p.since} 年${p.how || "到手"}`; }
+function renderMap(s) {
+  const m = s.map;
+  if (!m) { $("tab-body").innerHTML = '<p class="muted">沒有地圖。</p>'; return; }
+  const C = 12, W = m.w * C, H = m.h * C;
+  const sel = selectedHouse;
+  const ids = [...new Set([...m.parcels.filter((p) => p.house >= 0 && !p.mine && !p.lord).map((p) => p.house), ...m.homes.filter((h) => !h.mine && !h.lord).map((h) => h.house)])].sort((a, b) => a - b);
+  mapColor = new Map(ids.map((id, i) => [id, MAP_COLORS[i % MAP_COLORS.length]]));
+  let g = `<rect width="${W}" height="${H}" class="mz waste"/>`;
+  for (const a of m.areas) {
+    g += `<rect x="${a.x * C}" y="${a.y * C}" width="${a.w * C}" height="${a.h * C}" class="mz ${a.kind}"/>`;
+  }
+  // Parcels: one group per parcel so the tooltip covers all its strips.
+  const byParcel = m.parcels.map(() => []);
+  m.cells.forEach((pi, c) => { if (pi >= 0) byParcel[pi].push(c); });
+  m.parcels.forEach((p, pi) => {
+    const dim = sel != null && p.house !== sel && !(sel === -2 && p.mine);
+    const tip = `${p.name}${p.free ? "（自由地）" : ""}\n${p.house < 0 ? "沒人租，在領主手上" : p.lord ? "領主自營" : p.mine ? "你家的" : p.holder + "家的"}　${parcelSince(p)}`;
+    g += `<g class="parcel${dim ? " dim" : ""}" ${p.house >= 0 && !p.lord ? `onclick="selectedHouse=${p.mine ? -2 : p.house};renderTabs()" style="cursor:pointer"` : ""}><title>${esc(tip)}</title>${byParcel[pi].map((c) => `<rect x="${(c % m.w) * C}" y="${Math.floor(c / m.w) * C}" width="${C}" height="${C}" fill="${parcelFill(p)}"/>`).join("")}</g>`;
+  });
+  // Lines between different parcels, so neighbouring strips of one house still read as separate pieces.
+  let edges = "";
+  for (let y = 0; y < m.h; y++) for (let x = 0; x < m.w; x++) {
+    const a = m.cells[y * m.w + x];
+    if (x + 1 < m.w) { const b = m.cells[y * m.w + x + 1]; if (a !== b && (a >= 0 || b >= 0)) edges += `M${(x + 1) * C} ${y * C}v${C}`; }
+    if (y + 1 < m.h) { const b = m.cells[(y + 1) * m.w + x]; if (a !== b && (a >= 0 || b >= 0)) edges += `M${x * C} ${(y + 1) * C}h${C}`; }
+  }
+  g += `<path d="${edges}" class="medge"/>`;
+  for (const a of m.areas) {
+    if (a.kind === "village") continue;
+    g += `<text x="${(a.x + a.w / 2) * C}" y="${(a.y + a.h / 2) * C + 4}" text-anchor="middle" class="mlabel">${esc(a.name)}</text>`;
+  }
+  for (const h of m.homes) {
+    if (h.lord) continue;
+    const on = sel != null && (h.house === sel || (sel === -2 && h.mine));
+    const x = h.x * C, y = h.y * C;
+    g += `<g style="cursor:pointer" onclick="selectedHouse=${h.mine ? -2 : h.house};renderTabs()"><title>${esc(h.mine ? "你家" : h.name + "家")}</title>
+      <rect x="${x + 2}" y="${y + 2}" width="${C - 4}" height="${C - 4}" rx="1.5" fill="${h.mine ? "var(--accent)" : houseColor(h.house)}" class="mhome${on ? " on" : ""}"/>
+      ${h.mine ? `<text x="${x + C / 2}" y="${y + C + 8}" text-anchor="middle" class="mhname">你家</text>` : ""}</g>`;
+  }
+  for (const p of m.pois) {
+    const x = p.x * C + C / 2, y = p.y * C + C / 2;
+    g += `<g><title>${esc(p.name)}</title><circle cx="${x}" cy="${y}" r="${C * 0.62}" class="mpoi"/><text x="${x}" y="${y + 4}" text-anchor="middle" class="mpoig">${MAP_POI[p.kind] || "•"}</text>
+      <text x="${x}" y="${y - C * 0.8}" text-anchor="middle" class="mpoin">${esc(p.name)}</text></g>`;
+  }
+  // Who holds how much: the houses' reach, largest first.
+  const hold = new Map();
+  for (const p of m.parcels) {
+    const k = p.mine ? "mine" : p.lord ? "lord" : p.house < 0 ? "vacant" : p.house;
+    const e = hold.get(k) || { k, name: p.mine ? "你家" : p.lord ? "領主自營" : p.house < 0 ? "沒人租" : p.holder + "家", acres: 0, n: 0, fill: parcelFill(p), house: p.mine ? -2 : p.house };
+    e.acres += p.acres; e.n++;
+    hold.set(k, e);
+  }
+  const rows = [...hold.values()].sort((a, b) => (a.k === "mine" ? -1 : b.k === "mine" ? 1 : b.acres - a.acres));
+  const legend = rows.map((r) => {
+    const click = r.k !== "lord" && r.k !== "vacant";
+    return `<button class="mrow${sel != null && r.house === sel ? " on" : ""}" ${click ? `onclick="selectedHouse=${sel === r.house ? "null" : r.house};renderTabs()"` : "disabled"}>
+      <svg width="14" height="14"><rect width="14" height="14" rx="2" fill="${r.fill}"/></svg> ${esc(r.name)} <span class="muted">${Math.round(r.acres)} 畝・${r.n} 塊</span></button>`;
+  }).join("");
+  const house = sel === -2 ? null : (s.houses || []).find((h) => h.id === sel);
+  const mineRows = sel === -2 ? m.parcels.filter((p) => p.mine) : house ? m.parcels.filter((p) => p.house === sel) : [];
+  const detail = sel == null ? '<p class="muted">點一塊地或一戶人家，看他家的地在哪裡。滑鼠停在地上看是哪一塊、怎麼來的。</p>'
+    : (sel === -2 ? `<div class="hdetail"><b>你家</b></div>` : house ? houseDetail(house) : "")
+      + `<div class="mlist">${mineRows.map((p) => `<div>${esc(p.name)}${p.free ? "・自由地" : ""}　<span class="muted">${esc(parcelSince(p))}</span></div>`).join("")}</div>`;
+  $("tab-body").innerHTML = `<div class="mapwrap${mapBig ? " big" : ""}"><button class="mapzoom" onclick="mapBig=!mapBig;renderTabs()">${mapBig ? "收起" : "放大"}</button><svg viewBox="-2 -14 ${W + 4} ${H + 18}" width="100%" role="img" aria-label="村子地圖：每塊地是哪一家的">
+      <defs><pattern id="vacant" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" class="mvac"/><line x1="0" y1="0" x2="0" y2="6" class="mvacl"/></pattern></defs>${g}</svg>
+    <div class="mside"><div class="legend">三塊大田分成一條條，同一個顏色是同一家的地；你家是深色。斜線是沒人租、在領主手上的地。</div>
+    <div class="mlegend">${legend}</div>${detail}</div>`;
 }
 
 function renderNet(s) {
@@ -303,10 +415,7 @@ function renderNet(s) {
       <text x="${x}" y="${y + rad + 13}" text-anchor="middle">${esc(h.surname)}</text></g>`;
   });
   const sel = hs.find((h) => h.id === selectedHouse);
-  const detail = sel ? `<div class="hdetail"><b>${esc(sel.surname)}家</b>　${sel.acres} 畝　兩家 ${Math.round(sel.link * 100)} 分近${sel.feud ? `　<span class="neg">${["", "有嫌隙", "結了怨", "世仇"][sel.feud]}</span>` : ""}
-      <div class="muted">${esc(sel.tie)}</div>
-      <div>${sel.members.map((m) => `<span style="display:inline-block;margin-right:10px">${m.head ? "（家主）" : ""}<button class="link" onclick="look({do:'inspect',who:${m.id}}, '${esc(m.name)}')">${esc(m.name)}</button> ${m.age} 歲 <span class="${cls(m.opinion)}">${opWord(m.opinion)}</span></span>`).join("")}</div></div>`
-    : '<p class="muted">點一戶人家看是誰、怎麼認識的。</p>';
+  const detail = sel ? houseDetail(sel) : '<p class="muted">點一戶人家看是誰、怎麼認識的。</p>';
   $("tab-body").innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="各戶跟你家多近">${edges}
       <g class="center"><circle cx="${cx}" cy="${cy}" r="20" fill="var(--accent)"/><text x="${cx}" y="${cy + 4}" text-anchor="middle" style="fill:#fff">你家</text></g>${nodes}</svg>
     <div class="legend">越靠近中間，兩家越近（親戚、常來往）。綠：對你家有好感；紅：對你家不好；虛線紅圈：有仇。</div>${detail}`;

@@ -374,6 +374,7 @@ public:
     const Household& household(Id id) const { return households_.at(id); }
     Id playerDynasty() const { return playerDynasty_; }
     Id playerHousehold() const { return playerHousehold_; }
+    Id lordId() const { return lord_; }
     bool gameOver() const { return gameOver_; }
 
     std::string fullName(Id id) const;

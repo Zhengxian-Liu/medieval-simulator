@@ -255,6 +255,38 @@ public:
         }
         o.raw("houses", arr(houses));
 
+        // The village map (design/contested.md): who holds which parcel, the ground nobody holds alone, landmarks.
+        {
+            const VillageMap& vm = w.villageMap();
+            Id lordHouse = w.lordId() != kNone ? w.people()[w.lordId()].household : kNone;
+            std::vector<std::string> areas, pois, homes, parcels;
+            for (const auto& a : vm.fields) areas.push_back(Obj().text("kind", "field").text("name", a.name).n("x", a.x).n("y", a.y).n("w", a.w).n("h", a.h).done());
+            for (const auto& a : vm.zones) areas.push_back(Obj().text("kind", a.kind).text("name", a.name).n("x", a.x).n("y", a.y).n("w", a.w).n("h", a.h).done());
+            for (const auto& pt : vm.pois) pois.push_back(Obj().text("kind", pt.kind).text("name", pt.name).n("x", pt.x).n("y", pt.y).done());
+            for (const auto& [hid, cell] : vm.houseCell) {
+                const Household& x = w.households()[hid];
+                if (x.extinct || x.members.empty()) continue;
+                homes.push_back(Obj().n("house", hid).text("name", x.dynasty != kNone ? w.dynasties()[x.dynasty].surname : "")
+                                    .n("x", cell % vm.width).n("y", cell / vm.width).b("mine", hid == hh).b("lord", hid == lordHouse).done());
+            }
+            std::vector<int> cells(static_cast<size_t>(vm.width * vm.height), -1);
+            for (const auto& pc : w.parcels()) {
+                if (pc.gone) continue;
+                int idx = static_cast<int>(parcels.size());
+                for (int c : pc.cells) cells[static_cast<size_t>(c)] = idx;
+                std::string holder = pc.holder == kNone ? "" : w.households()[pc.holder].dynasty != kNone ? w.dynasties()[w.households()[pc.holder].dynasty].surname : "";
+                parcels.push_back(Obj().n("id", pc.id).text("name", w.parcelName(pc)).n("acres", pc.acres).b("free", pc.free)
+                                      .n("house", pc.holder == kNone ? -1 : pc.holder).text("holder", holder).text("how", pc.how)
+                                      .n("since", w.config().startYear + pc.since / kDaysPerYear).b("mine", pc.holder == hh)
+                                      .b("lord", pc.holder != kNone && pc.holder == lordHouse).done());
+            }
+            std::string cs = "[";
+            for (size_t i = 0; i < cells.size(); ++i) cs += (i ? "," : "") + std::to_string(cells[i]);
+            cs += "]";
+            o.raw("map", Obj().n("w", vm.width).n("h", vm.height).raw("areas", arr(areas)).raw("pois", arr(pois))
+                             .raw("homes", arr(homes)).raw("parcels", arr(parcels)).raw("cells", cs).done());
+        }
+
         // What the family has heard, newest first.
         std::vector<std::string> heard;
         const auto& hd = w.heard();

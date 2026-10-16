@@ -29,7 +29,7 @@
       {"kind": "green", "name": "村中草地", "x": 22, "y": 14},
       {"kind": "alehouse", "name": "酒館", "x": 20, "y": 16},
       {"kind": "well", "name": "井", "x": 24, "y": 16},
-      {"kind": "mill", "name": "磨坊", "x": 2, "y": 15},
+      {"kind": "mill", "name": "磨坊", "x": 1, "y": 8},
       {"kind": "pound", "name": "牲口欄", "x": 27, "y": 18},
       {"kind": "cross", "name": "路口十字架", "x": 18, "y": 19}
     ]
