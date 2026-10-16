@@ -239,6 +239,7 @@ func build(root: Node3D) -> Node3D:
 	(player.mesh as CapsuleMesh).radius = 0.3
 	(player.mesh as CapsuleMesh).height = 1.7
 	player.position.y = 0.85
+	player.material_override = _weathered("cloth")  # undyed stand-in until characters exist: the flat red read as the focal point (Fable r9)
 	return player
 
 func _clear_of_houses(p: Vector3, houses: Array, radius: float) -> bool:
