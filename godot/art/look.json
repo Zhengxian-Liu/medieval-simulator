@@ -110,6 +110,10 @@
     "exposure_low": {
       "v": 4.0,
       "why": "exposure (x tonemap_exposure) as the sun nears the horizon, daylight only: the camera exposes up for golden hour instead of the frame going dark. 4.0 keeps the dusk frame at 0.24 with the dimmer sky (swept 2.5-4.0)"
+    },
+    "sky_saturation_low": {
+      "v": 0.8,
+      "why": "sky saturation as the sun nears the horizon (same ramp as the sun colour): the blue sky keeps golden-hour shade neutral-cool instead of orange bounce (Fable round 6: dusk read as an orange filter)"
     }
   },
   "sun": {
@@ -224,16 +228,16 @@
       "plaster": {
         "v": {
           "tint": [
-            1.0,
-            0.86,
-            0.68
+            0.95,
+            0.9,
+            0.8
           ],
           "dirt_height": 1.1,
           "moss": 0.0,
           "roughness_min": 0.85,
           "specular": 0.3
         },
-        "why": "splash dirt up to ~1 m on daub"
+        "why": "pale lime daub on the white flaking scan; dark timber frame must read against it (round 6: grey_plaster_03 x warm tint made a tan slab, frame lost). Splash dirt up to ~1 m"
       },
       "timber": {
         "v": {
@@ -297,12 +301,12 @@
           0.13,
           0.05
         ],
-        "ao_strength": 1.0,
+        "ao_strength": 0.7,
         "splash": 0.4,
         "grime": 0.15,
         "edge_wear": 0.6
       },
-      "why": "shared by every slot; splash/grime lowered in art review 2 (they crushed timber to 0.09)"
+      "why": "shared by every slot; splash/grime lowered in art review 2 (they crushed timber to 0.09). ao_strength 1.0 -> 0.7 (Fable round 6 A/B): contacts stacked vertex AO + skirt + SSAO"
     },
     "leaves": {
       "v": {
@@ -762,6 +766,28 @@
           "max": 6.0
         },
         "why": "a low sun still models form: key:fill at least the daytime 3, up to 6 (long, deeper shadows). Set before measuring. user decision 2026-10-16 (“改看暖色”): golden hour is judged by warmth and contrast, not brightness (docs/art-check-conflicts.md)"
+      },
+      "shadow_tint": {
+        "v": {
+          "measure": "shadow_tint",
+          "min": 0.87,
+          "max": 1.3
+        },
+        "why": "blue/red of the light in shadow (lighting-only pass): at golden hour only the key is warm, the shade stays neutral or cool (Fable round 6: R/B <= 1.15)"
+      },
+      "saturation": {
+        "v": {
+          "rect": [
+            0,
+            0,
+            1920,
+            1080
+          ],
+          "measure": "saturation",
+          "min": 0.2,
+          "max": 0.4
+        },
+        "why": "whole-frame HSL saturation: golden hour, not an orange filter (round 6 measured 0.48 vs 0.33 at noon)"
       }
     },
     "light_pass_exposure": {
@@ -778,24 +804,6 @@
         },
         "why": "red/blue of the key light on lit pixels: noon measures 1.05; a visibly orange morning would read > 1.15"
       }
-    }
-  },
-  "stylise": {
-    "_doc": "Disco Elysium study (coordinator defaults 2026-10-16): each item is a toggle, OFF by default; compared with tools/ab.py and judged by Fable before any is turned on. No Kuwahara filter.",
-    "surface": {
-      "v": {
-        "brush": 0.0,
-        "brush_scale": 5.0
-      },
-      "why": "world-space painterly stroke texture on buildings, props and ground (shaders/brush.gdshaderinc); A/B value 0.12"
-    },
-    "focal": {
-      "v": {
-        "strength": 0.0,
-        "radius": 0.55,
-        "desaturate": 0.0
-      },
-      "why": "detail and saturation fall off toward the frame edges (shaders/focal.gdshader); A/B value strength 2.5, desaturate 0.3"
     }
   }
 }

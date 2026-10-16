@@ -31,7 +31,6 @@ number there, never in scene code or shaders. Update this document in the same c
 | `materials` | triplanar tiling/tint, per-slot weathered params (`weathered.<slot>`), shared weathering, leaves, water, ground, flat placeholder colours |
 | `placement` | skirt decal, grass tufts, debris density, tree clearance, props kept off paths |
 | `checks` | measured regions + targets per shot, triangle budgets |
-| `stylise` | Disco Elysium study toggles (brush strokes, focal falloff), off by default; A/B with `tools/ab.py` |
 
 Read in code with `scripts/look.gd`: `Look.v("sun.energy_day")`, `Look.col(...)`, `Look.group(...)`,
 `Look.apply(shader_material, params)`.
@@ -106,7 +105,8 @@ Add it to `godot/tools/fetch_polyhaven.py` (Poly Haven / ambientCG, CC0 only, 1K
 - Grass speckle ≤ 2% of open-grass pixels brighter than median + 0.15.
 - Roof macro structure: 16 px-blurred std dev on the barn roof ≥ 0.05.
 - Dusk (`godot_far_dusk`, 16:48, sun ~17 deg; user decision 2026-10-16): frame >= 0.22, key warmth (R/B of the key light
-  on lit pixels, lighting-only pass) 1.5–2.5, key:fill 3–6.
+  on lit pixels, lighting-only pass) 1.5–2.5, key:fill 3–6; shade stays neutral (B/R >= 0.87) and the frame is not an
+  orange filter (saturation <= 0.40).
 - Morning (`godot_far_morning`, 9:00): key warmth 0.95–1.15, daylight stays neutral under the golden-hour ramp.
 - Quick A/B of one value: `SHOTS=godot_mid godot/tools/capture.sh && python3 godot/tools/art_check.py --no-capture`.
 - Night (`godot_far_night`, hour 22): frame mean 0.10–0.20 (moonlit, readable), torch pool ≥ 1.8x the frame mean.
@@ -143,3 +143,6 @@ Add it to `godot/tools/fetch_polyhaven.py` (Poly Haven / ambientCG, CC0 only, 1K
 | key:fill and light warmth looked flat; far key:fill 2.1 vs mid 4.0 "under the same light" | the lighting-only pass went through AgX: lit light capped at ~0.89 and bleached | the lighting-only pass renders with the linear tonemapper at `checks.light_pass_exposure` (no clipping) |
 | a swapped texture never showed up in the shots | running the game uses cached imports | `capture.sh` runs `godot --headless --import` first |
 | golden hour looked like overcast dusk (sun on ~= sun off) | sun colour warmed only below 20 deg; sky fill stayed at full noon strength | `sun.warm_below_elevation`, `environment.sky_energy_low` (sky dims with the sun), `environment.exposure_low` (camera exposes up); all gated to daylight |
+| plaster swap made walls a tan slab, half-timbering lost (round 6) | mid-value tan scan x warm tint: frame and infill same value | daub stays pale lime on the white flaking scan; the timber frame must read darker |
+| golden hour read as an orange filter (round 6) | shade lit by orange bounce from the ground | sky saturation rises with a low sun (`environment.sky_saturation_low`): blue sky keeps shade neutral; `checks.dusk.shadow_tint`, `.saturation` |
+| painterly toggles (Disco Elysium study) | world brush strokes at 0.12 were invisible (0.75/255); edge blur + desaturate read as a lens defect | rejected by Fable round 6 and removed; adopt only what survives an A/B (`tools/ab.py`) |

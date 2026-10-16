@@ -456,7 +456,6 @@ func _weathered(slot: String) -> Material:
 			m.set_shader_parameter("rough_tex", load(dir + "roughness.jpg"))
 			Look.apply(m, Look.v("materials.weathered_common"))
 			Look.apply(m, Look.group("materials.weathered")[slot])
-			Look.apply(m, Look.v("stylise.surface"))
 			_mats[key] = m
 	_mats[key].resource_name = slot  # keeps the slot name through glTF export (tools/render_cycles.py)
 	return _mats[key]

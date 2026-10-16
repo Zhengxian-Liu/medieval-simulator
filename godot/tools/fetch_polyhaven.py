@@ -14,7 +14,7 @@ TEXTURES = {  # material slot -> Poly Haven asset id
     "grass": "leafy_grass",
     "riverbed": "brown_mud_rocks_01",
     "stone": "stacked_stone_wall",
-    "plaster": "grey_plaster_03",  # uneven lime/daub, mid value (white_rough_plaster read as modern render, near white)
+    "plaster": "white_rough_plaster",  # flaking daub; grey_plaster_03 tried in round 6: tan slab, frame lost
     "timber": "weathered_planks",
     "thatch": "thatch_roof_angled",
     "rock": "rock_face",

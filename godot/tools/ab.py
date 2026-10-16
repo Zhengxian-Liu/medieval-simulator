@@ -2,7 +2,7 @@
 
   python3 godot/tools/ab.py <label> <path=value> [<path=value> ...] [--shots godot_far,godot_mid]
 
-<path> is a look.json path to a leaf (`sun.angular_distance`) or into its value (`stylise.surface.brush`); <value> is
+<path> is a look.json path to a leaf (`sun.angular_distance`) or into its value (`materials.weathered.plaster.tint`); <value> is
 JSON. look.json is restored afterwards, even on failure. Renders the B shots into docs/screenshots/ab/<label>/ and
 writes <shot>_ab.jpg there: the current shot (A, docs/screenshots/<shot>.png, so run art_check.py first) left, B right.
 """

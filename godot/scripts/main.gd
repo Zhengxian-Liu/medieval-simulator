@@ -22,7 +22,7 @@ var player: Node3D
 var sun: DirectionalLight3D
 var moon: DirectionalLight3D
 var environment: Environment
-var focal: MeshInstance3D  # stylise.focal pass, null when off
+var sky_mat: ShaderMaterial
 var camera: Camera3D
 var village: RefCounted
 
@@ -49,24 +49,8 @@ func _ready() -> void:
 		vp.add_child(camera)
 		_capture(vp, capture_dir)
 	camera.current = true
-	_build_focal()
 	_apply_camera()
 	_apply_time()
-
-# Disco Elysium study (art/look.json stylise.focal): full-screen pass on the camera, off when strength is 0.
-func _build_focal() -> void:
-	var spec: Dictionary = Look.v("stylise.focal")
-	if spec.strength <= 0.0:
-		return
-	var m := ShaderMaterial.new()
-	m.shader = load("res://shaders/focal.gdshader")
-	Look.apply(m, spec)
-	focal = MeshInstance3D.new()
-	focal.mesh = QuadMesh.new()
-	focal.material_override = m
-	focal.extra_cull_margin = 16384.0
-	focal.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	camera.add_child(focal)
 
 func _user_arg(prefix: String) -> String:
 	for arg in OS.get_cmdline_user_args():
@@ -97,7 +81,7 @@ func _export_gltf(path: String) -> void:
 	get_tree().quit(0 if err == OK else 1)
 
 func _build_lighting() -> void:
-	var sky_mat := ShaderMaterial.new()
+	sky_mat = ShaderMaterial.new()
 	sky_mat.shader = load("res://shaders/sky.gdshader")
 	sky_mat.set_shader_parameter("panorama", load("res://assets/sky.hdr"))
 	sky_mat.set_shader_parameter("saturation", Look.v("environment.sky_saturation"))
@@ -162,6 +146,8 @@ func _apply_time() -> void:
 	sun.light_color = Look.col("sun.color_low").lerp(Look.col("sun.color_day"), warm)
 	sun.visible = elevation > -2.0
 	# The HDRI is a daytime sky: dim it (and the ambient light it gives) toward night.
+	# shade stays neutral-to-cool at a low sun: the blue sky, not the orange-lit ground, is what lights it (round 6)
+	sky_mat.set_shader_parameter("saturation", lerpf(Look.v("environment.sky_saturation_low"), Look.v("environment.sky_saturation"), warm))
 	environment.background_energy_multiplier = lerpf(Look.v("environment.night_sky_energy"), 1.0, day) \
 			* lerpf(1.0, lerpf(Look.v("environment.sky_energy_low"), 1.0, warm), day)  # also the GI fill; dims with a low sun
 	# the camera exposes up for a low sun (as a photographer would), so golden hour keeps its contrast without going dark
@@ -241,8 +227,6 @@ func _capture(vp: SubViewport, dir: String) -> void:
 			# lighting-only pass (white albedo): the colour of the light itself, so shadow tint is measured without
 			# material colour mixed in
 			vp.debug_draw = Viewport.DEBUG_DRAW_LIGHTING
-			if focal:
-				focal.visible = false  # measure the light, not the stylised frame
 			# linear tonemap at reduced exposure: AgX capped lit light at ~0.89 and bleached its colour, which flattened
 			# key:fill and warmth (2026-10-16)
 			environment.tonemap_mode = Environment.TONE_MAPPER_LINEAR
@@ -252,8 +236,6 @@ func _capture(vp: SubViewport, dir: String) -> void:
 			if not _save_shot(vp, dir.path_join(shot[0] + "_light.png")):
 				return
 			vp.debug_draw = Viewport.DEBUG_DRAW_DISABLED
-			if focal:
-				focal.visible = true
 			environment.tonemap_mode = Environment.TONE_MAPPER_AGX
 			_apply_time()
 	get_tree().quit(0)

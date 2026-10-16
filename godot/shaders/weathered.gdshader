@@ -3,7 +3,6 @@
 // splash dirt rising from the asset's base, and moss on upward-facing surfaces, both broken up by noise.
 shader_type spatial;
 render_mode cull_disabled;
-#include "res://shaders/brush.gdshaderinc"
 
 uniform sampler2D albedo_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D normal_tex : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
@@ -23,9 +22,7 @@ uniform float eave_age = 0.0;   // thatch: darkening toward the eave (vertex col
 uniform float course_height = 0.0;  // thatch: vertical spacing of the laid courses (m); 0 = off
 uniform float course_shadow = 0.0;  // darkening just below each course's butt ends
 uniform float course_var = 0.0;     // per-course tone variation (each course laid from a different batch of straw)
-uniform float detile = 0.0;
-uniform float brush = 0.0;        // painterly stroke texture strength (stylise.surface)
-uniform float brush_scale = 5.0;  // strokes per metre  // blend in a second, rescaled sample: hides the texture repeat (thatch)
+uniform float detile = 0.0;  // blend in a second, rescaled sample: hides the texture repeat (thatch)
 
 varying vec3 world_pos;
 varying vec3 world_normal;
@@ -77,7 +74,6 @@ void fragment() {
 		c *= 1.0 + (hash(vec2(k, NODE_POSITION_WORLD.x + NODE_POSITION_WORLD.z)) - 0.5) * 2.0 * course_var;
 		c *= mix(1.0 - course_shadow, 1.0, smoothstep(0.0, 0.3, 1.0 - fract(y)));  // dark band just under the butt ends above
 	}
-	c *= 1.0 + (brush_stroke(world_pos, world_normal, brush_scale) - 0.5) * 2.0 * brush;
 	ALBEDO = c;
 	AO = mix(1.0, baked_ao, ao_strength);  // occludes ambient/GI light only, so direct sun still lands on the surface
 	AO_LIGHT_AFFECT = 0.25;                  // and a little on direct light: crevices stay dark at noon too

@@ -1,7 +1,6 @@
 // Village ground: grass and trampled dirt blended by a painted mask (paths, yards, the square),
 // with noise breaking up the mask edge and large-scale colour variation so the grass never reads as one tile.
 shader_type spatial;
-#include "res://shaders/brush.gdshaderinc"
 
 uniform sampler2D grass_albedo : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D grass_normal : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
@@ -15,8 +14,6 @@ uniform vec3 grass_tint : source_color = vec3(0.5, 0.66, 0.42);
 uniform vec3 soil_tint = vec3(1.0);  // warm brown on the dirt/gravel scan (art/look.json materials.ground)
 uniform float grass_tiles = 0.25;        // tiles per metre
 uniform float dirt_tiles = 0.4;
-uniform float brush = 0.0;        // painterly stroke texture strength (stylise.surface)
-uniform float brush_scale = 5.0;
 uniform float ground_value = 0.62;  // darkens the bright photo-scanned gravel/grass: ground should sit at ~0.25-0.35 value
 uniform vec4 river;  // centre z0, amplitude, frequency, phase (same curve as village.gd river_center)
 uniform float river_half = 3.5;
@@ -55,7 +52,6 @@ void fragment() {
 	col = mix(col, soil * vec3(1.55, 1.38, 1.05), sand);
 	float wet = 1.0 - smoothstep(river_half - 0.6, river_half + 0.1, rd);
 	col = mix(col, soil * 0.55, wet);
-	col *= 1.0 + (brush_stroke(world_pos, vec3(0, 1, 0), brush_scale) - 0.5) * 2.0 * brush;
 	ALBEDO = col * ground_value;
 	ROUGHNESS = mix(texture(grass_rough, uvg).r, texture(dirt_rough, uvd).r, dirt);
 	NORMAL_MAP = mix(texture(grass_normal, uvg).rgb, texture(dirt_normal, uvd).rgb, dirt);

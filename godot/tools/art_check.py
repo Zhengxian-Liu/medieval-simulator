@@ -142,39 +142,30 @@ def main():
         subprocess.run([str(GODOT / "tools" / "capture.sh")], check=True)
     rows, ok = [], True
 
-    for shot in ("far", "mid"):
-        png = SHOTS / f"godot_{shot}.png"
-        subprocess.run(["magick", str(png), "-colorspace", "gray", str(SHOTS / f"godot_{shot}_grey.png")], check=True)
-        stats = masked(png, SHOTS / f"godot_{shot}_fill.png")
-        rows.append(("info", f"{shot} masks", f"lit {stats['lit_share']:.0%}, shadow {stats['shadow_share']:.0%}, key warmth {stats['key_warmth']:.2f}",
-                     "", True, "share of the frame classified lit / in shadow"))
-        for name, leaf in CHECKS[shot].items():
+    # checks.<shot> -> rendered frame; shots with a sun-off pair (capture.sh fill=1) get the lit/shadow measures
+    for shot, png_name in (("far", "godot_far.png"), ("mid", "godot_mid.png"), ("night", "godot_far_night.png"),
+                           ("dusk", "godot_far_dusk.png"), ("morning", "godot_far_morning.png")):
+        png = SHOTS / png_name
+        fill = SHOTS / png_name.replace(".png", "_fill.png")
+        stats = masked(png, fill) if fill.exists() and shot != "night" else {}
+        if shot in ("far", "mid"):
+            subprocess.run(["magick", str(png), "-colorspace", "gray", str(SHOTS / f"godot_{shot}_grey.png")], check=True)
+            rows.append(("info", f"{shot} masks", f"lit {stats['lit_share']:.0%}, shadow {stats['shadow_share']:.0%}, key warmth {stats['key_warmth']:.2f}",
+                         "", True, "share of the frame classified lit / in shadow"))
+        for name, leaf in CHECKS.get(shot, {}).items():
+            if name.startswith("_"):
+                continue
             spec = leaf["v"]
             kind = spec.get("measure", "rect")
             m = (stats[kind] if kind in stats else contact_floor(png) if kind == "contact_floor"
                  else macro_sd(png, spec["rect"]) if kind == "macro_sd" else speckle(png, spec["rect"]) if kind == "speckle"
                  else saturation(png, spec["rect"]) if kind == "saturation"
                  else empty_share(png) if kind == "empty_share"
+                 else region_mean(png, spec["rect"]) / max(region_mean(png, [0, 0, 1920, 1080]), 1e-3) if kind == "torch_pool"
                  else blue_over_red(png, spec["rect"]) if kind == "blue_over_red" else region_mean(png, spec["rect"]))
             passed = spec["min"] <= m <= spec["max"]
             ok &= passed
             rows.append(("value", f"{shot}.{name}", f"{m:.3f}", f"{spec['min']}-{spec['max']}", passed, leaf["why"]))
-
-    for shot_name, png_name in (("night", "godot_far_night.png"), ("dusk", "godot_far_dusk.png"), ("morning", "godot_far_morning.png")):
-        png = SHOTS / png_name
-        for name, leaf in CHECKS.get(shot_name, {}).items():
-            if name.startswith("_"):
-                continue
-            spec = leaf["v"]
-            if spec.get("measure") == "torch_pool":
-                m = region_mean(png, spec["rect"]) / max(region_mean(png, [0, 0, 1920, 1080]), 1e-3)
-            elif spec.get("measure") in ("key_fill", "key_warmth"):
-                m = masked(png, SHOTS / png_name.replace(".png", "_fill.png"))[spec["measure"]]
-            else:
-                m = region_mean(png, spec["rect"])
-            passed = spec["min"] <= m <= spec["max"]
-            ok &= passed
-            rows.append(("value", f"{shot_name}.{name}", f"{m:.3f}", f"{spec['min']}-{spec['max']}", passed, leaf["why"]))
 
     imports = list((GODOT / "assets").rglob("*.jpg.import")) + list((GODOT / "assets").rglob("*.png.import"))
     no_mips = [p for p in imports if "mipmaps/generate=true" not in p.read_text()]
