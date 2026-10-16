@@ -15,12 +15,32 @@ const COLORS := {
 var _rng := RandomNumberGenerator.new()
 var _mats := {}
 
+# Slots with a Poly Haven texture set (see assets/CREDITS.md); others stay flat colour placeholders.
+const TEXTURED := {grass = 0.25, riverbed = 0.4, stone = 0.6, plaster = 0.5, timber = 0.6, thatch = 0.5, rock = 0.8}  # tiles per metre
+
+# leafy_grass reads as dry dirt from above; push it toward green.
+const TINT := {grass = Color(0.62, 0.8, 0.45)}
+
 func _mat(name: String) -> StandardMaterial3D:
 	if not _mats.has(name):
 		var m := StandardMaterial3D.new()
-		m.albedo_color = COLORS[name]
 		m.roughness = 0.9
 		m.cull_mode = BaseMaterial3D.CULL_DISABLED  # riverbed is a hand-built strip; avoid winding surprises
+		var slot := "rock" if name == "stone_rock" else name
+		if TEXTURED.has(slot):
+			var dir := "res://assets/textures/%s/" % slot
+			m.albedo_texture = load(dir + "albedo.jpg")
+			m.normal_enabled = true
+			m.normal_texture = load(dir + "normal.jpg")
+			m.roughness_texture = load(dir + "roughness.jpg")
+			m.roughness = 1.0
+			# World-space triplanar: primitive meshes have no sensible UVs, and tiling stays the same size everywhere.
+			m.uv1_triplanar = true
+			m.uv1_world_triplanar = true
+			m.uv1_scale = Vector3.ONE * TEXTURED[slot]
+			m.albedo_color = TINT.get(slot, Color.WHITE)
+		else:
+			m.albedo_color = COLORS[name]
 		_mats[name] = m
 	return _mats[name]
 
@@ -165,5 +185,5 @@ func _rock(root: Node3D, pos: Vector3) -> void:
 	s.height = r * 1.2
 	s.radial_segments = 6
 	s.rings = 3
-	var mi := _add(root, s, "stone", pos, _rng.randf() * 360.0)
+	var mi := _add(root, s, "stone_rock", pos, _rng.randf() * 360.0)
 	mi.scale = Vector3(1.0, 1.0, 0.7 + _rng.randf() * 0.5)

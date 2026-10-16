@@ -18,6 +18,7 @@ var hour := 10.0
 
 var player: Node3D
 var sun: DirectionalLight3D
+var environment: Environment
 var camera: Camera3D
 
 func _ready() -> void:
@@ -47,7 +48,8 @@ func _capture_dir() -> String:
 	return ""
 
 func _build_lighting() -> void:
-	var sky_mat := ProceduralSkyMaterial.new()
+	var sky_mat := PanoramaSkyMaterial.new()
+	sky_mat.panorama = load("res://assets/sky.hdr")
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
 	var env := Environment.new()
@@ -64,6 +66,7 @@ func _build_lighting() -> void:
 	env.glow_intensity = 0.3
 	var we := WorldEnvironment.new()
 	we.environment = env
+	environment = env
 	add_child(we)
 
 	sun = DirectionalLight3D.new()
@@ -80,6 +83,9 @@ func _apply_time() -> void:
 	sun.light_energy = lerpf(0.0, 1.6, day)
 	sun.light_color = Color(1.0, 0.55, 0.3).lerp(Color(1.0, 0.96, 0.9), day)
 	sun.visible = elevation > -2.0
+	# The HDRI is a daytime sky: dim it (and the ambient light it gives) toward night.
+	environment.background_energy_multiplier = lerpf(0.04, 1.0, day)
+	environment.ambient_light_energy = lerpf(0.08, 0.45, day)  # the HDRI is bright; full strength washed out the sun shadows
 
 func _apply_camera() -> void:
 	var pose := CameraZoom.evaluate(zoom)
