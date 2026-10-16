@@ -181,7 +181,7 @@ func build(root: Node3D) -> Node3D:
 		var a := _rng.randf() * TAU
 		var dist := (10.0 + _rng.randf() * 8.0) if i < 8 else (20.0 + _rng.randf() * 30.0)
 		var p := Vector3(cos(a) * dist, 0, sin(a) * dist + 4.0)
-		if river_dist(Vector2(p.x, p.z)) > RIVER_HALF + 3.5 and _clear_of_houses(p, houses, 6.5) \
+		if river_dist(Vector2(p.x, p.z)) > RIVER_HALF + 5.0 and _clear_of_houses(p, houses, 6.5) \
 				and _ground.dirt_at(Vector2(p.x, p.z)) < 0.15:  # crowns must not hang over the river, bridge or paths
 			if dist < 25.0 or _rng.randf() < 0.5:  # broadleaf oaks near the village; the faceted firs only far off
 				_instance(root, FOLIAGE % ("oak_%d" % _rng.randi_range(0, 2)), p, _rng.randf() * 360.0, _rng.randf_range(0.85, 1.15))
