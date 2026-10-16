@@ -18,3 +18,5 @@ All assets from [Poly Haven](https://polyhaven.com), licence CC0 1.0 (public dom
 - `models/shrub_04/`: [shrub_04](https://polyhaven.com/a/shrub_04) (1K glTF)
 - `models/pine_sapling_small/`: [pine_sapling_small](https://polyhaven.com/a/pine_sapling_small) (1K glTF)
 - `sky.hdr`: [kloofendal_48d_partly_cloudy_puresky](https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky) (2K HDRI)
+
+Generated in this repo (no third-party source): `models/trees/` by `tools/make_trees.py`.
