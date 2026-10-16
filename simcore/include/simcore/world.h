@@ -579,6 +579,7 @@ public:
     std::string lifeLine(Id id) const;   // the road walked, as one line: "拜…為師，出師當鐵匠，娶了…，當了家"
     std::vector<Id> peopleToSee() const;  // family first, then those the head knows
     void runCommands() { processCommands(); }
+    void setMoneyForTest(Id house, double money) { households_[house].money = money; }  // tests only
     void startSeason() { rollSeason(); }  // on a season's first day, before it runs: free time and the family's wants  // carry out what the player just asked for, before the day runs
     // The season at a glance, and what changed since a snapshot taken at its start.
     std::string familyGlance() const;

@@ -331,7 +331,9 @@ int main(int argc, char** argv) {
 
     std::cout << "== " << w.dynasties()[w.playerDynasty()].surname << " 家，" << cfg.startYear << " 年 ==\n";
     std::cout << w.familyReport();
+    // The village's years before the hand-over (Config::prerun) are not the family's story: start at the hand-over.
     size_t shown = 0;
+    while (shown < w.chronicle().size() && w.chronicle()[shown].day < w.handedOver()) ++shown;
     auto flush = [&]() {
         const auto& log = w.chronicle();
         for (; shown < log.size(); ++shown)
@@ -396,7 +398,7 @@ int main(int argc, char** argv) {
     if (!out.empty()) {
         std::ofstream f(out);
         for (const auto& e : w.chronicle())
-            if (e.importance != 2) f << "- " << w.config().startYear + e.day / kDaysPerYear << " 年　" << tidyText(e.text) << "\n";
+            if (e.day >= w.handedOver() && e.importance != 2) f << "- " << w.config().startYear + e.day / kDaysPerYear << " 年　" << tidyText(e.text) << "\n";
     }
     return 0;
 }

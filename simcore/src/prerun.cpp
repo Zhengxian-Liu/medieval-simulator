@@ -36,7 +36,7 @@ void World::prerun() {
         // Nobody left to take over: the game is over before it began, but the tools still have a family to name.
         playerHousehold_ = house;
         playerDynasty_ = dynasty;
-        chronicle_.clear();
+        handedOver_ = day_;
         log(1, "【開局】" + std::to_string(playYear) + " 年，" + villageName_ + "已經沒有人家可以接手了。");
         gameOver_ = true;
         return;
@@ -51,8 +51,6 @@ void World::handOver(Id house, Id dynasty, int playYear) {
     Household& h = households_[house];
     Person& head = people_[h.head];
     Dynasty& d = dynasties_[dynasty];
-    // The village's years before the hand-over are not the family's story; what of them it carries is told below.
-    chronicle_.clear();
     if (d.heads.empty() || d.heads.back() != h.head) {
         d.heads.push_back(h.head);
         d.headSince.push_back(day_);

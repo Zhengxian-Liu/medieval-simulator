@@ -193,6 +193,50 @@ int main() {
         std::printf("paths: %d servants, %d town apprentices, %d archers, %d came back\n", walked["servant"], walked["town_apprentice"],
                     walked["archer"], cameBack);
     }
+    // The cases the sweep above rarely reaches, made on purpose: a gift pressed with every sum of money around what
+    // the deal costs, and a no pressed once the season has turned.
+    {
+        bool giftTried = false, seasonTried = false;
+        for (int seed = 1; seed <= 40 && !(giftTried && seasonTried); ++seed) {
+            Config c;
+            c.seed = seed;
+            c.prerun = 25;
+            World w(defs, c);
+            for (int season = 0; season < 16 && !(giftTried && seasonTried) && !w.gameOver(); ++season) {
+                for (Id who : w.peopleToSee()) {
+                    if (giftTried && seasonTried) break;
+                    for (const auto& o : w.asksFor(who)) {
+                        if (!o.open || (o.ask != "rent_vacant" && o.ask != "sell_parcel" && o.ask != "apprentice")) continue;
+                        std::string sub = o.subject == kNone ? "" : std::to_string(o.subject);
+                        World a = w;
+                        a.issue({a.today(), "ask", a.playerHead(), o.ask + "|" + o.office + "||" + sub, who, o.object});
+                        a.runCommands();
+                        const auto& lv = a.lastAsk().levers;
+                        if (a.lastAsk().answer < 2 || std::find(lv.begin(), lv.end(), "gift") == lv.end()) continue;
+                        for (double m = 0; m <= 400; m += 2) {
+                            World b = a;
+                            b.setMoneyForTest(b.playerHousehold(), m);
+                            b.issue({b.today(), "ask", b.playerHead(), o.ask + "|" + o.office + "|gift|" + sub, who, o.object});
+                            b.runCommands();
+                            CHECK(b.household(b.playerHousehold()).money > -0.01, "a gift left the family in the red");
+                        }
+                        giftTried = true;
+                        World d = a;
+                        for (int k = 0; k < kDaysPerYear / 4; ++k) d.stepDay();
+                        std::string said = d.lastAsk().text;
+                        int before = d.timeLeft();
+                        d.issue({d.today(), "ask", d.playerHead(), o.ask + "|" + o.office + "|gift|" + sub, who, o.object});
+                        d.runCommands();
+                        CHECK(d.lastAsk().text == said && d.timeLeft() == before, "a no was pressed in another season");
+                        seasonTried = true;
+                        break;
+                    }
+                }
+                for (int k = 0; k < kDaysPerYear / 4 && !w.gameOver(); ++k) w.stepDay();
+            }
+        }
+        CHECK(giftTried && seasonTried, "found no ask to press with a gift");
+    }
     // A run driven by the auto-player replays exactly from its command log alone.
     {
         Config c;

@@ -5,6 +5,7 @@
 
 #include <cstdio>
 #include <fstream>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -65,7 +66,7 @@ public:
 private:
     World* w_ = nullptr;
     std::string model_, logPath_;
-    bool warned_ = false;
+    std::set<std::string> warned_;  // the failures already reported
     std::vector<std::pair<int, std::string>> replay_;
     size_t pos_ = 0;
     std::ofstream log_;
@@ -107,12 +108,6 @@ private:
                     size_t tab = first.find('\t');
                     out[i] = {parseIndex(first.substr(0, tab)), tab == std::string::npos ? "" : first.substr(tab + 1)};
                 }
-                // Say so once, out loud: a model command that never answers otherwise looks just like a rules game.
-                if (out[i].first < 0 && !warned_) {
-                    warned_ = true;
-                    std::string why = out[i].second.empty() ? model_ : out[i].second;
-                    std::fprintf(stderr, "注意：模型沒有回答（%s），沒回答的決定改由規則決定。\n", why.c_str());
-                }
                 std::remove(paths[i - from].c_str());
             }
         }
@@ -131,6 +126,11 @@ private:
             for (size_t i = 0; i < fresh.size(); ++i) {
                 auto [pick, reason] = got[i];
                 if (pick < 0 || pick >= static_cast<int>(fresh[i].options.size())) {
+                    // Say so out loud, once for each kind of failure: a model command that never answers
+                    // otherwise looks just like a game of rules.
+                    std::string why = pick >= 0 ? "模型的回答不在選項裡" : !reason.empty() ? reason : "沒有回答：" + model_;
+                    if (!model_.empty() && warned_.insert(why).second)
+                        std::fprintf(stderr, "注意：模型沒有給出可用的回答（%s），這些決定改由規則決定。\n", why.c_str());
                     pick = -1;
                     reason.clear();
                 }

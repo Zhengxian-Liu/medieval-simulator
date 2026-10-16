@@ -398,10 +398,12 @@ public:
                                      .n("month", (f.due % kDaysPerYear) / kDaysPerMonth + 1).b("extended", f.extended).done());
             o.raw("contest", c.done());
             const AskResult& la = w.lastAsk();
+            // A no can be pressed only in the season it was given, and only with a free day left for it.
+            bool canPress = w.timeLeft() > 0 && la.season == w.year() * 4 + w.month() / 3;
             if (la.who != kNone && la.day >= w.today() - 2)
                 o.raw("last_ask", Obj().n("who", la.who).text("name", w.fullName(la.who)).text("ask", la.ask).text("office", la.office)
                                       .n("object", la.object).n("subject", la.subject).n("answer", la.answer).text("text", la.text)
-                                      .raw("levers", [&] { std::vector<std::string> v; for (const auto& l : la.levers) v.push_back(str(l)); return arr(v); }()).done());
+                                      .raw("levers", [&] { std::vector<std::string> v; if (canPress) for (const auto& l : la.levers) v.push_back(str(l)); return arr(v); }()).done());
         }
 
         // What the family has heard, newest first.
@@ -537,11 +539,13 @@ int main(int argc, char** argv) {
     }
     World w(defs, cfg);
     Web web(w);
+    // The village's years before the hand-over (Config::prerun) are not the family's story: start at the hand-over.
+    while (web.shown < w.chronicle().size() && w.chronicle()[web.shown].day < w.handedOver()) ++web.shown;
     auto saveLog = [&]() {
         if (out.empty()) return;
         std::ofstream f(out);
         for (const auto& e : w.chronicle())
-            if (e.importance != 2) f << "- " << w.config().startYear + e.day / kDaysPerYear << " 年　" << tidyText(e.text) << "\n";
+            if (e.day >= w.handedOver() && e.importance != 2) f << "- " << w.config().startYear + e.day / kDaysPerYear << " 年　" << tidyText(e.text) << "\n";
     };
     bool aiPlays = false;  // after quit: nobody is asked any more
     w.setChooser([&](const World::ChoicePrompt& c) {

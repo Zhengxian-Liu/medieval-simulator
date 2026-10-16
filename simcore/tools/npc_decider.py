@@ -178,7 +178,7 @@ def main() -> None:
         return
     weights = blend(weights, req.get("rule_weights", []), int(req.get("fallback", -1)))
     if not weights or sum(weights) <= 0:
-        print("-1")
+        print("-1\t決策模型給的機率全是零")
         return
     if os.environ.get("DECIDER_TOP") == "1":
         pick = max(range(len(keys)), key=lambda i: weights[i])

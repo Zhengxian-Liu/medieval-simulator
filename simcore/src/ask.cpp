@@ -138,12 +138,13 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
         if (o.ask == what && o.object == object && o.subject == subject && o.office == officeId) opt = &o;
     bool again = !lever.empty();
     if (again) {
-        // Pressing the answer just given: in the same season, with a lever offered, and another free day.
+        // Pressing the answer just given: in the same season, with a lever offered, and another free day
+        // (taken below, once the lever is known to work).
         if (lastAsk_.who != who || lastAsk_.ask != what || lastAsk_.object != object || lastAsk_.subject != subject ||
             lastAsk_.season != year() * 4 + month() / 3 ||
             std::find(lastAsk_.levers.begin(), lastAsk_.levers.end(), lever) == lastAsk_.levers.end())
             return;
-        if (!opt || !spendTime(1)) return;
+        if (!opt) return;
     } else {
         if (!opt || !opt->open || !spendTime(1)) return;
     }
@@ -283,6 +284,18 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
     std::string leverNote;
     // What a yes costs the family outright, so a gift never spends the money the deal itself needs.
     const double dealCost = what == "sell_parcel" || what == "rent_vacant" || what == "apprentice" ? price : 0;
+    // A loan's condition is paid later, when it is repaid; every other condition is paid now, with the deal.
+    auto canMeet = [&] {
+        return lastAsk_.answer == 2 && (what == "lend" || lastAsk_.demandMoney <= 0 || ph.money >= lastAsk_.demandMoney + price);
+    };
+    if (again) {
+        // Every way a press can fail is checked before it takes the day.
+        bool ok = lever == "gift"   ? ph.money >= std::max(12.0, std::round(price * 0.1)) + dealCost
+                  : lever == "hook" ? hookDeed(head, who) != kNone
+                  : lever == "meet" ? canMeet()
+                                    : true;
+        if (!ok || !spendTime(1)) return;
+    }
     if (lever == "gift") {
         double g = std::max(12.0, std::round(price * 0.1));
         if (ph.money < g + dealCost) return;
@@ -306,11 +319,10 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
         hardNo = false;
         leverNote = "低聲提起那件見不得人的事，";
     } else if (lever == "meet") {
-        if (lastAsk_.answer != 2) return;
+        if (!canMeet()) return;
         demand = lastAsk_.demand;
         demandMoney = lastAsk_.demandMoney;
         demandParcel = lastAsk_.demandParcel;
-        if (demandMoney > 0 && ph.money < demandMoney + (what == "lend" ? 0 : price)) return;
         fs.push_back({100, ""});
         leverNote = "答應了" + shortName(who) + "的條件，";
     }
@@ -443,7 +455,9 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
         if (lever == "meet") {
             if (demandParcel != kNone) {
                 std::string pn = parcelName(parcels_[demandParcel]);
-                moveParcel(demandParcel, thId, "換來");
+                // Their house may have merged into another at the wedding just made: the parcel goes where they live now.
+                Id to = people_[who].household != kNone ? people_[who].household : thId;
+                moveParcel(demandParcel, to, "換來");
                 res.text += "你家把" + pn + "讓了出去。";
             }
             if (!demandOffice.empty()) promises_[{head, demandOffice}] = who;
