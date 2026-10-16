@@ -351,9 +351,9 @@
         "dirt_tiles": 0.3,
         "ground_value": 0.62,
         "grass_tint": [
-          0.31,
-          0.66,
-          0.15
+          0.42,
+          0.82,
+          0.2
         ],
         "soil_tint": [
           1.2,
@@ -362,9 +362,10 @@
         ],
         "edge_width": 0.2,
         "edge_break": 0.75,
-        "edge_clumps": 0.4
+        "edge_clumps": 0.4,
+        "specular": 0.3
       },
-      "why": "darkens bright scans so lit ground sits near 0.45; grass and soil tints carry the scene's chroma (grade stays neutral). grass_tint -8% (round 8): lit grass 0.50 -> ~0.46, inside The Guild lawn 0.45-0.60, lets thatch read level with it. Round 11: grass->dirt edge wider (edge_width 0.2) and broken into ~10 cm clumps (edge_clumps 0.4, edge_break 0.75): Fable r10 'hard mask with a gravel rim'. A/B ab/grass_edge"
+      "why": "darkens bright scans so lit ground sits near 0.45; grass and soil tints carry the scene's chroma (grade stays neutral). grass_tint -8% (round 8): lit grass 0.50 -> ~0.46, inside The Guild lawn 0.45-0.60, lets thatch read level with it. Round 11: grass->dirt edge wider (edge_width 0.2) and broken into ~10 cm clumps (edge_clumps 0.4, edge_break 0.75): Fable r10 'hard mask with a gravel rim'. A/B ab/grass_edge. Round 12: specular 0.5 -> 0.3 - the default F0 reflected the grey sky over all ground and was what kept grass (0.21) and mid frame saturation (0.26) below the reference; with tint 0.42/0.82/0.2 lit grass measures V 0.48 / S 0.32 (The Guild 0.44-0.54 / 0.31-0.36). A/B ab/grass_spec*"
     },
     "flat": {
       "v": {
@@ -694,6 +695,24 @@
           "max": 0.3
         },
         "why": "crowns read as lit clusters with shadowed gaps, not uniform confetti: 8 px-blurred sd over all leaf pixels. The Guild trees 0.095 (guild3_3 400x300+1500+0) and 0.112 (250x150+1000+0); round 10: 0.071. Set before tuning"
+      },
+      "grass_value": {
+        "v": {
+          "measure": "class_luma",
+          "class": "grass",
+          "min": 0.44,
+          "max": 0.56
+        },
+        "why": "lit grass value (sRGB, ID pass). The Guild lawn measured 0.44-0.54 (guild3_3 80x200+10+330, 200x100+1100+250, 300x120+1450+330). Set before tuning"
+      },
+      "grass_saturation": {
+        "v": {
+          "measure": "class_saturation",
+          "class": "grass",
+          "min": 0.3,
+          "max": 0.4
+        },
+        "why": "lit grass HSL saturation. The Guild lawn 0.31-0.36 (same rects). Set before tuning"
       }
     },
     "mid": {

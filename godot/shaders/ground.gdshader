@@ -20,6 +20,7 @@ uniform vec3 id_dirt = vec3(0.0, 0.0, 1.0);
 uniform float edge_width = 0.12;  // half-width of the grass->dirt blend in mask units
 uniform float edge_break = 0.55;  // noise breaking the edge into clumps
 uniform float edge_clumps = 0.0;  // share of a fine (~10 cm) octave: grass clumps / bare patches along the edge
+uniform float specular = 0.5;  // F0 control: grass and soil reflect little sky
 uniform float ground_value = 0.62;  // darkens the bright photo-scanned gravel/grass: ground should sit at ~0.25-0.35 value
 uniform vec4 river;  // centre z0, amplitude, frequency, phase (same curve as village.gd river_center)
 uniform float river_half = 3.5;
@@ -61,6 +62,7 @@ void fragment() {
 	col = mix(col, soil * 0.55, wet);
 	ALBEDO = col * ground_value;
 	ROUGHNESS = mix(texture(grass_rough, uvg).r, texture(dirt_rough, uvd).r, dirt);
+	SPECULAR = specular;
 	NORMAL_MAP = mix(texture(grass_normal, uvg).rgb, texture(dirt_normal, uvd).rgb, dirt);
 	if (id_pass > 0.5) {  // material-ID capture pass (main.gd): flat colour per material class, no lighting
 		ALBEDO = vec3(0.0);

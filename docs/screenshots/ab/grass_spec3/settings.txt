@@ -1,0 +1,2 @@
+materials.ground.grass_tint=[0.42,0.82,0.2]
+materials.ground.specular=0.3
