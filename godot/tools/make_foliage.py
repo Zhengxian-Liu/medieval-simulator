@@ -73,6 +73,19 @@ def leaf(mesh, rng, center, size, normal_hint):
     mesh.face([center + q @ c for c in corners], uvs, 1)
 
 
+def inner(mesh, center, radius, rings=6, segs=10):
+    """Low-poly sphere using the leaf material's darkest atlas corner (UV 0,0 region is opaque leaf body)."""
+    verts = []
+    for r in range(rings + 1):
+        phi = math.pi * r / rings
+        verts.append([center + Vector((math.sin(phi) * math.cos(t), math.sin(phi) * math.sin(t), math.cos(phi) * 0.8)) * radius
+                      for t in (i / segs * math.tau for i in range(segs + 1))])
+    uv = (0.5 / ATLAS_COLS, 0.5 / ATLAS_ROWS)  # centre of the first leaf: opaque green
+    for r in range(rings):
+        for i in range(segs):
+            mesh.face([verts[r][i], verts[r + 1][i], verts[r + 1][i + 1], verts[r][i + 1]], [uv] * 4, 1)
+
+
 def build(name, seed, height, crown, trunk_r, leaves, leaf_size):
     rng = random.Random(seed)
     mesh = Mesh()
@@ -90,6 +103,9 @@ def build(name, seed, height, crown, trunk_r, leaves, leaf_size):
                 twig_end = end + Vector((rng.uniform(-1.2, 1.2), rng.uniform(-1.2, 1.2), rng.uniform(-0.4, 1.0)))
                 limb(mesh, rng, end, twig_end, trunk_r * 0.18, 0.02, sides=5)
                 tips.append(twig_end)
+    if trunk_r:  # dark inner crown volume behind the leaves, so gaps show shade instead of sky (reads as one dense canopy)
+        for c in [crown_center] + [crown_center + Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-0.3, 0.5))) * crown * 0.35 for _ in range(4)]:
+            inner(mesh, c, crown * rng.uniform(0.42, 0.52))
     # leaf clumps: points inside a lumpy ellipsoid, concentrated near its surface so the crown reads as masses
     lobes = [crown_center + Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-0.4, 0.6))) * crown * 0.45
              for _ in range(7)] + tips

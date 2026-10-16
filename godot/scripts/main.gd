@@ -96,10 +96,10 @@ func _build_lighting() -> void:
 	env.ssil_radius = 3.0
 	env.sdfgi_use_occlusion = true
 	env.sdfgi_enabled = true
-	env.sdfgi_energy = 2.5  # bounce light: at 1.0 the shaded sides of buildings went near black
+	env.sdfgi_energy = 4.0  # sky + bounce fill: matched by eye to the Cycles reference (docs/screenshots/render_compare_*), where shaded walls stay readable
 	env.ssao_enabled = true
 	env.ssao_radius = 1.2
-	env.ssao_intensity = 2.0
+	env.ssao_intensity = 1.3  # contact darkening only; at 2.0 it stacked with weak GI into black shadows
 	env.glow_enabled = true
 	env.glow_intensity = 0.3
 	var we := WorldEnvironment.new()
@@ -124,7 +124,7 @@ func _apply_time() -> void:
 	sun.visible = elevation > -2.0
 	# The HDRI is a daytime sky: dim it (and the ambient light it gives) toward night.
 	environment.background_energy_multiplier = lerpf(0.04, 1.0, day)
-	environment.ambient_light_energy = lerpf(0.08, 1.0, day)  # the HDRI is bright; full strength washed out the sun shadows
+	environment.ambient_light_energy = lerpf(0.08, 1.5, day)  # the HDRI is bright; full strength washed out the sun shadows
 
 func _apply_camera() -> void:
 	var pose := CameraZoom.evaluate(zoom)
