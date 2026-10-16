@@ -147,6 +147,8 @@ def walls():
         x = sx * (W / 2 - 0.03)
         verts = [bm.verts.new((x, y, TOP + z)) for y, z in tri]
         bm.faces.new(verts if sx > 0 else verts[::-1])
+    # baked AO is per vertex: a bare 3-vertex triangle (all corners under the roof) bakes solid black
+    bmesh.ops.subdivide_edges(bm, edges=bm.edges[:], cuts=8, use_grid_fill=True)
     new_object("gables", bm, WALL, grain_axis=2)
 
 

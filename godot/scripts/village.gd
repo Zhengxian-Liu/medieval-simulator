@@ -158,8 +158,7 @@ func build(root: Node3D) -> Node3D:
 	ground_mat.set_shader_parameter("river_half", RIVER_HALF)
 	_terrain(root, ground_mat)
 	_water(root)
-	var bridge := _add(root, _box(Vector3(2.4, 0.25, RIVER_HALF * 2.0 + 2.0)), "timber", Vector3(bridge_x, 0.3, river_center(bridge_x)))
-	bridge.rotation_degrees.y = river_yaw(bridge_x)
+	_instance(root, "res://assets/models/props/bridge.glb", Vector3(bridge_x, -0.15, river_center(bridge_x)), river_yaw(bridge_x))
 
 	for h in houses:
 		_house(root, Vector3(h[0], 0, h[1]), h[2], h[3])
@@ -386,7 +385,7 @@ const WEATHER := {
 	stone = {tint = Color(1, 1, 1), dirt_height = 0.6, moss = 0.7},
 	plaster = {tint = Color(0.95, 0.92, 0.85), dirt_height = 1.1, moss = 0.0},
 	timber = {tint = Color(0.9, 0.85, 0.8), dirt_height = 1.0, moss = 0.2},
-	thatch = {tint = Color(0.78, 0.6, 0.38), dirt_height = 0.0, moss = 0.45},
+	thatch = {tint = Color(0.78, 0.6, 0.38), dirt_height = 0.0, moss = 0.45, detile = 0.45},
 }
 
 func _weathered(slot: String) -> Material:

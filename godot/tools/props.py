@@ -199,9 +199,34 @@ def haystack(origin=(0, 0, 0)):
     hc.beam("hay_pole", o + Vector((0, 0, 2.2)), o + Vector((0, 0, 3.0)), section=0.06)
 
 
+def bridge(origin=(0, 0, 0), length=9.0, width=2.2):
+    """Plank footbridge along local Y: two log stringers on posts driven into each bank, planks laid across with
+    gaps and slight unevenness, a rail on one side."""
+    o = Vector(origin)
+    deck = 0.45
+    for sx in (-1, 1):
+        log(f"stringer_{sx}", o + Vector((sx * width * 0.38, -length / 2, deck - 0.14)), o + Vector((sx * width * 0.38, length / 2, deck - 0.14)), 0.12)
+        for sy in (-1, -0.33, 0.33, 1):  # posts: at each bank and two mid-stream piers
+            y = sy * length * 0.42
+            hc.beam(f"post_{sx}_{sy}", o + Vector((sx * width * 0.38, y, -1.4)), o + Vector((sx * width * 0.38, y, deck - 0.2)), section=0.14)
+    y = -length / 2 + 0.1
+    k = 0
+    while y < length / 2 - 0.1:
+        w = RNG.uniform(0.2, 0.28)
+        bm = hc.cube_bm((width + RNG.uniform(-0.1, 0.1), w, 0.05), bevel=0.008, subdiv=1, jitter=0.006)
+        hc.new_object(f"plank_{k}", bm, "timber", grain_axis=0,
+                      location=o + Vector((RNG.uniform(-0.05, 0.05), y + w / 2, deck + RNG.uniform(-0.012, 0.012))),
+                      rotation=(RNG.uniform(-0.02, 0.02), RNG.uniform(-0.02, 0.02), RNG.uniform(-0.015, 0.015)))
+        y += w + RNG.uniform(0.015, 0.03)
+        k += 1
+    for sy in (-0.42, 0.0, 0.42):  # rail on the downstream side
+        hc.beam(f"rail_post_{sy}", o + Vector((width / 2 - 0.05, sy * length, deck)), o + Vector((width / 2 - 0.05, sy * length, deck + 1.0)), section=0.09)
+    log("rail", o + Vector((width / 2 - 0.05, -length * 0.45, deck + 0.95)), o + Vector((width / 2 - 0.05, length * 0.45, deck + 0.95)), 0.05)
+
+
 PROPS = {
     "barrel": barrel, "crate": crate, "woodpile": woodpile, "handcart": handcart, "wattle_fence": wattle_fence,
-    "rail_fence": rail_fence, "well": well, "drying_rack": drying_rack, "haystack": haystack,
+    "rail_fence": rail_fence, "well": well, "drying_rack": drying_rack, "haystack": haystack, "bridge": bridge,
 }
 
 

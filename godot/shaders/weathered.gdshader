@@ -12,7 +12,8 @@ uniform float dirt_height = 1.0;  // metres above the asset origin that splash d
 uniform float moss = 0.0;         // 0..1 coverage on upward faces
 uniform vec3 dirt_color : source_color = vec3(0.2, 0.15, 0.1);
 uniform vec3 moss_color : source_color = vec3(0.1, 0.13, 0.05);
-uniform float ao_strength = 1.0;  // vertex colour = Cycles-baked AO (tools/hero_cottage.py bake_ao)
+uniform float ao_strength = 1.0;
+uniform float detile = 0.0;  // blend in a second, rotated and rescaled sample: kills the visible repeat (thatch)  // vertex colour = Cycles-baked AO (tools/hero_cottage.py bake_ao)
 
 varying vec3 world_pos;
 varying vec3 world_normal;
@@ -32,7 +33,12 @@ void vertex() {
 }
 
 void fragment() {
-	vec3 c = texture(albedo_tex, UV).rgb * tint;
+	vec3 c = texture(albedo_tex, UV).rgb;
+	if (detile > 0.0) {
+		vec2 uv2 = vec2(-UV.x * 0.71 + 0.37, UV.y * 0.83 + 0.19);  // same strand direction, different scale and phase
+		c = mix(c, texture(albedo_tex, uv2).rgb, detile);
+	}
+	c *= tint * mix(0.88, 1.08, vnoise(world_pos.xz * 0.35 + world_pos.y * 0.2));  // large soft patches break the tile period
 	float n = vnoise(world_pos.xz * 1.3 + world_pos.y * 0.7) * 0.6 + vnoise(world_pos.xz * 4.1 + world_pos.y * 3.0) * 0.4;
 	float height = world_pos.y - NODE_POSITION_WORLD.y;
 	float dirt = clamp(1.0 - height / dirt_height, 0.0, 1.0) * smoothstep(0.25, 0.7, n);
