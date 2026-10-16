@@ -180,6 +180,19 @@ def frame():
             beam(f"rafter_{sx}_{sy}", (x, sy * ys, TOP), (x, 0, TOP + PITCH_RISE * 0.95), section=0.16)
 
 
+def stagger_courses(obj, course=0.28):
+    """Each thatch course (a row of bundles laid along the ridge) gets its own texture offset and slight scale, so the
+    texture period never lines up into diagonal bands across the roof (art review 2026-10-16)."""
+    me = obj.data
+    uv = me.uv_layers.active.data
+    for poly in me.polygons:
+        k = int(poly.center.y // course)
+        du, dv, sv = (k * 0.37) % 1.0, (k * 0.61) % 1.0, 0.85 + 0.3 * ((k * 0.43) % 1.0)
+        for li in poly.loop_indices:
+            u, v = uv[li].uv
+            uv[li].uv = (u + du, v * sv + dv)
+
+
 def thatch():
     """Two slopes of layered thatch: courses step out every ~0.28 m, ragged eaves, plus a rounded ridge cap."""
     half = D / 2
@@ -227,7 +240,8 @@ def thatch():
                 f.normal_flip()
         # local frame: x along ridge, y down-slope, z out of the roof; strands follow y (down-slope)
         rot = Euler((-pitch, 0, 0 if side > 0 else math.pi))  # tilt local +y down-slope, then face it to its side
-        new_object(f"thatch_{side}", bm, "thatch", grain_axis=1, location=(0, 0, TOP + PITCH_RISE + 0.05), rotation=rot)
+        obj = new_object(f"thatch_{side}", bm, "thatch", grain_axis=1, location=(0, 0, TOP + PITCH_RISE + 0.05), rotation=rot)
+        stagger_courses(obj)
     # ridge cap: a lumpy half-tube along the ridge
     bm = bmesh.new()
     seg, ring = 40, 10
