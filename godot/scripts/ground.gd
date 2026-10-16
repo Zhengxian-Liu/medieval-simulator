@@ -10,7 +10,7 @@ const GRASS_CLUMPS := 9000
 var _mask := Image.create(MASK_PX, MASK_PX, false, Image.FORMAT_RF)
 
 # houses: [[x, z, yaw_deg, variant], ...]; door is on the house's local +Z side.
-func build(root: Node3D, houses: Array, square: Vector2, bridge: Vector2, river_z: float, river_half: float,
+func build(root: Node3D, houses: Array, square: Vector2, bridge: Vector2, river_dist: Callable, river_half: float,
 		rng: RandomNumberGenerator, grass_mat: Material) -> Material:
 	_disc(square, 4.5, 1.0)
 	for h in houses:
@@ -18,9 +18,9 @@ func build(root: Node3D, houses: Array, square: Vector2, bridge: Vector2, river_
 		_line(square, door, 0.9, 0.95)
 		_disc(door, 1.6, 0.8)
 	_line(square, bridge, 1.0, 0.95)
-	_line(bridge, bridge + Vector2(0, -6), 0.9, 0.9)  # path continues past the river
+	_line(bridge + Vector2(0, -11), bridge + Vector2(0, -17), 0.9, 0.9)  # path continues on the far bank
 	var mat := _material(grass_mat)
-	_grass(root, houses, river_z, river_half, rng)
+	_grass(root, houses, river_dist, river_half, rng)
 	return mat
 
 func _door(h: Array) -> Vector2:
@@ -88,7 +88,7 @@ func _clump_mesh(rng: RandomNumberGenerator) -> ArrayMesh:
 	st.generate_normals()
 	return st.commit()
 
-func _grass(root: Node3D, houses: Array, river_z: float, river_half: float, rng: RandomNumberGenerator) -> void:
+func _grass(root: Node3D, houses: Array, river_dist: Callable, river_half: float, rng: RandomNumberGenerator) -> void:
 	var mat := StandardMaterial3D.new()
 	mat.vertex_color_use_as_albedo = true
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
@@ -96,7 +96,7 @@ func _grass(root: Node3D, houses: Array, river_z: float, river_half: float, rng:
 	var xforms: Array[Transform3D] = []
 	for i in GRASS_CLUMPS:
 		var p := Vector2(rng.randf_range(-34, 34), rng.randf_range(-34, 34))
-		if absf(p.y - river_z) < river_half + 0.3:
+		if river_dist.call(p) < river_half + 1.8:  # bare sand along the banks
 			continue
 		var near_house := false
 		for h in houses:

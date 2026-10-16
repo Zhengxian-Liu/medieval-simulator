@@ -13,6 +13,8 @@ uniform vec4 mask_rect;                  // world x0, z0, width, depth covered b
 uniform vec3 grass_tint : source_color = vec3(0.5, 0.66, 0.42);
 uniform float grass_tiles = 0.25;        // tiles per metre
 uniform float dirt_tiles = 0.4;
+uniform vec4 river;  // centre z0, amplitude, frequency, phase (same curve as village.gd river_center)
+uniform float river_half = 3.5;
 
 varying vec3 world_pos;
 
@@ -36,7 +38,14 @@ void fragment() {
 	float patchy = mix(0.78, 1.12, vnoise(world_pos.xz * 0.12));  // big soft colour patches in the grass
 	vec3 grass = texture(grass_albedo, uvg).rgb * grass_tint * patchy;
 	vec3 soil = texture(dirt_albedo, uvd).rgb;
-	ALBEDO = mix(grass, soil, dirt);
+	vec3 col = mix(grass, soil, dirt);
+	// banks: pale sand from just outside the bank into the shallows, dark wet mud under deeper water
+	float rd = abs(world_pos.z - (river.x + river.y * sin(world_pos.x * river.z + river.w)));
+	float sand = 1.0 - smoothstep(river_half + 0.4, river_half + 1.8, rd + (n - 0.5) * 0.9);
+	col = mix(col, soil * vec3(1.55, 1.38, 1.05), sand);
+	float wet = 1.0 - smoothstep(river_half - 0.6, river_half + 0.1, rd);
+	col = mix(col, soil * 0.55, wet);
+	ALBEDO = col;
 	ROUGHNESS = mix(texture(grass_rough, uvg).r, texture(dirt_rough, uvd).r, dirt);
 	NORMAL_MAP = mix(texture(grass_normal, uvg).rgb, texture(dirt_normal, uvd).rgb, dirt);
 }

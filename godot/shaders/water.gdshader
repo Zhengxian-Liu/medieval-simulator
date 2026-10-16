@@ -6,7 +6,7 @@ uniform sampler2D depth_tex : hint_depth_texture, filter_linear_mipmap;
 uniform vec3 shallow : source_color = vec3(0.30, 0.52, 0.48);
 uniform vec3 deep : source_color = vec3(0.03, 0.13, 0.16);
 uniform float depth_scale = 1.4;  // metres to reach the deep colour
-uniform float foam_width = 0.7;  // metres of water depth that still shows foam
+uniform float foam_width = 0.12;  // metres of water depth that still shows foam; shallows are 0.35 m, so it hugs the waterline
 
 void fragment() {
 	float d = texture(depth_tex, SCREEN_UV).r;

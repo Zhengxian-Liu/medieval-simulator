@@ -5,6 +5,29 @@ extends RefCounted
 const RIVER_Z := -14.0
 const RIVER_HALF := 3.5  # shore-to-shore half width
 const BED_DEPTH := 1.5
+const RIVER_AMP := 3.0     # the river meanders: centre z = RIVER_Z + RIVER_AMP * sin(x * RIVER_FREQ + RIVER_PHASE)
+const RIVER_FREQ := 0.07
+const RIVER_PHASE := 0.6
+const SHALLOWS := 1.4      # metres of shallow water (and sand) along each bank
+
+static func river_center(x: float) -> float:
+	return RIVER_Z + RIVER_AMP * sin(x * RIVER_FREQ + RIVER_PHASE)
+
+static func river_dist(p: Vector2) -> float:
+	return absf(p.y - river_center(p.x))
+
+# Yaw (degrees) that lines a prop's local X up with the river's flow at x.
+static func river_yaw(x: float) -> float:
+	return -rad_to_deg(atan(RIVER_AMP * RIVER_FREQ * cos(x * RIVER_FREQ + RIVER_PHASE)))
+
+# Ground height: flat land, a shelf of shallows inside each bank, then down to the bed.
+static func ground_height(x: float, z: float) -> float:
+	var d := river_dist(Vector2(x, z))
+	if d >= RIVER_HALF:
+		return 0.0
+	if d > RIVER_HALF - SHALLOWS:
+		return lerpf(0.0, -0.35, (RIVER_HALF - d) / SHALLOWS)
+	return lerpf(-0.35, -BED_DEPTH, smoothstep(0.0, 1.0, (RIVER_HALF - SHALLOWS - d) / 0.8))
 
 const COLORS := {
 	grass = Color("4a5a2a"), stone = Color("6b6862"), plaster = Color("cfc2a6"),
@@ -20,6 +43,7 @@ const SAPLING_SETS := [PH % ["pine_sapling_small", "pine_sapling_small"]]
 const TREE_SETS := ["res://assets/models/trees/fir_0.glb", "res://assets/models/trees/fir_1.glb", "res://assets/models/trees/fir_2.glb", "res://assets/models/trees/fir_3.glb"]
 
 var _rng := RandomNumberGenerator.new()
+var _ground: RefCounted
 var _variants := {}
 
 # Each variant: [mesh, offset] where offset moves the piece's AABB bottom-centre to the origin.
@@ -124,10 +148,16 @@ func _cyl(top: float, bottom: float, height: float, sides := 8) -> CylinderMesh:
 func build(root: Node3D) -> Node3D:
 	_rng.seed = 7  # deterministic so screenshots are comparable between runs
 	var houses := [[-9, 6, 10, "cottage"], [6, 9, -15, "barn"], [-3, 19, 80, "longhouse"], [15, -3, 40, "cottage"]]
-	var ground_mat: Material = Ground.new().build(root, houses, Vector2(2, 3), Vector2(3, RIVER_Z + RIVER_HALF + 1.0), RIVER_Z, RIVER_HALF, _rng, _mat("grass"))
-	_ground(root, ground_mat)
-	_river(root)
-	_add(root, _box(Vector3(2.4, 0.25, 9.0)), "timber", Vector3(3, 0.35, RIVER_Z))  # bridge
+	_ground = Ground.new()
+	var bridge_x := 3.0
+	var ground_mat: Material = _ground.build(root, houses, Vector2(2, 3), Vector2(bridge_x, river_center(bridge_x) + RIVER_HALF + 1.0),
+		river_dist, RIVER_HALF, _rng, _mat("grass"))
+	ground_mat.set_shader_parameter("river", Vector4(RIVER_Z, RIVER_AMP, RIVER_FREQ, RIVER_PHASE))
+	ground_mat.set_shader_parameter("river_half", RIVER_HALF)
+	_terrain(root, ground_mat)
+	_water(root)
+	var bridge := _add(root, _box(Vector3(2.4, 0.25, RIVER_HALF * 2.0 + 2.0)), "timber", Vector3(bridge_x, 0.3, river_center(bridge_x)))
+	bridge.rotation_degrees.y = river_yaw(bridge_x)
 
 	for h in houses:
 		_house(root, Vector3(h[0], 0, h[1]), h[2], h[3])
@@ -150,17 +180,23 @@ func build(root: Node3D) -> Node3D:
 		var a := _rng.randf() * TAU
 		var dist := (10.0 + _rng.randf() * 8.0) if i < 8 else (20.0 + _rng.randf() * 30.0)
 		var p := Vector3(cos(a) * dist, 0, sin(a) * dist + 4.0)
-		if absf(p.z - RIVER_Z) > RIVER_HALF + 1.5 and _clear_of_houses(p, houses, 5.5):
+		if river_dist(Vector2(p.x, p.z)) > RIVER_HALF + 1.5 and _clear_of_houses(p, houses, 5.5):
 			_place(root, TREE_SETS, p, _rng.randf_range(0.8, 1.15), _foliage_mat())
-	for i in 46:
-		var along := i < 24
-		var p := Vector3(_rng.randf_range(-30, 30), 0.0, RIVER_Z + signf(_rng.randf() - 0.5) * _rng.randf_range(RIVER_HALF - 0.6, RIVER_HALF + 1.2)) if along \
+	for i in 70:
+		var along := i < 48  # most rocks line the banks, in small clusters
+		var rx := _rng.randf_range(-32, 32)
+		if along and absf(rx - 3.0) < 2.2:
+			continue  # keep the bridge clear
+		var p := Vector3(rx, 0.0, river_center(rx) + signf(_rng.randf() - 0.5) * _rng.randf_range(RIVER_HALF - 1.2, RIVER_HALF + 0.8)) if along \
 			else Vector3(_rng.randf_range(-24, 24), 0.0, _rng.randf_range(-6, 28))
 		if _clear_of_houses(p, houses, 4.5):
-			_place(root, ROCK_SETS, p - Vector3(0, 0.15, 0), _rng.randf_range(0.3, 0.7))  # sunk a little so they sit in the ground
+			for k in (3 if along else 1):
+				var q := p + Vector3(_rng.randf_range(-0.8, 0.8), 0, _rng.randf_range(-0.6, 0.6)) * float(k > 0)
+				q.y = ground_height(q.x, q.z) - 0.15  # sunk a little so they sit in the ground / bank
+				_place(root, ROCK_SETS, q, _rng.randf_range(0.25, 0.75))
 	for i in 30:
 		var p := Vector3(_rng.randf_range(-26, 26), 0.0, _rng.randf_range(-8, 28))
-		if absf(p.z - RIVER_Z) > RIVER_HALF + 0.5 and _clear_of_houses(p, houses, 4.5):
+		if river_dist(Vector2(p.x, p.z)) > RIVER_HALF + 0.5 and _clear_of_houses(p, houses, 4.5):
 			_place(root, SHRUB_SETS, p, _rng.randf_range(0.6, 0.9))
 	for i in 18:
 		var p := Vector3(_rng.randf_range(-26, 26), 0.0, _rng.randf_range(-6, 28))
@@ -179,30 +215,35 @@ func _clear_of_houses(p: Vector3, houses: Array, radius: float) -> bool:
 			return false
 	return true
 
-func _ground(root: Node3D, mat: Material) -> void:
-	var far_edge := 150.0
-	var north := RIVER_Z - RIVER_HALF
-	var south := RIVER_Z + RIVER_HALF
-	for slab in [[far_edge + north, (north - far_edge) / 2.0], [far_edge - south, (south + far_edge) / 2.0]]:
-		var mi := _add(root, _box(Vector3(300, 1, slab[0])), "grass", Vector3(0, -0.5, slab[1]))
-		mi.material_override = mat
-
-# Channel cross-section: shore (y=0) slopes down to a flat bed, so the water shader sees a depth gradient for foam.
-func _river(root: Node3D) -> void:
+# One terrain mesh for land, banks and riverbed (heights from ground_height), shaded by shaders/ground.gdshader.
+func _terrain(root: Node3D, mat: Material) -> void:
+	var half := 80.0
+	var step := 0.6
+	var n := int(half * 2 / step)
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var profile := [Vector2(-RIVER_HALF, 0.0), Vector2(-1.5, -BED_DEPTH), Vector2(1.5, -BED_DEPTH), Vector2(RIVER_HALF, 0.0)]
-	for s in profile.size() - 1:
-		var a: Vector2 = profile[s]
-		var b: Vector2 = profile[s + 1]
-		var v := [Vector3(-150, a.y, RIVER_Z + a.x), Vector3(150, a.y, RIVER_Z + a.x), Vector3(150, b.y, RIVER_Z + b.x), Vector3(-150, b.y, RIVER_Z + b.x)]
-		for idx in [0, 2, 1, 0, 3, 2]:
-			st.add_vertex(v[idx])
+	for j in n + 1:
+		for i in n + 1:
+			var x := -half + i * step
+			var z := -half + j * step
+			st.set_uv(Vector2(x, z))
+			st.add_vertex(Vector3(x, ground_height(x, z), z))
+	for j in n:
+		for i in n:
+			var a := j * (n + 1) + i
+			for idx in [a, a + 1, a + n + 1, a + 1, a + n + 2, a + n + 1]:
+				st.add_index(idx)
 	st.generate_normals()
-	_add(root, st.commit(), "riverbed", Vector3.ZERO)
+	var mi := MeshInstance3D.new()
+	mi.name = "Terrain"
+	mi.mesh = st.commit()
+	mi.material_override = mat
+	root.add_child(mi)
 
+# Flat water sheet just below the banks; the land hides it everywhere except over the river channel.
+func _water(root: Node3D) -> void:
 	var surface := PlaneMesh.new()
-	surface.size = Vector2(300, RIVER_HALF * 2.0)
+	surface.size = Vector2(160, (RIVER_AMP + RIVER_HALF + 1.0) * 2.0)
 	var water := MeshInstance3D.new()
 	water.name = "Water"
 	water.mesh = surface
@@ -218,7 +259,11 @@ func _house(root: Node3D, pos: Vector3, yaw: float, variant: String) -> void:
 	_instance(root, "res://assets/models/buildings/%s.glb" % variant, pos, yaw)
 
 # Props come from tools/props.py; same material slots as the buildings.
+const KEEP_OFF_PATHS := ["wattle_fence", "rail_fence", "handcart", "haystack", "drying_rack"]
+
 func _prop(root: Node3D, name: String, pos: Vector3, yaw: float) -> void:
+	if name in KEEP_OFF_PATHS and _ground.dirt_at(Vector2(pos.x, pos.z)) > 0.3:
+		return  # never block a path or yard
 	_instance(root, "res://assets/models/props/%s.glb" % name, pos, yaw + _rng.randf_range(-4.0, 4.0))
 
 func _instance(root: Node3D, path: String, pos: Vector3, yaw: float) -> void:
@@ -271,9 +316,8 @@ func _dress_square(root: Node3D) -> void:
 	_prop(root, "crate", Vector3(4.2, 0, -0.6), 0)
 	_prop(root, "crate", Vector3(3.5, 0, -1.1), 25)
 	_prop(root, "barrel", Vector3(4.8, 0, -1.4), 0)
-	for i in 3:  # rail fence guarding the river bank by the bridge
-		_prop(root, "rail_fence", Vector3(-3.5 - i * 3.1, 0, RIVER_Z + RIVER_HALF + 1.2), 0)
-		_prop(root, "rail_fence", Vector3(9.5 + i * 3.1, 0, RIVER_Z + RIVER_HALF + 1.2), 0)
+	for x in [-2.5, -5.6, -8.7, 8.5, 11.6, 14.7]:  # rail fence along the south bank either side of the bridge
+		_prop(root, "rail_fence", Vector3(x, 0, river_center(x) + RIVER_HALF + 1.6), river_yaw(x))
 
 # Per-slot look of the weathered shader; numbers match the Cycles materials in tools/hero_cottage.py.
 const WEATHER := {

@@ -78,10 +78,12 @@ func _build_lighting() -> void:
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.tonemap_white = 6.0
-	env.tonemap_exposure = 0.85
+	env.tonemap_exposure = 0.95
 	env.adjustment_enabled = true
-	env.adjustment_contrast = 1.15
-	env.adjustment_saturation = 0.9
+	env.adjustment_contrast = 1.12
+	env.adjustment_saturation = 1.12  # warm, saturated like the reference
+	env.ambient_light_color = Color(0.5, 0.68, 0.72)  # teal fill so shadows lean blue-green, not grey
+	env.ambient_light_sky_contribution = 0.6
 	env.sdfgi_enabled = true
 	env.sdfgi_energy = 2.5  # bounce light: at 1.0 the shaded sides of buildings went near black
 	env.ssao_enabled = true
@@ -106,7 +108,7 @@ func _apply_time() -> void:
 	sun.rotation_degrees = Vector3(-elevation, 75.0 + (hour - 12.0) * 10.0, 0)  # from the upper left of the screen (classic iso key light), so the roofs and walls we see are lit
 	var day := clampf(elevation / 20.0, 0.0, 1.0)
 	sun.light_energy = lerpf(0.0, 1.4, day)
-	sun.light_color = Color(1.0, 0.55, 0.3).lerp(Color(1.0, 0.96, 0.9), day)
+	sun.light_color = Color(1.0, 0.55, 0.3).lerp(Color(1.0, 0.9, 0.74), day)
 	sun.visible = elevation > -2.0
 	# The HDRI is a daytime sky: dim it (and the ambient light it gives) toward night.
 	environment.background_energy_multiplier = lerpf(0.04, 1.0, day)
@@ -143,10 +145,14 @@ func _process(delta: float) -> void:
 
 func _capture(vp: SubViewport, dir: String) -> void:
 	DirAccess.make_dir_recursive_absolute(dir)
-	for shot in [["godot_far", 0.0, 11.0], ["godot_mid", 1.0, 11.0], ["godot_far_dusk", 0.0, 17.6]]:
+	var home := player.position
+	var river := Vector3(4.0, home.y, Village.river_center(4.0) + 3.0)
+	for shot in [["godot_far", 0.0, 11.0, home], ["godot_mid", 1.0, 11.0, home], ["godot_far_dusk", 0.0, 17.6, home],
+			["godot_river", 0.0, 11.0, river]]:
 		zoom = shot[1]
 		zoom_target = shot[1]
 		hour = shot[2]
+		player.position = shot[3]
 		_apply_time()
 		for i in SETTLE_FRAMES:
 			await RenderingServer.frame_post_draw
