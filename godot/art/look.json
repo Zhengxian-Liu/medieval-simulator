@@ -1,0 +1,455 @@
+{
+  "_doc": "Single source of truth for the village look. Every leaf is {v, why}. Read by scripts/look.gd; documented in docs/art-pipeline.md. Change values here, never in scene code.",
+  "camera": {
+    "far_fov": {
+      "v": 12.0,
+      "why": "vertical degrees; near-orthographic like a pre-rendered iso game"
+    },
+    "near_fov": {
+      "v": 35.0,
+      "why": "mid view becomes a natural perspective around the character"
+    },
+    "far_width": {
+      "v": 16.0,
+      "why": "metres of ground across the screen; closer than 22 m so building and material detail reads"
+    },
+    "near_width": {
+      "v": 10.0,
+      "why": "mid view frames the character plus their surroundings"
+    },
+    "far_pitch": {
+      "v": 52.0,
+      "why": "steep ARPG look-down; walls still visible"
+    },
+    "near_pitch": {
+      "v": 38.0,
+      "why": "flatter at mid range so faces of buildings fill more of the frame"
+    },
+    "yaw": {
+      "v": 45.0,
+      "why": "classic isometric diagonal"
+    }
+  },
+  "environment": {
+    "tonemap_exposure": {
+      "v": 1.1,
+      "why": "AgX exposure; lit ground lands near the 0.45 target"
+    },
+    "tonemap_white": {
+      "v": 16.0,
+      "why": "AgX white point; keeps sunlit plaster from clipping"
+    },
+    "adjustment_contrast": {
+      "v": 1.0,
+      "why": "neutral: extra contrast crushed shadows to black (art review 2)"
+    },
+    "adjustment_saturation": {
+      "v": 1.0,
+      "why": "neutral grade (user)"
+    },
+    "ambient_sky_contribution": {
+      "v": 0.5,
+      "why": "half the fill comes from a neutral grey instead of the blue HDRI sky, so shadows are not blue"
+    },
+    "ambient_color": {
+      "v": [
+        0.6,
+        0.6,
+        0.6
+      ],
+      "why": "neutral fill colour"
+    },
+    "ambient_energy_day": {
+      "v": 1.0,
+      "why": "shadow floor ~0.24 with sun 3.2 (sun:fill ~4:1)"
+    },
+    "ambient_energy_night": {
+      "v": 0.08,
+      "why": "moonless fill"
+    },
+    "sdfgi_energy": {
+      "v": 1.8,
+      "why": "bounce light; higher washed out the key/fill ratio"
+    },
+    "ssao_radius": {
+      "v": 0.6,
+      "why": "metres; tight contact occlusion at bases, crevices come from baked AO"
+    },
+    "ssao_intensity": {
+      "v": 3.5,
+      "why": "strong contact darkening"
+    },
+    "ssao_power": {
+      "v": 2.0,
+      "why": "sharpens the falloff so it reads as contact, not haze"
+    },
+    "ssil_radius": {
+      "v": 3.0,
+      "why": "metres of screen-space bounce (walls onto ground)"
+    }
+  },
+  "sun": {
+    "energy_day": {
+      "v": 3.2,
+      "why": "key light; ~4:1 against the fill"
+    },
+    "angular_distance": {
+      "v": 0.5,
+      "why": "degrees; the real sun: crisp contact, softening with distance"
+    },
+    "peak_elevation": {
+      "v": 55.0,
+      "why": "noon elevation; long enough shadows to model form"
+    },
+    "yaw_at_noon": {
+      "v": 75.0,
+      "why": "degrees; light from the upper left of the screen (classic iso key)"
+    },
+    "yaw_per_hour": {
+      "v": 10.0,
+      "why": "sun moves across the sky during the day"
+    },
+    "color_day": {
+      "v": [
+        1.0,
+        0.96,
+        0.9
+      ],
+      "why": "slightly warm daylight"
+    },
+    "color_low": {
+      "v": [
+        1.0,
+        0.55,
+        0.3
+      ],
+      "why": "orange near the horizon"
+    },
+    "shadow_bias": {
+      "v": 0.02,
+      "why": "no peter-panning at bases"
+    },
+    "shadow_normal_bias": {
+      "v": 1.0,
+      "why": "no acne on gently curved thatch"
+    },
+    "shadow_margin": {
+      "v": 3.0,
+      "why": "metres added to the fitted shadow range beyond the farthest visible ground"
+    }
+  },
+  "materials": {
+    "triplanar_tiles": {
+      "v": {
+        "grass": 0.25,
+        "riverbed": 0.4,
+        "stone": 0.6,
+        "plaster": 0.5,
+        "timber": 0.6,
+        "thatch": 0.5,
+        "rock": 0.8
+      },
+      "why": "tiles per metre for world-triplanar placeholder geometry"
+    },
+    "triplanar_tint": {
+      "v": {
+        "grass": [
+          0.5,
+          0.66,
+          0.42
+        ]
+      },
+      "why": "leafy_grass reads as dry dirt from above; push it to green"
+    },
+    "weathered": {
+      "_why": "per material slot of scripted assets (tools/blender), parameters of shaders/weathered.gdshader",
+      "stone": {
+        "v": {
+          "tint": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "dirt_height": 0.6,
+          "moss": 0.7
+        },
+        "why": "moss on stone footings and chimneys"
+      },
+      "plaster": {
+        "v": {
+          "tint": [
+            0.95,
+            0.92,
+            0.85
+          ],
+          "dirt_height": 1.1,
+          "moss": 0.0
+        },
+        "why": "splash dirt up to ~1 m on daub"
+      },
+      "timber": {
+        "v": {
+          "tint": [
+            1.26,
+            1.19,
+            1.12
+          ],
+          "dirt_height": 1.0,
+          "moss": 0.2
+        },
+        "why": "the Poly Haven planks are very dark; lifted so lit planks reach ~0.18+"
+      },
+      "thatch": {
+        "v": {
+          "tint": [
+            0.78,
+            0.6,
+            0.38
+          ],
+          "dirt_height": 0.0,
+          "moss": 0.45,
+          "detile": 0.45
+        },
+        "why": "grey scan aged to straw; second sample hides the tile period"
+      },
+      "cloth": {
+        "v": {
+          "tint": [
+            0.5,
+            0.33,
+            0.24
+          ],
+          "dirt_height": 0.5,
+          "moss": 0.0,
+          "texture": "plaster"
+        },
+        "why": "faded madder linen on the plaster grain"
+      }
+    },
+    "weathered_common": {
+      "v": {
+        "dirt_color": [
+          0.2,
+          0.15,
+          0.1
+        ],
+        "moss_color": [
+          0.1,
+          0.13,
+          0.05
+        ],
+        "ao_strength": 1.0,
+        "splash": 0.4,
+        "grime": 0.15,
+        "edge_wear": 0.6
+      },
+      "why": "shared by every slot; splash/grime lowered in art review 2 (they crushed timber to 0.09)"
+    },
+    "leaves": {
+      "v": {
+        "tint": [
+          0.33,
+          0.42,
+          0.26
+        ],
+        "variation": 0.35,
+        "backlight": 0.3
+      },
+      "why": "summer oak (~10% reflectance); per-plant variation"
+    },
+    "water": {
+      "v": {
+        "shallow": [
+          0.22,
+          0.34,
+          0.3
+        ],
+        "deep": [
+          0.03,
+          0.13,
+          0.16
+        ],
+        "depth_scale": 1.4,
+        "roughness": 0.08
+      },
+      "why": "depth-coloured river over a visible bed"
+    },
+    "ground": {
+      "v": {
+        "grass_tiles": 0.25,
+        "dirt_tiles": 0.3,
+        "ground_value": 0.62,
+        "grass_tint": [
+          0.5,
+          0.66,
+          0.42
+        ]
+      },
+      "why": "darkens bright scans so lit ground sits near 0.45"
+    },
+    "flat": {
+      "v": {
+        "iron": [
+          0.133,
+          0.133,
+          0.133
+        ],
+        "cloth": [
+          0.478,
+          0.18,
+          0.141
+        ],
+        "dark": [
+          0.082,
+          0.067,
+          0.051
+        ]
+      },
+      "why": "untextured slots and placeholders (player capsule, torch post, window voids)"
+    }
+  },
+  "placement": {
+    "skirt": {
+      "v": {
+        "color": [
+          0.16,
+          0.12,
+          0.08
+        ],
+        "mix": 1.0,
+        "pad": 0.9,
+        "pad_per_metre": 0.12,
+        "fade_begin": 60.0
+      },
+      "why": "dirt skirt decal under every placed building/prop (rule, applied automatically)"
+    },
+    "grass_points": {
+      "v": 36000,
+      "why": "candidate tuft positions; noise clustering keeps about half"
+    },
+    "grass_keep": {
+      "v": 0.45,
+      "why": "base keep probability before noise clustering"
+    },
+    "grass_tuft": {
+      "v": {
+        "blades": [
+          18,
+          30
+        ],
+        "height": [
+          0.05,
+          0.12
+        ],
+        "root": [
+          0.42,
+          0.47,
+          0.22
+        ],
+        "tip": [
+          0.52,
+          0.56,
+          0.27
+        ],
+        "tip_dry": [
+          0.62,
+          0.56,
+          0.32
+        ]
+      },
+      "why": "short pale tufts read as texture at the far view"
+    },
+    "debris_points": {
+      "v": 26000,
+      "why": "about one small detail per square metre near paths and houses"
+    },
+    "tree_clearance": {
+      "v": {
+        "river": 5.0,
+        "houses": 6.5,
+        "max_dirt": 0.15
+      },
+      "why": "metres; crowns never hang over the river, houses or paths"
+    }
+  },
+  "checks": {
+    "_why": "tools/art_check.py: measured on the captured shots (1920x1080, greyscale means of regions). Fails the run if out of range.",
+    "far": {
+      "lit_ground": {
+        "v": {
+          "rect": [
+            650,
+            250,
+            200,
+            150
+          ],
+          "min": 0.4,
+          "max": 0.5
+        },
+        "why": "sunlit dirt in the square"
+      },
+      "shadow_ground": {
+        "v": {
+          "rect": [
+            800,
+            800,
+            200,
+            150
+          ],
+          "min": 0.2,
+          "max": 0.26
+        },
+        "why": "ground in the barn's shadow: ~4:1 against lit"
+      },
+      "whole_frame": {
+        "v": {
+          "rect": [
+            0,
+            0,
+            1920,
+            1080
+          ],
+          "min": 0.25,
+          "max": 0.4
+        },
+        "why": "overall value structure"
+      }
+    },
+    "mid": {
+      "lit_ground": {
+        "v": {
+          "rect": [
+            300,
+            150,
+            200,
+            150
+          ],
+          "min": 0.38,
+          "max": 0.52
+        },
+        "why": "sunlit grass/path"
+      },
+      "whole_frame": {
+        "v": {
+          "rect": [
+            0,
+            0,
+            1920,
+            1080
+          ],
+          "min": 0.2,
+          "max": 0.4
+        },
+        "why": "overall value structure"
+      }
+    },
+    "budgets": {
+      "v": {
+        "building": 100000,
+        "prop": 15000,
+        "foliage": 35000
+      },
+      "why": "max triangles per GLB on an M2 Pro"
+    }
+  }
+}

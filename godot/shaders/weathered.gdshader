@@ -13,6 +13,9 @@ uniform float moss = 0.0;         // 0..1 coverage on upward faces
 uniform vec3 dirt_color : source_color = vec3(0.2, 0.15, 0.1);
 uniform vec3 moss_color : source_color = vec3(0.1, 0.13, 0.05);
 uniform float ao_strength = 1.0;
+uniform float splash = 0.4;      // strength of ground splash dirt
+uniform float grime = 0.15;      // grime in baked-AO crevices
+uniform float edge_wear = 0.6;   // lightening on baked convex edges
 uniform float detile = 0.0;  // blend in a second, rotated and rescaled sample: kills the visible repeat (thatch)  // vertex colour = Cycles-baked AO (tools/hero_cottage.py bake_ao)
 
 varying vec3 world_pos;
@@ -44,17 +47,17 @@ void fragment() {
 	float n = vnoise(world_pos.xz * 1.3 + world_pos.y * 0.7) * 0.6 + vnoise(world_pos.xz * 4.1 + world_pos.y * 3.0) * 0.4;
 	float height = world_pos.y - NODE_POSITION_WORLD.y;
 	float dirt = clamp(1.0 - height / dirt_height, 0.0, 1.0) * smoothstep(0.25, 0.7, n);
-	c = mix(c, dirt_color, dirt * 0.4);
+	c = mix(c, dirt_color, dirt * splash);
 	float up = smoothstep(0.45, 0.9, world_normal.y);
 	c = mix(c, moss_color, moss * up * smoothstep(0.5, 0.78, n));
 	ALBEDO = c;
 	AO = mix(1.0, baked_ao, ao_strength);  // occludes ambient/GI light only, so direct sun still lands on the surface
 	AO_LIGHT_AFFECT = 0.25;                  // and a little on direct light: crevices stay dark at noon too
 	// grime collects where the AO says the surface is sheltered: under eaves, between beams, at the base
-	ALBEDO = mix(ALBEDO, dirt_color * 0.6, (1.0 - baked_ao) * 0.15 * ao_strength);
+	ALBEDO = mix(ALBEDO, dirt_color * 0.6, (1.0 - baked_ao) * grime * ao_strength);
 	// worn edges: lighter, drier, slightly rougher where beams, planks and stones turn a corner (breaks up flat shapes)
 	float wear = smoothstep(0.25, 0.8, edge) * smoothstep(0.3, 0.7, n);
-	ALBEDO = mix(ALBEDO, ALBEDO * 1.45 + vec3(0.03), wear * 0.6);
+	ALBEDO = mix(ALBEDO, ALBEDO * 1.45 + vec3(0.03), wear * edge_wear);
 	ROUGHNESS = clamp(texture(rough_tex, UV).r * mix(0.85, 1.15, n) + wear * 0.1, 0.0, 1.0);
 	NORMAL_MAP = texture(normal_tex, UV).rgb;
 }

@@ -29,10 +29,8 @@ static func ground_height(x: float, z: float) -> float:
 		return lerpf(0.0, -0.35, (RIVER_HALF - d) / SHALLOWS)
 	return lerpf(-0.35, -BED_DEPTH, smoothstep(0.0, 1.0, (RIVER_HALF - SHALLOWS - d) / 0.8))
 
-const COLORS := {
-	grass = Color("4a5a2a"), stone = Color("6b6862"), plaster = Color("cfc2a6"),
-	timber = Color("4a3220"), thatch = Color("8a6d3b"), iron = Color("222222"), cloth = Color("7a2e24"), riverbed = Color("4d4434"), dark = Color("15110d"),
-}
+const Look = preload("res://scripts/look.gd")
+static var COLORS: Dictionary = Look.v("materials.flat")  # placeholder colours for untextured slots
 
 # Poly Haven glTF sets: every mesh piece becomes one variant (see assets/CREDITS.md).
 const PH := "res://assets/models/%s/%s.gltf"
@@ -96,10 +94,10 @@ var _mats := {}
 const Ground = preload("res://scripts/ground.gd")
 
 # Slots with a Poly Haven texture set (see assets/CREDITS.md); others stay flat colour placeholders.
-const TEXTURED := {grass = 0.25, riverbed = 0.4, stone = 0.6, plaster = 0.5, timber = 0.6, thatch = 0.5, rock = 0.8}  # tiles per metre
+static var TEXTURED: Dictionary = Look.v("materials.triplanar_tiles")  # tiles per metre
 
 # leafy_grass reads as dry dirt from above; push it toward green.
-const TINT := {grass = Color(0.5, 0.66, 0.42)}
+static var TINT: Dictionary = Look.v("materials.triplanar_tint")
 
 func _mat(name: String) -> StandardMaterial3D:
 	if not _mats.has(name):
@@ -118,9 +116,9 @@ func _mat(name: String) -> StandardMaterial3D:
 			m.uv1_triplanar = true
 			m.uv1_world_triplanar = true
 			m.uv1_scale = Vector3.ONE * TEXTURED[slot]
-			m.albedo_color = TINT.get(slot, Color.WHITE)
+			m.albedo_color = Look.to_color(TINT[slot]) if TINT.has(slot) else Color.WHITE
 		else:
-			m.albedo_color = COLORS[name]
+			m.albedo_color = Look.to_color(COLORS[name])
 		m.resource_name = name  # slot name survives glTF export (tools/render_cycles.py re-textures by it)
 		_mats[name] = m
 	return _mats[name]
@@ -181,8 +179,9 @@ func build(root: Node3D) -> Node3D:
 		var a := _rng.randf() * TAU
 		var dist := (10.0 + _rng.randf() * 8.0) if i < 8 else (20.0 + _rng.randf() * 30.0)
 		var p := Vector3(cos(a) * dist, 0, sin(a) * dist + 4.0)
-		if river_dist(Vector2(p.x, p.z)) > RIVER_HALF + 5.0 and _clear_of_houses(p, houses, 6.5) \
-				and _ground.dirt_at(Vector2(p.x, p.z)) < 0.15:  # crowns must not hang over the river, bridge or paths
+		var clear: Dictionary = Look.v("placement.tree_clearance")
+		if river_dist(Vector2(p.x, p.z)) > RIVER_HALF + clear.river and _clear_of_houses(p, houses, clear.houses) \
+				and _ground.dirt_at(Vector2(p.x, p.z)) < clear.max_dirt:
 			if dist < 25.0 or _rng.randf() < 0.5:  # broadleaf oaks near the village; the faceted firs only far off
 				_instance(root, FOLIAGE % ("oak_%d" % _rng.randi_range(0, 2)), p, _rng.randf() * 360.0, _rng.randf_range(0.85, 1.15))
 			else:
@@ -263,6 +262,7 @@ func _water(root: Node3D) -> void:
 	water.mesh = surface
 	var sm := ShaderMaterial.new()
 	sm.shader = load("res://shaders/water.gdshader")
+	Look.apply(sm, Look.v("materials.water"))
 	water.material_override = sm
 	water.position = Vector3(0, -0.12, RIVER_Z)
 	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -310,15 +310,16 @@ func _ground_skirt(root: Node3D, scene: Node3D) -> void:
 		return
 	var d := Decal.new()
 	d.texture_albedo = _skirt_texture()
-	d.modulate = Color(0.16, 0.12, 0.08)
-	d.albedo_mix = 1.0
+	var sk: Dictionary = Look.v("placement.skirt")
+	d.modulate = Look.to_color(sk.color)
+	d.albedo_mix = sk.mix
 	d.upper_fade = 0.15
 	d.lower_fade = 0.15
-	var pad := 0.9 + 0.12 * maxf(box.size.x, box.size.z)
+	var pad: float = sk.pad + sk.pad_per_metre * maxf(box.size.x, box.size.z)
 	d.size = Vector3(box.size.x + pad * 2.0, 1.2, box.size.z + pad * 2.0)
 	d.position = Vector3(box.get_center().x, box.position.y + 0.1, box.get_center().z)
 	d.distance_fade_enabled = true
-	d.distance_fade_begin = 60.0
+	d.distance_fade_begin = sk.fade_begin
 	root.add_child(d)
 
 var _skirt: Texture2D
@@ -389,14 +390,6 @@ func _dress_square(root: Node3D) -> void:
 	for x in [-2.5, -5.6, -8.7, 8.5, 11.6, 14.7]:  # rail fence along the south bank either side of the bridge
 		_prop(root, "rail_fence", Vector3(x, 0, river_center(x) + RIVER_HALF + 1.6), river_yaw(x))
 
-# Per-slot look of the weathered shader; numbers match the Cycles materials in tools/hero_cottage.py.
-const WEATHER := {
-	stone = {tint = Color(1, 1, 1), dirt_height = 0.6, moss = 0.7},
-	plaster = {tint = Color(0.95, 0.92, 0.85), dirt_height = 1.1, moss = 0.0},
-	timber = {tint = Color(1.26, 1.19, 1.12), dirt_height = 1.0, moss = 0.2},  # the Poly Haven planks are very dark
-	thatch = {tint = Color(0.78, 0.6, 0.38), dirt_height = 0.0, moss = 0.45, detile = 0.45},
-	cloth = {tint = Color(0.5, 0.33, 0.24), dirt_height = 0.5, moss = 0.0},  # faded madder-dyed linen on the plaster texture grain
-}
 
 func _weathered(slot: String) -> Material:
 	var key := "weathered_" + slot
@@ -407,6 +400,7 @@ func _weathered(slot: String) -> Material:
 			lm.set_shader_parameter("color_tex", load("res://assets/textures/leaves_oak/color.jpg"))
 			lm.set_shader_parameter("opacity_tex", load("res://assets/textures/leaves_oak/opacity.jpg"))
 			lm.set_shader_parameter("normal_tex", load("res://assets/textures/leaves_oak/normalgl.jpg"))
+			Look.apply(lm, Look.v("materials.leaves"))
 			_mats[key] = lm
 		elif slot == "bark":
 			var bm := StandardMaterial3D.new()
@@ -417,18 +411,19 @@ func _weathered(slot: String) -> Material:
 			bm.roughness_texture = load(dir + "arm_1k.jpg")
 			bm.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN  # ARM packing: AO, roughness, metal
 			_mats[key] = bm
-		elif not WEATHER.has(slot):
+		elif not Look.group("materials.weathered").has(slot):
 			assert(slot in COLORS, "unknown material slot " + slot)
 			_mats[key] = _mat(slot)
 		else:
 			var m := ShaderMaterial.new()
 			m.shader = load("res://shaders/weathered.gdshader")
-			var dir := "res://assets/textures/%s/" % ("plaster" if slot == "cloth" else slot)
+			var spec: Dictionary = Look.group("materials.weathered")[slot]
+			var dir := "res://assets/textures/%s/" % spec.get("texture", slot)
 			m.set_shader_parameter("albedo_tex", load(dir + "albedo.jpg"))
 			m.set_shader_parameter("normal_tex", load(dir + "normal.jpg"))
 			m.set_shader_parameter("rough_tex", load(dir + "roughness.jpg"))
-			for k in WEATHER[slot]:
-				m.set_shader_parameter(k, WEATHER[slot][k])
+			Look.apply(m, Look.v("materials.weathered_common"))
+			Look.apply(m, Look.group("materials.weathered")[slot])
 			_mats[key] = m
 	_mats[key].resource_name = slot  # keeps the slot name through glTF export (tools/render_cycles.py)
 	return _mats[key]

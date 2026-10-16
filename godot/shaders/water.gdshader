@@ -8,6 +8,7 @@ uniform sampler2D depth_tex : hint_depth_texture, filter_linear_mipmap;
 uniform vec3 shallow : source_color = vec3(0.22, 0.34, 0.30);
 uniform vec3 deep : source_color = vec3(0.03, 0.13, 0.16);
 uniform float depth_scale = 1.4;  // metres to reach the deep colour
+uniform float roughness = 0.08;
 uniform vec2 flow = vec2(0.25, 0.02);  // m/s, roughly along the river (+x)
 
 varying vec3 world_pos;
@@ -40,6 +41,6 @@ void fragment() {
 	NORMAL = normalize((VIEW_MATRIX * vec4(n, 0.0)).xyz);
 	ALBEDO = mix(shallow, deep, k) * mix(0.55, 1.0, smoothstep(0.0, 0.15, depth));  // dark wet edge at the waterline
 	ALPHA = mix(0.8, 0.97, k);
-	ROUGHNESS = 0.08;
+	ROUGHNESS = roughness;
 	SPECULAR = 0.6;
 }

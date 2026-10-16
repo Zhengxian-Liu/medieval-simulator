@@ -5,7 +5,7 @@ extends RefCounted
 
 const MASK_PX := 512
 const MASK_RECT := Rect2(-40, -40, 80, 80)  # world x/z covered by the mask
-const GRASS_CLUMPS := 36000  # candidate points; noise clustering keeps roughly a third
+const Look = preload("res://scripts/look.gd")
 
 var _mask := Image.create(MASK_PX, MASK_PX, false, Image.FORMAT_RF)
 
@@ -68,7 +68,7 @@ func _material(grass_mat: StandardMaterial3D) -> ShaderMaterial:
 	m.set_shader_parameter("dirt_normal", load(dirt + "normal.jpg"))
 	m.set_shader_parameter("dirt_rough", load(dirt + "roughness.jpg"))
 	m.set_shader_parameter("mask", ImageTexture.create_from_image(_mask))
-	m.set_shader_parameter("dirt_tiles", 0.3)
+	Look.apply(m, Look.v("materials.ground"))
 	m.set_shader_parameter("mask_rect", Vector4(MASK_RECT.position.x, MASK_RECT.position.y, MASK_RECT.size.x, MASK_RECT.size.y))
 	return m
 
@@ -80,16 +80,17 @@ func _tuft_mesh(rng: RandomNumberGenerator) -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	st.set_normal(Vector3.UP)
-	var blades := rng.randi_range(18, 30)
+	var tuft: Dictionary = Look.v("placement.grass_tuft")
+	var blades := rng.randi_range(tuft.blades[0], tuft.blades[1])
 	var dry := rng.randf() * 0.4
 	for i in blades:
 		var a := rng.randf() * TAU
-		var h := rng.randf_range(0.05, 0.12)  # short: at the far view tufts must read as texture, not countable starbursts
+		var h := rng.randf_range(tuft.height[0], tuft.height[1])
 		var lean := Vector3(cos(a), 0, sin(a)) * rng.randf_range(0.02, 0.12)
 		var side := Vector3(-sin(a), 0, cos(a)) * 0.012
 		var base := Vector3(cos(a), 0, sin(a)) * rng.randf_range(0.0, 0.15)
-		var root_c := Color(0.42, 0.47, 0.22)  # sRGB, ~ the tinted grass ground, so tufts grow out of it instead of sitting on it
-		var tip_c := Color(0.52, 0.56, 0.27).lerp(Color(0.62, 0.56, 0.32), dry + rng.randf() * 0.2)  # a touch brighter than the ground
+		var root_c := Look.to_color(tuft.root)
+		var tip_c := Look.to_color(tuft.tip).lerp(Look.to_color(tuft.tip_dry), dry + rng.randf() * 0.2)
 		for v in [[base - side, root_c], [base + side, root_c], [base + lean + Vector3(0, h, 0), tip_c]]:
 			st.set_color(v[1])
 			st.add_vertex(v[0])
@@ -107,7 +108,7 @@ func _grass(root: Node3D, houses: Array, river_dist: Callable, river_half: float
 	var xforms := []
 	for v in TUFT_VARIANTS:
 		xforms.append([])
-	for i in GRASS_CLUMPS:
+	for i in int(Look.v("placement.grass_points")):
 		var p := Vector2(rng.randf_range(-34, 34), rng.randf_range(-34, 34))
 		if river_dist.call(p) < river_half + 1.8:  # bare sand along the banks
 			continue
@@ -119,7 +120,7 @@ func _grass(root: Node3D, houses: Array, river_dist: Callable, river_half: float
 		var d := dirt_at(p)
 		if d > 0.3:
 			continue  # dead zone: no tufts on paths and their worn fringe
-		var keep := clampf(0.45 + noise.get_noise_2d(p.x, p.y) * 1.2, 0.0, 1.0)  # clusters and bare patches
+		var keep := clampf(Look.v("placement.grass_keep") + noise.get_noise_2d(p.x, p.y) * 1.2, 0.0, 1.0)  # clusters and bare patches
 		if rng.randf() > keep:
 			continue
 		var s := rng.randf_range(0.6, 1.3)
@@ -140,7 +141,6 @@ func _grass(root: Node3D, houses: Array, river_dist: Callable, river_half: float
 # Ground debris (art direction round 3): pebbles, twigs, wood chips and dead leaves, one small "detail event" per
 # ~1 m², concentrated where real yards collect them: path edges, around houses, under the oaks. Tiny, low-poly,
 # coloured from the ground palette so they read as texture at the far view and as objects at the mid view.
-const DEBRIS_POINTS := 26000
 
 func _pebble_mesh(rng: RandomNumberGenerator) -> Mesh:
 	var s := SphereMesh.new()
@@ -199,7 +199,7 @@ func _debris(root: Node3D, houses: Array, river_dist: Callable, river_half: floa
 	var noise := FastNoiseLite.new()
 	noise.seed = 11
 	noise.frequency = 0.2
-	for i in DEBRIS_POINTS:
+	for i in int(Look.v("placement.debris_points")):
 		var p := Vector2(rng.randf_range(-30, 30), rng.randf_range(-30, 30))
 		if river_dist.call(p) < river_half + 0.2:
 			continue

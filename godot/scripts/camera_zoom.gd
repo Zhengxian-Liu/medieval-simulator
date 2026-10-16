@@ -1,15 +1,17 @@
 # Camera pose for one zoom level. t=0: near-orthographic isometric overview; t=1: ~10 m mid-range view.
 # Distance is derived from FOV so the framed area shrinks smoothly while the FOV opens (no pop).
+# Framing values live in art/look.json (camera.*).
 extends RefCounted
 
-const FAR_FOV := 12.0     # vertical, degrees
-const NEAR_FOV := 35.0
-const FAR_WIDTH := 16.0   # metres of ground across the screen: close enough that building and material detail reads (pre-rendered ARPG framing)
-const NEAR_WIDTH := 10.0
-const FAR_PITCH := 52.0   # degrees below the horizon
-const NEAR_PITCH := 38.0
-const YAW := 45.0
+const Look = preload("res://scripts/look.gd")
 const ASPECT := 16.0 / 9.0
+static var FAR_FOV: float = Look.v("camera.far_fov")
+static var NEAR_FOV: float = Look.v("camera.near_fov")
+static var FAR_WIDTH: float = Look.v("camera.far_width")
+static var NEAR_WIDTH: float = Look.v("camera.near_width")
+static var FAR_PITCH: float = Look.v("camera.far_pitch")
+static var NEAR_PITCH: float = Look.v("camera.near_pitch")
+static var YAW: float = Look.v("camera.yaw")
 
 static func framed_width(pose: Dictionary) -> float:
 	return 2.0 * pose.distance * tan(deg_to_rad(pose.fov) / 2.0) * ASPECT

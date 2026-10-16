@@ -4,6 +4,7 @@
 extends Node3D
 
 const CameraZoom = preload("res://scripts/camera_zoom.gd")
+const Look = preload("res://scripts/look.gd")
 const Village = preload("res://scripts/village.gd")
 
 const ZOOM_STEP := 0.08
@@ -89,22 +90,23 @@ func _build_lighting() -> void:
 	# AgX, the same view transform as Blender/Cycles: rolls off bright saturated colours the way film does.
 	# The user preferred the Cycles look; ACES plus a contrast boost made colours loud and edges hard.
 	env.tonemap_mode = Environment.TONE_MAPPER_AGX
-	env.tonemap_white = 16.0
-	env.tonemap_exposure = 1.1
-	env.adjustment_enabled = true  # tuned to the Cycles frames by measurement (docs/screenshots/match_cycles_*)
-	env.adjustment_contrast = 1.0
-	env.adjustment_saturation = 1.0
-	env.ssil_enabled = true  # screen-space bounce light between nearby surfaces (walls onto ground, props onto walls)
-	env.ssil_radius = 3.0
+	# every value below: art/look.json "environment" (with reasons)
+	env.tonemap_white = Look.v("environment.tonemap_white")
+	env.tonemap_exposure = Look.v("environment.tonemap_exposure")
+	env.adjustment_enabled = true
+	env.adjustment_contrast = Look.v("environment.adjustment_contrast")
+	env.adjustment_saturation = Look.v("environment.adjustment_saturation")
+	env.ssil_enabled = true
+	env.ssil_radius = Look.v("environment.ssil_radius")
 	env.sdfgi_use_occlusion = true
 	env.sdfgi_enabled = true
-	env.sdfgi_energy = 1.8  # sun:ambient ~4:1 (Fable art review): strong key, modest fill, real darks under eaves
+	env.sdfgi_energy = Look.v("environment.sdfgi_energy")
 	env.ssao_enabled = true
-	env.ssao_radius = 0.6
-	env.ssao_intensity = 3.5
-	env.ssao_power = 2.0  # tight contact occlusion at bases, not a wide haze; baked AO covers crevices
-	env.ambient_light_sky_contribution = 0.5  # half neutral-grey fill: the blue HDRI tinted every shadow blue-grey
-	env.ambient_light_color = Color(0.6, 0.6, 0.6)
+	env.ssao_radius = Look.v("environment.ssao_radius")
+	env.ssao_intensity = Look.v("environment.ssao_intensity")
+	env.ssao_power = Look.v("environment.ssao_power")
+	env.ambient_light_sky_contribution = Look.v("environment.ambient_sky_contribution")
+	env.ambient_light_color = Look.col("environment.ambient_color")
 	var we := WorldEnvironment.new()
 	we.environment = env
 	environment = env
@@ -112,24 +114,24 @@ func _build_lighting() -> void:
 
 	sun = DirectionalLight3D.new()
 	sun.shadow_enabled = true
-	sun.light_angular_distance = 0.5  # the real sun: crisp shadows that soften only with distance (PCSS)
+	sun.light_angular_distance = Look.v("sun.angular_distance")
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL  # range set per zoom in _apply_camera
-	sun.shadow_bias = 0.02
-	sun.shadow_normal_bias = 1.0
+	sun.shadow_bias = Look.v("sun.shadow_bias")
+	sun.shadow_normal_bias = Look.v("sun.shadow_normal_bias")
 	sun.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_AND_SKY
 	add_child(sun)
 
 # Sun path: rises in the east at 6:00, highest at 12:00, sets at 18:00; dims and warms near the horizon.
 func _apply_time() -> void:
-	var elevation := sin((hour - 6.0) / 12.0 * PI) * 55.0  # noon peak 55°: long enough shadows to model form
-	sun.rotation_degrees = Vector3(-elevation, 75.0 + (hour - 12.0) * 10.0, 0)  # from the upper left of the screen (classic iso key light), so the roofs and walls we see are lit
+	var elevation: float = sin((hour - 6.0) / 12.0 * PI) * Look.v("sun.peak_elevation")
+	sun.rotation_degrees = Vector3(-elevation, Look.v("sun.yaw_at_noon") + (hour - 12.0) * Look.v("sun.yaw_per_hour"), 0)
 	var day := clampf(elevation / 20.0, 0.0, 1.0)
-	sun.light_energy = lerpf(0.0, 3.2, day)
-	sun.light_color = Color(1.0, 0.55, 0.3).lerp(Color(1.0, 0.96, 0.9), day)
+	sun.light_energy = lerpf(0.0, Look.v("sun.energy_day"), day)
+	sun.light_color = Look.col("sun.color_low").lerp(Look.col("sun.color_day"), day)
 	sun.visible = elevation > -2.0
 	# The HDRI is a daytime sky: dim it (and the ambient light it gives) toward night.
 	environment.background_energy_multiplier = lerpf(0.04, 1.0, day)
-	environment.ambient_light_energy = lerpf(0.08, 1.0, day)  # the HDRI is bright; full strength washed out the sun shadows
+	environment.ambient_light_energy = lerpf(Look.v("environment.ambient_energy_night"), Look.v("environment.ambient_energy_day"), day)
 
 func _apply_camera() -> void:
 	var pose := CameraZoom.evaluate(zoom)
@@ -142,7 +144,7 @@ func _apply_camera() -> void:
 	# cascade fitted to the visible depth band: full resolution, no split seams.
 	var height: float = pose.distance * sin(deg_to_rad(pose.pitch))
 	var far_ground: float = height / sin(deg_to_rad(maxf(pose.pitch - pose.fov / 2.0, 5.0)))
-	sun.directional_shadow_max_distance = far_ground + 3.0
+	sun.directional_shadow_max_distance = far_ground + Look.v("sun.shadow_margin")
 	camera.near = maxf(0.05, (height - 12.0) / sin(deg_to_rad(pose.pitch + pose.fov / 2.0)))  # start the depth range near the scene
 
 func _unhandled_input(event: InputEvent) -> void:

@@ -8,6 +8,7 @@ uniform sampler2D opacity_tex : hint_default_white, filter_linear_mipmap_anisotr
 uniform sampler2D normal_tex : hint_normal, filter_linear_mipmap_anisotropic;
 uniform vec3 tint : source_color = vec3(0.33, 0.42, 0.26);  // atlas leaves are spring-bright; oak leaf reflectance is ~10%
 uniform float variation = 0.35;
+uniform float backlight = 0.3;
 
 float hash(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
 
@@ -21,5 +22,5 @@ void fragment() {
 	ALPHA_ANTIALIASING_EDGE = 0.3;
 	NORMAL_MAP = texture(normal_tex, UV).rgb;
 	ROUGHNESS = 0.75;
-	BACKLIGHT = c * 0.3;
+	BACKLIGHT = c * backlight;
 }
