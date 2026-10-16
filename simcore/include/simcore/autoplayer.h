@@ -27,9 +27,10 @@ public:
 private:
     Rng rng_;
 
-    // At the start of a season: comfort whoever at home is hurting, and now and then go and see someone,
-    // keeping a day for a plan.
+    // At the start of a season: answer most of what the family wants of the head, and now and then go and
+    // see someone, keeping a day for a plan.
     void seePeople(World& w, Id head) {
+        w.startSeason();
         int spare = w.timeLeft() - 1;
         std::vector<Id> people = w.peopleToSee();
         auto open = [&](Id who, const std::string& id) {
@@ -41,13 +42,14 @@ private:
             if (spare <= 0) return;
             const Person& p = w.people()[id];
             if (p.household != w.people()[head].household) continue;
-            bool hurting = false;
-            for (const auto& c : p.concerns)
-                if ((c.kind == "grief" || c.kind == "heartbreak" || c.kind == "shame" || c.kind == "worry") && c.strength >= 20) hurting = true;
-            if (hurting && open(id, "talk_comfort") && rng_.chance(0.7)) {
-                w.issue({w.today(), "interact", head, "talk_comfort", id, kNone});
-                --spare;
-            }
+            const WantDef* want = w.defs().want(p.want);
+            if (!want || !rng_.chance(0.65)) continue;
+            for (const auto& by : want->answeredBy)
+                if (open(id, by)) {
+                    w.issue({w.today(), "interact", head, by, id, kNone});
+                    --spare;
+                    break;
+                }
         }
         if (spare <= 0 || people.empty() || !rng_.chance(0.5)) return;
         Id who = people[rng_.range(0, static_cast<int>(std::min<size_t>(people.size(), 8)) - 1)];

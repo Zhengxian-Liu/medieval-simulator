@@ -58,11 +58,11 @@ void World::chooseAmbition(Person& head) {
     bool player = head.household == playerHousehold_ && head.id == playerHead();
     const AmbitionDef* pick = nullptr;
     if (player) {
-        // Three to choose from, drawn by how much this person would want them.
+        // Five to choose from (Zhengxian, 2026-10-16), drawn by how much this person would want them.
         std::vector<const AmbitionDef*> offer;
         std::vector<double> ow;
         std::vector<double> w = weights;
-        for (int k = 0; k < 3; ++k) {
+        for (int k = 0; k < 5; ++k) {
             int i = rngMinds_.weighted(w);
             if (i < 0) break;
             offer.push_back(pool[i]);

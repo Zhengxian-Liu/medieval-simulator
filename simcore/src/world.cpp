@@ -36,6 +36,7 @@ World::World(const Defs& defs, Config cfg)
       rngPlans_(cfg.seed, hashString("plans")),
       rngKnow_(cfg.seed, hashString("knowledge")) {
     rngMinds_.reseed(cfg.seed, hashString("minds"));
+    rngWants_.reseed(cfg.seed, hashString("wants"));
     baseParams_ = {
         {"mortality_mult", 1.0}, {"harvest_mult", 1.0}, {"grain_price", 0.4},
         {"wage_mult", 1.0},      {"rent_mult", 1.0},    {"plague_monthly", 0.0},
@@ -153,13 +154,24 @@ std::string World::fullName(Id id) const {
                 s = "小" + s;
                 break;
             }
+    // The dead whose name lives on in the family (a son named for his father, a girl for the sister who
+    // died before her): "老約翰" for the elder gone, "早夭的茱莉安娜" for a child.
+    if (!p.alive() && p.dynasty != kNone) {
+        double age = static_cast<double>(p.deathDay - p.birthDay) / kDaysPerYear;
+        for (const auto& o : people_)
+            if (o.id != id && o.alive() && o.dynasty == p.dynasty && o.firstName == p.firstName) {
+                // The younger one gone keeps the 小 the rules above gave (or none): only the elder is marked.
+                if (o.birthDay > p.birthDay) s = (age < 5 ? "早夭的" : age >= 30 ? "老" : "已故的") + s;
+                break;
+            }
+    }
     if (p.dynasty != kNone) s += "·" + dynasties_[p.dynasty].surname;
     // Another living namesake in another house: say whose child (or wife) this one is.
     if (p.alive() && p.household != kNone && p.dynasty != kNone) {
         bool clash = false;
         for (const auto& o : people_)
             if (o.id != id && o.alive() && o.household != kNone && o.household != p.household &&
-                o.dynasty == p.dynasty && o.firstName == p.firstName) {
+                o.dynasty == p.dynasty && o.firstName == p.firstName && o.father != id && o.mother != id) {
                 clash = true;
                 break;
             }
@@ -184,7 +196,10 @@ std::string World::fullName(Id id) const {
 
 std::string World::shortName(Id id) const {
     if (id == kNone) return "";
-    return fullName(id).rfind("小", 0) == 0 ? "小" + people_[id].firstName : people_[id].firstName;
+    // fullName without the surname (and whatever follows it), keeping 小 / 老 / 早夭的.
+    std::string s = fullName(id);
+    auto dot = s.find("·");
+    return dot == std::string::npos ? s : s.substr(0, dot);
 }
 
 double World::opinion(Id from, Id to) const {

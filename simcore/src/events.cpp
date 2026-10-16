@@ -205,6 +205,10 @@ void EventRunner::interact(const EventDef& ev, Person& p, Id head) {
         w_.pendingReason_.clear();
     }
     apply(o.effects, p, head);
+    p.soughtDay = w_.day_;
+    // The summary says what came of it: what they were waiting for, if this was it, or how they took it.
+    if (!w_.answerWant(p.id, ev.id))
+        w_.seasonNotes_.push_back("你找" + w_.shortName(p.id) + "（" + ev.title + "）：" + format(o.text, p, head) + "。");
 }
 
 Id EventRunner::pickTarget(const EventDef& ev, const Person& p) {
@@ -481,6 +485,8 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     if (k == "opinion_from_target_lt") return target != kNone && w.opinion(target, p.id) < v.asNumber();
     if (k == "target_mood_lt") return target != kNone && w.mood(w.people_[target]) < v.asNumber();
     if (k == "mood_lt") return w.mood(p) < v.asNumber();
+    // The head has not sought this person out for so many months (or ever, since the game began).
+    if (k == "not_sought_months") return w.day_ - std::max(p.soughtDay, 0) >= v.asNumber() * kDaysPerMonth;
     if (k == "mood_ge") return w.mood(p) >= v.asNumber();
     if (k == "reputation_ge") return p.reputation >= v.asNumber();
     if (k == "reputation_lt") return p.reputation < v.asNumber();

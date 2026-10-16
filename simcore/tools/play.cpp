@@ -137,8 +137,9 @@ bool seeMenu(World& w) {
         const Person& p = w.people()[id];
         std::string kin = w.kinWord(head, id);
         World::MoodView mv = w.moodView(p);
+        std::string want = w.wantText(p);
         std::cout << "  " << i + 1 << ". " << w.fullName(id) << (kin.empty() ? "" : "（" + kin + "）") << "：" << mv.word
-                  << "；對你" << opinionWord(w.opinion(id, head)) << "\n";
+                  << "；對你" << opinionWord(w.opinion(id, head)) << (want.empty() ? "" : "；" + want) << "\n";
     }
     int n = number(ask("找誰（直接 Enter 取消）："));
     if (n < 1 || n > static_cast<int>(people.size())) return false;
@@ -147,11 +148,14 @@ bool seeMenu(World& w) {
     std::vector<const EventDef*> open;
     EventRunner er(w);
     const Person& wp = w.people()[who];
+    const WantDef* want = w.defs().want(wp.want);
     for (const auto& in : ins) {
         std::string desc = er.format(in.ev->interaction.stringOr("desc", ""), wp, head);
+        bool wanted = want && std::find(want->answeredBy.begin(), want->answeredBy.end(), in.ev->id) != want->answeredBy.end();
         if (in.open) {
             open.push_back(in.ev);
-            std::cout << "  " << open.size() << ". " << in.ev->title << (desc.empty() ? "" : "：" + desc) << "\n";
+            std::cout << "  " << open.size() << ". " << in.ev->title << (desc.empty() ? "" : "：" + desc)
+                      << (wanted ? "　← 正是" + std::string(wp.sex == Sex::Male ? "他" : "她") + "想要的" : "") << "\n";
         } else {
             std::cout << "  　 " << in.ev->title << "（" << in.why << "）\n";
         }
@@ -405,9 +409,12 @@ int main(int argc, char** argv) {
         if (d > 0 && w.dayOfMonth() == 0 && w.month() % 3 == 0 && w.today() >= skipUntil) {
             flush();
             // A season is a turn: what changed, who is at home and how they are, then what to spend the free days on.
+            w.startSeason();
             std::string changes = w.seasonChanges(before);
             if (!changes.empty() && !eof) std::cout << "\n" << changes;
             if (!eof) std::cout << "\n—— " << w.year() << " 年 " << seasonName(w.month()) << " ——\n" << w.familyGlance();
+            // From here: what the player does this season counts toward the season's changes.
+            before = w.snapshot();
             while (!eof) {
                 std::string a = ask("Enter 過這一季　t 找人　p 定計畫　k 家裡知道什麼　i 看一個人　c 放棄計畫　y 過一年　q 結束：");
                 if (a == "t") {
@@ -433,7 +440,6 @@ int main(int argc, char** argv) {
                     break;
                 }
             }
-            before = w.snapshot();
         }
         if (d >= years * kDaysPerYear) break;
         if (eof) ai.act(w);

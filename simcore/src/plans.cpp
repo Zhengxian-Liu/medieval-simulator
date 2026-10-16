@@ -142,6 +142,8 @@ bool World::startPlan(Id actorId, const std::string& planId, Id target, Id subje
     plans_.push_back({actorId, target, subject, planId, 0, day_, {}});
     ++counters_["plan:" + planId + ":start"];
     if (isPlayerFamily(actor)) ++counters_["plan_family:" + planId + ":start"];
+    // The head taking up a child's cause (a match for them) is what that child was waiting for.
+    if (actorId == playerHead() && subject != kNone) answerWant(subject, "plan:" + planId);
     bool home = actor.household == playerHousehold_;
     if (home && !pd->startLog.empty()) {
         EventRunner ev(*this, &plans_.back());

@@ -45,9 +45,9 @@ World::MoodView World::moodView(const Person& p) const {
     if (top && topWeight <= -6 && v.value < 60) {
         const ConcernDef* d = defs_.concern(top->kind);
         if (!d->word.empty() && v.value >= 25) v.word = d->word;
-        v.cause = concernText(p, *top, false);
+        v.cause = concernText(p, *top);
     } else if (top && topWeight >= 6 && v.value >= 55) {
-        v.cause = concernText(p, *top, false);
+        v.cause = concernText(p, *top);
     } else if (p.stress >= 40 && !p.stressCause.empty()) {
         v.cause = "心裡壓著" + p.stressCause;
     } else if (v.value < 55) {
@@ -63,10 +63,10 @@ World::MoodView World::moodView(const Person& p) const {
     return v;
 }
 
-std::string World::concernText(const Person& p, const Concern& c, bool wish) const {
+std::string World::concernText(const Person& p, const Concern& c) const {
     const ConcernDef* d = defs_.concern(c.kind);
     if (!d) return "";
-    std::string t = wish ? d->wish : d->text;
+    std::string t = d->text;
     auto put = [&](const std::string& key, const std::string& val) {
         for (size_t at; (at = t.find(key)) != std::string::npos;) t.replace(at, key.size(), val);
     };
@@ -80,9 +80,11 @@ std::string World::concernText(const Person& p, const Concern& c, bool wish) con
 }
 
 const Concern* World::concernOf(const Person& p, const std::string& kind, Id about) const {
+    // About anyone: the one that weighs most (two deaths in a plague year, the worse loss).
+    const Concern* best = nullptr;
     for (const auto& c : p.concerns)
-        if (c.kind == kind && (about == kNone || c.about == about)) return &c;
-    return nullptr;
+        if (c.kind == kind && (about == kNone || c.about == about) && (!best || c.strength > best->strength)) best = &c;
+    return best;
 }
 
 void World::addConcern(Id holder, const std::string& kind, Id about, double strength) {
@@ -161,17 +163,90 @@ void World::rollSeason() {
     if (h.timeSeason >= 0) h.workBonus = std::min(0.12, h.workBonus + 0.015 * h.timeLeft);
     h.timeSeason = key;
     h.timeLeft = seasonBudget(month());
+    // What the head did last season waits for the summary (which the text game prints and clears).
+    lastSeasonNotes_.insert(lastSeasonNotes_.end(), seasonNotes_.begin(), seasonNotes_.end());
+    seasonNotes_.clear();
+    seasonWants();
+    if (lastSeasonNotes_.size() > 40) lastSeasonNotes_.erase(lastSeasonNotes_.begin(), lastSeasonNotes_.end() - 40);
     ++counters_["season"];
     bool concern = false, wish = false;
-    for (Id m : h.members)
-        for (const auto& c : people_[m].concerns) {
-            if (c.strength < 15) continue;
-            concern = true;
-            const ConcernDef* d = defs_.concern(c.kind);
-            if (d && !d->wish.empty() && m != h.head) wish = true;
-        }
+    for (Id m : h.members) {
+        if (m != h.head && !people_[m].want.empty()) wish = true;
+        for (const auto& c : people_[m].concerns)
+            if (c.strength >= 15) concern = true;
+    }
     if (concern) ++counters_["season_concern"];
     if (wish) ++counters_["season_wish"];
+}
+
+void World::seasonWants() {
+    Id head = playerHead();
+    if (head == kNone) return;
+    int season = year() * 4 + month() / 3;
+    EventRunner er(*this);
+    std::vector<Id> members = households_[playerHousehold_].members;
+    std::set<std::string> held;
+    for (Id m : members)
+        if (!people_[m].want.empty()) held.insert(people_[m].want);
+    int formed = 0;
+    for (Id m : members) {
+        Person& p = people_[m];
+        if (m == head || !p.alive() || p.household != playerHousehold_ || ageYears(p) < 5) {
+            p.want.clear();
+            continue;
+        }
+        if (const WantDef* w = defs_.want(p.want)) {
+            if (!er.eval(w->when, p, head)) {
+                p.want.clear();  // it passed of itself
+            } else if (season - p.wantSince >= w->patience) {
+                // Waited and was not heard: it is let go, and remembered.
+                if (!w->neglectNote.empty()) lastSeasonNotes_.push_back(er.format(w->neglectNote, p, head));
+                er.apply(w->neglect, p, head);
+                ++counters_["want_neglected"];
+                p.want.clear();
+                p.wantSince = season;  // a while before the next one
+                continue;
+            } else {
+                continue;
+            }
+        } else {
+            p.want.clear();
+        }
+        if (p.wantSince == season || formed >= 2) continue;  // not everyone at once: a family asks a thing or two a season
+        for (const auto& w : defs_.wants)
+            if ((!w.oneAtATime || !held.count(w.id)) && !(w.id == p.lastWant && season - p.lastWantMet < 3) &&
+                er.eval(w.when, p, head) && rngWants_.chance(w.chance)) {
+                held.insert(w.id);
+                ++formed;
+                p.want = w.id;
+                p.wantSince = season;
+                ++counters_["want:" + w.id];
+                break;
+            }
+    }
+}
+
+std::string World::wantText(const Person& p) const {
+    const WantDef* w = defs_.want(p.want);
+    if (!w) return "";
+    return EventRunner(const_cast<World&>(*this)).format(w->text, p, playerHead());
+}
+
+bool World::answerWant(Id who, const std::string& by) {
+    if (who == kNone) return false;
+    Person& p = people_[who];
+    const WantDef* w = defs_.want(p.want);
+    if (!w || std::find(w->answeredBy.begin(), w->answeredBy.end(), by) == w->answeredBy.end()) return false;
+    EventRunner er(*this);
+    Id head = playerHead();
+    std::string note = w->fulfilNote.empty() ? "" : er.format(w->fulfilNote, p, head);
+    if (!note.empty()) seasonNotes_.push_back(note);
+    er.apply(w->fulfil, p, head);
+    ++counters_["want_met"];
+    p.lastWant = p.want;
+    p.lastWantMet = year() * 4 + month() / 3;
+    p.want.clear();
+    return !note.empty();
 }
 
 int World::timeLeft() const {
@@ -256,13 +331,9 @@ std::string World::familyGlance() const {
                         std::to_string(int(ageYears(p))) + " 歲）：" + mv.word + (mv.cause.empty() ? "" : "，" + mv.cause) + "。";
         if (p.health < 40) s += "身體很差。";
         if (id != head && ageYears(p) >= 6) s += "對你" + std::string(opinionWord(opinion(id, head))) + "。";
-        // What they want from you, from the strongest concern that asks something.
-        const Concern* ask = nullptr;
-        for (const auto& c : p.concerns) {
-            const ConcernDef* d = defs_.concern(c.kind);
-            if (d && !d->wish.empty() && c.strength >= 15 && (!ask || c.strength > ask->strength)) ask = &c;
-        }
-        if (ask && id != head) s += concernText(p, *ask, true) + "。";
+        // What they want from you this season (data/wants.json).
+        std::string want = id == head ? "" : wantText(p);
+        if (!want.empty()) s += want + "。";
         return s + "\n";
     };
     o += line(head);
@@ -272,10 +343,7 @@ std::string World::familyGlance() const {
         const Person& p = people_[m];
         if (m == head || !p.alive()) continue;
         MoodView mv = moodView(p);
-        bool wants = std::any_of(p.concerns.begin(), p.concerns.end(), [&](const Concern& c) {
-            const ConcernDef* d = defs_.concern(c.kind);
-            return d && !d->wish.empty() && c.strength >= 15;
-        });
+        bool wants = !p.want.empty();
         if (mv.word == "平靜" && mv.cause.empty() && !wants && p.health >= 40 && std::abs(opinion(m, head)) < 30)
             fine += (fine.empty() ? "" : "、") + shortName(m) + "（" + kinWord(head, m) + "）";
         else
@@ -294,7 +362,11 @@ World::FamilySnapshot World::snapshot() const {
     if (s.head == kNone) return s;
     const Household& h = households_[playerHousehold_];
     for (Id m : h.members)
-        if (people_[m].alive()) s.people[m] = {moodView(people_[m]).word, m == s.head ? 0 : opinion(m, s.head)};
+        if (people_[m].alive()) {
+            s.people[m] = {moodView(people_[m]).word, m == s.head ? 0 : opinion(m, s.head)};
+            if (m != s.head)
+                for (const auto& [lab, v] : opinionBreakdown(m, s.head)) s.why[m][lab] += v;
+        }
     s.money = h.money;
     s.food = h.food / std::max(1.0, consumption(h));
     s.acres = h.acres;
@@ -307,6 +379,8 @@ std::string World::seasonChanges(const FamilySnapshot& before) const {
     if (head == kNone || before.head == kNone) return "";
     const Household& h = households_[playerHousehold_];
     std::string o;
+    for (const auto& n : lastSeasonNotes_) o += "  " + n + "\n";
+    lastSeasonNotes_.clear();
     for (const auto& [id, was] : before.people) {
         const Person& p = people_[id];
         if (!p.alive() || p.household != playerHousehold_) continue;
@@ -315,8 +389,30 @@ std::string World::seasonChanges(const FamilySnapshot& before) const {
         if (mv.word != was.first) o += "  " + who + "從" + was.first + "變得" + mv.word + (mv.cause.empty() ? "" : "：" + mv.cause) + "。\n";
         if (id != head && head == before.head) {
             double now = opinion(id, head), d = now - was.second;
-            if (std::abs(d) >= 5)
-                o += "  " + who + "對你" + (d > 0 ? "更親近了" : "疏遠了") + "（" + opinionWord(was.second) + " → " + opinionText(id, head, 2) + "）。\n";
+            if (std::abs(d) >= 3) {
+                // Name the reasons that moved, so the numbers add up: new ones, grown, faded.
+                std::map<std::string, double> diff;
+                auto bw = before.why.find(id);
+                if (bw != before.why.end())
+                    for (const auto& [lab, v] : bw->second) diff[lab] -= v;
+                for (const auto& [lab, v] : opinionBreakdown(id, head)) diff[lab] += v;
+                std::vector<std::pair<double, std::string>> moved;
+                double named = 0;
+                for (const auto& [lab, v] : diff)
+                    if (std::abs(v) >= 1) moved.push_back({v, lab});
+                std::sort(moved.begin(), moved.end(), [](auto& a, auto& b) { return std::abs(a.first) > std::abs(b.first); });
+                std::string why;
+                for (size_t i = 0; i < moved.size() && i < 3; ++i) {
+                    why += (why.empty() ? "" : "、") + opinionLabel(moved[i].second) + " " + signedText(moved[i].first);
+                    named += moved[i].first;
+                }
+                if (std::abs(d - named) >= 2) why += (why.empty() ? "" : "、") + std::string("平常的往來 ") + signedText(d - named);
+                std::string words = opinionWord(was.second) == std::string(opinionWord(now))
+                                        ? std::string(opinionWord(now))
+                                        : std::string(opinionWord(was.second)) + " → " + opinionWord(now);
+                o += "  " + who + "對你" + (d > 0 ? "更親近了" : "疏遠了") + "：" + signedText(was.second) + " → " + signedText(now) +
+                     "，" + words + (why.empty() ? "" : "（" + why + "）") + "。\n";
+            }
         }
     }
     double food = h.food / std::max(1.0, consumption(h));

@@ -218,10 +218,26 @@ Defs Defs::loadFromDir(const std::string& dir) {
         cd.name = c.stringOr("name", cd.id);
         cd.text = c.stringOr("text", cd.name);
         cd.word = c.stringOr("word", "");
-        cd.wish = c.stringOr("wish", "");
         cd.mood = c.numberOr("mood", -30);
         cd.fade = c.numberOr("fade", 5);
         d.concerns[cd.id] = cd;
+    }
+
+    Json wantsRoot = Json::parseFile(dir + "/wants.json");
+    for (const auto& w : wantsRoot["wants"].asArray()) {
+        WantDef wd;
+        wd.id = w["id"].asString();
+        wd.text = w["text"].asString();
+        wd.when = w["when"];
+        wd.answeredBy = readStrings(w["answered_by"]);
+        wd.fulfil = w["fulfil"];
+        wd.neglect = w["neglect"];
+        wd.fulfilNote = w.stringOr("fulfil_note", "");
+        wd.neglectNote = w.stringOr("neglect_note", "");
+        wd.patience = static_cast<int>(w.numberOr("patience", 2));
+        wd.chance = w.numberOr("chance", 1);
+        wd.oneAtATime = w["one_at_a_time"].isBool() && w["one_at_a_time"].asBool();
+        d.wants.push_back(std::move(wd));
     }
 
     d.village = Json::parseFile(dir + "/village.json");
@@ -244,6 +260,11 @@ const AmbitionDef* Defs::ambition(const std::string& id) const {
 const ConcernDef* Defs::concern(const std::string& id) const {
     auto it = concerns.find(id);
     return it == concerns.end() ? nullptr : &it->second;
+}
+const WantDef* Defs::want(const std::string& id) const {
+    for (const auto& w : wants)
+        if (w.id == id) return &w;
+    return nullptr;
 }
 const DeedDef* Defs::deed(const std::string& id) const {
     auto it = deeds.find(id);

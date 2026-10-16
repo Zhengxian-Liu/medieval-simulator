@@ -99,6 +99,11 @@ struct Person {
     int loverSince = 0;
     Id loverDeed = kNone;       // this person's betrayal of their spouse
     std::vector<Concern> concerns;  // what is on their mind
+    std::string want;               // what they want from the head this season (data/wants.json), if anything
+    int wantSince = -1;             // season it took hold
+    std::string lastWant;           // the last one met, which does not come back at once
+    int lastWantMet = -100;         // season it was met
+    int soughtDay = -1;             // the last day the head sought them out
     double effort = 1;          // how much of themselves they put into the work, from their mood over recent months
 
     bool alive() const { return deathDay < 0; }
@@ -401,7 +406,7 @@ public:
     // Lessens a concern (about = kNone: whoever it is about); returns how much it eased.
     double easeConcern(Id holder, const std::string& kind, double by, Id about = kNone);
     const Concern* concernOf(const Person& p, const std::string& kind, Id about = kNone) const;
-    std::string concernText(const Person& p, const Concern& c, bool wish) const;
+    std::string concernText(const Person& p, const Concern& c) const;
     // The head's free time this season, and the people the head can go and see with what.
     static int seasonBudget(int month);
     int timeLeft() const;
@@ -412,11 +417,17 @@ public:
     };
     std::vector<Interaction> interactionsWith(Id target);
     std::vector<Id> peopleToSee() const;  // family first, then those the head knows
-    void runCommands() { processCommands(); }  // carry out what the player just asked for, before the day runs
+    void runCommands() { processCommands(); }
+    void startSeason() { rollSeason(); }  // on a season's first day, before it runs: free time and the family's wants  // carry out what the player just asked for, before the day runs
     // The season at a glance, and what changed since a snapshot taken at its start.
     std::string familyGlance() const;
+    std::string wantText(const Person& p) const;  // "希望你陪她去威廉的墳前", or "" when they want nothing of you
+    // The head did something for them (an interaction id, or "plan:<id>"): meets their want if that was it.
+    // Returns whether it did (and wrote what came of it into the season's summary).
+    bool answerWant(Id who, const std::string& by);
     struct FamilySnapshot {
         std::map<Id, std::pair<std::string, double>> people;  // mood word, opinion of the head
+        std::map<Id, std::map<std::string, double>> why;       // the reasons behind that opinion
         double money = 0, food = 0, acres = 0;
         Id head = kNone;
         std::map<std::string, double> ledger;
@@ -497,6 +508,9 @@ private:
     std::map<Id, int> reeveTerms_;  // consecutive terms served
     Id lordOverrode_ = kNone;       // the lord who last overrode the vote
     mutable std::map<Id, std::string> bynames_;
+    std::vector<std::string> seasonNotes_;            // what the head did this season and what came of it
+    mutable std::vector<std::string> lastSeasonNotes_;  // the ended season's, until the summary shows them
+    Rng rngWants_;
     std::map<std::tuple<Id, std::string, int>, int> budgetUsed_;  // (household, budget, year) -> events fired  // "（Rose 的丈夫）": fixed the first time it is needed  // the reeve serves three years unless the post falls vacant
     size_t nextHistory_ = 0;
 
@@ -614,6 +628,7 @@ private:
     void book(Household& h, const std::string& why, double amount) {
         if (h.id == playerHousehold_ && amount != 0) h.ledger[why] += amount;
     }
+    void seasonWants();         // the family's wants: kept, let go and resented, or newly formed
     void rollSeason();          // starts the head's season budget, banking unspent days as work
     bool spendTime(int n);
     void runScheduled();

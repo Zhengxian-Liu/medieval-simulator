@@ -150,9 +150,23 @@ struct ConcernDef {
     std::string name;   // 喪親之痛
     std::string text;   // how it reads: "{about}的死還壓在{pron}心上"
     std::string word;   // the mood it brings when it weighs most: 悲痛
-    std::string wish;   // what they want from the head of the house, if anything: "希望你陪{pron}去{about}的墳前"
     double mood = -30;  // effect on mood at full strength (100); positive for joys
     double fade = 5;    // strength lost per month
+};
+
+// What a member of the family wants from the head this season (data/wants.json): shown in the season's
+// glance, met by seeking them out with one of `answeredBy` (an interaction id, or "plan:<id>" for a plan
+// about them), or let go for `patience` seasons and resented.
+struct WantDef {
+    std::string id;
+    std::string text;        // "希望你陪{pron}去{about:grief}的墳前"
+    Json when;               // conditions on the person, the head as target
+    std::vector<std::string> answeredBy;
+    Json fulfil, neglect;    // effects on the person, the head as target
+    std::string fulfilNote, neglectNote;  // for the season's summary
+    int patience = 2;        // seasons
+    double chance = 1;       // per season, when `when` holds
+    bool oneAtATime = false; // only one member of the house holds it at a time
 };
 
 struct Defs {
@@ -167,6 +181,7 @@ struct Defs {
     std::map<std::string, TraditionDef> traditions;
     std::map<std::string, ItemDef> items;
     std::map<std::string, ConcernDef> concerns;
+    std::vector<WantDef> wants;
     std::vector<std::string> maleNames;
     std::vector<std::string> femaleNames;
     std::vector<std::string> surnames;
@@ -181,6 +196,7 @@ struct Defs {
     const PlanDef* plan(const std::string& id) const;
     const DeedDef* deed(const std::string& id) const;
     const ConcernDef* concern(const std::string& id) const;
+    const WantDef* want(const std::string& id) const;
 };
 
 }  // namespace sim

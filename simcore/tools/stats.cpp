@@ -287,6 +287,10 @@ int main(int argc, char** argv) {
     double seasons = cnt("season");
     md << "- 季數 " << seasons << "，家裡有人有心事的季 " << (seasons > 0 ? 100 * cnt("season_concern") / seasons : 0)
        << "%，有人想要你做什麼的季 " << (seasons > 0 ? 100 * cnt("season_wish") / seasons : 0) << "%\n";
+    md << "- 家人的願望：做到 " << cnt("want_met") << "，冷落 " << cnt("want_neglected") << "；";
+    for (const auto& [k, v] : counters)
+        if (k.rfind("want:", 0) == 0) md << k.substr(5) << " " << v / n << "　";
+    md << "\n";
     md << "- 找人：";
     std::vector<std::pair<int, std::string>> talks;
     for (const auto& [k, v] : counters)

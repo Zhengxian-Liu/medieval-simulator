@@ -225,8 +225,16 @@ void World::kill(Id id, const std::string& cause) {
         addConcern(who, "grief", id, std::clamp(strength + op * 0.2, 15.0, 100.0));
         emit({std::string("bereaved:") + relation, kNone, who, id, false, 0});
     };
+    // Gladness about the dead one (a birth, a match) turns to grief; it does not linger beside it.
+    for (auto& o : people_)
+        if (o.alive())
+            o.concerns.erase(std::remove_if(o.concerns.begin(), o.concerns.end(),
+                                            [&](const Concern& c) { return c.about == id && (c.kind == "joy" || c.kind == "longing"); }),
+                             o.concerns.end());
     if (p.spouse != kNone) mourn(p.spouse, 75, "spouse");
-    for (Id par : {p.father, p.mother}) mourn(par, age < 1 ? 30 : age < 16 ? 70 : 65, "child");
+    // Babies died often and were mourned all the same, the mother most.
+    mourn(p.mother, age < 1 ? 60 : age < 16 ? 70 : 65, "child");
+    mourn(p.father, age < 1 ? 50 : age < 16 ? 70 : 65, "child");
     if (age >= 1)
         for (Id c : p.children)
             if (people_[c].alive() && ageYears(people_[c]) < 40) mourn(c, ageYears(people_[c]) < 16 ? 60 : 45, "parent");

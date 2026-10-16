@@ -1,3 +1,4 @@
 .DS_Store
 simcore/build/
 simcore/saves/
+__pycache__/
