@@ -329,9 +329,9 @@
     "water": {
       "v": {
         "shallow": [
-          0.26,
-          0.3,
-          0.22
+          0.16,
+          0.2,
+          0.15
         ],
         "deep": [
           0.08,
@@ -339,10 +339,11 @@
           0.06
         ],
         "depth_scale": 0.9,
-        "roughness": 0.5,
-        "specular": 0.3
+        "roughness": 0.25,
+        "specular": 0.4,
+        "ripple": 0.35
       },
-      "why": "dark green river; rough, low-specular surface (review 5: glints read as white noise); shallower depth scale so the bed shows"
+      "why": "dark green river; rough, low-specular surface (review 5: glints read as white noise); shallower depth scale so the bed shows. Round 10: ripple normal strength 0.35, roughness 0.25, darker shallows: the full-strength ripples caught the sky as white dashes (Fable r5-r10); The Guild's river is dark with fine ripples. A/B ab/water_calm"
     },
     "ground": {
       "v": {

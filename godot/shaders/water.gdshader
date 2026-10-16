@@ -10,6 +10,7 @@ uniform vec3 deep : source_color = vec3(0.03, 0.13, 0.16);
 uniform float depth_scale = 1.4;  // metres to reach the deep colour
 uniform float roughness = 0.08;
 uniform float specular = 0.3;
+uniform float ripple = 1.0;  // ripple normal strength
 uniform vec2 flow = vec2(0.25, 0.02);  // m/s, roughly along the river (+x)
 
 varying vec3 world_pos;
@@ -38,7 +39,7 @@ void fragment() {
 	vec2 p = world_pos.xz;
 	float e = 0.05;
 	float h0 = height(p);
-	vec3 n = normalize(vec3(h0 - height(p + vec2(e, 0.0)), e * 4.0, h0 - height(p + vec2(0.0, e))));
+	vec3 n = normalize(vec3((h0 - height(p + vec2(e, 0.0))) * ripple, e * 4.0, (h0 - height(p + vec2(0.0, e))) * ripple));
 	NORMAL = normalize((VIEW_MATRIX * vec4(n, 0.0)).xyz);
 	ALBEDO = mix(shallow, deep, k) * mix(0.55, 1.0, smoothstep(0.0, 0.15, depth));  // dark wet edge at the waterline
 	ALPHA = mix(0.8, 0.97, k);

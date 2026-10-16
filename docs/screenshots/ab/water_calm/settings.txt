@@ -1,0 +1,4 @@
+materials.water.ripple=0.35
+materials.water.specular=0.4
+materials.water.roughness=0.25
+materials.water.shallow=[0.16,0.2,0.15]
