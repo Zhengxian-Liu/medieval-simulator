@@ -110,8 +110,8 @@
       "why": "key light; ~4:1 against the fill"
     },
     "angular_distance": {
-      "v": 0.5,
-      "why": "degrees; the real sun: crisp contact, softening with distance"
+      "v": 1.5,
+      "why": "degrees; soft penumbra like the pre-rendered references (0.5 read as hard real-time shadows)"
     },
     "peak_elevation": {
       "v": 55.0,
@@ -727,10 +727,10 @@
             1920,
             1080
           ],
-          "min": 0.3,
+          "min": 0.22,
           "max": 0.5
         },
-        "why": "whole frame at golden hour stays a daylight frame (review 5)"
+        "why": "whole frame at golden hour stays a daylight frame (review 5). 0.30 -> 0.22, user decision 2026-10-16: a 16-17 deg sun lights flat ground at ~0.29 of noon, so golden hour is judged by warmth and contrast, not brightness (docs/art-check-conflicts.md)"
       }
     }
   }
