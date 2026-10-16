@@ -384,7 +384,7 @@ func _dress_square(root: Node3D) -> void:
 const WEATHER := {
 	stone = {tint = Color(1, 1, 1), dirt_height = 0.6, moss = 0.7},
 	plaster = {tint = Color(0.95, 0.92, 0.85), dirt_height = 1.1, moss = 0.0},
-	timber = {tint = Color(0.9, 0.85, 0.8), dirt_height = 1.0, moss = 0.2},
+	timber = {tint = Color(1.26, 1.19, 1.12), dirt_height = 1.0, moss = 0.2},  # the Poly Haven planks are very dark
 	thatch = {tint = Color(0.78, 0.6, 0.38), dirt_height = 0.0, moss = 0.45, detile = 0.45},
 }
 

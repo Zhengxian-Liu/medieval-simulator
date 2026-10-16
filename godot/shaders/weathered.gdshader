@@ -44,14 +44,14 @@ void fragment() {
 	float n = vnoise(world_pos.xz * 1.3 + world_pos.y * 0.7) * 0.6 + vnoise(world_pos.xz * 4.1 + world_pos.y * 3.0) * 0.4;
 	float height = world_pos.y - NODE_POSITION_WORLD.y;
 	float dirt = clamp(1.0 - height / dirt_height, 0.0, 1.0) * smoothstep(0.25, 0.7, n);
-	c = mix(c, dirt_color, dirt * 0.75);
+	c = mix(c, dirt_color, dirt * 0.4);
 	float up = smoothstep(0.45, 0.9, world_normal.y);
 	c = mix(c, moss_color, moss * up * smoothstep(0.5, 0.78, n));
 	ALBEDO = c;
 	AO = mix(1.0, baked_ao, ao_strength);  // occludes ambient/GI light only, so direct sun still lands on the surface
 	AO_LIGHT_AFFECT = 0.25;                  // and a little on direct light: crevices stay dark at noon too
 	// grime collects where the AO says the surface is sheltered: under eaves, between beams, at the base
-	ALBEDO = mix(ALBEDO, dirt_color * 0.6, (1.0 - baked_ao) * 0.35 * ao_strength);
+	ALBEDO = mix(ALBEDO, dirt_color * 0.6, (1.0 - baked_ao) * 0.15 * ao_strength);
 	// worn edges: lighter, drier, slightly rougher where beams, planks and stones turn a corner (breaks up flat shapes)
 	float wear = smoothstep(0.25, 0.8, edge) * smoothstep(0.3, 0.7, n);
 	ALBEDO = mix(ALBEDO, ALBEDO * 1.45 + vec3(0.03), wear * 0.6);

@@ -90,9 +90,9 @@ func _build_lighting() -> void:
 	# The user preferred the Cycles look; ACES plus a contrast boost made colours loud and edges hard.
 	env.tonemap_mode = Environment.TONE_MAPPER_AGX
 	env.tonemap_white = 16.0
-	env.tonemap_exposure = 1.0
+	env.tonemap_exposure = 1.1
 	env.adjustment_enabled = true  # tuned to the Cycles frames by measurement (docs/screenshots/match_cycles_*)
-	env.adjustment_contrast = 1.1
+	env.adjustment_contrast = 1.0
 	env.adjustment_saturation = 1.0
 	env.ssil_enabled = true  # screen-space bounce light between nearby surfaces (walls onto ground, props onto walls)
 	env.ssil_radius = 3.0
@@ -104,7 +104,7 @@ func _build_lighting() -> void:
 	env.ssao_intensity = 3.5
 	env.ssao_power = 2.0  # tight contact occlusion at bases, not a wide haze; baked AO covers crevices
 	env.ambient_light_sky_contribution = 0.5  # half neutral-grey fill: the blue HDRI tinted every shadow blue-grey
-	env.ambient_light_color = Color(0.5, 0.5, 0.5)
+	env.ambient_light_color = Color(0.6, 0.6, 0.6)
 	var we := WorldEnvironment.new()
 	we.environment = env
 	environment = env
@@ -113,8 +113,7 @@ func _build_lighting() -> void:
 	sun = DirectionalLight3D.new()
 	sun.shadow_enabled = true
 	sun.light_angular_distance = 0.5  # the real sun: crisp shadows that soften only with distance (PCSS)
-	sun.directional_shadow_max_distance = 40.0  # resolution where the 16 m view needs it
-	sun.directional_shadow_blend_splits = true
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL  # range set per zoom in _apply_camera
 	sun.shadow_bias = 0.02
 	sun.shadow_normal_bias = 1.0
 	sun.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_AND_SKY
@@ -130,7 +129,7 @@ func _apply_time() -> void:
 	sun.visible = elevation > -2.0
 	# The HDRI is a daytime sky: dim it (and the ambient light it gives) toward night.
 	environment.background_energy_multiplier = lerpf(0.04, 1.0, day)
-	environment.ambient_light_energy = lerpf(0.08, 0.7, day)  # the HDRI is bright; full strength washed out the sun shadows
+	environment.ambient_light_energy = lerpf(0.08, 1.0, day)  # the HDRI is bright; full strength washed out the sun shadows
 
 func _apply_camera() -> void:
 	var pose := CameraZoom.evaluate(zoom)
@@ -138,6 +137,13 @@ func _apply_camera() -> void:
 	var basis := Basis.from_euler(Vector3(deg_to_rad(-pose.pitch), deg_to_rad(-pose.yaw), 0), EULER_ORDER_YXZ)
 	camera.transform = Transform3D(basis, focus + basis.z * pose.distance)
 	camera.fov = pose.fov
+	# Shadow range must reach the far edge of what the camera sees. The far iso camera sits ~43 m from the ground it
+	# frames, so a fixed 40 m range left the far view with no sun shadows at all (art review 2). One orthogonal
+	# cascade fitted to the visible depth band: full resolution, no split seams.
+	var height: float = pose.distance * sin(deg_to_rad(pose.pitch))
+	var far_ground: float = height / sin(deg_to_rad(maxf(pose.pitch - pose.fov / 2.0, 5.0)))
+	sun.directional_shadow_max_distance = far_ground + 3.0
+	camera.near = maxf(0.05, (height - 12.0) / sin(deg_to_rad(pose.pitch + pose.fov / 2.0)))  # start the depth range near the scene
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
