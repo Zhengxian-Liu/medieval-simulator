@@ -294,6 +294,50 @@ func _instance(root: Node3D, path: String, pos: Vector3, yaw: float, scale := 1.
 		for i in mesh.get_surface_count():
 			var slot := mesh.surface_get_material(i).resource_name
 			mi.set_surface_override_material(i, _weathered(slot))
+	if not path.contains("/foliage/"):
+		_ground_skirt(root, scene)
+
+# Dirt/mud skirt projected onto the ground around an object's footprint: darkened, damp soil fading outward,
+# so walls, props and rocks sit *in* the ground instead of on it (pre-rendered games never have a clean seam).
+func _ground_skirt(root: Node3D, scene: Node3D) -> void:
+	var box := AABB()
+	var first := true
+	for mi in scene.find_children("*", "MeshInstance3D", true, false):
+		var b: AABB = (mi as MeshInstance3D).global_transform * (mi as MeshInstance3D).get_aabb()
+		box = b if first else box.merge(b)
+		first = false
+	if first:
+		return
+	var d := Decal.new()
+	d.texture_albedo = _skirt_texture()
+	d.modulate = Color(0.16, 0.12, 0.08)
+	d.albedo_mix = 1.0
+	d.upper_fade = 0.15
+	d.lower_fade = 0.15
+	var pad := 0.9 + 0.12 * maxf(box.size.x, box.size.z)
+	d.size = Vector3(box.size.x + pad * 2.0, 1.2, box.size.z + pad * 2.0)
+	d.position = Vector3(box.get_center().x, box.position.y + 0.1, box.get_center().z)
+	d.distance_fade_enabled = true
+	d.distance_fade_begin = 60.0
+	root.add_child(d)
+
+var _skirt: Texture2D
+
+func _skirt_texture() -> Texture2D:
+	if _skirt == null:
+		var g := Gradient.new()
+		g.set_color(0, Color(1, 1, 1, 0.85))
+		g.set_color(1, Color(1, 1, 1, 0.0))
+		g.add_point(0.55, Color(1, 1, 1, 0.55))
+		var t := GradientTexture2D.new()
+		t.gradient = g
+		t.fill = GradientTexture2D.FILL_SQUARE
+		t.fill_from = Vector2(0.5, 0.5)
+		t.fill_to = Vector2(1.0, 0.5)
+		t.width = 128
+		t.height = 128
+		_skirt = t
+	return _skirt
 
 # Footprints (x along the ridge, z through the door side) of the buildings from tools/hero_cottage.py.
 const FOOTPRINT := {cottage = Vector2(6.0, 4.5), longhouse = Vector2(9.5, 5.0), barn = Vector2(7.5, 5.5)}

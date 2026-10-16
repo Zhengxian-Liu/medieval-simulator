@@ -90,7 +90,7 @@ func _build_lighting() -> void:
 	# The user preferred the Cycles look; ACES plus a contrast boost made colours loud and edges hard.
 	env.tonemap_mode = Environment.TONE_MAPPER_AGX
 	env.tonemap_white = 16.0
-	env.tonemap_exposure = 1.85
+	env.tonemap_exposure = 1.55
 	env.adjustment_enabled = true  # tuned to the Cycles frames by measurement (docs/screenshots/match_cycles_*)
 	env.adjustment_contrast = 1.1
 	env.adjustment_saturation = 1.0
@@ -100,8 +100,8 @@ func _build_lighting() -> void:
 	env.sdfgi_enabled = true
 	env.sdfgi_energy = 4.0  # sky + bounce fill: matched by eye to the Cycles reference (docs/screenshots/render_compare_*), where shaded walls stay readable
 	env.ssao_enabled = true
-	env.ssao_radius = 1.2
-	env.ssao_intensity = 1.3  # contact darkening only; at 2.0 it stacked with weak GI into black shadows
+	env.ssao_radius = 1.5
+	env.ssao_intensity = 2.5  # strong but soft contact darkening (art direction, iteration 1); baked AO covers crevices
 	env.glow_enabled = true
 	env.glow_intensity = 0.3
 	var we := WorldEnvironment.new()
@@ -118,7 +118,7 @@ func _build_lighting() -> void:
 
 # Sun path: rises in the east at 6:00, highest at 12:00, sets at 18:00; dims and warms near the horizon.
 func _apply_time() -> void:
-	var elevation := sin((hour - 6.0) / 12.0 * PI) * 65.0
+	var elevation := sin((hour - 6.0) / 12.0 * PI) * 55.0  # noon peak 55°: long enough shadows to model form
 	sun.rotation_degrees = Vector3(-elevation, 75.0 + (hour - 12.0) * 10.0, 0)  # from the upper left of the screen (classic iso key light), so the roofs and walls we see are lit
 	var day := clampf(elevation / 20.0, 0.0, 1.0)
 	sun.light_energy = lerpf(0.0, 1.4, day)
