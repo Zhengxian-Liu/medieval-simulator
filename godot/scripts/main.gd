@@ -79,8 +79,11 @@ func _export_gltf(path: String) -> void:
 	get_tree().quit(0 if err == OK else 1)
 
 func _build_lighting() -> void:
-	var sky_mat := PanoramaSkyMaterial.new()
-	sky_mat.panorama = load("res://assets/sky.hdr")
+	var sky_mat := ShaderMaterial.new()
+	sky_mat.shader = load("res://shaders/sky.gdshader")
+	sky_mat.set_shader_parameter("panorama", load("res://assets/sky.hdr"))
+	sky_mat.set_shader_parameter("saturation", Look.v("environment.sky_saturation"))
+	sky_mat.set_shader_parameter("energy", Look.v("environment.sky_energy"))
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
 	var env := Environment.new()
@@ -98,6 +101,7 @@ func _build_lighting() -> void:
 	env.adjustment_saturation = Look.v("environment.adjustment_saturation")
 	env.ssil_enabled = true
 	env.ssil_radius = Look.v("environment.ssil_radius")
+	env.ssil_intensity = Look.v("environment.ssil_intensity")
 	env.sdfgi_use_occlusion = true
 	env.sdfgi_enabled = true
 	env.sdfgi_energy = Look.v("environment.sdfgi_energy")
@@ -130,7 +134,7 @@ func _apply_time() -> void:
 	sun.light_color = Look.col("sun.color_low").lerp(Look.col("sun.color_day"), day)
 	sun.visible = elevation > -2.0
 	# The HDRI is a daytime sky: dim it (and the ambient light it gives) toward night.
-	environment.background_energy_multiplier = lerpf(0.04, 1.0, day)
+	environment.background_energy_multiplier = lerpf(0.04, 1.0, day)  # also scales the sky as GI fill
 	environment.ambient_light_energy = lerpf(Look.v("environment.ambient_energy_night"), Look.v("environment.ambient_energy_day"), day)
 
 func _apply_camera() -> void:
@@ -196,6 +200,14 @@ func _capture(vp: SubViewport, dir: String) -> void:
 			if not _save_shot(vp, dir.path_join(shot[0] + "_fill.png")):
 				return
 			_apply_time()
+			# lighting-only pass (white albedo): the colour of the light itself, so shadow tint is measured without
+			# material colour mixed in
+			vp.debug_draw = Viewport.DEBUG_DRAW_LIGHTING
+			for i in SETTLE_FRAMES:
+				await RenderingServer.frame_post_draw
+			if not _save_shot(vp, dir.path_join(shot[0] + "_light.png")):
+				return
+			vp.debug_draw = Viewport.DEBUG_DRAW_DISABLED
 	get_tree().quit(0)
 
 func _save_shot(vp: SubViewport, path: String) -> bool:

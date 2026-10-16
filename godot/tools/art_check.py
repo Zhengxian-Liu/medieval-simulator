@@ -40,7 +40,8 @@ def pixels(png, size="480x270", channels="gray"):
 def masked(full_png, fill_png):
     """Classify pixels by how much the sun adds, ratio = full / sun-off in linear light. Shadowed ground still gets
     some sun through bounce light (measured ratios ~1-3); sunlit ground 5-60. Pixels in between are left out."""
-    full, fill, rgb = pixels(full_png), pixels(fill_png), pixels(full_png, channels="rgb")
+    full, fill = pixels(full_png), pixels(fill_png)
+    light = pixels(str(full_png).replace(".png", "_light.png"), channels="rgb")
     lit, shadow = [], []
     for i, (f, s) in enumerate(zip(full, fill)):
         if s <= 0.03 or f <= 0.02:
@@ -52,7 +53,9 @@ def masked(full_png, fill_png):
             shadow.append(i)
     mean = lambda xs: sum(xs) / len(xs) if xs else float("nan")
     return {"lit_mean": mean([full[i] for i in lit]), "shadow_mean": mean([full[i] for i in shadow]),
-            "shadow_tint": mean([rgb[i][2] / max(rgb[i][0], 1e-3) for i in shadow]),
+            # light colour in shadow, measured on the lighting-only pass (white albedo), so material colour is excluded
+            "shadow_tint": mean([light[i][2] / max(light[i][0], 1e-3) for i in shadow]),
+            "shadow_green": mean([light[i][1] / max((light[i][0] + light[i][2]) / 2, 1e-3) for i in shadow]),
             "lit_share": len(lit) / len(full), "shadow_share": len(shadow) / len(full)}
 
 
@@ -61,6 +64,29 @@ def contact_floor(png):
                           "-depth", "8", "gray:-"], capture_output=True, check=True).stdout
     vals = sorted(b / 255 for b in out)
     return vals[len(vals) // 100]
+
+
+def macro_sd(png, rect):
+    x, y, w, h = rect
+    out = subprocess.run(["magick", str(png), "-colorspace", "gray", "-blur", "0x16", "-crop", f"{w}x{h}+{x}+{y}",
+                          "+repage", "-format", "%[fx:standard_deviation]", "info:"], capture_output=True, text=True, check=True)
+    return float(out.stdout)
+
+
+def speckle(png, rect):
+    x, y, w, h = rect
+    raw = subprocess.run(["magick", str(png), "-crop", f"{w}x{h}+{x}+{y}", "+repage", "-colorspace", "gray", "-depth", "8",
+                          "gray:-"], capture_output=True, check=True).stdout
+    vals = sorted(raw)
+    med = vals[len(vals) // 2]
+    return sum(1 for v in raw if v > med + 0.15 * 255) / len(raw)
+
+
+def saturation(png, rect):
+    x, y, w, h = rect
+    out = subprocess.run(["magick", str(png), "-crop", f"{w}x{h}+{x}+{y}", "+repage", "-colorspace", "HSL", "-channel", "G",
+                          "-separate", "-format", "%[fx:mean]", "info:"], capture_output=True, text=True, check=True)
+    return float(out.stdout)
 
 
 def blue_over_red(png, rect):
@@ -98,6 +124,8 @@ def main():
             spec = leaf["v"]
             kind = spec.get("measure", "rect")
             m = (stats[kind] if kind in stats else contact_floor(png) if kind == "contact_floor"
+                 else macro_sd(png, spec["rect"]) if kind == "macro_sd" else speckle(png, spec["rect"]) if kind == "speckle"
+                 else saturation(png, spec["rect"]) if kind == "saturation"
                  else blue_over_red(png, spec["rect"]) if kind == "blue_over_red" else region_mean(png, spec["rect"]))
             passed = spec["min"] <= m <= spec["max"]
             ok &= passed

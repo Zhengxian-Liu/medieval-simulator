@@ -32,7 +32,7 @@
   },
   "environment": {
     "tonemap_exposure": {
-      "v": 1.1,
+      "v": 1.0,
       "why": "AgX exposure; lit ground lands near the 0.45 target"
     },
     "tonemap_white": {
@@ -69,7 +69,7 @@
     },
     "sdfgi_energy": {
       "v": 2.4,
-      "why": "THE fill knob with SDFGI on (sky + bounce): shadow floor ~0.20-0.26 at far and mid (art check)"
+      "why": "THE fill knob with SDFGI on (sky + bounce): shadow floor 0.20-0.26 at far and mid (art check)"
     },
     "ssao_radius": {
       "v": 0.6,
@@ -86,6 +86,18 @@
     "ssil_radius": {
       "v": 3.0,
       "why": "metres of screen-space bounce (walls onto ground)"
+    },
+    "ssil_intensity": {
+      "v": 0.25,
+      "why": "screen-space bounce; higher bounced magenta off the red-brown barn/soil into mid shadows (review 4, shadow_green 0.91)"
+    },
+    "sky_saturation": {
+      "v": 0.35,
+      "why": "HDRI sky partly desaturated: under SDFGI the sky IS the shadow fill; full blue gave shadows a blue cast (art check shadow_tint 1.25)"
+    },
+    "sky_energy": {
+      "v": 0.2,
+      "why": "sky brightness = shadow fill under SDFGI; tuned so shadowed ground sits at 0.20-0.26 (art check)"
     }
   },
   "sun": {
@@ -154,9 +166,9 @@
     "triplanar_tint": {
       "v": {
         "grass": [
-          0.5,
-          0.66,
-          0.42
+          0.34,
+          0.72,
+          0.16
         ]
       },
       "why": "leafy_grass reads as dry dirt from above; push it to green"
@@ -178,9 +190,9 @@
       "plaster": {
         "v": {
           "tint": [
-            0.95,
-            0.92,
-            0.85
+            1.0,
+            0.9,
+            0.76
           ],
           "dirt_height": 1.1,
           "moss": 0.0
@@ -190,9 +202,9 @@
       "timber": {
         "v": {
           "tint": [
-            1.26,
-            1.19,
-            1.12
+            1.32,
+            1.12,
+            0.9
           ],
           "dirt_height": 1.0,
           "moss": 0.2
@@ -202,9 +214,9 @@
       "thatch": {
         "v": {
           "tint": [
-            0.78,
-            0.6,
-            0.38
+            0.95,
+            0.68,
+            0.3
           ],
           "dirt_height": 0.0,
           "moss": 0.45,
@@ -249,9 +261,9 @@
     "leaves": {
       "v": {
         "tint": [
-          0.33,
-          0.42,
-          0.26
+          0.3,
+          0.46,
+          0.2
         ],
         "variation": 0.35,
         "backlight": 0.3
@@ -261,19 +273,19 @@
     "water": {
       "v": {
         "shallow": [
-          0.22,
-          0.34,
-          0.3
+          0.26,
+          0.3,
+          0.22
         ],
         "deep": [
-          0.06,
-          0.09,
-          0.07
+          0.08,
+          0.1,
+          0.06
         ],
         "depth_scale": 1.4,
-        "roughness": 0.2
+        "roughness": 0.35
       },
-      "why": "depth-coloured river over a visible bed; deep is dark green-brown, not saturated blue; 0.2 roughness avoids clipped white specks (review 3)"
+      "why": "dark green-brown river over a visible bed (review 4: milky teal, clipped glints)"
     },
     "ground": {
       "v": {
@@ -281,12 +293,17 @@
         "dirt_tiles": 0.3,
         "ground_value": 0.62,
         "grass_tint": [
-          0.5,
-          0.66,
-          0.42
+          0.34,
+          0.72,
+          0.16
+        ],
+        "soil_tint": [
+          1.2,
+          0.95,
+          0.7
         ]
       },
-      "why": "darkens bright scans so lit ground sits near 0.45"
+      "why": "darkens bright scans so lit ground sits near 0.45; grass and soil tints carry the scene's chroma (grade stays neutral)"
     },
     "flat": {
       "v": {
@@ -389,10 +406,35 @@
     "grass_tuft_shadows": {
       "v": false,
       "why": "tuft shadows made dark stars at the far view (review 3)"
+    },
+    "debris_colors": {
+      "v": {
+        "pebble": [
+          0.5,
+          0.48,
+          0.44
+        ],
+        "twig": [
+          0.35,
+          0.27,
+          0.18
+        ],
+        "chip": [
+          0.55,
+          0.45,
+          0.32
+        ],
+        "leaf": [
+          0.5,
+          0.38,
+          0.2
+        ]
+      },
+      "why": "albedo before the ground_value darkening shared with the ground, so debris sits in the ground's value range (review 4: chips were bright orange flecks)"
     }
   },
   "checks": {
-    "_why": "tools/art_check.py on the captured far/mid shots. Lit/shadow pixels are classified with a second, sun-off frame (godot_<shot>_fill.png), so checks follow the shadows wherever the sun puts them.",
+    "_why": "tools/art_check.py on the captured far/mid shots. Each is rendered three times: full, sun off (_fill: classifies lit vs shadow pixels so checks follow the sun) and lighting-only (_light: white albedo, measures the colour of the light itself).",
     "far": {
       "lit_mean": {
         "v": {
@@ -414,9 +456,9 @@
         "v": {
           "measure": "shadow_tint",
           "min": 0.85,
-          "max": 1.05
+          "max": 1.2
         },
-        "why": "blue/red in shadow: slightly cool skylight is natural; the fault was 1.1-1.3 (review 3)"
+        "why": "blue/red of the light in shadow (lighting-only pass): skylit shade slightly cool is natural; review 3's fault was a strong blue cast"
       },
       "contact_floor": {
         "v": {
@@ -438,6 +480,56 @@
           "max": 0.4
         },
         "why": "overall value structure"
+      },
+      "shadow_green": {
+        "v": {
+          "measure": "shadow_green",
+          "min": 0.95,
+          "max": 1.05
+        },
+        "why": "g/avg(r,b) of the light in shadow (lighting-only pass): no magenta bounce off red walls (review 4)"
+      },
+      "roof_macro": {
+        "v": {
+          "rect": [
+            1500,
+            100,
+            400,
+            400
+          ],
+          "measure": "macro_sd",
+          "min": 0.06,
+          "max": 1.0
+        },
+        "why": "16 px-blurred std dev on the barn roof: thatch must show ridge-to-eave and course structure (review 4: 0.035)"
+      },
+      "grass_speckle": {
+        "v": {
+          "rect": [
+            0,
+            250,
+            250,
+            350
+          ],
+          "measure": "speckle",
+          "max": 0.02,
+          "min": 0.0
+        },
+        "why": "share of open-grass pixels brighter than median+0.15: tufts/debris must not read as sprinkles (region left of the stall)"
+      },
+      "saturation": {
+        "v": {
+          "rect": [
+            0,
+            0,
+            1920,
+            1080
+          ],
+          "measure": "saturation",
+          "min": 0.28,
+          "max": 0.35
+        },
+        "why": "mean HSL saturation: references sit at 0.30-0.40; colour comes from materials, the grade stays neutral (user default, 2026-10-16)"
       }
     },
     "mid": {
@@ -452,18 +544,18 @@
       "shadow_mean": {
         "v": {
           "measure": "shadow_mean",
-          "min": 0.16,
+          "min": 0.2,
           "max": 0.26
         },
-        "why": "mid-frame shadow pixels are half the barn's shaded dark timber wall; shadowed ground there measures 0.18-0.20 (2026-10-16)"
+        "why": "restored to 0.20 (review 4: lowering it fitted the check to the frame)"
       },
       "shadow_tint": {
         "v": {
           "measure": "shadow_tint",
           "min": 0.85,
-          "max": 1.05
+          "max": 1.2
         },
-        "why": "blue/red in shadow: slightly cool skylight is natural; the fault was 1.1-1.3 (review 3)"
+        "why": "blue/red of the light in shadow (lighting-only pass): skylit shade slightly cool is natural; review 3's fault was a strong blue cast"
       },
       "contact_floor": {
         "v": {
@@ -485,6 +577,28 @@
           "max": 0.4
         },
         "why": "overall value structure"
+      },
+      "shadow_green": {
+        "v": {
+          "measure": "shadow_green",
+          "min": 0.95,
+          "max": 1.05
+        },
+        "why": "g/avg(r,b) of the light in shadow (lighting-only pass): no magenta bounce off red walls (review 4)"
+      },
+      "saturation": {
+        "v": {
+          "rect": [
+            0,
+            0,
+            1920,
+            1080
+          ],
+          "measure": "saturation",
+          "min": 0.28,
+          "max": 0.35
+        },
+        "why": "mean HSL saturation: references sit at 0.30-0.40; colour comes from materials, the grade stays neutral (user default, 2026-10-16)"
       }
     },
     "budgets": {

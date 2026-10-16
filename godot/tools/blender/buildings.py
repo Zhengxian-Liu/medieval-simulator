@@ -18,7 +18,7 @@ FOOT = 0.55               # stone footing height
 VARIANTS = {
     "cottage": dict(w=6.0, d=4.5, h=2.7, wall="plaster", chimney=True, big_door=False, windows=True),
     "longhouse": dict(w=9.5, d=5.0, h=2.9, wall="plaster", chimney=True, big_door=False, windows=True),
-    "barn": dict(w=7.5, d=5.5, h=3.3, wall="timber", chimney=False, big_door=True, windows=False),
+    "barn": dict(w=7.5, d=5.5, h=3.3, wall="plaster", chimney=False, big_door=True, windows=False),  # English timber frame + daub (all-plank read American, review 4)
 }
 W = D = H = PITCH_RISE = TOP = 0.0
 WALL, CHIMNEY, BIG_DOOR, WINDOWS = "plaster", True, False, True

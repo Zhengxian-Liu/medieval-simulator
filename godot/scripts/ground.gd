@@ -89,17 +89,23 @@ func _tuft_mesh(rng: RandomNumberGenerator) -> ArrayMesh:
 		var lean := Vector3(cos(a), 0, sin(a)) * rng.randf_range(0.02, 0.12)
 		var side := Vector3(-sin(a), 0, cos(a)) * 0.012
 		var base := Vector3(cos(a), 0, sin(a)) * rng.randf_range(0.0, 0.15)
-		var root_c := Look.to_color(tuft.root)
-		var tip_c := Look.to_color(tuft.tip).lerp(Look.to_color(tuft.tip_dry), dry + rng.randf() * 0.2)
-		for v in [[base - side, root_c], [base + side, root_c], [base + lean + Vector3(0, h, 0), tip_c]]:
-			st.set_color(v[1])
-			st.add_vertex(v[0])
+		# tufts take the ground's own darkening (ground_value) so they never read as bright sprinkles (review 4)
+		var gv: float = Look.v("materials.ground").ground_value
+		var root_c := Look.to_color(tuft.root) * gv
+		var tip_c := Look.to_color(tuft.tip).lerp(Look.to_color(tuft.tip_dry), dry + rng.randf() * 0.2) * gv
+		# both windings with the UP normal and back-face culling: with culling off, Godot flips the normal on back faces,
+		# which then point down and render near-black (the "dark starbursts", reviews 3-4)
+		var tri := [[base - side, root_c], [base + side, root_c], [base + lean + Vector3(0, h, 0), tip_c]]
+		for order in [[0, 1, 2], [0, 2, 1]]:
+			for k in order:
+				st.set_color(tri[k][1])
+				st.add_vertex(tri[k][0])
 	return st.commit()
 
 func _grass(root: Node3D, houses: Array, river_dist: Callable, river_half: float, rng: RandomNumberGenerator) -> void:
 	var mat := StandardMaterial3D.new()
 	mat.vertex_color_use_as_albedo = true
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.cull_mode = BaseMaterial3D.CULL_BACK  # see _tuft_mesh: both windings are emitted
 	mat.roughness = 0.95
 	mat.vertex_color_is_srgb = true  # tuft colours are authored as sRGB; read as linear they rendered washed-out white
 	var noise := FastNoiseLite.new()
@@ -177,6 +183,9 @@ func _leaf_mesh(rng: RandomNumberGenerator) -> Mesh:
 	q.orientation = PlaneMesh.FACE_Y
 	return q
 
+func _debris_color(kind: String) -> Color:
+	return Look.to_color(Look.v("placement.debris_colors")[kind]) * float(Look.v("materials.ground").ground_value)
+
 func _debris_mat(c: Color, rough := 0.9) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.albedo_color = c
@@ -187,10 +196,10 @@ func _debris_mat(c: Color, rough := 0.9) -> StandardMaterial3D:
 func _debris(root: Node3D, houses: Array, river_dist: Callable, river_half: float, rng: RandomNumberGenerator) -> void:
 	var kinds := [
 		# [mesh factory, material, variants, weight on paths, weight on grass, weight near walls]
-		[_pebble_mesh, _debris_mat(Color(0.32, 0.3, 0.27)), 4, 0.55, 0.1, 0.35],
-		[_twig_mesh, _debris_mat(Color(0.22, 0.16, 0.1)), 2, 0.1, 0.3, 0.25],
-		[_chip_mesh, _debris_mat(Color(0.45, 0.36, 0.24)), 2, 0.2, 0.05, 0.3],
-		[_leaf_mesh, _debris_mat(Color(0.35, 0.25, 0.12)), 1, 0.15, 0.55, 0.1],
+		[_pebble_mesh, _debris_mat(_debris_color("pebble")), 4, 0.55, 0.1, 0.35],
+		[_twig_mesh, _debris_mat(_debris_color("twig")), 2, 0.1, 0.3, 0.25],
+		[_chip_mesh, _debris_mat(_debris_color("chip")), 2, 0.2, 0.05, 0.3],
+		[_leaf_mesh, _debris_mat(_debris_color("leaf")), 1, 0.15, 0.55, 0.1],
 	]
 	var buckets := []
 	for k in kinds:

@@ -91,7 +91,10 @@ Add it to `godot/tools/fetch_polyhaven.py` (Poly Haven / ambientCG, CC0 only, 1K
   > 5x, in shadow if < 3x (bounce only). Means of those sets are checked, so checks follow the shadows.
 - Values: lit 0.40–0.50; shadow 0.20–0.26 far (0.16 mid, dark timber wall in frame); whole frame 0.25–0.40 far.
 - Contact: 1st percentile of the 8 px-blurred frame ≥ 0.05 (dark contacts, never black halos).
-- Neutral shadows: blue/red in shadow 0.85–1.05.
+- Neutral shadow light (lighting-only pass): blue/red 0.85–1.2, green/avg(red,blue) 0.95–1.05.
+- Saturation (HSL mean, whole frame) 0.28–0.35: colour from materials, neutral grade.
+- Grass speckle ≤ 2% of open-grass pixels brighter than median + 0.15.
+- Roof macro structure: 16 px-blurred std dev on the barn roof ≥ 0.06.
 - Every texture mipmapped; every GLB within its triangle budget.
 - Screenshots: `godot/tools/capture.sh` renders each shot in its own Godot process at 3840×2160 → 1920×1080.
 
@@ -111,4 +114,8 @@ Add it to `godot/tools/fetch_polyhaven.py` (Poly Haven / ambientCG, CC0 only, 1K
 | captures hang after the first shot | macOS pauses a covered window | `capture.sh`: one process per shot, always-on-top, caffeinate, retry |
 | loud colours, hard edges | ACES + contrast boost | AgX, neutral contrast (user preferred the Cycles look) |
 | changing ambient energy did nothing | with SDFGI on, Godot takes sky/bounce light from SDFGI and ignores ambient energy/colour | the fill knob is `environment.sdfgi_energy` |
+| blue shadows came back after every fill change | under SDFGI the HDRI sky is the fill light | sky drawn by `shaders/sky.gdshader`, desaturated (`environment.sky_saturation`) with its own energy (`sky_energy`, the shadow-floor knob) |
+| shadow colour checks confused material colour with light colour | warm soil / green grass skew the ratios | capture renders a lighting-only pass (`_light.png`, white albedo); tint checks read the light there |
+| grass tufts black / dark starbursts | culling off flips the normal on back faces, pointing them down | emit both windings with an up normal, cull back faces |
+| frame grey (saturation 0.17 vs 0.30-0.40 in references) | colour came only from desaturated scans + neutral grade | chroma lives in material tints (grass, soil, thatch, daub, timber, leaves); `checks.*.saturation` 0.28-0.35 |
 | fixed check rectangles broke when the sun moved | shadows move with the sun | `capture.sh` also renders far/mid with the sun off; `art_check.py` classifies lit/shadow pixels from the pair |

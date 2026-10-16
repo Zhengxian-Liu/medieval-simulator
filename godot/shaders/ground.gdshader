@@ -11,6 +11,7 @@ uniform sampler2D dirt_rough : hint_roughness_r, filter_linear_mipmap_anisotropi
 uniform sampler2D mask : filter_linear;  // r = how trampled (0 grass .. 1 bare dirt)
 uniform vec4 mask_rect;                  // world x0, z0, width, depth covered by the mask
 uniform vec3 grass_tint : source_color = vec3(0.5, 0.66, 0.42);
+uniform vec3 soil_tint = vec3(1.0);  // warm brown on the dirt/gravel scan (art/look.json materials.ground)
 uniform float grass_tiles = 0.25;        // tiles per metre
 uniform float dirt_tiles = 0.4;
 uniform float ground_value = 0.62;  // darkens the bright photo-scanned gravel/grass: ground should sit at ~0.25-0.35 value
@@ -38,7 +39,7 @@ void fragment() {
 	float dirt = smoothstep(0.38, 0.62, m + (n - 0.5) * 0.55);
 	float patchy = mix(0.78, 1.12, vnoise(world_pos.xz * 0.12));  // big soft colour patches in the grass
 	vec3 grass = texture(grass_albedo, uvg).rgb * grass_tint * patchy;
-	vec3 soil = texture(dirt_albedo, uvd).rgb;
+	vec3 soil = texture(dirt_albedo, uvd).rgb * soil_tint;
 	// worn fringe beside paths and yards: yellowed, flattened grass before the bare dirt starts
 	float fringe = smoothstep(0.12, 0.3, m) * (1.0 - dirt);
 	grass = mix(grass, grass * vec3(1.15, 1.05, 0.7), fringe * 0.7);
