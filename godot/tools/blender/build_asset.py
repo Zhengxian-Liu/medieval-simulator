@@ -2,6 +2,7 @@
 
   Blender -b --factory-startup --python godot/tools/blender/build_asset.py -- <kind> [name ...]
       kind: building | prop | foliage | tree | all          (no names = every asset of that kind)
+  Blender -b --factory-startup --python godot/tools/blender/build_asset.py -- atlas   (leaf-cluster atlas, before foliage)
   Blender -b --factory-startup --python godot/tools/blender/build_asset.py -- preview <building> <out_dir> [samples]
 
 Every asset: fresh scene, deterministic RNG seeded by name, build from its spec, then
@@ -79,6 +80,11 @@ KINDS = {
 
 def main():
     args = sys.argv[sys.argv.index("--") + 1:]
+    if args[0] == "atlas":  # leaf-cluster atlas for the foliage cards (leaf_atlas.py); run before `foliage`
+        import leaf_atlas
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+        leaf_atlas.build()
+        return
     if args[0] == "preview":
         import preview
         fresh(args[1])

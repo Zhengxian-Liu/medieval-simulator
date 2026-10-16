@@ -1,5 +1,6 @@
-"""Broadleaf oaks and bushes: branching bark limbs plus thousands of single-leaf cards from the ambientCG oak
-atlas. Vertex colour R = canopy depth (dark interior), normals point out of the crown so it lights as one mass.
+"""Broadleaf oaks and bushes: branching bark limbs plus leaf-cluster cards (each card one baked clump of 24-30 oak
+leaves with its own occlusion, tools/blender/leaf_atlas.py -> assets/textures/leaf_clusters). Vertex colour R = canopy
+depth (dark interior), normals point out of the crown so it lights as one mass.
 Surfaces "bark" and "leaves" are shaded in Godot (shaders/leaves.gdshader, art/look.json materials.leaves)."""
 import math
 import random
@@ -10,16 +11,17 @@ from mathutils import Matrix, Vector, noise
 
 ATLAS_COLS, ATLAS_ROWS = 3, 2
 
-# name: (seed, height, crown radius, trunk radius, leaves, leaf size)
+# name: (seed, height, crown radius, trunk radius, card cover, card height m). Single-leaf cards (11-16k per tree) could
+# not make lit clusters with shadowed gaps (Fable rounds 8-11). The card count follows from the lobes' surface: cover x
+# lobe area / (card area x ATLAS_OPACITY); 60-120 cards per tree left the crown see-through (round 12 A/Bs)
+ATLAS_OPACITY = 0.4  # mean opacity of a leaf_clusters cell (tools/blender/leaf_atlas.py)
 VARIANTS = {
-    "oak_0": (1, 8.5, 3.6, 0.28, 14000, 0.22),  # many small leaves read as a dense crown, few big ones as confetti
-    "oak_1": (2, 7.0, 3.0, 0.24, 11500, 0.21),
-    "oak_2": (3, 9.5, 4.0, 0.32, 16000, 0.23),
-    # bushes are seen close in the mid view: real leaf size (~10 cm), more of them (0.17 m cards read as big confetti,
-    # Fable round 6)
-    "bush_0": (11, 1.3, 1.1, 0.0, 5000, 0.10),
-    "bush_1": (12, 1.0, 0.9, 0.0, 3600, 0.095),
-    "bush_2": (13, 1.6, 1.3, 0.0, 6400, 0.105),
+    "oak_0": (1, 8.5, 3.6, 0.28, 1.3, 1.7),
+    "oak_1": (2, 7.0, 3.0, 0.24, 1.3, 1.5),
+    "oak_2": (3, 9.5, 4.0, 0.32, 1.3, 1.85),
+    "bush_0": (11, 1.3, 1.1, 0.0, 1.3, 0.75),
+    "bush_1": (12, 1.0, 0.9, 0.0, 1.3, 0.65),
+    "bush_2": (13, 1.6, 1.3, 0.0, 1.3, 0.85),
 }
 
 
@@ -69,16 +71,16 @@ def limb(mesh, rng, a, b, r0, r1, sides=7):
         mesh.face([a0[0], a1[0], b1[0], b0[0]], [a0[1], a1[1], b1[1], b0[1]], 0)
 
 
-def leaf(mesh, rng, center, size, normal_hint, shade=1.0):
-    """One leaf card: random atlas cell, random orientation biased to face outward/upward from the crown."""
+def card(mesh, rng, center, size, normal_hint, shade=1.0):
+    """One leaf-cluster card: random atlas cell (twig at the bottom), facing out of the crown with jitter, kept upright."""
     cell = rng.randrange(ATLAS_COLS * ATLAS_ROWS)
-    cu, cv = cell % ATLAS_COLS, cell // ATLAS_COLS
-    u0, v0 = cu / ATLAS_COLS, cv / ATLAS_ROWS
+    cu, cr = cell % ATLAS_COLS, cell // ATLAS_COLS
+    u0, v0 = cu / ATLAS_COLS, 1 - (cr + 1) / ATLAS_ROWS  # atlas row 0 is the top of the image
     du, dv = 1 / ATLAS_COLS, 1 / ATLAS_ROWS
-    n = (normal_hint + Vector((rng.uniform(-0.7, 0.7), rng.uniform(-0.7, 0.7), rng.uniform(-0.2, 0.9)))).normalized()
-    q = n.to_track_quat("Z", "Y") @ Matrix.Rotation(rng.uniform(0, math.tau), 3, "Z").to_quaternion()
-    w, h = size * 0.75, size
-    corners = [Vector((-w / 2, -h * 0.1, 0)), Vector((w / 2, -h * 0.1, 0)), Vector((w / 2, h * 0.9, 0)), Vector((-w / 2, h * 0.9, 0))]
+    n = (normal_hint + Vector((rng.uniform(-0.4, 0.4), rng.uniform(-0.4, 0.4), rng.uniform(-0.1, 0.5)))).normalized()
+    q = n.to_track_quat("Z", "Y") @ Matrix.Rotation(rng.uniform(-0.5, 0.5), 3, "Z").to_quaternion()
+    w, h = size * 2 / 3, size
+    corners = [Vector((-w / 2, -h / 2, 0)), Vector((w / 2, -h / 2, 0)), Vector((w / 2, h / 2, 0)), Vector((-w / 2, h / 2, 0))]
     uvs = [(u0, v0), (u0 + du, v0), (u0 + du, v0 + dv), (u0, v0 + dv)]
     mesh.face([center + q @ c for c in corners], uvs, 1, shade, normal_hint)
 
@@ -103,7 +105,7 @@ def inner(mesh, center, radius, rings=6, segs=10):
             mesh.face(quad, [uv] * 4, 1, 0.15 + 0.35 * (n.z * 0.5 + 0.5), n)  # lit top, dark underside
 
 
-def build(name, seed, height, crown, trunk_r, leaves, leaf_size):
+def build(name, seed, height, crown, trunk_r, cover, leaf_size):
     rng = random.Random(seed)
     mesh = Mesh()
     crown_center = Vector((0, 0, height * (0.62 if trunk_r else 0.45)))
@@ -127,19 +129,19 @@ def build(name, seed, height, crown, trunk_r, leaves, leaf_size):
     else:  # bushes: lobes around the centre
         lobes = [crown_center + Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-0.4, 0.6))) * crown * 0.45
                  for _ in range(7)]
-        inner(mesh, crown_center, lobe_r * 0.8)
+        inner(mesh, crown_center, lobe_r * 0.5)
     # inner volume in every lobe, just under its leaf shell: gaps show leafy shade, not ground or sky (round 7)
     for c in lobes:
-        inner(mesh, c, lobe_r * rng.uniform(0.76, 0.84))
-    for _ in range(leaves):
+        inner(mesh, c, lobe_r * rng.uniform(0.5, 0.58))  # well behind the cards: fills gaps, never seen as a facet
+    cards = int(cover * len(lobes) * 4 * math.pi * lobe_r ** 2 / (leaf_size * leaf_size * 2 / 3 * ATLAS_OPACITY))
+    for _ in range(cards):  # cluster cards on each lobe surface
         c = rng.choice(lobes)
-        d = Vector((rng.gauss(0, 1), rng.gauss(0, 1), rng.gauss(0, 0.8))).normalized()
-        r = lobe_r * rng.uniform(0.93, 1.15) * (rng.random() ** 0.15)  # on the lobe surface: few stragglers (round 8)
-        p = c + d * r
-        p.z = max(p.z, 0.15 if not trunk_r else height * 0.32)
+        d = Vector((rng.gauss(0, 1), rng.gauss(0, 1), rng.gauss(0.3, 0.8))).normalized()
+        p = c + d * lobe_r * rng.uniform(0.7, 0.95)  # card centre just inside the lobe surface: its clump reaches out
+        p.z = max(p.z, 0.25 if not trunk_r else height * 0.38)
         out = (p - crown_center)
         depth = min(1.0, out.length / (crown * 0.75))
-        leaf(mesh, rng, p, leaf_size * rng.uniform(0.8, 1.2), out.normalized(), 0.25 + 0.75 * depth ** 1.5)
+        card(mesh, rng, p, leaf_size * rng.uniform(0.85, 1.15), d, 0.35 + 0.65 * depth ** 1.5)
     me = bpy.data.meshes.new(name)
     mesh.to_mesh(me)
     for slot in ("bark", "leaves"):

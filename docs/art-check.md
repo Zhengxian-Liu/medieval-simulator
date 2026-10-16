@@ -4,42 +4,42 @@ Result: **FAIL** (rerun: `python3 godot/tools/art_check.py`)
 
 | check | item | measured | target | pass | note |
 |---|---|---|---|---|---|
-| info | far masks | lit 61%, shadow 25%, key warmth 1.06 |  | yes | share of the frame classified lit / in shadow |
+| info | far masks | lit 60%, shadow 25%, key warmth 1.06 |  | yes | share of the frame classified lit / in shadow |
 | value | far.lit_mean | 0.467 | 0.4-0.5 | yes | mean value of sunlit pixels (sun adds >5x the sun-off frame) |
-| value | far.shadow_tint | 1.074 | 0.85-1.2 | yes | blue/red of the light in shadow (lighting-only pass): skylit shade slightly cool is natural; review 3's fault was a strong blue cast |
-| value | far.contact_floor | 0.137 | 0.05-0.5 | yes | 1st percentile of the frame blurred 8 px: contacts dark but never black halos (reference measures 0.05-0.07) |
-| value | far.whole_frame | 0.391 | 0.25-0.46 | yes | overall value structure of the far daylight frame. Max 0.40 -> 0.46, user decision 2026-10-16 (“改成 0.46”): 0.40 had no reference; The Guild daylight frames measure 0.449 (guild3_3) and 0.348 (guild3_1), and the cap blocked grass, footing, thatch brightening and the reed thatch texture (docs/art-check-conflicts.md) |
-| value | far.shadow_green | 1.006 | 0.95-1.05 | yes | g/avg(r,b) of the light in shadow (lighting-only pass): no magenta bounce off red walls (review 4) |
-| value | far.grass_speckle | 0.010 | 0.0-0.02 | yes | share of open-grass pixels brighter than median+0.15: tufts/debris must not read as sprinkles (region left of the stall) |
-| value | far.saturation | 0.335 | 0.28-0.35 | yes | mean HSL saturation of sunlit pixels (AgX correctly desaturates shade, review 5); colour from materials, grade neutral |
+| value | far.shadow_tint | 1.076 | 0.85-1.2 | yes | blue/red of the light in shadow (lighting-only pass): skylit shade slightly cool is natural; review 3's fault was a strong blue cast |
+| value | far.contact_floor | 0.122 | 0.05-0.5 | yes | 1st percentile of the frame blurred 8 px: contacts dark but never black halos (reference measures 0.05-0.07) |
+| value | far.whole_frame | 0.388 | 0.25-0.46 | yes | overall value structure of the far daylight frame. Max 0.40 -> 0.46, user decision 2026-10-16 (“改成 0.46”): 0.40 had no reference; The Guild daylight frames measure 0.449 (guild3_3) and 0.348 (guild3_1), and the cap blocked grass, footing, thatch brightening and the reed thatch texture (docs/art-check-conflicts.md) |
+| value | far.shadow_green | 0.990 | 0.95-1.05 | yes | g/avg(r,b) of the light in shadow (lighting-only pass): no magenta bounce off red walls (review 4) |
+| value | far.grass_speckle | 0.012 | 0.0-0.02 | yes | share of open-grass pixels brighter than median+0.15: tufts/debris must not read as sprinkles (region left of the stall) |
+| value | far.saturation | 0.326 | 0.28-0.35 | yes | mean HSL saturation of sunlit pixels (AgX correctly desaturates shade, review 5); colour from materials, grade neutral |
 | value | far.empty_share | 0.056 | 0.0-0.1 | yes | share of ~1.3 m blocks with almost no detail: The Guild never shows an empty patch (2026-10-16: 0.26) |
-| value | far.key_fill | 4.571 | 3.0-5.0 | yes | light on sunlit vs shadowed surfaces (lighting-only pass, linear): ~4:1 key:fill. Replaces shadow_mean, which mixed albedo in: mid shadow pixels are dark soil (0.5x lit albedo), far ones 1.9x, so no single fill could satisfy both (2026-10-16 sweep) |
+| value | far.key_fill | 4.570 | 3.0-5.0 | yes | light on sunlit vs shadowed surfaces (lighting-only pass, linear): ~4:1 key:fill. Replaces shadow_mean, which mixed albedo in: mid shadow pixels are dark soil (0.5x lit albedo), far ones 1.9x, so no single fill could satisfy both (2026-10-16 sweep) |
 | value | far.thatch_vs_grass | 1.039 | 1.0-1.5 | yes | lit thatch at or above lit grass in value (sRGB, ID pass). Measured on docs/reference/the-guild/guild3_3.jpg: lit thatch 0.57, lit lawn 0.45-0.60 -> ~1.0-1.25 (Fable round 7 estimated 2.7; the reference measurement overrides it). Round 7: 0.59 |
 | value | far.thatch_saturation | 0.386 | 0.3-0.6 | yes | lit thatch straw saturation within the reference range: measured guild3_3 0.40, guild3_1 0.60 (Fable round 7 estimated 0.29; reference measurement overrides it) |
-| value | far.leaves_value | 0.312 | 0.235-0.5 | yes | lit foliage reads as green masses, not near-black holes: >= 60/255 (Fable round 7, bushes measured ~39/255). Set before tuning |
-| value | far.cloth_value | 0.493 | 0.3-0.51 | yes | lit stall canvas / sacks no brighter than 130/255: the canvas was the brightest surface and pulled the eye off the well (Fable round 7). Set before tuning |
+| value | far.leaves_value | 0.292 | 0.235-0.5 | yes | lit foliage reads as green masses, not near-black holes: >= 60/255 (Fable round 7, bushes measured ~39/255). Set before tuning |
+| value | far.cloth_value | 0.491 | 0.3-0.51 | yes | lit stall canvas / sacks no brighter than 130/255: the canvas was the brightest surface and pulled the eye off the well (Fable round 7). Set before tuning |
 | value | far.thatch_bundles | 0.050 | 0.07-0.15 | **NO** | bundle-scale detail on lit thatch: sd of (blur 3 px - blur 12 px). The Guild measures 0.092 (guild3_3 250x100+300+110) and 0.093 (guild3_1 400x200+700+120) at the same course spacing as our far view (~33 px); round 8: 0.036 (smooth fur). Set before tuning |
 | value | far.roof_macro | 0.098 | 0.06-1.0 | yes | 16 px-blurred std dev over lit thatch (ID pass; was a fixed rect on the barn roof, which the yard oak's shadow now covers, Fable r7). Target unchanged (review 5: lowering it to 0.05 was fitting the check) |
-| value | far.foliage_clusters | 0.081 | 0.09-0.3 | **NO** | crowns read as lit clusters with shadowed gaps, not uniform confetti: 8 px-blurred sd over all leaf pixels. The Guild trees 0.095 (guild3_3 400x300+1500+0) and 0.112 (250x150+1000+0); round 10: 0.071. Set before tuning |
+| value | far.foliage_clusters | 0.096 | 0.09-0.3 | yes | crowns read as lit clusters with shadowed gaps, not uniform confetti: 8 px-blurred sd over all leaf pixels. The Guild trees 0.095 (guild3_3 400x300+1500+0) and 0.112 (250x150+1000+0); round 10: 0.071. Set before tuning |
 | value | far.grass_value | 0.480 | 0.44-0.56 | yes | lit grass value (sRGB, ID pass). The Guild lawn measured 0.44-0.54 (guild3_3 80x200+10+330, 200x100+1100+250, 300x120+1450+330). Set before tuning |
 | value | far.grass_saturation | 0.316 | 0.3-0.4 | yes | lit grass HSL saturation. The Guild lawn 0.31-0.36 (same rects). Set before tuning |
-| info | mid masks | lit 40%, shadow 53%, key warmth 1.07 |  | yes | share of the frame classified lit / in shadow |
-| value | mid.lit_mean | 0.445 | 0.4-0.5 | yes | mean value of sunlit pixels (sun adds >5x the sun-off frame) |
-| value | mid.shadow_tint | 1.086 | 0.85-1.2 | yes | blue/red of the light in shadow (lighting-only pass): skylit shade slightly cool is natural; review 3's fault was a strong blue cast |
-| value | mid.contact_floor | 0.059 | 0.05-0.5 | yes | 1st percentile of the frame blurred 8 px: contacts dark but never black halos (reference measures 0.05-0.07) |
-| value | mid.whole_frame | 0.273 | 0.2-0.4 | yes | overall value structure |
-| value | mid.shadow_green | 0.989 | 0.95-1.05 | yes | g/avg(r,b) of the light in shadow (lighting-only pass): no magenta bounce off red walls (review 4) |
+| info | mid masks | lit 42%, shadow 50%, key warmth 1.07 |  | yes | share of the frame classified lit / in shadow |
+| value | mid.lit_mean | 0.446 | 0.4-0.5 | yes | mean value of sunlit pixels (sun adds >5x the sun-off frame) |
+| value | mid.shadow_tint | 1.092 | 0.85-1.2 | yes | blue/red of the light in shadow (lighting-only pass): skylit shade slightly cool is natural; review 3's fault was a strong blue cast |
+| value | mid.contact_floor | 0.055 | 0.05-0.5 | yes | 1st percentile of the frame blurred 8 px: contacts dark but never black halos (reference measures 0.05-0.07) |
+| value | mid.whole_frame | 0.277 | 0.2-0.4 | yes | overall value structure |
+| value | mid.shadow_green | 0.983 | 0.95-1.05 | yes | g/avg(r,b) of the light in shadow (lighting-only pass): no magenta bounce off red walls (review 4) |
 | value | mid.saturation | 0.315 | 0.28-0.35 | yes | mean HSL saturation of sunlit pixels (AgX correctly desaturates shade, review 5); colour from materials, grade neutral |
-| value | mid.key_fill | 10.169 | 3.0-5.0 | **NO** | light on sunlit vs shadowed surfaces (lighting-only pass, linear): ~4:1 key:fill. Replaces shadow_mean, which mixed albedo in: mid shadow pixels are dark soil (0.5x lit albedo), far ones 1.9x, so no single fill could satisfy both (2026-10-16 sweep) |
-| value | night.mean | 0.112 | 0.1-0.2 | yes | night readable like Baldur's Gate 2 (~0.15), not black (user default) |
-| value | night.torch_brightest | 2.224 | 1.8-10.0 | yes | mean of the torch's light pool / frame mean: the torch is clearly the brightest area at night |
-| value | dusk.lit_mean | 0.269 | 0.22-0.5 | yes | whole frame at golden hour stays a daylight frame (review 5). 0.30 -> 0.22, user decision 2026-10-16: a 16-17 deg sun lights flat ground at ~0.29 of noon, so golden hour is judged by warmth and contrast, not brightness (docs/art-check-conflicts.md) |
-| value | dusk.key_warmth | 1.576 | 1.5-2.5 | yes | red/blue of the light on sunlit surfaces (lighting-only pass): noon sun [1,0.96,0.9] gives ~1.1; golden hour clearly warm (>= 1.5) but not sunset orange (<= 2.5). Set before measuring. user decision 2026-10-16 (“改看暖色”): golden hour is judged by warmth and contrast, not brightness (docs/art-check-conflicts.md) |
-| value | dusk.key_fill | 5.487 | 3.0-6.0 | yes | a low sun still models form: key:fill at least the daytime 3, up to 6 (long, deeper shadows). Set before measuring. user decision 2026-10-16 (“改看暖色”): golden hour is judged by warmth and contrast, not brightness (docs/art-check-conflicts.md) |
-| value | dusk.shadow_tint | 1.101 | 0.87-1.3 | yes | blue/red of the light in shadow (lighting-only pass): at golden hour only the key is warm, the shade stays neutral or cool (Fable round 6: R/B <= 1.15) |
-| value | dusk.saturation | 0.419 | 0.2-0.4 | **NO** | whole-frame HSL saturation: golden hour, not an orange filter (round 6 measured 0.48 vs 0.33 at noon) |
+| value | mid.key_fill | 9.868 | 3.0-5.0 | **NO** | light on sunlit vs shadowed surfaces (lighting-only pass, linear): ~4:1 key:fill. Replaces shadow_mean, which mixed albedo in: mid shadow pixels are dark soil (0.5x lit albedo), far ones 1.9x, so no single fill could satisfy both (2026-10-16 sweep) |
+| value | night.mean | 0.110 | 0.1-0.2 | yes | night readable like Baldur's Gate 2 (~0.15), not black (user default) |
+| value | night.torch_brightest | 2.256 | 1.8-10.0 | yes | mean of the torch's light pool / frame mean: the torch is clearly the brightest area at night |
+| value | dusk.lit_mean | 0.265 | 0.22-0.5 | yes | whole frame at golden hour stays a daylight frame (review 5). 0.30 -> 0.22, user decision 2026-10-16: a 16-17 deg sun lights flat ground at ~0.29 of noon, so golden hour is judged by warmth and contrast, not brightness (docs/art-check-conflicts.md) |
+| value | dusk.key_warmth | 1.564 | 1.5-2.5 | yes | red/blue of the light on sunlit surfaces (lighting-only pass): noon sun [1,0.96,0.9] gives ~1.1; golden hour clearly warm (>= 1.5) but not sunset orange (<= 2.5). Set before measuring. user decision 2026-10-16 (“改看暖色”): golden hour is judged by warmth and contrast, not brightness (docs/art-check-conflicts.md) |
+| value | dusk.key_fill | 5.418 | 3.0-6.0 | yes | a low sun still models form: key:fill at least the daytime 3, up to 6 (long, deeper shadows). Set before measuring. user decision 2026-10-16 (“改看暖色”): golden hour is judged by warmth and contrast, not brightness (docs/art-check-conflicts.md) |
+| value | dusk.shadow_tint | 1.095 | 0.87-1.3 | yes | blue/red of the light in shadow (lighting-only pass): at golden hour only the key is warm, the shade stays neutral or cool (Fable round 6: R/B <= 1.15) |
+| value | dusk.saturation | 0.416 | 0.2-0.4 | **NO** | whole-frame HSL saturation: golden hour, not an orange filter (round 6 measured 0.48 vs 0.33 at noon) |
 | value | morning.key_warmth | 1.094 | 0.95-1.15 | yes | red/blue of the key light on lit pixels: noon measures 1.05; a visibly orange morning would read > 1.15 |
-| mipmaps | 67 textures | 0 without | 0 | yes | all mipmapped |
+| mipmaps | 70 textures | 0 without | 0 | yes | all mipmapped |
 | budget | buildings/barn | 50590 | <= 100000 | yes | triangles |
 | budget | buildings/cottage | 81162 | <= 100000 | yes | triangles |
 | budget | buildings/longhouse | 94994 | <= 100000 | yes | triangles |

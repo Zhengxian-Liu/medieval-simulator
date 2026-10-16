@@ -442,9 +442,9 @@ func _weathered(slot: String) -> Material:
 		if slot == "leaves":
 			var lm := ShaderMaterial.new()
 			lm.shader = load("res://shaders/leaves.gdshader")
-			lm.set_shader_parameter("color_tex", load("res://assets/textures/leaves_oak/color.jpg"))
-			lm.set_shader_parameter("opacity_tex", load("res://assets/textures/leaves_oak/opacity.jpg"))
-			lm.set_shader_parameter("normal_tex", load("res://assets/textures/leaves_oak/normalgl.jpg"))
+			lm.set_shader_parameter("color_tex", load("res://assets/textures/leaf_clusters/color.jpg"))
+			lm.set_shader_parameter("opacity_tex", load("res://assets/textures/leaf_clusters/opacity.jpg"))
+			lm.set_shader_parameter("normal_tex", load("res://assets/textures/leaf_clusters/normalgl.jpg"))
 			Look.apply(lm, Look.v("materials.leaves"))
 			lm.set_shader_parameter("id_color", Look.to_color(Look.v("checks.id_colors").leaves))
 			_mats[key] = lm

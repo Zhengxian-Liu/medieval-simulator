@@ -13,7 +13,7 @@ number there, never in scene code or shaders. Update this document in the same c
 
 1. Change a value in `look.json`, or a builder in `godot/tools/blender/`.
 2. Rebuild assets if geometry changed: `Blender -b --factory-startup --python godot/tools/blender/build_asset.py -- all`
-   (or `-- prop barrel`, `-- building cottage` ...).
+   (or `-- prop barrel`, `-- building cottage` ...). Leaf-cluster atlas first when foliage or leaves change: `-- atlas`.
 3. `python3 godot/tools/art_check.py` → captures far/mid/dusk/river shots, writes greyscale copies, measures, writes
    `docs/art-check.md`, exits 1 on failure.
 4. A/B a candidate change without committing it: `python3 godot/tools/ab.py <label> <path=value> ...` →
@@ -54,7 +54,8 @@ Shared modules:
 | `roofs.py` | `thatch_roof` (layered courses, ragged eave, sag between gables, wavy ridge, lumpy ridge cap) |
 | `buildings.py` | `VARIANTS` spec per building + footing, walls, timber frame, openings, chimney |
 | `props.py` | one function per prop + `PROPS` table |
-| `foliage.py` / `trees.py` | oaks + bushes (leaf cards) / background firs |
+| `leaf_atlas.py` | leaf-cluster atlas: 6 clumps of 24-30 CC0 oak leaves rendered in Cycles under sky + dark ground (AO, darker undersides) -> `assets/textures/leaf_clusters` (1K) |
+| `foliage.py` / `trees.py` | oaks + bushes (leaf-cluster cards, count from lobe surface x cover / card coverage) / background firs |
 
 **Material slots** are the contract with Godot: `stone, plaster, timber, thatch, cloth, iron, dark` (+ `bark`,
 `leaves` for foliage). Each slot's look is `materials.weathered.<slot>` in `look.json` (tint, dirt height, moss,
@@ -165,3 +166,4 @@ Add it to `godot/tools/fetch_polyhaven.py` (Poly Haven / ambientCG, CC0 only, 1K
 | river read as milky water with white scratches (r5-r10) | full-strength value-noise ripple normals caught the sky in stretched cells | `materials.water.ripple` 0.35, darker shallows |
 | grass and the mid frame stayed grey whatever the tint (rounds 5-11) | the ground used Godot's default specular 0.5: grazing sky reflection greyed it | ground `specular` 0.3 like the other matte slots; measure saturation per material (ID pass) |
 | captures sometimes missed a pass (GPU fence timeout) | retry looked only at the main frame | `capture.sh` requires every pass and retries up to 3 times |
+| crowns read as confetti or topiary (rounds 7-11) | one flat unshaded leaf per card | baked leaf-cluster cards (`leaf_atlas.py`); card count from crown surface - 60-120 per tree left it see-through |
