@@ -19,7 +19,7 @@ var _mats := {}
 const TEXTURED := {grass = 0.25, riverbed = 0.4, stone = 0.6, plaster = 0.5, timber = 0.6, thatch = 0.5, rock = 0.8}  # tiles per metre
 
 # leafy_grass reads as dry dirt from above; push it toward green.
-const TINT := {grass = Color(0.62, 0.8, 0.45)}
+const TINT := {grass = Color(0.5, 0.66, 0.42)}
 
 func _mat(name: String) -> StandardMaterial3D:
 	if not _mats.has(name):

@@ -58,6 +58,10 @@ func _build_lighting() -> void:
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.tonemap_white = 6.0
+	env.tonemap_exposure = 0.85
+	env.adjustment_enabled = true
+	env.adjustment_contrast = 1.15
+	env.adjustment_saturation = 0.9
 	env.sdfgi_enabled = true
 	env.ssao_enabled = true
 	env.ssao_radius = 1.2
@@ -80,7 +84,7 @@ func _apply_time() -> void:
 	var elevation := sin((hour - 6.0) / 12.0 * PI) * 55.0
 	sun.rotation_degrees = Vector3(-elevation, -150.0 + (hour - 12.0) * 10.0, 0)
 	var day := clampf(elevation / 20.0, 0.0, 1.0)
-	sun.light_energy = lerpf(0.0, 1.6, day)
+	sun.light_energy = lerpf(0.0, 1.4, day)
 	sun.light_color = Color(1.0, 0.55, 0.3).lerp(Color(1.0, 0.96, 0.9), day)
 	sun.visible = elevation > -2.0
 	# The HDRI is a daytime sky: dim it (and the ambient light it gives) toward night.
