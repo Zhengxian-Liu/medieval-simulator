@@ -12,6 +12,8 @@ uniform float dirt_height = 1.0;  // metres above the asset origin that splash d
 uniform float moss = 0.0;         // 0..1 coverage on upward faces
 uniform vec3 dirt_color : source_color = vec3(0.2, 0.15, 0.1);
 uniform vec3 moss_color : source_color = vec3(0.1, 0.13, 0.05);
+global uniform float id_pass;
+uniform vec3 id_color = vec3(0.0);  // art/look.json checks.id_colors[slot]
 uniform float ao_light_affect = 0.25;  // share of the baked AO that also darkens direct light
 uniform float ao_strength = 1.0;  // vertex colour R = Cycles-baked AO, G = convexity (tools/blender/bake.py)
 uniform float splash = 0.4;      // strength of ground splash dirt
@@ -86,4 +88,10 @@ void fragment() {
 	ROUGHNESS = clamp(max(texture(rough_tex, UV).r * mix(0.85, 1.15, n), roughness_min) + wear * 0.1, 0.0, 1.0);
 	SPECULAR = specular;
 	NORMAL_MAP = texture(normal_tex, UV).rgb;
+	if (id_pass > 0.5) {  // material-ID capture pass (main.gd): flat colour per material class, no lighting
+		ALBEDO = vec3(0.0);
+		SPECULAR = 0.0;
+		ROUGHNESS = 1.0;
+		EMISSION = id_color;
+	}
 }

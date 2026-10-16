@@ -32,3 +32,10 @@ texture={
 "mipmaps/generate": true,
 "detect_3d/compress_to": 0
 }
+
+[shader_globals]
+
+id_pass={
+"type": "float",
+"value": 0.0
+}

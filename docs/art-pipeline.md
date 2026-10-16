@@ -103,6 +103,8 @@ Add it to `godot/tools/fetch_polyhaven.py` (Poly Haven / ambientCG, CC0 only, 1K
 - Values: lit 0.40–0.50; whole frame 0.25–0.40 far. Shadow depth is checked as **key:fill 3–5** on the lighting-only pass
   (lit light / shadow light), not as a displayed shadow value: that mixed material albedo into a lighting rule
   (evidence: `docs/art-check-conflicts.md`).
+- Per material (material-ID pass `_id.png`, classes in `checks.id_colors`): `class_luma`, `class_saturation`,
+  `class_luma_ratio` on lit pixels of one material (e.g. thatch vs grass, foliage value).
 - Contact: 1st percentile of the 8 px-blurred frame ≥ 0.05 (dark contacts, never black halos).
 - Neutral shadow light (lighting-only pass): blue/red 0.85–1.2, green/avg(red,blue) 0.95–1.05.
 - Saturation (HSL mean, lit pixels) 0.28–0.35: colour from materials, neutral grade.
@@ -152,3 +154,4 @@ Add it to `godot/tools/fetch_polyhaven.py` (Poly Haven / ambientCG, CC0 only, 1K
 | golden hour read as an orange filter (round 6) | shade lit by orange bounce from the ground | sky saturation rises with a low sun (`environment.sky_saturation_low`): blue sky keeps shade neutral; `checks.dusk.shadow_tint`, `.saturation` |
 | painterly toggles (Disco Elysium study) | world brush strokes at 0.12 were invisible (0.75/255); edge blur + desaturate read as a lens defect | rejected by Fable round 6 and removed; adopt only what survives an A/B (`tools/ab.py`) |
 | bushes read as confetti at the mid view (round 6) | 17 cm leaf cards | bushes use real leaf size (~10 cm) and 3-4x the cards (`foliage.py` VARIANTS) |
+| per-material targets fitted to Fable's eyeballed numbers | a reviewer's estimate (thatch 2.7x grass) was off by 2x vs the reference | measure the reference with the same method before setting a target |

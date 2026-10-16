@@ -14,6 +14,9 @@ uniform vec3 grass_tint : source_color = vec3(0.5, 0.66, 0.42);
 uniform vec3 soil_tint = vec3(1.0);  // warm brown on the dirt/gravel scan (art/look.json materials.ground)
 uniform float grass_tiles = 0.25;        // tiles per metre
 uniform float dirt_tiles = 0.4;
+global uniform float id_pass;
+uniform vec3 id_grass = vec3(0.0, 1.0, 0.0);
+uniform vec3 id_dirt = vec3(0.0, 0.0, 1.0);
 uniform float ground_value = 0.62;  // darkens the bright photo-scanned gravel/grass: ground should sit at ~0.25-0.35 value
 uniform vec4 river;  // centre z0, amplitude, frequency, phase (same curve as village.gd river_center)
 uniform float river_half = 3.5;
@@ -55,4 +58,10 @@ void fragment() {
 	ALBEDO = col * ground_value;
 	ROUGHNESS = mix(texture(grass_rough, uvg).r, texture(dirt_rough, uvd).r, dirt);
 	NORMAL_MAP = mix(texture(grass_normal, uvg).rgb, texture(dirt_normal, uvd).rgb, dirt);
+	if (id_pass > 0.5) {  // material-ID capture pass (main.gd): flat colour per material class, no lighting
+		ALBEDO = vec3(0.0);
+		SPECULAR = 0.0;
+		ROUGHNESS = 1.0;
+		EMISSION = mix(id_grass, id_dirt, step(0.5, dirt));
+	}
 }

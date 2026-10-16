@@ -428,6 +428,7 @@ func _weathered(slot: String) -> Material:
 			lm.set_shader_parameter("opacity_tex", load("res://assets/textures/leaves_oak/opacity.jpg"))
 			lm.set_shader_parameter("normal_tex", load("res://assets/textures/leaves_oak/normalgl.jpg"))
 			Look.apply(lm, Look.v("materials.leaves"))
+			lm.set_shader_parameter("id_color", Look.to_color(Look.v("checks.id_colors").leaves))
 			_mats[key] = lm
 		elif slot == "bark":
 			var bm := StandardMaterial3D.new()
@@ -451,6 +452,7 @@ func _weathered(slot: String) -> Material:
 			m.set_shader_parameter("rough_tex", load(dir + "roughness.jpg"))
 			Look.apply(m, Look.v("materials.weathered_common"))
 			Look.apply(m, Look.group("materials.weathered")[slot])
+			m.set_shader_parameter("id_color", Look.to_color(Look.v("checks.id_colors").get(slot, [0, 0, 0])))
 			_mats[key] = m
 	_mats[key].resource_name = slot  # keeps the slot name through glTF export (tools/render_cycles.py)
 	return _mats[key]

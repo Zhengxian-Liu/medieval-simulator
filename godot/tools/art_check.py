@@ -48,6 +48,22 @@ def _sat(c):
     return 0.0 if mx == mn else (mx - mn) / (1 - abs(2 * l - 1) + 1e-6)
 
 
+def classes(id_png):
+    """Material class per pixel from the ID pass (checks.id_colors), by normalised colour so shading in the pass
+    doesn't matter; None where nothing matches (unclassified materials, mixed edge pixels)."""
+    ids = {k: tuple(v) for k, v in CHECKS["id_colors"]["v"].items()}
+    out = []
+    for c in pixels(id_png, channels="rgb"):
+        m = max(c)
+        if m < 0.15:
+            out.append(None)
+            continue
+        n = tuple(x / m for x in c)
+        best = min(ids, key=lambda k: sum((a - b) ** 2 for a, b in zip(n, ids[k])))
+        out.append(best if sum((a - b) ** 2 for a, b in zip(n, ids[best])) < 0.06 else None)
+    return out
+
+
 def masked(full_png, fill_png):
     """Classify pixels by how much the sun adds, ratio = full / sun-off in linear light. Shadowed ground still gets
     some sun through bounce light (measured ratios ~1-3); sunlit ground 5-60. Pixels in between are left out."""
@@ -64,7 +80,24 @@ def masked(full_png, fill_png):
         elif ratio < 3.0:
             shadow.append(i)
     mean = lambda xs: sum(xs) / len(xs) if xs else float("nan")
-    return {"lit_mean": mean([full[i] for i in lit]), "shadow_mean": mean([full[i] for i in shadow]),
+    id_png = pathlib.Path(str(full_png).replace(".png", "_id.png"))
+    cls = classes(id_png) if id_png.exists() else None
+    lit_set = set(lit)
+
+    def of(name, pool):
+        return [i for i in pool if cls and cls[i] == name]
+
+    def class_stat(spec):  # per-material measures (ID pass)
+        if spec["measure"] == "class_luma":
+            return mean([full[i] for i in of(spec["class"], lit)])
+        if spec["measure"] == "class_saturation":
+            return mean([_sat(rgb_full[i]) for i in of(spec["class"], lit)])
+        if spec["measure"] == "class_luma_ratio":
+            return mean([full[i] for i in of(spec["num"], lit)]) / max(mean([full[i] for i in of(spec["den"], lit)]), 1e-6)
+        raise KeyError(spec["measure"])
+
+    return {"class_stat": class_stat if cls else None,
+            "lit_mean": mean([full[i] for i in lit]), "shadow_mean": mean([full[i] for i in shadow]),
             # light colour in shadow, measured on the lighting-only pass (white albedo), so material colour is excluded
             "shadow_tint": mean([light[i][2] / max(light[i][0], 1e-3) for i in shadow]),
             "shadow_green": mean([light[i][1] / max((light[i][0] + light[i][2]) / 2, 1e-3) for i in shadow]),
@@ -164,7 +197,8 @@ def main():
                 continue
             spec = leaf["v"]
             kind = spec.get("measure", "rect")
-            m = (stats[kind] if kind in stats else contact_floor(png) if kind == "contact_floor"
+            m = (stats["class_stat"](spec) if kind.startswith("class_")
+                 else stats[kind] if kind in stats else contact_floor(png) if kind == "contact_floor"
                  else macro_sd(png, spec["rect"]) if kind == "macro_sd" else speckle(png, spec["rect"]) if kind == "speckle"
                  else saturation(png, spec["rect"]) if kind == "saturation"
                  else empty_share(png) if kind == "empty_share"

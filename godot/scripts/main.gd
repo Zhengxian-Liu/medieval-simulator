@@ -236,6 +236,20 @@ func _capture(vp: SubViewport, dir: String) -> void:
 			if not _save_shot(vp, dir.path_join(shot[0] + "_light.png")):
 				return
 			vp.debug_draw = Viewport.DEBUG_DRAW_DISABLED
+			# material-ID pass: each material emits its flat class colour (art/look.json checks.id_colors), linear
+			# exposure 1, so tools/art_check.py can measure one material at a time
+			environment.tonemap_exposure = 1.0
+			RenderingServer.global_shader_parameter_set("id_pass", 1.0)
+			var decals := find_children("*", "Decal", true, false)  # skirt decals would paint over the ground's ID
+			for d in decals:
+				d.visible = false
+			for i in SETTLE_FRAMES:
+				await RenderingServer.frame_post_draw
+			if not _save_shot(vp, dir.path_join(shot[0] + "_id.png")):
+				return
+			RenderingServer.global_shader_parameter_set("id_pass", 0.0)
+			for d in decals:
+				d.visible = true
 			environment.tonemap_mode = Environment.TONE_MAPPER_AGX
 			_apply_time()
 	get_tree().quit(0)

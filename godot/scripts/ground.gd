@@ -72,6 +72,8 @@ func _material(grass_mat: StandardMaterial3D) -> ShaderMaterial:
 	m.set_shader_parameter("dirt_rough", load(dirt + "roughness.jpg"))
 	m.set_shader_parameter("mask", ImageTexture.create_from_image(_mask))
 	Look.apply(m, Look.v("materials.ground"))
+	m.set_shader_parameter("id_grass", Look.to_color(Look.v("checks.id_colors").grass))
+	m.set_shader_parameter("id_dirt", Look.to_color(Look.v("checks.id_colors").dirt))
 	m.set_shader_parameter("mask_rect", Vector4(MASK_RECT.position.x, MASK_RECT.position.y, MASK_RECT.size.x, MASK_RECT.size.y))
 	return m
 
