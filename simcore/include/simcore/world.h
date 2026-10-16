@@ -475,6 +475,7 @@ public:
     const std::vector<Heard>& heard() const { return heard_; }
     std::string newsText(const News& n) const;
     std::string villageTalk() const;  // what the family heard last season, for the glance
+    std::string tellerName(Id teller) const;  // "兒子威廉" for the family's own, the full name for others
 
     // --- player interface
     void issue(const Command& c);
@@ -646,7 +647,6 @@ private:
     void attendOccasion(Id person, Id about, bool came, double opinionValue, const std::string& mod);
     std::vector<double> houseLinks(Id hh) const;  // link of every household to this one
     std::string formatNews(const std::string& tmpl, const News& n) const;
-    std::string tellerName(Id teller) const;  // "兒子威廉" for the family's own, the full name for others
 
     // stress.cpp: grief, hardship and acting against one's nature, and the breaking points
     void addStress(Id id, double amount, const std::string& cause);

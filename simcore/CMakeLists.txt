@@ -28,6 +28,8 @@ add_executable(chronicle tools/chronicle.cpp)
 target_link_libraries(chronicle simcore)
 add_executable(play tools/play.cpp)
 target_link_libraries(play simcore)
+add_executable(webplay tools/webplay.cpp)
+target_link_libraries(webplay simcore)
 
 find_package(Threads REQUIRED)
 add_executable(stats tools/stats.cpp)

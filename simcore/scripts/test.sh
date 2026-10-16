@@ -7,12 +7,13 @@
 #   2. unit tests (tests/tests.cpp)
 #   3. replay: a game played with a (fake) model, then replayed from its log, must match exactly
 #   4. the decider adapter falls back to the rules (-1) when the model cannot be reached
+#   5. the browser version (scripts/ui.sh) plays a year through its server the way the page does
 # No network and no API key needed.
 set -eo pipefail  # no -u: macOS bash 3.2 treats empty arrays as unset
 cd "$(dirname "$0")/.."
 mkdir -p build; "$BASH" scripts/build.sh > build/build.log 2>&1 || { cat build/build.log; echo "建置失敗"; exit 1; }
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
-echo "1/4 腳本在 $(basename "$BASH") ${BASH_VERSION} 下能跑"
+echo "1/5 腳本在 $(basename "$BASH") ${BASH_VERSION} 下能跑"
 bad=$(LC_ALL=C grep -nE '\$[A-Za-z_][A-Za-z0-9_]*[^[:print:][:space:]]' scripts/*.sh || true)
 [ -z "$bad" ] || { echo "失敗：變數後面緊接中文，macOS bash 3.2 會把字吃進變數名（改用 \${名字}）："; echo "$bad"; exit 1; }
 smoke() {  # $1 = bash to use; plays one year without and with the model branch
@@ -27,9 +28,9 @@ smoke() {  # $1 = bash to use; plays one year without and with the model branch
 smoke "$BASH"
 if [ -n "${BASH32:-}" ]; then smoke "$BASH32"; echo "   也在 $("$BASH32" -c 'echo $BASH_VERSION') 下跑過"; fi
 echo "   通過"
-echo "2/4 單元測試"
+echo "2/5 單元測試"
 ./build/simcore_tests | tail -1
-echo "3/4 模型局的記錄能逐字重播"
+echo "3/5 模型局的記錄能逐字重播"
 fake="python3 $PWD/tests/fake_decider.py"
 ./build/play --data data --seed 21 --years 30 --npc-model "$fake" --npc-log "$tmp/npc.txt" --out "$tmp/a.md" </dev/null >/dev/null 2>&1
 n1=$(wc -l < "$tmp/npc.txt")
@@ -39,8 +40,10 @@ n2=$(wc -l < "$tmp/npc.txt")
 cmp -s "$tmp/a.md" "$tmp/b.md" || { echo "失敗：重播和原局不同"; exit 1; }
 [ "$n1" = "$n2" ] || { echo "失敗：重播時又叫了模型（$n1 → $n2 行）"; exit 1; }
 echo "   通過（$n1 次決定）"
-echo "4/4 模型連不上時退回規則"
+echo "4/5 模型連不上時退回規則"
 out=$(echo '{"who":"x","title":"t","situation":"s","mind":"m","options":["a","b"]}' | DECIDER_URL=http://127.0.0.1:9/none python3 tools/npc_decider.py)
 [ "$out" = "-1" ] || { echo "失敗：應該印 -1，實際是 $out"; exit 1; }
 echo "   通過"
+echo "5/5 瀏覽器版能玩完一年"
+python3 tests/ui_smoke.py "$tmp/ui.md"
 echo "全部通過"

@@ -24,6 +24,7 @@
 #include "simcore/autoplayer.h"
 #include "simcore/events.h"
 #include "simcore/world.h"
+#include "npc_bridge.h"
 
 using namespace sim;
 
@@ -89,17 +90,6 @@ int number(const std::string& s) {
     } catch (...) {
         return -1;
     }
-}
-
-std::string jsonEscape(const std::string& s) {
-    std::string o;
-    for (char c : s) {
-        if (c == '"' || c == '\\') o += '\\', o += c;
-        else if (c == '\n') o += "\\n";
-        else if (c == '\t') o += "\\t";
-        else o += c;
-    }
-    return o;
 }
 
 // The people who matter to the family right now; pick one to see what they want and why.
@@ -302,91 +292,9 @@ int main(int argc, char** argv) {
             std::cout << "請輸入 1 到 " << c.options.size() << " 的數字。\n";
         }
     });
-    // Spotlight villagers' choices: replayed from the log first, then asked of the model, else the rules.
-    std::vector<std::pair<int, std::string>> npcReplay;
-    size_t npcPos = 0;
-    if (!npcLogPath.empty()) {
-        std::ifstream in(npcLogPath);
-        std::string line;
-        while (std::getline(in, line)) {
-            size_t tab = line.find('\t');
-            npcReplay.push_back({number(line.substr(0, tab)), tab == std::string::npos ? "" : line.substr(tab + 1)});
-        }
-    }
-    std::ofstream npcLog;
-    if (!npcLogPath.empty()) npcLog.open(npcLogPath, std::ios::app);
-    w.setNpcScope(npcScope == "all" ? World::kFar : npcScope == "near" ? World::kNear : World::kSpotlight);
-    // The model is run as a separate command per question; several can run at once.
-    auto requestOf = [&](const World::NpcChoice& c) {
-        std::string req = std::string("{\"who\": \"") + jsonEscape(w.fullName(c.who)) + "\", \"title\": \"" + jsonEscape(c.title) +
-                          "\", \"situation\": \"" + jsonEscape(c.situation) + "\", \"mind\": \"" + jsonEscape(c.mind) + "\", \"feelings\": \"" + jsonEscape(c.feelings) + "\", \"options\": [";
-        for (size_t i = 0; i < c.options.size(); ++i) req += (i ? ", " : "") + std::string("\"") + jsonEscape(c.options[i]) + "\"";
-        req += "], \"rule_weights\": [";
-        for (size_t i = 0; i < c.weights.size(); ++i) req += (i ? ", " : "") + std::to_string(c.weights[i]);
-        req += "], \"fallback\": " + std::to_string(c.fallback) + "}";
-        return req;
-    };
-    auto askModel = [&](const std::vector<World::NpcChoice>& cs) {
-        std::vector<std::pair<int, std::string>> out(cs.size(), {-1, ""});
-        const size_t kAtOnce = 16;
-        std::string base = npcLogPath.empty() ? std::string("npc") : npcLogPath;
-        for (size_t from = 0; from < cs.size(); from += kAtOnce) {
-            size_t to = std::min(cs.size(), from + kAtOnce);
-            std::vector<std::string> paths;
-            std::vector<FILE*> running;
-            for (size_t i = from; i < to; ++i) {
-                paths.push_back(base + "." + std::to_string(i - from) + ".request.json");
-                {
-                    std::ofstream rq(paths.back());
-                    rq << requestOf(cs[i]);
-                }
-                running.push_back(popen((npcModel + " < '" + paths.back() + "'").c_str(), "r"));
-            }
-            for (size_t i = from; i < to; ++i) {
-                if (FILE* f = running[i - from]) {
-                    char buf[4096];
-                    std::string outText;
-                    while (fgets(buf, sizeof buf, f)) outText += buf;
-                    pclose(f);
-                    std::string first = outText.substr(0, outText.find('\n'));
-                    size_t tab = first.find('\t');
-                    out[i] = {number(first.substr(0, tab)), tab == std::string::npos ? "" : first.substr(tab + 1)};
-                }
-                std::remove(paths[i - from].c_str());
-            }
-        }
-        return out;
-    };
-    // Answers come from the replay log while it lasts, then from the model; every answer is logged in order.
-    auto decideAll = [&](const std::vector<World::NpcChoice>& cs) {
-        std::vector<std::pair<int, std::string>> out;
-        std::vector<World::NpcChoice> fresh;
-        for (const auto& c : cs) {
-            if (npcPos < npcReplay.size()) out.push_back(npcReplay[npcPos++]);
-            else fresh.push_back(c);
-        }
-        if (!fresh.empty()) {
-            auto got = npcModel.empty() ? std::vector<std::pair<int, std::string>>(fresh.size(), {-1, ""}) : askModel(fresh);
-            for (size_t i = 0; i < fresh.size(); ++i) {
-                auto [pick, reason] = got[i];
-                if (pick < 0 || pick >= static_cast<int>(fresh[i].options.size())) {
-                    pick = -1;
-                    reason.clear();
-                }
-                if (npcLog.is_open()) npcLog << pick << "\t" << reason << "\n" << std::flush;
-                out.emplace_back(pick, reason);
-            }
-        }
-        return out;
-    };
-    if (!npcModel.empty() || !npcLogPath.empty()) {
-        w.setNpcDecider([&](const World::NpcChoice& c, std::string& reason) -> int {
-            auto [pick, why] = decideAll({c})[0];
-            reason = why;
-            return pick;
-        });
-        w.setNpcBatchDecider(decideAll);
-    }
+    // Villagers' choices: replayed from the log first, then asked of the model, else the rules.
+    NpcBridge npc;
+    npc.attach(w, npcModel, npcLogPath, npcScope);
     AutoPlayer ai(cfg.seed);
 
     std::cout << "== " << w.dynasties()[w.playerDynasty()].surname << " 家，" << cfg.startYear << " 年 ==\n";

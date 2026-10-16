@@ -22,7 +22,7 @@ for f in src/*.cpp; do
   fi
   objs+=("$o")
 done
-for t in play chronicle stats; do
+for t in play chronicle stats webplay; do
   "$CXX" $FLAGS "tools/$t.cpp" "${objs[@]}" -o "build/$t"
 done
 "$CXX" $FLAGS -DSIMCORE_DATA_DIR="\"$PWD/data\"" tests/tests.cpp "${objs[@]}" -o build/simcore_tests

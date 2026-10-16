@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>中世紀家族試玩</title>
+<style>
+:root {
+  --bg: #f4f1ea; --panel: #fffdf8; --ink: #2b2620; --muted: #7a7064; --line: #e2dbcf;
+  --accent: #8a5a2b; --accent-soft: #f3e6d6; --good: #2f7d4f; --bad: #b23b3b; --warn: #b07a12;
+  --news: #2d5e9e; --whisper: #7b4f9e; --history: #6b5a3a; --btn: #efe7da; --btn-hover: #e6dac6;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1d1b18; --panel: #26231f; --ink: #ece6dc; --muted: #a3998b; --line: #3a352e;
+    --accent: #d9a46b; --accent-soft: #3a2e22; --good: #6cc48f; --bad: #e87b7b; --warn: #e2b04f;
+    --news: #82aee8; --whisper: #c39ae6; --history: #cdb88f; --btn: #332e28; --btn-hover: #3e382f;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.55 -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif; }
+header { position: sticky; top: 0; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line); padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; }
+header h1 { font-size: 18px; margin: 0; }
+.stat { color: var(--muted); }
+.stat b { color: var(--ink); font-weight: 600; }
+.lean { color: var(--bad); font-weight: 600; }
+main { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(360px, 1.35fr) minmax(320px, 1.15fr); gap: 14px; padding: 14px 16px 40px; align-items: start; }
+@media (max-width: 1100px) { main { grid-template-columns: 1fr 1fr; } #col-mid { grid-column: 1 / -1; order: -1; } }
+@media (max-width: 720px) { main { grid-template-columns: 1fr; } }
+section.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
+section.panel h2 { font-size: 15px; margin: 0 0 8px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+section.panel h2 small { font-weight: normal; color: var(--muted); font-size: 12px; }
+.card { border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; margin-bottom: 9px; }
+.card.wants { border-color: var(--accent); background: var(--accent-soft); }
+.card .top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.card .name { font-weight: 600; font-size: 15px; }
+.card .sub { color: var(--muted); font-size: 12px; }
+.mood { font-size: 13px; }
+.want { color: var(--accent); font-weight: 600; margin: 3px 0; }
+.op { font-size: 13px; cursor: pointer; }
+.op .reasons { display: none; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.op.open .reasons { display: block; }
+.pos { color: var(--good); } .neg { color: var(--bad); }
+.needs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin: 6px 0 2px; }
+.need { font-size: 11px; color: var(--muted); }
+.need .bar { height: 5px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 1px; }
+.need .bar i { display: block; height: 100%; background: var(--good); }
+.need .bar i.low { background: var(--bad); } .need .bar i.mid { background: var(--warn); }
+.traits { font-size: 12px; color: var(--muted); }
+.actions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+button { font: inherit; color: var(--ink); background: var(--btn); border: 1px solid var(--line); border-radius: 6px; padding: 4px 9px; cursor: pointer; }
+button:hover:not(:disabled) { background: var(--btn-hover); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); }
+button.wanted { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+button.link { background: none; border: none; color: var(--accent); padding: 0 2px; }
+.ask { border: 2px solid var(--accent); }
+.ask .situation { font-size: 15px; margin: 4px 0 10px; }
+.ask .opts { display: flex; flex-direction: column; gap: 6px; }
+.ask .opts button { text-align: left; padding: 8px 11px; }
+.ask .closed { color: var(--muted); font-size: 12px; margin-top: 6px; }
+.running { color: var(--muted); font-style: italic; }
+.turnbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.summary { white-space: pre-wrap; font-size: 13px; }
+.feed { max-height: 560px; overflow: auto; }
+.feed .yr { color: var(--muted); font-size: 12px; margin-top: 8px; border-top: 1px dashed var(--line); padding-top: 4px; }
+.feed .ln { padding: 2px 0; }
+.feed .ln.news { color: var(--news); } .feed .ln.wide { color: var(--warn); } .feed .ln.history { color: var(--history); font-weight: 600; }
+.feed .ln.event { font-weight: 600; } .feed .ln.fresh { background: var(--accent-soft); border-radius: 4px; }
+.tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
+.tabs button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.talk .item { padding: 5px 0; border-bottom: 1px solid var(--line); }
+.talk .item.whisper { color: var(--whisper); }
+.talk .item.old { opacity: .6; }
+.talk .who { color: var(--muted); font-size: 12px; }
+.person { padding: 7px 0; border-bottom: 1px solid var(--line); }
+.person .top { display: flex; justify-content: space-between; gap: 6px; }
+.busy { color: var(--accent); }
+svg text { fill: var(--ink); font-size: 12px; }
+svg .center text { font-weight: 700; }
+.legend { font-size: 12px; color: var(--muted); }
+.hdetail { margin-top: 8px; font-size: 13px; }
+.drawer { position: fixed; right: 16px; bottom: 16px; width: min(520px, calc(100vw - 32px)); max-height: 70vh; overflow: auto; background: var(--panel); border: 1px solid var(--accent); border-radius: 10px; padding: 12px 14px; box-shadow: 0 8px 30px rgba(0,0,0,.25); display: none; z-index: 10; }
+.drawer.show { display: block; }
+.drawer pre { white-space: pre-wrap; font: inherit; margin: 0; }
+.plan .card { cursor: default; }
+.muted { color: var(--muted); }
+.steps span { display: inline-block; margin-right: 6px; font-size: 12px; }
+.steps .done { color: var(--good); }
+</style>
+</head>
+<body>
+<header id="top"><h1>載入中…</h1></header>
+<main>
+  <div id="col-left">
+    <section class="panel"><h2>家裡 <small id="timeleft"></small></h2><div id="family"></div></section>
+  </div>
+  <div id="col-mid">
+    <section class="panel" id="turn"></section>
+    <section class="panel" id="summary-panel" style="display:none"><h2>上一季</h2><div class="summary" id="summary"></div></section>
+    <section class="panel"><h2>發生的事 <small>最新的在上面</small></h2><div class="feed" id="feed"></div></section>
+  </div>
+  <div id="col-right">
+    <section class="panel">
+      <div class="tabs" id="tabs"></div>
+      <div id="tab-body"></div>
+    </section>
+  </div>
+</main>
+<div class="drawer" id="drawer"><div style="display:flex;justify-content:space-between;align-items:center"><b id="drawer-title"></b><button class="link" onclick="closeDrawer()">關閉</button></div><pre id="drawer-text"></pre></div>
+<script>
+const NEEDS = ["吃飽", "歇息", "暖和", "人情", "心靈"];
+let seq = -1, lineCount = 0, view = null, lines = [], tab = "talk", selectedHouse = null, openPlan = null, freshFrom = 0;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const signed = (v) => (v > 0 ? "+" : "") + v;
+const cls = (v) => (v >= 10 ? "pos" : v <= -10 ? "neg" : "");
+const opWord = (op) => op >= 60 ? "非常親近" : op >= 30 ? "有好感" : op >= 10 ? "還算友善" : op > -10 ? "沒什麼感覺" : op > -30 ? "不太喜歡" : op > -60 ? "厭惡" : "恨之入骨";
+
+async function poll() {
+  for (;;) {
+    try {
+      const r = await fetch(`/api/view?seq=${seq}&line=${lineCount}`);
+      const v = await r.json();
+      if (v.seq !== seq) {
+        freshFrom = lines.length;
+        lines = lines.concat(v.lines || []);
+        lineCount = v.line_count;
+        seq = v.seq;
+        view = v;
+        render();
+      }
+    } catch (e) {
+      $("turn").innerHTML = `<p class="running">連不上遊戲（關掉了嗎？）。重新執行 scripts/ui.sh 再開。</p>`;
+      await new Promise((ok) => setTimeout(ok, 3000));
+    }
+  }
+}
+
+async function act(obj) {
+  view.ask = null;
+  renderTurn();
+  renderFamily();
+  await fetch("/api/act", { method: "POST", body: JSON.stringify(obj) });
+}
+async function look(obj, title) {
+  const r = await fetch("/api/look", { method: "POST", body: JSON.stringify(obj) });
+  const v = await r.json();
+  $("drawer-title").textContent = title;
+  $("drawer-text").textContent = v.text || "（沒有回應）";
+  $("drawer").classList.add("show");
+}
+function closeDrawer() { $("drawer").classList.remove("show"); }
+
+const seasonOpen = () => view && view.ask && view.ask.kind === "season";
+
+function render() {
+  renderTop();
+  renderTurn();
+  renderFamily();
+  renderFeed();
+  renderTabs();
+}
+
+function renderTop() {
+  const s = view.state;
+  if (!s || !s.house) { $("top").innerHTML = "<h1>載入中…</h1>"; return; }
+  const h = s.house;
+  let amb = "";
+  if (s.ambition) {
+    const steps = s.ambition.steps.map((x) => `<span class="${x.done ? "done" : ""}">${x.done ? "✓" : "○"} ${esc(x.name)}</span>`).join("");
+    amb = `<span class="stat" title="${esc(s.ambition.desc)}">志向 <b>${esc(s.ambition.name)}</b> <span class="steps">${steps}</span></span>`;
+  }
+  $("top").innerHTML = `<h1>${esc(h.surname)}家</h1>
+    <span class="stat"><b>${s.date.year}</b> 年 ${esc(s.date.season)}</span>
+    <span class="stat">地位 <b>${esc(h.standing)}</b></span>
+    <span class="stat">錢 <b>${h.money}</b> 便士</span>
+    <span class="stat">存糧 <b>${h.food_days}</b> 天${h.lean ? ' <span class="lean">今年缺糧</span>' : ""}</span>
+    <span class="stat">地 <b>${h.acres}</b> 畝${h.freehold > 0 ? `（自由地 ${h.freehold}）` : ""}</span>
+    ${h.debt > 0 ? `<span class="stat lean">欠債 ${h.debt} 便士</span>` : ""}
+    ${amb}`;
+  $("timeleft").textContent = seasonOpen() ? `這一季還有 ${s.time_left} 段空閒` : "";
+}
+
+function renderTurn() {
+  const s = view.state, a = view.ask;
+  let html = "";
+  if (view.ended) {
+    html = `<h2>結束</h2><p>${view.ended.crashed ? "遊戲程式停了。" : view.ended.line_ended ? `${view.ended.year} 年，家族斷絕了。` : `玩到了 ${view.ended.year} 年。`}記錄存在這一局的資料夾裡（log.md）。</p>`;
+    $("turn").className = "panel";
+  } else if (a && a.kind === "choice") {
+    $("turn").className = "panel ask";
+    html = `<h2>〔${esc(a.title)}〕<small>${s ? `${s.date.year} 年 ${s.date.month} 月` : ""}</small></h2>
+      <div class="situation">${esc(a.situation)}</div>
+      <div class="opts">${a.options.map((o, i) => `<button onclick="act({do:'choose',index:${i}})">${i + 1}. ${esc(o)}</button>`).join("")}</div>
+      ${a.unavailable.length ? `<div class="closed">${a.unavailable.map(esc).join("<br>")}</div>` : ""}
+      <div style="margin-top:8px"><button class="link" onclick="act({do:'ai'})">讓 AI 替你決定</button></div>`;
+  } else if (a && a.kind === "season") {
+    $("turn").className = "panel ask";
+    html = `<h2>${s.date.year} 年 ${esc(s.date.season)} <small>還有 ${s.time_left} 段空閒</small></h2>
+      <p class="muted" style="margin:0 0 8px">找家人或村民（左邊、右邊的按鈕）各用一段空閒，定計畫也用一段；沒用完的拿去下田，收成會好一點。</p>
+      <div class="turnbar">
+        <button class="primary" onclick="act({do:'pass'})">過這一季</button>
+        <button onclick="act({do:'year'})">一口氣過一年</button>
+        <button onclick="look({do:'report'}, '家裡知道的事')">家裡知道什麼</button>
+        <button class="link" onclick="if(confirm('結束這一局？'))act({do:'quit'})">結束這一局</button>
+      </div>`;
+  } else {
+    $("turn").className = "panel";
+    html = `<p class="running">日子在過……</p>`;
+  }
+  $("turn").innerHTML = html;
+  const sum = s && s.summary ? s.summary.trim() : "";
+  $("summary-panel").style.display = sum ? "" : "none";
+  $("summary").textContent = sum;
+}
+
+function needBars(needs) {
+  return `<div class="needs">${needs.map((v, i) => `<div class="need">${NEEDS[i]}<div class="bar"><i class="${v < 30 ? "low" : v < 55 ? "mid" : ""}" style="width:${v}%"></i></div></div>`).join("")}</div>`;
+}
+function actionButtons(p) {
+  if (!p.actions || !p.actions.length) return "";
+  const can = seasonOpen();
+  return `<div class="actions">${p.actions.map((x) => {
+    const tip = x.open ? (x.desc || "") + (x.money ? `（${x.money} 便士）` : "") : x.why;
+    return `<button ${x.open && can ? "" : "disabled"} class="${x.wanted ? "wanted" : ""}" title="${esc(tip)}" onclick="act({do:'interact',who:${p.id},event:'${x.event}'})">${x.wanted ? "★ " : ""}${esc(x.title)}</button>`;
+  }).join("")}</div>`;
+}
+function reasonsLine(rs) {
+  return rs && rs.length ? rs.map(([l, v]) => `${esc(l)} <span class="${cls(v)}">${signed(v)}</span>`).join("、") : "沒有特別的原因";
+}
+function toggle(el) { el.classList.toggle("open"); }
+
+function renderFamily() {
+  const s = view.state;
+  if (!s || !s.family) return;
+  $("family").innerHTML = s.family.map((p) => {
+    const me = p.id === s.head;
+    return `<div class="card ${p.want ? "wants" : ""}">
+      <div class="top"><span class="name">${me ? "你　" : ""}${esc(p.name)}</span><span class="sub">${esc(me ? "" : p.kin)} ${p.age} 歲${p.health < 40 ? ' <span class="neg">身體很差</span>' : ""}</span></div>
+      <div class="mood">${esc(p.mood)}${p.mood_cause ? "：" + esc(p.mood_cause) : ""}</div>
+      ${p.want ? `<div class="want">${esc(p.want)}</div>` : ""}
+      ${me ? "" : `<div class="op" onclick="toggle(this)">對你 <b class="${cls(p.opinion)}">${esc(p.opinion_word)} ${signed(p.opinion)}</b> <span class="muted">▾</span><div class="reasons">${reasonsLine(p.reasons)}</div></div>`}
+      ${needBars(p.needs)}
+      ${p.traits.length ? `<div class="traits">${p.traits.map(esc).join("、")}</div>` : ""}
+      ${actionButtons(p)}
+    </div>`;
+  }).join("");
+}
+
+function lineClass(l) {
+  if (l.kind === 3) return "history";
+  if (l.text.startsWith("【消息】")) return "news";
+  if (l.text.startsWith("【風聲】")) return "wide";
+  if (l.text.startsWith("〔")) return "event";
+  return "";
+}
+function renderFeed() {
+  const show = lines.slice(-400);
+  const start = lines.length - show.length;
+  let html = "", year = null;
+  for (let i = show.length - 1; i >= 0; --i) {
+    const l = show[i];
+    if (l.year !== year) { html += `<div class="yr">${l.year} 年</div>`; year = l.year; }
+    html += `<div class="ln ${lineClass(l)} ${start + i >= freshFrom ? "fresh" : ""}">${esc(l.text)}</div>`;
+  }
+  $("feed").innerHTML = html || '<p class="muted">還沒有事。</p>';
+}
+
+const TABS = [["talk", "村裡在說"], ["net", "關係網"], ["people", "村民"], ["plans", "計畫"]];
+function renderTabs() {
+  $("tabs").innerHTML = TABS.map(([k, n]) => `<button class="${tab === k ? "on" : ""}" onclick="tab='${k}';renderTabs()">${n}</button>`).join("");
+  const s = view.state;
+  if (!s || !s.family) { $("tab-body").innerHTML = ""; return; }
+  if (tab === "talk") renderTalk(s);
+  else if (tab === "net") renderNet(s);
+  else if (tab === "people") renderPeople(s);
+  else renderPlans(s);
+}
+
+function renderTalk(s) {
+  const items = s.heard || [];
+  $("tab-body").innerHTML = items.length ? `<div class="talk">${items.map((h) => `<div class="item ${h.whisper ? "whisper" : ""} ${h.recent ? "" : "old"}">
+      <div class="who">${h.year} 年　${h.whisper ? (h.teller ? esc(h.teller) + "悄悄說（不知真假）" : "有人悄悄說") : h.teller ? "聽" + esc(h.teller) + "說" : ""}</div>
+      ${esc(h.text)}</div>`).join("")}</div>` : '<p class="muted">還沒聽到什麼。</p>';
+}
+
+function renderNet(s) {
+  const hs = [...s.houses].sort((a, b) => b.link - a.link);
+  const W = 460, H = 460, cx = W / 2, cy = H / 2;
+  let edges = "", nodes = "";
+  hs.forEach((h, i) => {
+    const ang = (i / hs.length) * Math.PI * 2 - Math.PI / 2;
+    const r = 55 + (1 - Math.min(1, h.link)) * 165;
+    const x = cx + Math.cos(ang) * r, y = cy + Math.sin(ang) * r;
+    const color = h.attitude >= 15 ? "var(--good)" : h.attitude <= -10 ? "var(--bad)" : "var(--muted)";
+    edges += `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="var(--accent)" stroke-opacity="${0.12 + h.link * 0.7}" stroke-width="${1 + h.link * 4}"/>`;
+    const rad = 7 + Math.min(10, h.members.length * 1.3);
+    nodes += `<g style="cursor:pointer" onclick="selectedHouse=${h.id};renderTabs()">
+      ${h.feud ? `<circle cx="${x}" cy="${y}" r="${rad + 5}" fill="none" stroke="var(--bad)" stroke-dasharray="3 3" stroke-width="2"/>` : ""}
+      <circle cx="${x}" cy="${y}" r="${rad}" fill="${color}" fill-opacity="${selectedHouse === h.id ? 1 : 0.75}" stroke="${selectedHouse === h.id ? "var(--ink)" : "none"}" stroke-width="2"/>
+      <text x="${x}" y="${y + rad + 13}" text-anchor="middle">${esc(h.surname)}</text></g>`;
+  });
+  const sel = hs.find((h) => h.id === selectedHouse);
+  const detail = sel ? `<div class="hdetail"><b>${esc(sel.surname)}家</b>　${sel.acres} 畝　兩家 ${Math.round(sel.link * 100)} 分近${sel.feud ? `　<span class="neg">${["", "有嫌隙", "結了怨", "世仇"][sel.feud]}</span>` : ""}
+      <div class="muted">${esc(sel.tie)}</div>
+      <div>${sel.members.map((m) => `<span style="display:inline-block;margin-right:10px">${m.head ? "（家主）" : ""}<button class="link" onclick="look({do:'inspect',who:${m.id}}, '${esc(m.name)}')">${esc(m.name)}</button> ${m.age} 歲 <span class="${cls(m.opinion)}">${opWord(m.opinion)}</span></span>`).join("")}</div></div>`
+    : '<p class="muted">點一戶人家看是誰、怎麼認識的。</p>';
+  $("tab-body").innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="各戶跟你家多近">${edges}
+      <g class="center"><circle cx="${cx}" cy="${cy}" r="20" fill="var(--accent)"/><text x="${cx}" y="${cy + 4}" text-anchor="middle" style="fill:#fff">你家</text></g>${nodes}</svg>
+    <div class="legend">越靠近中間，兩家越近（親戚、常來往）。綠：對你家有好感；紅：對你家不好；虛線紅圈：有仇。</div>${detail}`;
+}
+
+function renderPeople(s) {
+  const ppl = s.people || [];
+  $("tab-body").innerHTML = ppl.length ? ppl.map((p) => `<div class="person">
+      <div class="top"><span><b>${p.busy ? '<span class="busy" title="跟你家有事">★</span> ' : ""}${esc(p.name)}</b> <span class="muted">${esc(p.familiarity)}${p.house ? "・" + esc(p.house) + "家" : ""}・${p.age} 歲</span></span>
+      <button class="link" onclick="look({do:'inspect',who:${p.id}}, '${esc(p.name)}')">詳情</button></div>
+      <div class="op" onclick="toggle(this)">對你 <b class="${cls(p.opinion)}">${esc(p.opinion_word)} ${signed(p.opinion)}</b>　你對他們 <span class="${cls(p.yours)}">${signed(p.yours)}</span>${p.feud ? `　<span class="neg">${["", "嫌隙", "結怨", "世仇"][p.feud]}</span>` : ""} <span class="muted">▾</span><div class="reasons">${reasonsLine(p.reasons)}</div></div>
+      <div class="muted" style="font-size:12px">${esc(p.line)}</div>
+      ${actionButtons(p)}</div>`).join("") : '<p class="muted">眼下沒有誰跟你家特別有關係。</p>';
+}
+
+function renderPlans(s) {
+  let html = "";
+  if (s.plan) {
+    html += `<div class="card"><b>正在進行：${esc(s.plan.name)}</b>${s.plan.target ? "（對象 " + esc(s.plan.target) + "）" : ""}<div class="needs" style="grid-template-columns:1fr"><div class="need">進度 ${s.plan.progress}/100<div class="bar"><i style="width:${Math.max(0, Math.min(100, s.plan.progress))}%"></i></div></div></div>
+      <button ${seasonOpen() ? "" : "disabled"} onclick="if(confirm('放棄這個計畫？'))act({do:'cancel'})">放棄</button></div>`;
+  }
+  const plans = s.plans || [];
+  if (!s.plan && !plans.length) html += '<p class="muted">這時候不能定計畫。</p>';
+  const sorted = [...plans].sort((a, b) => (b.ambition - a.ambition) || (b.open - a.open));
+  html += sorted.map((p) => {
+    const open = p.open && seasonOpen();
+    const expanded = openPlan === p.id && open;
+    return `<div class="card">
+      <div class="top"><span class="name">${p.ambition ? "★ " : ""}${esc(p.name)}</span>${p.open ? `<button ${open ? "" : "disabled"} onclick="openPlan=openPlan==='${p.id}'?null:'${p.id}';renderTabs()">${expanded ? "收起" : "選對象"}</button>` : '<span class="muted">現在不行</span>'}</div>
+      <div class="sub">${esc(p.desc)}</div>
+      ${!p.open && p.needs ? `<div class="muted" style="font-size:12px">要：${esc(p.needs)}</div>` : ""}
+      ${expanded ? `<div class="actions" style="flex-direction:column;align-items:stretch">${p.targets.map((t) => `<button style="text-align:left" onclick="openPlan=null;act({do:'plan',plan:'${p.id}',target:${t.target},subject:${t.subject}})">${esc(t.label)}</button>`).join("")}</div>` : ""}
+    </div>`;
+  }).join("");
+  if (plans.some((p) => p.ambition)) html = `<p class="muted" style="margin-top:0">★ 是能推動這一代志向的計畫。</p>` + html;
+  $("tab-body").innerHTML = html;
+}
+
+poll();
+</script>
+</body>
+</html>
