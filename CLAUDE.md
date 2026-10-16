@@ -2,6 +2,23 @@
 
 Unreal Engine 5 C++ life-sim. Realistic 3D; camera zooms continuously from an isometric overview to third-person over-the-shoulder.
 
+## Current engine: Godot 4.7 (`godot/`) — decided 2026-10-16
+UE (`Source/`, `Content/`, `Config/`) and three.js (`web/`) attempts are kept in git for reference; new work goes in `godot/`.
+- Forward+, Jolt physics. GDScript, statically typed. Logic that can be pure (e.g. `scripts/camera_zoom.gd`) stays free of nodes and is tested headless.
+- The village is built procedurally in code (`scripts/village.gd`, seeded RNG) so screenshots are deterministic.
+- Camera: far = 45° pitch, 12° FOV iso overview (40 m wide); zooms to a 35° FOV mid view ~10 m wide. No over-the-shoulder view.
+- Lighting: real-time sun driven by `hour` (T key advances), SDFGI + SSAO, ACES.
+
+Commands (from repo root):
+```
+godot --headless --path godot -s res://tests/test_camera_zoom.gd     # tests, exit 1 on failure
+godot --path godot -- --capture="$PWD/docs/screenshots"                 # far/mid/dusk shots at 1920x1080, then quits
+godot --path godot                                                      # play
+godot --editor --path godot                                             # editor
+```
+
+## Unreal attempt (kept for reference)
+
 ## Rules
 - Game logic in C++. Blueprints only for asset wiring (meshes, materials, tuning), never logic.
 - Simulation core lives in plain C++ classes (`F`-prefixed, no UObject/Actor), e.g. `Source/MedievalSim/Public/SimClock.h`. Actors/Components only read the sim and present it.
