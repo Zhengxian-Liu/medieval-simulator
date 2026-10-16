@@ -28,7 +28,8 @@ uniform float course_var = 0.0;     // per-course tone variation (each course la
 uniform float bundle_width = 0.3;  // thatch: bundles laid side by side along each course (m)
 uniform float bundle_var = 0.0;    // per-bundle tone variation
 uniform float bundle_gap = 0.0;    // darkening in the gaps between bundles
-uniform float ragged = 0.0;        // per-bundle offset of the course edge (in courses): jagged butt ends
+uniform float ragged = 0.0;
+uniform float bundle_relief = 0.0;  // normal tilt across each bundle and at each course step: lit like geometry        // per-bundle offset of the course edge (in courses): jagged butt ends
 uniform float detile = 0.0;  // blend in a second, rescaled sample: hides the texture repeat (thatch)
 
 varying vec3 world_pos;
@@ -73,6 +74,8 @@ void fragment() {
 	c *= mix(1.0, mix(0.45, 1.35, patches), step(0.001, slope_pos) * eave_age);
 	c = mix(c, c * 0.45, clamp(age, 0.0, 1.0));
 	c = mix(c, moss_color, clamp(age * moss * 0.8, 0.0, 1.0) * smoothstep(0.45, 0.75, patches));
+	vec3 relief_normal = NORMAL;
+	bool use_relief = false;
 	if (course_height > 0.0 && slope_pos > 0.001) {
 		// horizontal courses: world-height bands, wobbling a few cm along the roof so they are not ruled lines
 		float y = (world_pos.y - NODE_POSITION_WORLD.y) / course_height
@@ -92,6 +95,16 @@ void fragment() {
 		float fa = fract(a);
 		c *= 1.0 - bundle_gap * (1.0 - smoothstep(0.0, 0.18, min(fa, 1.0 - fa)));
 		c *= mix(1.0 - course_shadow, 1.0, smoothstep(0.0, 0.3, 1.0 - fract(y)));  // dark band just under the butt ends above
+		if (bundle_relief > 0.0) {
+			// rounded bundles (normal turns across each one) and stepped courses (butt ends face down-slope): the
+			// sun lights one flank and shades the other, as real bundle depth does; geometry would cost ~30k tris a roof
+			vec3 along3 = vec3(along_dir.x, 0.0, along_dir.y);
+			vec3 down = normalize(vec3(0.0, -1.0, 0.0) - world_normal * dot(vec3(0.0, -1.0, 0.0), world_normal) + vec3(1e-4));
+			vec3 nw = world_normal + along3 * (fa - 0.5) * 2.0 * bundle_relief
+					+ down * smoothstep(0.65, 1.0, fract(y)) * bundle_relief * 1.5;
+			relief_normal = normalize((VIEW_MATRIX * vec4(normalize(nw), 0.0)).xyz);
+			use_relief = true;
+		}
 	}
 	ALBEDO = c;
 	AO = mix(1.0, baked_ao, ao_strength);  // occludes ambient/GI light only, so direct sun still lands on the surface
@@ -103,6 +116,9 @@ void fragment() {
 	ALBEDO = mix(ALBEDO, ALBEDO * 1.45 + vec3(0.03), wear * edge_wear);
 	ROUGHNESS = clamp(max(texture(rough_tex, UV).r * mix(0.85, 1.15, n), roughness_min) + wear * 0.1, 0.0, 1.0);
 	SPECULAR = specular;
+	if (use_relief) {
+		NORMAL = relief_normal;
+	}
 	NORMAL_MAP = texture(normal_tex, UV).rgb;
 	if (id_pass > 0.5) {  // material-ID capture pass (main.gd): flat colour per material class, no lighting
 		ALBEDO = vec3(0.0);

@@ -1,0 +1,2 @@
+materials.weathered.thatch.bundle_relief=0.6
+materials.weathered.thatch.tint=[1.57,1.37,0.91]
