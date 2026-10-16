@@ -10,6 +10,7 @@ const ZOOM_STEP := 0.08
 const ZOOM_SPEED := 6.0
 const MOVE_SPEED := 4.0
 const SHOT_SIZE := Vector2i(1920, 1080)
+const SUPERSAMPLE := 2  # render shots at 2x and downscale: clean edges on thin geometry (grass, fences, beams)
 const SETTLE_FRAMES := 90  # SDFGI and SSAO converge over several frames
 
 var zoom := 0.0
@@ -34,8 +35,9 @@ func _ready() -> void:
 		add_child(camera)
 	else:
 		var vp := SubViewport.new()  # fixed size regardless of the screen the window lands on
-		vp.size = SHOT_SIZE
+		vp.size = SHOT_SIZE * SUPERSAMPLE
 		vp.msaa_3d = Viewport.MSAA_4X
+		vp.use_taa = true
 		vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 		add_child(vp)
 		camera = Camera3D.new()
@@ -80,10 +82,11 @@ func _build_lighting() -> void:
 	env.tonemap_white = 6.0
 	env.tonemap_exposure = 0.95
 	env.adjustment_enabled = true
-	env.adjustment_contrast = 1.12
-	env.adjustment_saturation = 1.12  # warm, saturated like the reference
-	env.ambient_light_color = Color(0.5, 0.68, 0.72)  # teal fill so shadows lean blue-green, not grey
-	env.ambient_light_sky_contribution = 0.6
+	env.adjustment_contrast = 1.08
+	env.adjustment_saturation = 1.0  # neutral grade (user's call): realism comes from light, not colour
+	env.ssil_enabled = true  # screen-space bounce light between nearby surfaces (walls onto ground, props onto walls)
+	env.ssil_radius = 3.0
+	env.sdfgi_use_occlusion = true
 	env.sdfgi_enabled = true
 	env.sdfgi_energy = 2.5  # bounce light: at 1.0 the shaded sides of buildings went near black
 	env.ssao_enabled = true
@@ -98,6 +101,7 @@ func _build_lighting() -> void:
 
 	sun = DirectionalLight3D.new()
 	sun.shadow_enabled = true
+	sun.light_angular_distance = 0.8  # sun disc size: soft penumbrae that widen with distance (PCSS)
 	sun.directional_shadow_max_distance = 120.0
 	sun.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_AND_SKY
 	add_child(sun)
@@ -108,7 +112,7 @@ func _apply_time() -> void:
 	sun.rotation_degrees = Vector3(-elevation, 75.0 + (hour - 12.0) * 10.0, 0)  # from the upper left of the screen (classic iso key light), so the roofs and walls we see are lit
 	var day := clampf(elevation / 20.0, 0.0, 1.0)
 	sun.light_energy = lerpf(0.0, 1.4, day)
-	sun.light_color = Color(1.0, 0.55, 0.3).lerp(Color(1.0, 0.9, 0.74), day)
+	sun.light_color = Color(1.0, 0.55, 0.3).lerp(Color(1.0, 0.96, 0.9), day)
 	sun.visible = elevation > -2.0
 	# The HDRI is a daytime sky: dim it (and the ambient light it gives) toward night.
 	environment.background_energy_multiplier = lerpf(0.04, 1.0, day)
@@ -157,7 +161,9 @@ func _capture(vp: SubViewport, dir: String) -> void:
 		for i in SETTLE_FRAMES:
 			await RenderingServer.frame_post_draw
 		var path: String = dir.path_join(shot[0] + ".png")
-		var err := vp.get_texture().get_image().save_png(path)
+		var image := vp.get_texture().get_image()
+		image.resize(SHOT_SIZE.x, SHOT_SIZE.y, Image.INTERPOLATE_LANCZOS)
+		var err := image.save_png(path)
 		if err != OK:
 			push_error("capture failed: %s (%s)" % [path, error_string(err)])
 			get_tree().quit(1)
