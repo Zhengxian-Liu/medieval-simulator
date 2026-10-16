@@ -4,7 +4,7 @@ extends RefCounted
 
 const FAR_FOV := 12.0     # vertical, degrees
 const NEAR_FOV := 35.0
-const FAR_WIDTH := 40.0   # metres of ground across the screen
+const FAR_WIDTH := 22.0   # metres of ground across the screen (Pine & Parcel frames ~20-25 m)
 const NEAR_WIDTH := 10.0
 const FAR_PITCH := 45.0   # degrees below the horizon
 const NEAR_PITCH := 32.0
