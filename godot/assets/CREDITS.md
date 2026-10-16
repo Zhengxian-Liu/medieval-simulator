@@ -1,6 +1,6 @@
 # Asset credits
 
-All assets from [Poly Haven](https://polyhaven.com), licence CC0 1.0 (public domain).
+Downloaded assets are CC0 1.0 (public domain): [Poly Haven](https://polyhaven.com) unless marked ambientCG.
 
 - `textures/grass/`: [leafy_grass](https://polyhaven.com/a/leafy_grass) (1K: albedo, normal GL, roughness)
 - `textures/riverbed/`: [brown_mud_rocks_01](https://polyhaven.com/a/brown_mud_rocks_01) (1K: albedo, normal GL, roughness)
@@ -17,6 +17,8 @@ All assets from [Poly Haven](https://polyhaven.com), licence CC0 1.0 (public dom
 - `models/shrub_02/`: [shrub_02](https://polyhaven.com/a/shrub_02) (1K glTF)
 - `models/shrub_04/`: [shrub_04](https://polyhaven.com/a/shrub_04) (1K glTF)
 - `models/pine_sapling_small/`: [pine_sapling_small](https://polyhaven.com/a/pine_sapling_small) (1K glTF)
+- `textures/leaves_oak/`: [LeafSet016](https://ambientcg.com/a/LeafSet016) (ambientCG, CC0 1.0, 1K)
+- `textures/grass_cards/`: [LeafSet026](https://ambientcg.com/a/LeafSet026) (ambientCG, CC0 1.0, 1K)
 - `sky.hdr`: [kloofendal_48d_partly_cloudy_puresky](https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky) (2K HDRI)
 
 Generated in this repo (no third-party source): `models/trees/` by `tools/make_trees.py`, `models/houses/` by `tools/make_houses.py`.

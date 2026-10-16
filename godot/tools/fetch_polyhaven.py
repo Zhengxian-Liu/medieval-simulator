@@ -1,10 +1,12 @@
-"""Downloads the CC0 Poly Haven textures/HDRI the village uses into godot/assets/ and writes assets/CREDITS.md.
+"""Downloads the CC0 Poly Haven (and two ambientCG leaf atlases) textures/HDRI the village uses into godot/assets/ and writes assets/CREDITS.md.
 
 Run: python3 godot/tools/fetch_polyhaven.py   (idempotent; skips files already present)
 """
+import io
 import json
 import pathlib
 import urllib.request
+import zipfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent / "assets"
 API = "https://api.polyhaven.com"
@@ -20,6 +22,7 @@ TEXTURES = {  # material slot -> Poly Haven asset id
 MAPS = {"Diffuse": "albedo", "nor_gl": "normal", "Rough": "roughness"}  # Poly Haven key -> our suffix
 HDRI = "kloofendal_48d_partly_cloudy_puresky"
 MODELS = ["rock_moss_set_01", "rock_moss_set_02", "boulder_01", "rock_07", "rock_09", "shrub_02", "shrub_04", "pine_sapling_small"]  # 1K glTF; full-size Poly Haven trees are 100-950 MB, too heavy
+AMBIENTCG = {"leaves_oak": "LeafSet016", "grass_cards": "LeafSet026"}  # leaf atlases with opacity (Poly Haven has none)
 HEADERS = {"User-Agent": "MedievalSim-asset-fetch/1.0"}  # the API answers 403 to urllib's default agent
 
 
@@ -40,7 +43,7 @@ def fetch(url, dest):
 
 def main():
     total = 0
-    credits = ["# Asset credits", "", "All assets from [Poly Haven](https://polyhaven.com), licence CC0 1.0 (public domain).", ""]
+    credits = ["# Asset credits", "", "Downloaded assets are CC0 1.0 (public domain): [Poly Haven](https://polyhaven.com) unless marked ambientCG.", ""]
     for slot, asset in TEXTURES.items():
         files = get_json(f"{API}/files/{asset}")
         for key, suffix in MAPS.items():
@@ -54,6 +57,20 @@ def main():
         for rel, entry in gltf.get("include", {}).items():
             total += fetch(entry["url"], folder / rel)
         credits.append(f"- `models/{asset}/`: [{asset}](https://polyhaven.com/a/{asset}) (1K glTF)")
+    for slot, asset in AMBIENTCG.items():
+        folder = ROOT / "textures" / slot
+        if not folder.exists():
+            url = f"https://ambientcg.com/get?file={asset}_1K-JPG.zip"
+            with urllib.request.urlopen(urllib.request.Request(url, headers=HEADERS)) as r:
+                data = r.read()
+            total += len(data)
+            folder.mkdir(parents=True)
+            with zipfile.ZipFile(io.BytesIO(data)) as z:
+                for name in z.namelist():  # images only; flatten names to <map>.jpg
+                    if name.lower().endswith(".jpg"):
+                        suffix = name.rsplit("_", 1)[-1].lower()  # e.g. Color.jpg, Opacity.jpg, NormalGL.jpg
+                        (folder / suffix).write_bytes(z.read(name))
+        credits.append(f"- `textures/{slot}/`: [{asset}](https://ambientcg.com/a/{asset}) (ambientCG, CC0 1.0, 1K)")
     hdr = get_json(f"{API}/files/{HDRI}")["hdri"]["2k"]["hdr"]
     total += fetch(hdr["url"], ROOT / "sky.hdr")
     credits.append(f"- `sky.hdr`: [{HDRI}](https://polyhaven.com/a/{HDRI}) (2K HDRI)")

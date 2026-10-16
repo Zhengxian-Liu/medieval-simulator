@@ -21,9 +21,11 @@ var player: Node3D
 var sun: DirectionalLight3D
 var environment: Environment
 var camera: Camera3D
+var village: RefCounted
 
 func _ready() -> void:
-	player = Village.new().build(self)
+	village = Village.new()
+	player = village.build(self)
 	_build_lighting()
 	var export_path := _user_arg("--export-gltf=")
 	if not export_path.is_empty():
@@ -55,12 +57,18 @@ func _user_arg(prefix: String) -> String:
 
 # Writes the village, the sun and the far-iso camera to a .glb so Blender can render the same shot offline.
 func _export_gltf(path: String) -> void:
-	camera = Camera3D.new()
-	camera.name = "FarIsoCamera"
-	add_child(camera)
-	zoom = 0.0
-	_apply_camera()
+	hour = 11.0
 	_apply_time()
+	for shot in [["FarIsoCamera", 0.0], ["MidCamera", 1.0]]:  # same poses as the far and mid captures
+		camera = Camera3D.new()
+		camera.name = shot[0]
+		add_child(camera)
+		zoom = shot[1]
+		_apply_camera()
+	# ShaderMaterials do not survive glTF; Blender rebuilds the ground from this mask (tools/render_cycles.py)
+	var mask: Image = village._ground._mask.duplicate()
+	mask.convert(Image.FORMAT_L8)
+	mask.save_png(path.get_basename() + "_mask.png")
 	var doc := GLTFDocument.new()
 	var state := GLTFState.new()
 	var err := doc.append_from_scene(self, state)
