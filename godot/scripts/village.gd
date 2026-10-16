@@ -172,7 +172,8 @@ func build(root: Node3D) -> Node3D:
 		_dress_yard(root, h)
 	_dress_square(root, layout)
 
-	_add(root, _cyl(0.05, 0.07, 1.6, 6), "iron", Vector3(1.5, 0.8, 1.5))
+	var post := _add(root, _cyl(0.05, 0.07, 1.6, 6), "iron", Vector3(1.5, 0.8, 1.5))
+	post.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF  # under its own torch it cast a black hexagon (round 6-7)
 	var torch := OmniLight3D.new()
 	torch.light_color = Color(1.0, 0.6, 0.25)
 	var tl: Dictionary = Look.v("placement.torch")

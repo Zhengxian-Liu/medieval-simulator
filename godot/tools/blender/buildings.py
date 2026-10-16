@@ -94,6 +94,15 @@ def frame():
         x = sx * xs
         beam(f"gsill_{sx}", (x, -ys, FOOT + 0.08), (x, ys, FOOT + 0.08), section=0.2)
         beam(f"gplate_{sx}", (x, -ys, TOP - 0.08), (x, ys, TOP - 0.08), section=0.2)
+        # gable walls framed in ~1.2 m bays with a mid-rail and braces like the long walls (the plain daub panel read
+        # as one 6 m slab, Fable round 7)
+        beam(f"grail_{sx}", (x, -ys, FOOT + H * 0.5), (x, ys, FOOT + H * 0.5), section=0.13)
+        n = max(3, round(D / 1.2))
+        for i in range(1, n):
+            y = -ys + i * 2 * ys / n
+            beam(f"gstud_{sx}_{i}", (x, y, FOOT + 0.08), (x, y, TOP - 0.08), section=0.15)
+        for sy in (-1, 1):
+            beam(f"gbrace_{sx}_{sy}", (x, sy * ys, FOOT + H * 0.5), (x, sy * (ys - 1.0), TOP - 0.1), section=0.12)
         beam(f"kingpost_{sx}", (x, 0, TOP), (x, 0, TOP + PITCH_RISE * 0.85), section=0.16)
         for sy in (-1, 1):  # principal rafters visible in the gable
             beam(f"rafter_{sx}_{sy}", (x, sy * ys, TOP), (x, 0, TOP + PITCH_RISE * 0.95), section=0.16)

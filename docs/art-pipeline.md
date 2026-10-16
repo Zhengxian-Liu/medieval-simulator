@@ -155,3 +155,6 @@ Add it to `godot/tools/fetch_polyhaven.py` (Poly Haven / ambientCG, CC0 only, 1K
 | painterly toggles (Disco Elysium study) | world brush strokes at 0.12 were invisible (0.75/255); edge blur + desaturate read as a lens defect | rejected by Fable round 6 and removed; adopt only what survives an A/B (`tools/ab.py`) |
 | bushes read as confetti at the mid view (round 6) | 17 cm leaf cards | bushes use real leaf size (~10 cm) and 3-4x the cards (`foliage.py` VARIANTS) |
 | per-material targets fitted to Fable's eyeballed numbers | a reviewer's estimate (thatch 2.7x grass) was off by 2x vs the reference | measure the reference with the same method before setting a target |
+| gable walls read as one 6 m daub slab (round 7) | frame() framed only the long walls | gable walls get ~1.2 m stud bays, a mid-rail and braces (`buildings.py frame`) |
+| dark hexagon at the torch foot at night | the 6-sided post shadowed the ground under its own omni light | thin props under their own light don't cast shadows |
+| key:fill differed by view for the same ground (far 2.4-3.6, mid ~6) | not SSAO, SSIL or SDFGI resolution (each A/B'd); partly wall-side geometry | measure per material/region with the ID pass; unresolved remainder recorded in art-check-conflicts.md |
