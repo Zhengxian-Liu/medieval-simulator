@@ -105,7 +105,10 @@ def lathe(name, profile, mat, segments=16, cap=True, location=(0, 0, 0), wobble=
     if cap:
         bm.faces.new(rings[-1])
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    return new_object(name, bm, mat, grain_axis=2, location=location)
+    obj = new_object(name, bm, mat, grain_axis=2, location=location)
+    for p in obj.data.polygons:  # turned shapes are round: smooth sides (flat ones read as faceted prisms, Fable r11)
+        p.use_smooth = len(p.vertices) == 4
+    return obj
 
 
 def log(name, a, b, radius):

@@ -1,0 +1,1 @@
+sun.yaw_per_hour=15.0

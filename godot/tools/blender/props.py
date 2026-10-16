@@ -189,7 +189,7 @@ def sack(origin=(0, 0, 0)):
     """Lumpy grain sack: a squashed, bulging lathe with a tied neck."""
     o = Vector(origin)
     prof = [(0.22, 0.0), (0.27, 0.08), (0.28, 0.25), (0.24, 0.42), (0.12, 0.52), (0.06, 0.56), (0.08, 0.62), (0.0, 0.64)]
-    obj = lathe("sack", prof, "cloth", segments=14, location=o, wobble=0.12)
+    obj = lathe("sack", prof, "cloth", segments=20, location=o, wobble=0.12)
     obj.scale = (1.0, 0.8, 0.9)
 
 

@@ -130,12 +130,12 @@
       "why": "noon elevation; long enough shadows to model form"
     },
     "yaw_at_noon": {
-      "v": 50.0,
-      "why": "degrees; upper-left key light; at 75 the barn's camera-facing wall was edge-on to the sun (review 3)"
+      "v": 55.0,
+      "why": "degrees; upper-left key light; at 75 the barn's camera-facing wall was edge-on to the sun (review 3). 50 -> 55 with 15 deg/h keeps the 11:00 shots' sun exactly where it was (40 deg)"
     },
     "yaw_per_hour": {
-      "v": 10.0,
-      "why": "sun moves across the sky during the day"
+      "v": 15.0,
+      "why": "sun moves across the sky during the day. 10 -> 15 deg/h (round 11, the real sun's mean rate): 9:00 looked like noon (Fable r11)"
     },
     "color_day": {
       "v": [
