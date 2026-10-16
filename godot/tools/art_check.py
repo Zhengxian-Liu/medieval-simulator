@@ -118,7 +118,8 @@ def masked(full_png, fill_png):
             f2, s2 = pixels(full_png, size), pixels(fill_png, size)
             out = subprocess.run(["magick", str(full_png), "-colorspace", "gray", "-blur", f"0x{spec['blur']}", "-resize",
                                   f"{size}!", "-depth", "8", "gray:-"], capture_output=True, check=True).stdout
-            vals = [out[i] / 255 for i in range(len(out)) if c2[i] == spec["class"] and s2[i] > 0.03 and (f2[i] / s2[i]) ** 2.2 > 5.0]
+            vals = [out[i] / 255 for i in range(len(out)) if c2[i] == spec["class"]
+                    and (not spec.get("lit_only", True) or (s2[i] > 0.03 and (f2[i] / s2[i]) ** 2.2 > 5.0))]
             mu = mean(vals)
             return (sum((v - mu) ** 2 for v in vals) / len(vals)) ** 0.5 if vals else float("nan")
         if spec["measure"] == "class_luma_ratio":

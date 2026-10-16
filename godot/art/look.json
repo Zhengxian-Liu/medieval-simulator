@@ -679,6 +679,17 @@
           "max": 1.0
         },
         "why": "16 px-blurred std dev over lit thatch (ID pass; was a fixed rect on the barn roof, which the yard oak's shadow now covers, Fable r7). Target unchanged (review 5: lowering it to 0.05 was fitting the check)"
+      },
+      "foliage_clusters": {
+        "v": {
+          "measure": "class_macro",
+          "class": "leaves",
+          "blur": 8,
+          "lit_only": false,
+          "min": 0.09,
+          "max": 0.3
+        },
+        "why": "crowns read as lit clusters with shadowed gaps, not uniform confetti: 8 px-blurred sd over all leaf pixels. The Guild trees 0.095 (guild3_3 400x300+1500+0) and 0.112 (250x150+1000+0); round 10: 0.071. Set before tuning"
       }
     },
     "mid": {
