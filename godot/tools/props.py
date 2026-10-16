@@ -152,11 +152,15 @@ def wattle_fence(origin=(0, 0, 0), length=2.4):
 
 def rail_fence(origin=(0, 0, 0), length=3.0):
     o = Vector(origin)
-    for sx in (-1, 1):
-        hc.beam(f"post_{sx}", o + Vector((sx * length / 2, 0, -0.05)), o + Vector((sx * length / 2, 0, 1.15)), section=0.11)
-    for z in (0.45, 0.9):
-        log(f"rail_{z}", o + Vector((-length / 2 - 0.1, 0.07, z + RNG.uniform(-0.04, 0.04))),
-            o + Vector((length / 2 + 0.1, 0.07, z + RNG.uniform(-0.04, 0.04))), 0.055)
+    tops = {}
+    for sx in (-1, 1):  # old posts lean a few degrees and are not the same height
+        top = o + Vector((sx * length / 2 + RNG.uniform(-0.08, 0.08), RNG.uniform(-0.08, 0.08), RNG.uniform(1.0, 1.2)))
+        hc.beam(f"post_{sx}", o + Vector((sx * length / 2, 0, -0.05)), top, section=0.11)
+        tops[sx] = top
+    for z in (0.45, 0.9):  # rails follow the posts, so they slope
+        a, b = tops[-1], tops[1]
+        za, zb = z * a.z / 1.15, z * b.z / 1.15
+        log(f"rail_{z}", Vector((a.x - 0.1, (a.y + o.y) / 2 + 0.07, o.z + za)), Vector((b.x + 0.1, (b.y + o.y) / 2 + 0.07, o.z + zb)), 0.055)
 
 
 def well(origin=(0, 0, 0)):

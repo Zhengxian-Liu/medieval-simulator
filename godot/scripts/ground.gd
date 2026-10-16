@@ -87,8 +87,8 @@ func _tuft_mesh(rng: RandomNumberGenerator) -> ArrayMesh:
 		var lean := Vector3(cos(a), 0, sin(a)) * rng.randf_range(0.02, 0.12)
 		var side := Vector3(-sin(a), 0, cos(a)) * 0.012
 		var base := Vector3(cos(a), 0, sin(a)) * rng.randf_range(0.0, 0.09)
-		var root_c := Color(0.17, 0.2, 0.09)  # ~ the tinted grass ground albedo, so tufts grow out of it instead of sitting on it
-		var tip_c := Color(0.26, 0.31, 0.13).lerp(Color(0.38, 0.33, 0.17), dry + rng.randf() * 0.2)
+		var root_c := Color(0.3, 0.34, 0.16)  # sRGB, ~ the tinted grass ground, so tufts grow out of it instead of sitting on it
+		var tip_c := Color(0.44, 0.5, 0.22).lerp(Color(0.58, 0.52, 0.3), dry + rng.randf() * 0.2)
 		for v in [[base - side, root_c], [base + side, root_c], [base + lean + Vector3(0, h, 0), tip_c]]:
 			st.set_color(v[1])
 			st.add_vertex(v[0])
@@ -99,6 +99,7 @@ func _grass(root: Node3D, houses: Array, river_dist: Callable, river_half: float
 	mat.vertex_color_use_as_albedo = true
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	mat.roughness = 0.95
+	mat.vertex_color_is_srgb = true  # tuft colours are authored as sRGB; read as linear they rendered washed-out white
 	var noise := FastNoiseLite.new()
 	noise.seed = 3
 	noise.frequency = 0.12

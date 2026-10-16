@@ -212,9 +212,13 @@ def thatch():
                 x = -length / 2 + i / nu * length
                 n = noise.noise(Vector((x * 1.7, s * 2.3, side * 5.0)))
                 lift = thick * 0.55 + 0.07 * course + 0.04 * n
-                droop = 0.0
+                # no straight line over 2 m: the whole roof sags between the gables (more toward the eave), with a
+                # slow wave along the ridge, so ridge and eave silhouettes read as old, settled thatch
+                along = (x + length / 2) / length
+                sag = (0.05 + 0.13 * (j / nv)) * math.sin(math.pi * along) + 0.04 * math.sin(along * 7.0 + side)
+                droop = sag
                 if j == nv:                         # ragged eave
-                    droop = RNG.uniform(0.0, 0.12)
+                    droop += RNG.uniform(0.0, 0.12)
                 if i in (0, nu):                    # rounded gable edge
                     lift *= 0.55
                 row.append(bm.verts.new((x, s + droop * 0.3, lift - droop)))
