@@ -1,0 +1,1 @@
+environment.exposure_low=4.6
