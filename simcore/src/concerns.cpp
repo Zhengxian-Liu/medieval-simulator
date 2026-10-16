@@ -278,6 +278,7 @@ std::vector<Id> World::peopleToSee() const {
         double s = std::abs(opinion(head, p.id)) + std::abs(opinion(p.id, head)) +
                    (p.id < static_cast<Id>(ringScore_.size()) ? ringScore_[p.id] * 0.5 : 0);
         if (isPlayerFamily(p) || closeKin(head, p.id)) s += 100;
+        if (auto k = people_[head].known.find(p.id); k != people_[head].known.end()) s += k->second;  // the people the head knows
         if (p.id == lord_ || p.id == priest_) s += 30;
         if (s >= 20) others.push_back({s, p.id});
     }
@@ -350,6 +351,7 @@ std::string World::familyGlance() const {
             o += line(m);
     }
     if (!fine.empty()) o += "  " + fine + "：都還好。\n";
+    o += villageTalk();
     int left = timeLeft();
     o += "這一季還有 " + std::to_string(left) + " 段空閒" +
          (left > 0 ? "（找人、定計畫各用一段；沒用完的拿去下田，收成會好一點）" : "（都用完了，這一季就埋頭幹活）") + "。\n";

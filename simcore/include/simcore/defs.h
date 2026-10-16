@@ -169,6 +169,25 @@ struct WantDef {
     bool oneAtATime = false; // only one member of the house holds it at a time
 };
 
+// How a kind of news travels the village (data/news.json, design/news.md): how readily it is told (heat), how long
+// it stays worth telling, who knows it at once, and what hearing it does.
+struct NewsKindDef {
+    std::string id;           // death | infant_death | birth | marriage | deed:<type>
+    std::string text;         // "{house}家的{subject}因{cause}去世了"
+    double heat = 0.5;        // chance a closely linked household passes it on in a month
+    int fadeMonths = 3;       // after this it is old news and no longer told
+    double instant = 2;       // households linked at least this closely know at once (2: nobody)
+    std::string invite;       // the occasion close households are asked to: funeral | wedding
+    double inviteLink = 0.35; // how close a household must be to be asked
+    int inviteMinAge = 0;     // a child's burial is the family's own; the village is asked for the grown
+    double logLink = 0.75;    // the family is told as it comes when it comes from this close (else: the glance)
+    bool gathering = false;   // close households turn out for it (the dead's wake, a wedding)
+    std::string attendMod;    // what the house it is about remembers of those who came
+    bool hasWitness = false;  // overrides the deed's "witness" role for those who hear of it
+    double witness = 0;
+    bool wide = false;        // tell the player when most of the village has heard this about them
+};
+
 struct Defs {
     std::map<std::string, TraitDef> traits;
     std::vector<std::string> traitOrder;  // deterministic iteration
@@ -182,6 +201,8 @@ struct Defs {
     std::map<std::string, ItemDef> items;
     std::map<std::string, ConcernDef> concerns;
     std::vector<WantDef> wants;
+    std::map<std::string, NewsKindDef> news;
+    std::map<std::string, std::string> whispers;  // secret deed type -> how a whisper of it is told
     std::vector<std::string> maleNames;
     std::vector<std::string> femaleNames;
     std::vector<std::string> surnames;
@@ -197,6 +218,7 @@ struct Defs {
     const DeedDef* deed(const std::string& id) const;
     const ConcernDef* concern(const std::string& id) const;
     const WantDef* want(const std::string& id) const;
+    const NewsKindDef* newsKind(const std::string& id) const;
 };
 
 }  // namespace sim

@@ -240,6 +240,27 @@ Defs Defs::loadFromDir(const std::string& dir) {
         d.wants.push_back(std::move(wd));
     }
 
+    Json newsRoot = Json::parseFile(dir + "/news.json");
+    for (const auto& n : newsRoot["kinds"].asArray()) {
+        NewsKindDef nd;
+        nd.id = n["id"].asString();
+        nd.text = n["text"].asString();
+        nd.heat = n.numberOr("heat", 0.5);
+        nd.fadeMonths = static_cast<int>(n.numberOr("fade_months", 3));
+        nd.instant = n.numberOr("instant", 2);
+        nd.invite = n.stringOr("invite", "");
+        nd.inviteLink = n.numberOr("invite_link", 0.35);
+        nd.inviteMinAge = static_cast<int>(n.numberOr("invite_min_age", 0));
+        nd.logLink = n.numberOr("log_link", 0.75);
+        nd.gathering = n["gathering"].isBool() && n["gathering"].asBool();
+        nd.attendMod = n.stringOr("attend_mod", "");
+        nd.hasWitness = n.has("witness");
+        nd.witness = n.numberOr("witness", 0);
+        nd.wide = n["wide"].isBool() && n["wide"].asBool();
+        d.news[nd.id] = nd;
+    }
+    for (const auto& [k, v] : newsRoot["whispers"].asObject()) d.whispers[k] = v.asString();
+
     d.village = Json::parseFile(dir + "/village.json");
     return d;
 }
@@ -261,6 +282,11 @@ const ConcernDef* Defs::concern(const std::string& id) const {
     auto it = concerns.find(id);
     return it == concerns.end() ? nullptr : &it->second;
 }
+const NewsKindDef* Defs::newsKind(const std::string& id) const {
+    auto it = news.find(id);
+    return it == news.end() ? nullptr : &it->second;
+}
+
 const WantDef* Defs::want(const std::string& id) const {
     for (const auto& w : wants)
         if (w.id == id) return &w;

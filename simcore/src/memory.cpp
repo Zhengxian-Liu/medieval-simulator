@@ -128,7 +128,11 @@ Id World::recordDeed(const std::string& type, Id actor, Id target, double scale,
                 remember(m, actor, role("target_family"));
                 told.push_back(m);
             }
-    if (def->visibility == "public" && role("witness") != 0)
+    // Who hears of it, and when, is up to the web of acquaintance (design/news.md); a deed with no news kind
+    // is known to the whole village at once.
+    std::string newsKind = "deed:" + type;
+    bool travels = defs_.newsKind(newsKind) != nullptr;
+    if (def->visibility == "public" && role("witness") != 0 && !travels)
         for (const auto& p : people_)
             if (p.alive() && p.household != kNone && ageYears(p) >= 10 &&
                 std::find(told.begin(), told.end(), p.id) == told.end())
@@ -146,6 +150,11 @@ Id World::recordDeed(const std::string& type, Id actor, Id target, double scale,
                        (v > 0 ? "+" : "") + std::to_string(int(std::lround(v))) + "）。");
     }
     feudOnDeed(deeds_.back(), *def, actor);
+    if (travels) {
+        Id house = actor != kNone && people_[actor].household != kNone ? people_[actor].household
+                   : target != kNone ? people_[target].household : kNone;
+        addNews(newsKind, actor, target, house, d.id);
+    }
     emit({"deed", d.id, actor, target});
     return d.id;
 }

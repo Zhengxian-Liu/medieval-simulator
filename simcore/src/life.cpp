@@ -168,6 +168,7 @@ void World::giveBirth(Person& mother) {
         rollCongenital(child);
         people_[motherId].children.push_back(c);
         if (father != kNone) people_[father].children.push_back(c);
+        addNews("birth", c, motherId, people_[motherId].household);
         addConcern(motherId, "joy", c, 55);
         if (father != kNone) addConcern(father, "joy", c, 45);
         if (isPlayerFamily(child) || isPlayerFamily(people_[motherId])) {
@@ -243,6 +244,8 @@ void World::kill(Id id, const std::string& cause) {
             if (m != id && m != p.spouse && m != p.father && m != p.mother && people_[m].alive() &&
                 ((p.father != kNone && people_[m].father == p.father) || (p.mother != kNone && people_[m].mother == p.mother)))
                 mourn(m, 40, "sibling");
+    // Word goes round (design/news.md): the houses close to this one know today, and are asked to the wake.
+    if (hid != kNone) addNews(age < 1 ? "infant_death" : age < 14 ? "child_death" : "death", id, kNone, hid);
     inheritMemories(id);
     if (hid == kNone) return;
     Household& h = households_[hid];
@@ -452,6 +455,7 @@ void World::marry(Id man, Id woman) {
                 moveTo(man, home);
         }
     recordDeed("married", man, woman);
+    addNews("marriage", man, woman, m.household != kNone ? m.household : w.household);
     chargeMerchet(woman, false);
     // A wedding is a joy to those who wanted it; whoever they had longed for before becomes a heartbreak.
     for (auto [a, b] : {std::pair{man, woman}, std::pair{woman, man}}) {

@@ -55,7 +55,8 @@ void EventRunner::fireScheduled(const EventDef& ev, Person& p, Id target, Id dee
     Id playerHead = w_.playerHousehold_ != kNone ? w_.households_[w_.playerHousehold_].head : kNone;
     if (!eligible(ev, p, playerHead)) return;
     // A mourner's moment is about the dead; every other target has to be still about.
-    bool aboutDead = ev.on.stringOr("signal", "").rfind("bereaved:", 0) == 0;
+    std::string sig = ev.on.stringOr("signal", "");
+    bool aboutDead = sig.rfind("bereaved:", 0) == 0 || sig == "news:funeral";
     if (target != kNone && !aboutDead && (!w_.people_[target].alive() || w_.people_[target].household == kNone)) return;
     if (target == kNone && ev.target["pick"].isString()) {
         target = pickTarget(ev, p);
@@ -206,6 +207,7 @@ void EventRunner::interact(const EventDef& ev, Person& p, Id head) {
     }
     apply(o.effects, p, head);
     p.soughtDay = w_.day_;
+    if (p.household != w_.playerHousehold_) w_.befriend(p.id, head, 8);  // seeking someone out is how you come to know them
     // The summary says what came of it: what they were waiting for, if this was it, or how they took it.
     if (!w_.answerWant(p.id, ev.id))
         w_.seasonNotes_.push_back("你找" + w_.shortName(p.id) + "（" + ev.title + "）：" + format(o.text, p, head) + "。");
@@ -486,6 +488,9 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     if (k == "target_mood_lt") return target != kNone && w.mood(w.people_[target]) < v.asNumber();
     if (k == "mood_lt") return w.mood(p) < v.asNumber();
     // The head has not sought this person out for so many months (or ever, since the game began).
+    if (k == "news_link_ge")  // how close the family's house is to the target's (design/news.md)
+        return target != kNone && w.houseLink(p.household, w.people_[target].household) >= v.asNumber();
+    if (k == "news_link_lt") return target != kNone && w.houseLink(p.household, w.people_[target].household) < v.asNumber();
     if (k == "not_sought_months") return w.day_ - std::max(p.soughtDay, 0) >= v.asNumber() * kDaysPerMonth;
     if (k == "mood_ge") return w.mood(p) >= v.asNumber();
     if (k == "reputation_ge") return p.reputation >= v.asNumber();
@@ -1095,6 +1100,12 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 // The plan's subject goes to serve in the target's household for some years.
                 if (plan_ && plan_->subject != kNone && target != kNone)
                     w.sendToService(plan_->subject, target, static_cast<int>(v.numberOr("years", 5)));
+            } else if (k == "occasion") {
+                // {"came": true, "value": 6, "mod": "came_to_wake"}: at (or missing) the wake or wedding of the target's house.
+                w.attendOccasion(p.id, target, !v["came"].isBool() || v["came"].asBool(), v.numberOr("value", 0), v.stringOr("mod", "event"));
+            } else if (k == "spend_time") {
+                // An occasion takes one of the head's free days, if there are any left this season.
+                if (w.timeLeft() > 0) w.spendTime(static_cast<int>(v.asNumber()));
             } else if (k == "log") {
                 w.log(p.household == w.playerHousehold_ ? 1 : 2, format(v.asString(), p, target));
             } else {

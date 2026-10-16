@@ -1,4 +1,5 @@
 // Headless tests for SimCore: determinism and state invariants over long runs.
+#include <cmath>
 #include <cstdio>
 #include <set>
 #include <string>
@@ -89,6 +90,32 @@ int main() {
         for (int d = 0; d < steps; ++d) b.stepDay();
         CHECK(a.digest() == b.digest(), "command replay diverged");
         std::printf("replay: %zu commands reproduced the same world\n", a.commandLog().size());
+    }
+    // News travels the web of acquaintance (design/news.md): ties are mutual, a death is known at once by the
+    // houses close to it, and old news has reached most of the village.
+    {
+        Config c;
+        c.seed = 5;
+        World w(defs, c);
+        w.runYears(25);
+        for (const auto& p : w.people())
+            for (const auto& [id, v] : p.known) {
+                auto back = w.person(id).known.find(p.id);
+                CHECK(back != w.person(id).known.end() && std::abs(back->second - v) < 0.01, "acquaintance not mutual");
+                CHECK(v >= 0 && v <= 100, "acquaintance out of range");
+            }
+        int live = 0, deaths = 0, wide = 0;
+        for (const auto& h : w.households()) live += !h.extinct && !h.members.empty();
+        for (const auto& n : w.news()) {
+            if (n.kind != "death" || w.today() - n.day < 2 * kDaysPerYear) continue;
+            ++deaths;
+            wide += static_cast<int>(n.heard.size()) * 2 >= live;
+        }
+        CHECK(deaths > 0, "no deaths became news");
+        CHECK(wide * 10 >= deaths * 8, "deaths did not get round the village");
+        CHECK(!w.heard().empty(), "the family heard no news in 25 years");
+        std::printf("news: %zu items, %d deaths of which %d reached half the village, family heard %zu\n", w.news().size(), deaths,
+                    wide, w.heard().size());
     }
     // Different seeds -> different histories.
     {

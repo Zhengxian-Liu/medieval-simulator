@@ -15,11 +15,16 @@ void World::monthlySocial() {
         if (age < 6) continue;
         int meetings = 2 + (traitMod(pa, "sociable") > 0 ? 2 : 0);
         for (int k = 0; k < meetings; ++k) {
-            Id b = all[rngSocial_.range(0, static_cast<int>(all.size()) - 1)];
+            // Mostly the people they already know (design/news.md), the better known the oftener; now and then
+            // someone new of about their age.
+            Id b = rngSocial_.chance(0.65) ? pickAcquaintance(a, rngSocial_) : kNone;
+            bool stranger = b == kNone;
+            if (stranger) b = all[rngSocial_.range(0, static_cast<int>(all.size()) - 1)];
             if (b == a || people_[b].household == pa.household) continue;
             Person& pb = people_[b];
             double ageB = ageYears(pb);
-            if (ageB < 6 || std::abs(ageB - age) > 15) continue;
+            if (ageB < 6 || (stranger && std::abs(ageB - age) > 15)) continue;
+            befriend(a, b, 4);
             double before = opinion(a, b);
             double friendly = 0.7 + before / 300 + traitMod(pa, "sociable") * 0.1 - traitMod(pa, "quarrel") * 0.15;
             if (rngSocial_.chance(std::clamp(friendly, 0.1, 0.95))) {

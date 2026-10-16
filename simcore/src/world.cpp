@@ -37,6 +37,7 @@ World::World(const Defs& defs, Config cfg)
       rngKnow_(cfg.seed, hashString("knowledge")) {
     rngMinds_.reseed(cfg.seed, hashString("minds"));
     rngWants_.reseed(cfg.seed, hashString("wants"));
+    rngNews_.reseed(cfg.seed, hashString("news"));
     baseParams_ = {
         {"mortality_mult", 1.0}, {"harvest_mult", 1.0}, {"grain_price", 0.4},
         {"wage_mult", 1.0},      {"rent_mult", 1.0},    {"plague_monthly", 0.0},
@@ -57,6 +58,7 @@ World::World(const Defs& defs, Config cfg)
                 if (e.has("world_flag")) worldFlags_.insert(e["world_flag"].asString());
     }
     setupVillage();
+    seedAcquaintance();
     // Each game opens on one of a few situations the family is already in (data/events/openings.json).
     std::vector<std::string> openings;
     for (const auto& ev : defs_.events)
@@ -110,6 +112,7 @@ void World::stepDay() {
         monthlyHealth();
         monthlyBirths();
         monthlySocial();
+        monthlyNews();
         monthlyRumours();
         monthlyStress();
         monthlyConcerns();
@@ -157,8 +160,8 @@ std::string World::fullName(Id id) const {
             if (people_[m].birthDay < p.birthDay || (people_[m].birthDay == p.birthDay && m < id)) ++older;
             else ++younger;
         }
-        static const char* nth[] = {"二", "三", "四", "五"};
-        if (older > 0) s = (younger == 0 ? std::string("小") : std::string(nth[std::min(older, 4) - 1])) + s;
+        static const char* nth[] = {"二", "三", "四", "五", "六", "七", "八", "九", "十"};
+        if (older > 0) s = (younger == 0 ? std::string("小") : std::string(nth[std::min(older, 9) - 1])) + s;
     }
     // The dead whose name lives on in the family (a son named for his father, a girl for the sister who
     // died before her): "老約翰" for the elder gone, "早夭的茱莉安娜" for a child.

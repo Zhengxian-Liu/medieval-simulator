@@ -1,0 +1,61 @@
+{
+  // How news travels the village (design/news.md). Every household is linked to every other by its closest pair
+  // of members: kin, or 熟識 grown from meeting. A piece of news starts with the houses it happened in; houses linked
+  // at least `instant` closely know at once; each month every house that knows passes it to each house that does
+  // not with chance heat × link × freshness (a small floor for church and the alehouse), until `fade_months`.
+  // Hearing of a deed gives the hearers its "witness" memory (or `witness` here). `invite`: close houses are asked
+  // to the occasion (data/events/occasions.json), `gathering`: close houses turn out for it on their own.
+  // `log_link`: news from a house at least this close is told in the chronicle as it comes (default 0.75); the rest
+  // waits for the season's glance. `invite_min_age`: a child's burial is the family's own.
+  // `wide`: the player is told when most of the village has heard this about the family.
+  // Text keys: {subject} {other} (full names), {subject_first}, {house} (the family it is about), {cause}, {age},
+  // {sexword} (兒子/女兒). For deeds {subject} is the doer and {other} the one it was done to.
+  "kinds": [
+    {"id": "death",        "text": "{house}家的{subject_first}因{cause}去世了，享年 {age} 歲", "heat": 0.9, "fade_months": 4, "instant": 0.5, "log_link": 0.6,
+     "invite": "funeral", "invite_link": 0.6, "invite_min_age": 14, "gathering": true, "attend_mod": "came_to_wake"},
+    {"id": "child_death",  "text": "{house}家的{subject_first}因{cause}夭折了，才 {age} 歲", "heat": 0.75, "fade_months": 3, "instant": 0.5, "log_link": 0.85},
+    {"id": "infant_death", "text": "{house}家剛生下的孩子{subject_first}沒保住", "heat": 0.5, "fade_months": 2, "instant": 0.8, "log_link": 0.9},
+    {"id": "birth",        "text": "{other}生了個{sexword}，取名{subject_first}", "heat": 0.45, "fade_months": 3, "instant": 0.8, "log_link": 0.9},
+    {"id": "marriage",     "text": "{subject}娶了{other}", "heat": 0.8, "fade_months": 4, "instant": 0.5, "log_link": 0.6,
+     "invite": "wedding", "invite_link": 0.6, "gathering": true, "attend_mod": "came_to_wedding"},
+
+    {"id": "deed:brawl",             "text": "{subject}和{other}打了一架", "heat": 0.8, "fade_months": 3, "instant": 0.6, "wide": true},
+    {"id": "deed:public_insult",     "text": "{subject}當著眾人的面羞辱了{other}", "heat": 0.85, "fade_months": 4, "instant": 0.6, "wide": true},
+    {"id": "deed:exposed_plot",      "text": "{subject}暗算{other}的事被揭穿了", "heat": 0.95, "fade_months": 6, "instant": 0.5, "wide": true},
+    {"id": "deed:affair_exposed",    "text": "{subject}和{other}私通的事被撞破了", "heat": 1.0, "fade_months": 6, "instant": 0.5, "wide": true},
+    {"id": "deed:court_case",        "text": "{subject}把{other}告上了莊園法庭", "heat": 0.7, "fade_months": 4, "instant": 0.6},
+    {"id": "deed:convicted",         "text": "{subject}告{other}，莊園法庭判{other}有罪", "heat": 0.85, "fade_months": 5, "instant": 0.5, "wide": true},
+    {"id": "deed:wrongly_convicted", "text": "{subject}告{other}，莊園法庭判{other}有罪", "heat": 0.85, "fade_months": 5, "instant": 0.5, "wide": true},
+    {"id": "deed:accused_unproven",  "text": "{subject}告{other}，法庭查無實據", "heat": 0.7, "fade_months": 4, "instant": 0.6},
+    {"id": "deed:false_accusation",  "text": "{subject}誣告{other}，被法庭識破了", "heat": 0.85, "fade_months": 5, "instant": 0.5, "wide": true},
+    {"id": "deed:defaulted",         "text": "{subject}欠{other}的錢賴著不還", "heat": 0.75, "fade_months": 5, "instant": 0.6, "wide": true},
+    {"id": "deed:distrained",        "text": "{subject}牽走了{other}家的牲口抵債", "heat": 0.6, "fade_months": 3, "instant": 0.6},
+    {"id": "deed:land_seized",       "text": "{subject}收走了{other}家的田抵債", "heat": 0.75, "fade_months": 5, "instant": 0.5, "wide": true},
+    {"id": "deed:land_bought",       "text": "{subject}買下了{other}家的地", "heat": 0.6, "fade_months": 4, "instant": 0.6},
+    {"id": "deed:trampled_crops",    "text": "{subject}家的豬糟蹋了{other}的莊稼", "heat": 0.5, "fade_months": 2, "instant": 0.7},
+    {"id": "deed:granted_freedom",   "text": "{subject}准{other}成了自由人", "heat": 0.7, "fade_months": 5, "instant": 0.5},
+    {"id": "deed:reconciled",        "text": "{subject}和{other}兩家和解了", "heat": 0.75, "fade_months": 4, "instant": 0.5, "wide": true},
+    {"id": "deed:made_amends",       "text": "{subject}上門向{other}賠了罪", "heat": 0.65, "fade_months": 3, "instant": 0.6},
+    {"id": "deed:refused_proposal",  "text": "{subject}家回絕了{other}的提親", "heat": 0.7, "fade_months": 4, "instant": 0.6, "wide": true},
+    {"id": "deed:helped_in_plague",  "text": "瘟疫裡{subject}挨家挨戶地幫忙", "heat": 0.7, "fade_months": 6, "instant": 0.5, "wide": true},
+    {"id": "deed:imposed_reeve",     "text": "領主不管票數，硬讓{subject}當了莊頭", "heat": 0.8, "fade_months": 4, "instant": 0.5},
+    {"id": "deed:reeve_strict",      "text": "莊頭{subject}上門逼{other}家交租", "heat": 0.55, "fade_months": 3, "instant": 0.7},
+    {"id": "deed:worst_boonwork",    "text": "莊頭{subject}把最苦的勞役派給了{other}", "heat": 0.45, "fade_months": 2, "instant": 0.7},
+    {"id": "deed:forgiven_by_lord",  "text": "領主免了{other}家的欠租", "heat": 0.6, "fade_months": 4, "instant": 0.6},
+    {"id": "deed:paid_compensation", "text": "{subject}賠了{other}一筆錢", "heat": 0.5, "fade_months": 3, "instant": 0.7},
+
+    {"id": "deed:kindness",          "text": "{subject}接濟了{other}一家", "heat": 0.4, "fade_months": 4, "instant": 0.7, "log_link": 2, "witness": 2},
+    {"id": "deed:lent_money",        "text": "{subject}借錢給{other}解了圍", "heat": 0.3, "fade_months": 3, "instant": 0.8, "log_link": 2, "witness": 1},
+    {"id": "deed:sworn_friend",      "text": "{subject}和{other}成了過命的交情", "heat": 0.35, "fade_months": 4, "instant": 0.7, "log_link": 2},
+    {"id": "deed:forced_match",      "text": "{subject}硬逼著{other}成親", "heat": 0.4, "fade_months": 3, "instant": 0.7, "log_link": 2, "witness": -1},
+    {"id": "deed:mistreated_servant","text": "{subject}虐待家裡的幫傭{other}", "heat": 0.45, "fade_months": 4, "instant": 0.7, "log_link": 2, "witness": -3},
+    {"id": "deed:good_master",       "text": "{subject}待幫傭{other}很厚道", "heat": 0.3, "fade_months": 3, "instant": 0.8, "log_link": 2, "witness": 1}
+  ],
+  // What is whispered of a secret deed (a belief passed on, true or not): {subject} the one said to have done it.
+  "whispers": {
+    "arson":     "{other}家那垛麥子是{subject}燒的",
+    "slander":   "說{other}的那些閒話，是{subject}傳出來的",
+    "affair":    "{subject}背著{other}在外頭有人",
+    "embezzled": "{subject}在帳上做了手腳，坑了{other}"
+  }
+}

@@ -105,6 +105,7 @@ struct Person {
     int lastWantMet = -100;         // season it was met
     int soughtDay = -1;             // the last day the head sought them out
     double effort = 1;          // how much of themselves they put into the work, from their mood over recent months
+    std::map<Id, float> known;  // 熟識 (design/news.md): how well they know each other villager beyond kin, 0–100
 
     bool alive() const { return deathDay < 0; }
 };
@@ -233,6 +234,32 @@ struct Scheduled {
     Id target = kNone;
     Id deed = kNone;
     uint64_t seq = 0;
+};
+
+// Something that happened, as it goes round the village (design/news.md): it starts with the houses it
+// happened to and those close to them, and travels the web of acquaintance by its heat and chance.
+struct News {
+    Id id = kNone;
+    std::string kind;        // a data/news.json kind: death, birth, marriage, deed:<type>…
+    Id subject = kNone, other = kNone, deed = kNone;
+    Id house = kNone;        // the household it is about
+    int day = 0;
+    std::string cause;       // for a death
+    int age = 0;
+    std::string subjectName, otherName;  // as they were called that day (no "老"/"已故的" for the newly dead)
+    std::set<Id> heard;      // households that know
+    std::vector<Id> came;    // who turned out for it (a wake, a wedding)
+    bool wideNoted = false;
+};
+
+// Something the player's family heard, as they heard it.
+struct Heard {
+    int day = 0;
+    Id news = kNone;         // kNone: a whisper about a secret (a belief, not news)
+    Id teller = kNone;
+    std::string text;
+    double weight = 0;       // how much it matters to the family: closeness to them, and how much it is talked of
+    bool logged = false;     // already told in the chronicle as it came
 };
 
 struct ChronicleEntry {
@@ -439,6 +466,14 @@ public:
     bool gentry(Id id) const;  // the lord's family: they do not marry tenants
     int swornFriends(Id id) const;  // living people this person has sworn friendship with
     int livingCount() const;
+    // The web of acquaintance (design/news.md): how close two people are, 0–100 (kin, then 熟識), and two
+    // households, 0–1 (their closest pair of members).
+    double closeness(Id a, Id b) const;
+    double houseLink(Id ha, Id hb) const;
+    const std::vector<News>& news() const { return news_; }
+    const std::vector<Heard>& heard() const { return heard_; }
+    std::string newsText(const News& n) const;
+    std::string villageTalk() const;  // what the family heard last season, for the glance
 
     // --- player interface
     void issue(const Command& c);
@@ -511,6 +546,11 @@ private:
     std::vector<std::string> seasonNotes_;            // what the head did this season and what came of it
     mutable std::vector<std::string> lastSeasonNotes_;  // the ended season's, until the summary shows them
     Rng rngWants_;
+    Rng rngNews_;
+    std::vector<News> news_;
+    std::vector<Heard> heard_;
+    std::set<Id> whispered_;  // deeds whose whisper the family has already been told
+    int lastWideDay_ = -100000;  // the last time the family heard what the whole village says of it
     std::map<std::tuple<Id, std::string, int>, int> budgetUsed_;  // (household, budget, year) -> events fired  // "（Rose 的丈夫）": fixed the first time it is needed  // the reeve serves three years unless the post falls vacant
     size_t nextHistory_ = 0;
 
@@ -592,6 +632,20 @@ private:
     // The manor court's jury: neighbours who vote by what they believe and whom they like.
     int juryVerdict(Id accuser, Id accused, Id deed, std::vector<Id>& guiltyVotes, int& panel);
     int juryVote_ = -1;  // set by the jury_duty event: 1 guilty, 0 not guilty
+
+    // news.cpp: acquaintance and how news travels
+    void befriend(Id a, Id b, double by);
+    Id pickAcquaintance(Id who, Rng& rng) const;  // someone they know, the better known the likelier
+    void seedAcquaintance();
+    void fadeAcquaintance();
+    Id addNews(const std::string& kind, Id subject, Id other, Id house, Id deed = kNone);
+    void monthlyNews();
+    void learnNews(News& n, Id household, Id teller, double link);
+    void whisper(Id holder, Id deed, Id culprit, Id source);
+    void attendOccasion(Id person, Id about, bool came, double opinionValue, const std::string& mod);
+    std::vector<double> houseLinks(Id hh) const;  // link of every household to this one
+    std::string formatNews(const std::string& tmpl, const News& n) const;
+    std::string tellerName(Id teller) const;  // "兒子威廉" for the family's own, the full name for others
 
     // stress.cpp: grief, hardship and acting against one's nature, and the breaking points
     void addStress(Id id, double amount, const std::string& cause);

@@ -58,6 +58,11 @@ void World::addBelief(Id holder, Id deed, Id culprit, double confidence, Id sour
     if (!b) {
         list.push_back({deed, culprit, confidence, source, day_, false});
         b = &list.back();
+        // Word of a secret reaching the family: the head hears the whisper (unless it is said outright, below).
+        Id head = playerHead();
+        if (source != kNone && people_[holder].household == playerHousehold_ && playerHousehold_ != kNone &&
+            ageYears(people_[holder]) >= 12 && deeds_[deed].actor != holder && !(holder == head && confidence >= 50))
+            whisper(holder, deed, culprit, source);
     } else if (b->culprit == culprit) {
         b->confidence = std::min(100.0, std::max(b->confidence, confidence) + 10);  // corroborated
     } else if (confidence > b->confidence) {
@@ -135,13 +140,16 @@ void World::monthlyRumours() {
             double years = (day_ - b.day) / double(kDaysPerYear);
             if (!rngKnow_.chance(talk * (years > 10 ? 0.3 : 1.0))) continue;
 
+            // Said at home, or to someone they know (design/news.md); now and then to whoever is at the alehouse.
             Id hearer = kNone;
             const Household& home = households_[p.household];
-            if (rngKnow_.chance(0.4) && home.members.size() > 1) {
+            double r = rngKnow_.uniform();
+            if (r < 0.35 && home.members.size() > 1) {
                 hearer = home.members[rngKnow_.range(0, static_cast<int>(home.members.size()) - 1)];
-            } else {
-                hearer = village[rngKnow_.range(0, static_cast<int>(village.size()) - 1)];
+            } else if (r < 0.85) {
+                hearer = pickAcquaintance(id, rngKnow_);
             }
+            if (hearer == kNone) hearer = village[rngKnow_.range(0, static_cast<int>(village.size()) - 1)];
             if (hearer == id || ageYears(people_[hearer]) < 10) continue;
             if (people_[hearer].household == people_[b.culprit].household) continue;  // not said to their faces
 
