@@ -19,6 +19,7 @@ Result: **FAIL** (rerun: `python3 godot/tools/art_check.py`)
 | value | far.thatch_saturation | 0.375 | 0.3-0.6 | yes | lit thatch straw saturation within the reference range: measured guild3_3 0.40, guild3_1 0.60 (Fable round 7 estimated 0.29; reference measurement overrides it) |
 | value | far.leaves_value | 0.296 | 0.235-0.5 | yes | lit foliage reads as green masses, not near-black holes: >= 60/255 (Fable round 7, bushes measured ~39/255). Set before tuning |
 | value | far.cloth_value | 0.495 | 0.3-0.51 | yes | lit stall canvas / sacks no brighter than 130/255: the canvas was the brightest surface and pulled the eye off the well (Fable round 7). Set before tuning |
+| value | far.thatch_bundles | 0.033 | 0.07-0.15 | **NO** | bundle-scale detail on lit thatch: sd of (blur 3 px - blur 12 px). The Guild measures 0.092 (guild3_3 250x100+300+110) and 0.093 (guild3_1 400x200+700+120) at the same course spacing as our far view (~33 px); round 8: 0.036 (smooth fur). Set before tuning |
 | info | mid masks | lit 37%, shadow 53%, key warmth 1.07 |  | yes | share of the frame classified lit / in shadow |
 | value | mid.lit_mean | 0.449 | 0.4-0.5 | yes | mean value of sunlit pixels (sun adds >5x the sun-off frame) |
 | value | mid.shadow_tint | 1.094 | 0.85-1.2 | yes | blue/red of the light in shadow (lighting-only pass): skylit shade slightly cool is natural; review 3's fault was a strong blue cast |

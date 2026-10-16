@@ -48,12 +48,16 @@ def _sat(c):
     return 0.0 if mx == mn else (mx - mn) / (1 - abs(2 * l - 1) + 1e-6)
 
 
-def classes(id_png):
+def classes_at(id_png, size):
+    return classes(id_png, size)
+
+
+def classes(id_png, size="480x270"):
     """Material class per pixel from the ID pass (checks.id_colors), by normalised colour so shading in the pass
     doesn't matter; None where nothing matches (unclassified materials, mixed edge pixels)."""
     ids = {k: tuple(v) for k, v in CHECKS["id_colors"]["v"].items()}
     out = []
-    for c in pixels(id_png, channels="rgb"):
+    for c in pixels(id_png, size=size, channels="rgb"):
         m = max(c)
         if m < 0.15:
             out.append(None)
@@ -62,6 +66,14 @@ def classes(id_png):
         best = min(ids, key=lambda k: sum((a - b) ** 2 for a, b in zip(n, ids[k])))
         out.append(best if sum((a - b) ** 2 for a, b in zip(n, ids[best])) < 0.06 else None)
     return out
+
+
+def bandpass(png, size="960x540"):
+    """Bundle-scale detail: grey frame blurred 3 px minus blurred 12 px (1920 px frame), at `size`, as floats."""
+    out = subprocess.run(["magick", str(png), "-colorspace", "gray", "(", "-clone", "0", "-blur", "0x3", ")", "(", "-clone", "0",
+                          "-blur", "0x12", ")", "-delete", "0", "-fx", "u-v+0.5", "-resize", f"{size}!", "-depth", "16", "-endian", "MSB",
+                          "gray:-"], capture_output=True, check=True).stdout
+    return [struct.unpack(">H", out[i:i + 2])[0] / 65535 - 0.5 for i in range(0, len(out), 2)]
 
 
 def masked(full_png, fill_png):
@@ -92,6 +104,14 @@ def masked(full_png, fill_png):
             return mean([full[i] for i in of(spec["class"], lit)])
         if spec["measure"] == "class_saturation":
             return mean([_sat(rgb_full[i]) for i in of(spec["class"], lit)])
+        if spec["measure"] == "class_bandpass":  # sd of bundle-scale detail on lit pixels of one material
+            size = "960x540"
+            c2 = classes_at(id_png, size)
+            f2, s2 = pixels(full_png, size), pixels(fill_png, size)
+            bp = bandpass(full_png, size)
+            vals = [bp[i] for i in range(len(bp)) if c2[i] == spec["class"] and s2[i] > 0.03 and (f2[i] / s2[i]) ** 2.2 > 5.0]
+            mu = mean(vals)
+            return (sum((v - mu) ** 2 for v in vals) / len(vals)) ** 0.5 if vals else float("nan")
         if spec["measure"] == "class_luma_ratio":
             return mean([full[i] for i in of(spec["num"], lit)]) / max(mean([full[i] for i in of(spec["den"], lit)]), 1e-6)
         raise KeyError(spec["measure"])

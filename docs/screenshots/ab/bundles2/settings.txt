@@ -1,0 +1,4 @@
+materials.weathered.thatch.bundle_var=0.35
+materials.weathered.thatch.bundle_gap=0.8
+materials.weathered.thatch.ragged=0.6
+materials.weathered.thatch.course_shadow=0.75

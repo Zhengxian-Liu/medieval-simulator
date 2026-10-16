@@ -25,6 +25,10 @@ uniform float eave_age = 0.0;   // thatch: darkening toward the eave (vertex col
 uniform float course_height = 0.0;  // thatch: vertical spacing of the laid courses (m); 0 = off
 uniform float course_shadow = 0.0;  // darkening just below each course's butt ends
 uniform float course_var = 0.0;     // per-course tone variation (each course laid from a different batch of straw)
+uniform float bundle_width = 0.3;  // thatch: bundles laid side by side along each course (m)
+uniform float bundle_var = 0.0;    // per-bundle tone variation
+uniform float bundle_gap = 0.0;    // darkening in the gaps between bundles
+uniform float ragged = 0.0;        // per-bundle offset of the course edge (in courses): jagged butt ends
 uniform float detile = 0.0;  // blend in a second, rescaled sample: hides the texture repeat (thatch)
 
 varying vec3 world_pos;
@@ -73,8 +77,20 @@ void fragment() {
 		// horizontal courses: world-height bands, wobbling a few cm along the roof so they are not ruled lines
 		float y = (world_pos.y - NODE_POSITION_WORLD.y) / course_height
 				+ (vnoise(world_pos.xz * 0.9) - 0.5) * 0.35;
+		// bundles: cells along the course (horizontal tangent of the roof), widths wobbling, each with its own tone,
+		// dark gaps between them, and its own butt-end height so course edges are jagged (round 8: smooth fur)
+		vec2 along_dir = normalize(vec2(world_normal.z, -world_normal.x) + vec2(1e-4));
+		float a = dot(world_pos.xz, along_dir) / bundle_width + vnoise(world_pos.xz * 1.7) * 0.8;
+		float k0 = floor(y);
+		a += hash(vec2(k0, 3.1)) * 7.0;  // bundles of neighbouring courses don't line up
+		float b = floor(a);
+		y += (hash(vec2(b, k0)) - 0.5) * ragged;
 		float k = floor(y);
-		c *= 1.0 + (hash(vec2(k, NODE_POSITION_WORLD.x + NODE_POSITION_WORLD.z)) - 0.5) * 2.0 * course_var;
+		float seed = NODE_POSITION_WORLD.x + NODE_POSITION_WORLD.z;
+		c *= 1.0 + (hash(vec2(k, seed)) - 0.5) * 2.0 * course_var;
+		c *= 1.0 + (hash(vec2(b + seed, k)) - 0.5) * 2.0 * bundle_var;
+		float fa = fract(a);
+		c *= 1.0 - bundle_gap * (1.0 - smoothstep(0.0, 0.18, min(fa, 1.0 - fa)));
 		c *= mix(1.0 - course_shadow, 1.0, smoothstep(0.0, 0.3, 1.0 - fract(y)));  // dark band just under the butt ends above
 	}
 	ALBEDO = c;

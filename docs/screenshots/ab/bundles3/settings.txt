@@ -1,0 +1,4 @@
+materials.weathered.thatch.bundle_var=0.2
+materials.weathered.thatch.bundle_gap=0.5
+materials.weathered.thatch.ragged=0.4
+materials.weathered.thatch.tint=[1.52,1.32,0.88]
