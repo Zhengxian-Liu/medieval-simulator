@@ -1,0 +1,2 @@
+materials.weathered_common.ao_light_affect=0.1
+sun.energy_day=3.3

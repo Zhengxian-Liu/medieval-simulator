@@ -4,7 +4,8 @@
 
 <path> is a look.json path to a leaf (`sun.angular_distance`) or into its value (`materials.weathered.plaster.tint`); <value> is
 JSON. look.json is restored afterwards, even on failure. Renders the B shots into docs/screenshots/ab/<label>/ and
-writes <shot>_ab.jpg there: the current shot (A, docs/screenshots/<shot>.png, so run art_check.py first) left, B right.
+writes <shot>_ab.jpg there: the current shot (A, docs/screenshots/<shot>.png, so run art_check.py first) left, B right,
+then prints B's art_check numbers.
 """
 import json
 import os
@@ -56,6 +57,7 @@ def main():
         subprocess.run(["magick", str(SHOTS / f"{shot}.png"), str(out / f"{shot}.png"), "-resize", "960x", "+append",
                         "-quality", "88", str(out / f"{shot}_ab.jpg")], check=True)
         print(out / f"{shot}_ab.jpg")
+    subprocess.run([sys.executable, str(GODOT / "tools" / "art_check.py"), "--dir", str(out)])  # B's numbers
 
 
 main()

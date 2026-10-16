@@ -118,8 +118,8 @@
   },
   "sun": {
     "energy_day": {
-      "v": 3.2,
-      "why": "key light; ~4:1 against the fill"
+      "v": 3.3,
+      "why": "key light; ~4:1 against the fill. 3.2 -> 3.3 (round 7): denser square content put far.lit_mean at 0.397"
     },
     "angular_distance": {
       "v": 1.5,
@@ -304,7 +304,8 @@
         "ao_strength": 0.7,
         "splash": 0.4,
         "grime": 0.15,
-        "edge_wear": 0.6
+        "edge_wear": 0.6,
+        "ao_light_affect": 0.25
       },
       "why": "shared by every slot; splash/grime lowered in art review 2 (they crushed timber to 0.09). ao_strength 1.0 -> 0.7 (Fable round 6 A/B): contacts stacked vertex AO + skirt + SSAO"
     },

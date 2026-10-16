@@ -65,6 +65,10 @@ detile, texture override) on top of `materials.weathered_common`.
 placement rules dress it automatically (paths to the door, yard props, woodpile under the lean-to, kitchen garden
 behind, a yard tree, bushes at the corners).
 
+### Add hand-placed content
+`village.json` `props` ([name, x, z, yaw]), `trees` ([x, z, scale]), `bushes` ([x, z]). To find where the frame is empty,
+the `far.empty_share` blocks are 160 px squares of the 1920 px shot; fill the blocks with sd < 0.04.
+
 ### Add a building
 1. Add a line to `VARIANTS` in `buildings.py` (footprint, wall height, infill slot, chimney, door, windows, lean_to).
 2. `build_asset.py -- building <name>`; check triangles against `checks.budgets.building`.
@@ -108,7 +112,8 @@ Add it to `godot/tools/fetch_polyhaven.py` (Poly Haven / ambientCG, CC0 only, 1K
   on lit pixels, lighting-only pass) 1.5–2.5, key:fill 3–6; shade stays neutral (B/R >= 0.87) and the frame is not an
   orange filter (saturation <= 0.40).
 - Morning (`godot_far_morning`, 9:00): key warmth 0.95–1.15, daylight stays neutral under the golden-hour ramp.
-- Quick A/B of one value: `SHOTS=godot_mid godot/tools/capture.sh && python3 godot/tools/art_check.py --no-capture`.
+- Quick A/B: `python3 godot/tools/ab.py <label> <path=value> ...` renders, writes side-by-sides and prints B's numbers
+  (`art_check.py --dir docs/screenshots/ab/<label>`).
 - Night (`godot_far_night`, hour 22): frame mean 0.10–0.20 (moonlit, readable), torch pool ≥ 1.8x the frame mean.
 - Every texture mipmapped; every GLB within its triangle budget.
 - Screenshots: `godot/tools/capture.sh` renders each shot in its own Godot process at 3840×2160 → 1920×1080.
@@ -146,3 +151,4 @@ Add it to `godot/tools/fetch_polyhaven.py` (Poly Haven / ambientCG, CC0 only, 1K
 | plaster swap made walls a tan slab, half-timbering lost (round 6) | mid-value tan scan x warm tint: frame and infill same value | daub stays pale lime on the white flaking scan; the timber frame must read darker |
 | golden hour read as an orange filter (round 6) | shade lit by orange bounce from the ground | sky saturation rises with a low sun (`environment.sky_saturation_low`): blue sky keeps shade neutral; `checks.dusk.shadow_tint`, `.saturation` |
 | painterly toggles (Disco Elysium study) | world brush strokes at 0.12 were invisible (0.75/255); edge blur + desaturate read as a lens defect | rejected by Fable round 6 and removed; adopt only what survives an A/B (`tools/ab.py`) |
+| bushes read as confetti at the mid view (round 6) | 17 cm leaf cards | bushes use real leaf size (~10 cm) and 3-4x the cards (`foliage.py` VARIANTS) |

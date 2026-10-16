@@ -15,9 +15,11 @@ VARIANTS = {
     "oak_0": (1, 8.5, 3.6, 0.28, 14000, 0.22),  # many small leaves read as a dense crown, few big ones as confetti
     "oak_1": (2, 7.0, 3.0, 0.24, 11500, 0.21),
     "oak_2": (3, 9.5, 4.0, 0.32, 16000, 0.23),
-    "bush_0": (11, 1.3, 1.1, 0.0, 1400, 0.17),
-    "bush_1": (12, 1.0, 0.9, 0.0, 1000, 0.16),
-    "bush_2": (13, 1.6, 1.3, 0.0, 1800, 0.18),
+    # bushes are seen close in the mid view: real leaf size (~10 cm), more of them (0.17 m cards read as big confetti,
+    # Fable round 6)
+    "bush_0": (11, 1.3, 1.1, 0.0, 5000, 0.10),
+    "bush_1": (12, 1.0, 0.9, 0.0, 3600, 0.095),
+    "bush_2": (13, 1.6, 1.3, 0.0, 6400, 0.105),
 }
 
 

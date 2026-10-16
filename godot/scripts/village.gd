@@ -170,7 +170,7 @@ func build(root: Node3D) -> Node3D:
 
 	for h in houses:
 		_dress_yard(root, h)
-	_dress_square(root)
+	_dress_square(root, layout)
 
 	_add(root, _cyl(0.05, 0.07, 1.6, 6), "iron", Vector3(1.5, 0.8, 1.5))
 	var torch := OmniLight3D.new()
@@ -405,20 +405,15 @@ func _garden(root: Node3D, origin: Vector3, basis: Basis, yaw: float, centre: Ve
 			_instance(root, FOLIAGE % ("bush_%d" % _rng.randi_range(0, 2)), p, _rng.randf() * 360.0, _rng.randf_range(g.scale[0], g.scale[1]))
 			x += g.plant_spacing
 
-func _dress_square(root: Node3D) -> void:
-	_prop(root, "well", Vector3(4.0, 0, 5.5), 20)
-	_prop(root, "handcart", Vector3(5.5, 0, 0.5), -60)
-	_prop(root, "crate", Vector3(4.2, 0, -0.6), 0)
-	_prop(root, "crate", Vector3(3.5, 0, -1.1), 25)
-	_prop(root, "barrel", Vector3(4.8, 0, -1.4), 0)
-	# market corner around the square, so no stretch of it is empty (art review 2: no empty patch > 3 m²)
-	_prop(root, "stall", Vector3(-1.5, 0, 0.0), 30)
-	_prop(root, "stall", Vector3(5.5, 0, 6.5), -110)
-	for p in [Vector3(-0.2, 0, 6.2), Vector3(0.3, 0, 6.6), Vector3(3.2, 0, 8.0), Vector3(-2.6, 0, 2.6)]:
-		_prop(root, "sack", p, _rng.randf() * 360.0)
-	_prop(root, "barrel", Vector3(-2.2, 0, 3.3), 0)
-	_prop(root, "barrel", Vector3(6.2, 0, 3.0), 0)
-	_prop(root, "woodpile", Vector3(-3.0, 0, 6.5), 70)
+# Hand-placed content around the square from art/village.json (props, small oaks, bushes): The Guild never shows an
+# empty patch (checks.far.empty_share).
+func _dress_square(root: Node3D, layout: Dictionary) -> void:
+	for p in layout.props:
+		_prop(root, p[0], Vector3(p[1], 0, p[2]), p[3])
+	for t in layout.trees:
+		_instance(root, FOLIAGE % ("oak_%d" % _rng.randi_range(0, 2)), Vector3(t[0], 0, t[1]), _rng.randf() * 360.0, t[2])
+	for b in layout.bushes:
+		_bush(root, Vector3(b[0], 0, b[1]))
 	for x in [-2.5, -5.6, -8.7, 8.5, 11.6, 14.7]:  # rail fence along the south bank either side of the bridge
 		_prop(root, "rail_fence", Vector3(x, 0, river_center(x) + RIVER_HALF + 1.6), river_yaw(x))
 

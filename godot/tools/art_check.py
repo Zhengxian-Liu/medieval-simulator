@@ -1,6 +1,8 @@
 """Automated art check: measures the captured shots against art/look.json `checks` and audits assets.
 
   python3 godot/tools/art_check.py [--no-capture]
+  python3 godot/tools/art_check.py --dir docs/screenshots/ab/<label>   (measure an A/B set only: no capture, no report,
+                                                                        shots missing from the set are skipped)
 Captures (tools/capture.sh) unless --no-capture, writes greyscale copies, then checks:
   values    per checks.<shot>: lit/shadow means and shadow tint from a sun-on vs sun-off pair (follows the shadows),
             contact floor (1st percentile of the blurred frame), or a greyscale region mean; each within [min, max]
@@ -16,6 +18,9 @@ import sys
 
 GODOT = pathlib.Path(__file__).resolve().parents[1]
 SHOTS = GODOT.parent / "docs" / "screenshots"
+AB_DIR = sys.argv[sys.argv.index("--dir") + 1] if "--dir" in sys.argv else None
+if AB_DIR:
+    SHOTS = pathlib.Path(AB_DIR).resolve()
 LOOK = json.loads((GODOT / "art" / "look.json").read_text())
 CHECKS = LOOK["checks"]
 
@@ -138,7 +143,7 @@ def glb_triangles(path):
 
 
 def main():
-    if "--no-capture" not in sys.argv:
+    if "--no-capture" not in sys.argv and not AB_DIR:
         subprocess.run([str(GODOT / "tools" / "capture.sh")], check=True)
     rows, ok = [], True
 
@@ -146,6 +151,8 @@ def main():
     for shot, png_name in (("far", "godot_far.png"), ("mid", "godot_mid.png"), ("night", "godot_far_night.png"),
                            ("dusk", "godot_far_dusk.png"), ("morning", "godot_far_morning.png")):
         png = SHOTS / png_name
+        if AB_DIR and not png.exists():
+            continue
         fill = SHOTS / png_name.replace(".png", "_fill.png")
         stats = masked(png, fill) if fill.exists() and shot != "night" else {}
         if shot in ("far", "mid"):
@@ -166,6 +173,11 @@ def main():
             passed = spec["min"] <= m <= spec["max"]
             ok &= passed
             rows.append(("value", f"{shot}.{name}", f"{m:.3f}", f"{spec['min']}-{spec['max']}", passed, leaf["why"]))
+
+    if AB_DIR:
+        for r in rows:
+            print(f"{r[1]:28} {r[2]:>8}  {r[3]:>10}  {'ok' if r[4] else 'NO'}")
+        sys.exit(0 if ok else 1)
 
     imports = list((GODOT / "assets").rglob("*.jpg.import")) + list((GODOT / "assets").rglob("*.png.import"))
     no_mips = [p for p in imports if "mipmaps/generate=true" not in p.read_text()]

@@ -12,6 +12,7 @@ uniform float dirt_height = 1.0;  // metres above the asset origin that splash d
 uniform float moss = 0.0;         // 0..1 coverage on upward faces
 uniform vec3 dirt_color : source_color = vec3(0.2, 0.15, 0.1);
 uniform vec3 moss_color : source_color = vec3(0.1, 0.13, 0.05);
+uniform float ao_light_affect = 0.25;  // share of the baked AO that also darkens direct light
 uniform float ao_strength = 1.0;  // vertex colour R = Cycles-baked AO, G = convexity (tools/blender/bake.py)
 uniform float splash = 0.4;      // strength of ground splash dirt
 uniform float grime = 0.15;      // grime in baked-AO crevices
@@ -76,7 +77,7 @@ void fragment() {
 	}
 	ALBEDO = c;
 	AO = mix(1.0, baked_ao, ao_strength);  // occludes ambient/GI light only, so direct sun still lands on the surface
-	AO_LIGHT_AFFECT = 0.25;                  // and a little on direct light: crevices stay dark at noon too
+	AO_LIGHT_AFFECT = ao_light_affect;       // and a little on direct light: crevices stay dark at noon too
 	// grime collects where the AO says the surface is sheltered: under eaves, between beams, at the base
 	ALBEDO = mix(ALBEDO, dirt_color * 0.6, (1.0 - baked_ao) * grime * ao_strength);
 	// worn edges: lighter, drier, slightly rougher where beams, planks and stones turn a corner (breaks up flat shapes)
