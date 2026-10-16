@@ -165,7 +165,8 @@ std::string World::fullName(Id id) const {
     }
     // The dead whose name lives on in the family (a son named for his father, a girl for the sister who
     // died before her): "老約翰" for the elder gone, "早夭的茱莉安娜" for a child.
-    if (!p.alive() && p.dynasty != kNone && p.deathDay < day_) {  // not in the notice of the death itself
+    // Not while the death is still news (the notice, the wake, word going round): only once they are a memory.
+    if (!p.alive() && p.dynasty != kNone && p.deathDay < day_ - kDaysPerMonth) {
         double age = static_cast<double>(p.deathDay - p.birthDay) / kDaysPerYear;
         for (const auto& o : people_)
             if (o.id != id && o.alive() && o.dynasty == p.dynasty && o.firstName == p.firstName) {

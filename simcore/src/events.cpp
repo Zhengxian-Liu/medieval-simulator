@@ -1145,7 +1145,12 @@ std::string EventRunner::format(const std::string& tmpl, const Person& p, Id tar
                 const Feud* f = target != kNone ? w_.feudBetween(p.dynasty, w_.people_[target].dynasty) : nullptr;
                 val = f ? w_.describeDeed(f->cause) : "";
             } else if (key == "target_house") val = target != kNone && w_.people_[target].dynasty != kNone ? w_.dynasties_[w_.people_[target].dynasty].surname : "";
-            else if (key.rfind("about:", 0) == 0) {
+            else if (key == "target_home") {
+                // The family of the house they live (or lived) in: a wife married in is mourned as one of that house.
+                Id th = target != kNone ? w_.people_[target].household : kNone;
+                Id dyn = th != kNone ? w_.households_[th].dynasty : kNone;
+                val = dyn != kNone ? w_.dynasties_[dyn].surname : "";
+            } else if (key.rfind("about:", 0) == 0) {
                 // {about:grief}: who this person's grief (or other concern) is about.
                 const Concern* c = w_.concernOf(p, key.substr(6));
                 Id a = c ? c->about : kNone;

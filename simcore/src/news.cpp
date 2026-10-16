@@ -174,11 +174,12 @@ std::string World::formatNews(const std::string& tmpl, const News& n) const {
         auto name = [&](Id id) { return id == kNone ? std::string("某人") : isPlayerFamily(people_[id]) ? shortName(id) : fullName(id); };
         if (key == "subject") val = n.subjectName.empty() ? name(n.subject) : n.subjectName;
         else if (key == "other") val = n.otherName.empty() ? name(n.other) : n.otherName;
-        else if (key == "subject_first") val = n.subject != kNone ? shortName(n.subject) : "";
+        else if (key == "subject_first") val = !n.subjectFirst.empty() ? n.subjectFirst : n.subject != kNone ? shortName(n.subject) : "";
         else if (key == "house") {
             Id dyn = n.house != kNone ? households_[n.house].dynasty : kNone;
             val = dyn != kNone ? dynasties_[dyn].surname : "";
         } else if (key == "cause") val = n.cause;
+        else if (key == "again") val = n.again ? "又" : "";
         else if (key == "age") val = std::to_string(n.age);
         else if (key == "sexword") val = n.subject != kNone && people_[n.subject].sex == Sex::Male ? "兒子" : "女兒";
         else val = "{" + key + "}";
@@ -206,9 +207,11 @@ std::string World::newsText(const News& n) const {
 Id World::addNews(const std::string& kind, Id subject, Id other, Id house, Id deed) {
     const NewsKindDef* k = defs_.newsKind(kind);
     if (!k || house == kNone || households_[house].extinct) return kNone;
-    // The same thing told twice (both lovers' side of one affair) is one piece of news.
-    for (auto it = news_.rbegin(); it != news_.rend() && it->day == day_; ++it)
-        if (it->kind == kind && ((it->subject == subject && it->other == other) || (it->subject == other && it->other == subject)))
+    // The same thing told twice (both lovers' side of one affair) is one piece of news, and the same help given
+    // again while the last time is still talked of is not news again.
+    for (auto it = news_.rbegin(); it != news_.rend() && day_ - it->day < k->fadeMonths * kDaysPerMonth; ++it)
+        if (it->kind == kind && (it->day == day_ || deed != kNone) &&
+            ((it->subject == subject && it->other == other) || (it->subject == other && it->other == subject)))
             return it->id;
     News n;
     n.id = static_cast<Id>(news_.size());
@@ -225,6 +228,9 @@ Id World::addNews(const std::string& kind, Id subject, Id other, Id house, Id de
     auto name = [&](Id id) { return id == kNone ? std::string() : isPlayerFamily(people_[id]) ? shortName(id) : fullName(id); };
     n.subjectName = name(subject);
     n.otherName = name(other);
+    n.subjectFirst = subject != kNone ? shortName(subject) : "";
+    for (const auto& o : news_)
+        if (o.kind == kind && other != kNone && o.other == other && o.subject != subject) n.again = true;
     // The houses it happened in know it; the houses close to them know it at once.
     std::vector<Id> origin{house};
     for (Id who : {subject, other})

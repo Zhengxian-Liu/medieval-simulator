@@ -245,7 +245,7 @@ void World::kill(Id id, const std::string& cause) {
                 ((p.father != kNone && people_[m].father == p.father) || (p.mother != kNone && people_[m].mother == p.mother)))
                 mourn(m, 40, "sibling");
     // Word goes round (design/news.md): the houses close to this one know today, and are asked to the wake.
-    if (hid != kNone) addNews(age < 1 ? "infant_death" : age < 14 ? "child_death" : "death", id, kNone, hid);
+    if (hid != kNone) addNews(age < 1 ? "infant_death" : age < 14 ? "child_death" : "death", id, age < 1 ? p.mother : kNone, hid);
     inheritMemories(id);
     if (hid == kNone) return;
     Household& h = households_[hid];
