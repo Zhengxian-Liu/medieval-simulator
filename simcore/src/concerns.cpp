@@ -182,7 +182,7 @@ void World::rollSeason() {
 }
 
 void World::seasonWants() {
-    Id head = playerHead();
+    Id head = actingHead();  // the one keeping the house hears what the family wants
     if (head == kNone) return;
     int season = year() * 4 + month() / 3;
     // A post the family wanted but its head can no longer stand for (a widow holds the house now, debt, age):
@@ -249,7 +249,7 @@ bool World::answerWant(Id who, const std::string& by) {
     const WantDef* w = defs_.want(p.want);
     if (!w || std::find(w->answeredBy.begin(), w->answeredBy.end(), by) == w->answeredBy.end()) return false;
     EventRunner er(*this);
-    Id head = playerHead();
+    Id head = actingHead();
     std::string note = w->fulfilNote.empty() ? "" : er.format(w->fulfilNote, p, head);
     if (!note.empty()) seasonNotes_.push_back(note);
     er.apply(w->fulfil, p, head);
@@ -277,7 +277,7 @@ bool World::spendTime(int n) {
 
 std::vector<Id> World::peopleToSee() const {
     std::vector<Id> out;
-    Id head = playerHead();
+    Id head = actingHead();
     if (head == kNone) return out;
     const Household& ph = households_[playerHousehold_];
     for (Id m : ph.members)
@@ -300,7 +300,7 @@ std::vector<Id> World::peopleToSee() const {
 
 std::vector<World::Interaction> World::interactionsWith(Id target) {
     std::vector<Interaction> out;
-    Id head = playerHead();
+    Id head = actingHead();
     if (head == kNone || target == kNone || target == head) return out;
     Person& tp = people_[target];
     if (!tp.alive() || tp.household == kNone) return out;
@@ -389,6 +389,27 @@ World::FamilySnapshot World::snapshot() const {
     return s;
 }
 
+// "存錢 120 → 98 便士（交租 -40、賣餘糧 +18）。": the family's money since a snapshot, item by item.
+std::string World::moneySince(const FamilySnapshot& before) const {
+    const Household& h = households_[playerHousehold_];
+    std::vector<std::pair<double, std::string>> items;
+    double listed = 0;
+    for (const auto& [why, total] : h.ledger) {
+        auto it = before.ledger.find(why);
+        double d = total - (it == before.ledger.end() ? 0 : it->second);
+        if (std::abs(d) >= 1) items.push_back({d, why});
+    }
+    std::sort(items.begin(), items.end(), [](auto& a, auto& b) { return std::abs(a.first) > std::abs(b.first); });
+    std::string why;
+    for (size_t i = 0; i < items.size() && i < 4; ++i) {
+        why += (why.empty() ? "" : "、") + items[i].second + " " + signedText(items[i].first);
+        listed += items[i].first;
+    }
+    double rest = (h.money - before.money) - listed;
+    if (std::abs(rest) >= 2) why += (why.empty() ? "" : "、") + std::string("其他 ") + signedText(rest);
+    return "存錢 " + std::to_string(int(before.money)) + " → " + std::to_string(int(h.money)) + " 便士" + (why.empty() ? "" : "（" + why + "）") + "。";
+}
+
 std::string World::seasonChanges(const FamilySnapshot& before) const {
     Id head = playerHead();
     if (head == kNone || before.head == kNone) return "";
@@ -431,25 +452,7 @@ std::string World::seasonChanges(const FamilySnapshot& before) const {
         }
     }
     double food = h.food / std::max(1.0, consumption(h));
-    if (std::abs(h.money - before.money) >= 5) {
-        // Where it went: the biggest items of the season's account, the rest as other.
-        std::vector<std::pair<double, std::string>> items;
-        double listed = 0;
-        for (const auto& [why, total] : h.ledger) {
-            auto it = before.ledger.find(why);
-            double d = total - (it == before.ledger.end() ? 0 : it->second);
-            if (std::abs(d) >= 1) items.push_back({d, why});
-        }
-        std::sort(items.begin(), items.end(), [](auto& a, auto& b) { return std::abs(a.first) > std::abs(b.first); });
-        std::string why;
-        for (size_t i = 0; i < items.size() && i < 4; ++i) {
-            why += (why.empty() ? "" : "、") + items[i].second + " " + signedText(items[i].first);
-            listed += items[i].first;
-        }
-        double rest = (h.money - before.money) - listed;
-        if (std::abs(rest) >= 2) why += (why.empty() ? "" : "、") + std::string("其他 ") + signedText(rest);
-        o += "  存錢 " + std::to_string(int(before.money)) + " → " + std::to_string(int(h.money)) + " 便士" + (why.empty() ? "" : "（" + why + "）") + "。\n";
-    }
+    if (std::abs(h.money - before.money) >= 5) o += "  " + moneySince(before) + "\n";
     if (food - before.food >= 45 || (food < 60 && before.food >= 60)) o += "  存糧 " + std::to_string(int(before.food)) + " → " + std::to_string(int(food)) + " 天。\n";
     if (std::abs(h.acres - before.acres) >= 0.5) o += "  田地 " + std::to_string(int(before.acres)) + " → " + std::to_string(int(h.acres)) + " 畝。\n";
     // Over a year let pass at once, say so: the totals are for all of it.

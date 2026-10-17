@@ -308,4 +308,22 @@ std::string World::movedText() const {
     return s;
 }
 
+// Why a house would let a few acres go, in its neighbours' words ("" if it would not): debts, an old man with
+// no son to take the plough, or more land than hands (after a pestilence, most of all).
+std::string World::sellReason(const Household& h) const {
+    if (h.extinct || h.head == kNone || h.acres < 8 || inPlayerHouse(h.id)) return "";
+    double hands = 0;
+    bool son = false;
+    for (Id m : h.members) {
+        const Person& q = people_[m];
+        if (q.sex == Sex::Male && ageYears(q) >= 14 && q.health >= 40) hands += 1;
+        if (m != h.head && q.sex == Sex::Male && q.father == h.head) son = true;
+    }
+    if (h.debt >= 20 && h.creditor != playerHead()) return "欠著債，等錢用";
+    if (!son && ageYears(people_[h.head]) > 55) return "沒有兒子接手，老人家種不動了";
+    if (h.acres > hands * 12 + 4) return worldFlags_.count("post_plague") ? "瘟疫以後人手不夠，地荒著" : "地多人少，種不過來";
+    return "";
+}
+
 }  // namespace sim
+

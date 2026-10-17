@@ -612,6 +612,7 @@ public:
     };
     FamilySnapshot snapshot() const;
     std::string seasonChanges(const FamilySnapshot& before) const;
+    std::string moneySince(const FamilySnapshot& before) const;
     bool isPlayerFamily(const Person& p) const;
     bool closeKin(Id a, Id b) const;
     bool gentry(Id id) const;  // the lord's family: they do not marry tenants
@@ -892,6 +893,11 @@ private:
     int nextMilestone(const Person& head) const;  // the first step of the ambition not yet reached, -1 if none
     void secretSurfaces();
     bool deedSpoken(Id deed) const;
+    std::string sellReason(const Household& h) const;  // why a house would sell a few acres, "" if it would not
+    void carryHouseRegard(Id prev, Id next);
+    std::string kinTie(Id from, Id to) const;   // how `to` stands to `from`: parent, sibling, step_parent, sibling_in_law, uncle...
+    Id lineHead(const Household& h) const;      // the heir a regent holds for when not of the same blood, else the head
+    bool houseFree(const Household& h) const;
     double owedLord(const Household& h) const;         // rent arrears and loans the house owes the manor
     double reduceLordDebt(Household& h, double amount);                     // once a season: a secret the head keeps may come up
     Id hookDeed(Id holder, Id culprit) const;  // a secret holder believes culprit did, usable as leverage
@@ -937,6 +943,7 @@ private:
         std::map<Id, int> votes;
         std::vector<Id> byWord;  // heads who promised the family's man their vote and kept it
         std::vector<Id> grudge;  // heads an old feud with the family turned against him
+        std::vector<Id> broke;   // heads who promised him their vote and gave it to someone else
     };
     double officeMerit(const Person& p, const std::string& id) const;
     std::vector<Id> officeCandidates(const std::string& id, Id old, const std::function<double(double)>& noise) const;

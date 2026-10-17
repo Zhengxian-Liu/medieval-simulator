@@ -25,7 +25,7 @@ AskOption opt(const std::string& ask, const std::string& label, Id object = kNon
 
 std::vector<AskOption> World::asksFor(Id target) {
     std::vector<AskOption> out;
-    Id head = playerHead();
+    Id head = actingHead();
     if (head == kNone || target == kNone || target == head) return out;
     const Person& hp = people_[head];
     const Person& t = people_[target];
@@ -134,7 +134,7 @@ std::vector<AskOption> World::asksFor(Id target) {
 }
 
 void World::ask(Id who, const std::string& what, Id object, Id subject, const std::string& officeId, const std::string& lever) {
-    Id head = playerHead();
+    Id head = actingHead();
     if (head == kNone || who == kNone) return;
     Person& t = people_[who];
     std::vector<AskOption> opts = asksFor(who);
@@ -143,8 +143,7 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
         if (o.ask == what && o.object == object && o.subject == subject && o.office == officeId) opt = &o;
     bool again = !lever.empty();
     if (again) {
-        // Pressing the answer just given: in the same season, with a lever offered, and another free day
-        // (taken below, once the lever is known to work).
+        // Pressing the answer just given: in the same season, with a lever offered, in the same talk.
         // Never silent: a press that cannot be made says why (an answer from last season, a lever no longer there).
         if (lastAsk_.who != who || lastAsk_.ask != what || lastAsk_.object != object || lastAsk_.subject != subject ||
             lastAsk_.season != year() * 4 + month() / 3 ||
@@ -248,6 +247,9 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
     } else if (what == "vote") {
         fs.push_back({-10, ""});
         if (wantOf(th.id, "office", kNone, officeId)) hardNo = true, hardWhy = "我家自己也要選";
+        // One of the likeliest men for it does not promise his vote away.
+        for (Id c : officeCandidates(officeId, kNone, [](double) { return 0.0; }))
+            if (c != head && people_[c].household == th.id) hardNo = true, hardWhy = "我家自己也有人要出來選";
         auto pr = promises_.find({who, officeId});
         if (pr != promises_.end() && pr->second != head) fs.push_back({-30, "我已經答應投給" + fullName(pr->second) + "了"});
         std::string r = rivalFavoured("office", kNone, officeId);
@@ -333,10 +335,7 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
             log(1, "〔開口〕" + std::string(ph.money + 0.01 < pressCost ? "錢不夠，" : "") + "這個說法現在用不上了。");
             return;
         }
-        if (!spendTime(1)) {
-            log(1, "〔開口〕這一季沒有空閒了，等下一季再去找" + shortName(who) + "。");
-            return;
-        }
+        // The press is made in the same talk, on the spot: no second day.
     }
     if (lever == "gift") {
         double g = giftSum;
@@ -553,11 +552,11 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
 
 bool World::leverOpen(const std::string& lever) const {
     const AskResult& a = lastAsk_;
-    if (a.who == kNone || playerHousehold_ == kNone || timeLeft() <= 0 || a.season != year() * 4 + month() / 3) return false;
+    if (a.who == kNone || playerHousehold_ == kNone || a.season != year() * 4 + month() / 3) return false;
     if (std::find(a.levers.begin(), a.levers.end(), lever) == a.levers.end()) return false;
     double cost = a.dealCost + (lever == "gift" ? a.giftSum : 0) + (lever == "meet" && a.ask != "lend" ? a.demandMoney : 0);
     if (households_[playerHousehold_].money + 0.01 < cost) return false;
-    if (lever == "hook") return hookDeed(playerHead(), a.who) != kNone;
+    if (lever == "hook") return hookDeed(actingHead(), a.who) != kNone;
     if (lever == "meet") return a.answer == 2 && (a.demandParcel == kNone || inPlayerHouse(parcels_[a.demandParcel].holder));
     return true;
 }

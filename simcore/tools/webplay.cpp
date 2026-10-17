@@ -94,6 +94,7 @@ public:
 
     size_t shown = 0;           // chronicle lines already sent
     std::string summary;        // what the last season came to, shown through this season
+    World::FamilySnapshot seasonStart;  // the family at the start of this season, for "這一季到現在"
     bool quit = false;
 
     void send(const std::string& line) { std::cout << line << "\n" << std::flush; }
@@ -102,7 +103,7 @@ public:
     std::string road(const Person& p) const {
         std::vector<std::string> v;
         for (const auto& r : p.road)
-            if (!r.note.empty()) v.push_back(Obj().n("year", w_.config().startYear + r.day / kDaysPerYear).text("text", r.note).done());
+            if (!r.note.empty() && r.note.rfind("接著", 0) != 0) v.push_back(Obj().n("year", w_.config().startYear + r.day / kDaysPerYear).text("text", r.note).done());
         return arr(v);
     }
 
@@ -183,6 +184,11 @@ public:
                            .b("lean", h.lean)
                            .done());
         o.n("time_left", w.timeLeft());
+        // Holding the house for a child: the head may hand the years to the steward and answer only what is asked.
+        if (const Household& ph = w.households()[w.playerHousehold()]; ph.ward != kNone && w.people()[ph.ward].alive()) {
+            double left = 16 - w.ageYears(w.people()[ph.ward]);
+            if (left > 1) o.raw("regency", Obj().text("ward", w.shortName(ph.ward)).n("years_left", std::ceil(left)).done());
+        }
         o.n("head", head);
         if (const AmbitionDef* a = w.defs().ambition(hp.ambition)) {
             std::vector<std::string> steps;
@@ -205,7 +211,7 @@ public:
             for (const auto& t : p.traits)
                 if (const TraitDef* td = w.defs().trait(t)) traits.push_back(str(td->name));
             Obj f;
-            f.n("id", m).text("name", w.shortName(m)).text("full", w.fullName(m)).text("kin", m == head ? "你" : w.kinWord(head, m))
+            f.n("id", m).text("name", w.shortName(m)).text("full", w.fullName(m)).text("kin", m == head ? "你" : w.kinWord(head, m).empty() ? "家裡人" : w.kinWord(head, m))
                 .n("age", std::floor(w.ageYears(p))).b("female", p.sex == Sex::Female).text("mood", mv.word).text("mood_cause", mv.cause)
                 .n("mood_value", std::lround(mv.value)).n("health", std::lround(p.health)).raw("needs", arr(needs)).raw("traits", arr(traits));
             f.text("station", p.station.empty() ? "" : w.stationName(p)).raw("road", road(p));
@@ -467,7 +473,7 @@ public:
                     targets.push_back(Obj().n("target", op.target).n("subject", op.subject).text("label", label).done());
                 }
                 plans.push_back(Obj().text("id", pd.id).text("name", pd.name).text("desc", pd.desc).text("needs", pd.needs)
-                                    .b("open", !picks.empty()).b("ambition", forAmb).raw("targets", arr(targets)).done());
+                                    .b("open", !picks.empty() && w.timeLeft() > 0).b("ambition", forAmb).raw("targets", arr(targets)).done());
             }
             o.raw("plans", arr(plans));
         }
@@ -482,7 +488,12 @@ public:
             lines.push_back(Obj().n("year", w.config().startYear + log[shown].day / kDaysPerYear).n("kind", log[shown].importance).text("text", t).done());
         }
         o.raw("chronicle", arr(lines));
-        o.text("summary", summary);  // what the last season came to, until the next one
+        // What the last season came to, until the next one; and what has moved since, so the header's money adds up.
+        std::string sum = summary.empty() ? "" : "【上一季】\n" + summary;
+        if (w.playerHead() != kNone && seasonStart.head != kNone &&
+            std::abs(w.households()[w.playerHousehold()].money - seasonStart.money) >= 1)
+            sum += "【這一季到現在】" + w.moneySince(seasonStart) + "\n";
+        o.text("summary", sum);
         return o.done();
     }
 
@@ -586,6 +597,7 @@ int main(int argc, char** argv) {
             w.startSeason();
             web.summary = w.seasonChanges(before);
             before = w.snapshot();
+            web.seasonStart = before;
             saveLog();
             bool leave = false;
             while (!leave) {
@@ -593,7 +605,7 @@ int main(int argc, char** argv) {
                 web.send(Obj().text("type", "ask").text("kind", "season").done());
                 auto m = web.next();
                 std::string what = m["do"];
-                Id head = w.playerHead();
+                Id head = w.actingHead();  // the one keeping the house, a widow or stepfather for a child head
                 if (what == "interact") {
                     w.issue({w.today(), "interact", head, m["event"], toInt(m, "who"), kNone});
                     w.runCommands();
@@ -609,10 +621,18 @@ int main(int argc, char** argv) {
                     w.runCommands();
                 } else if (what == "plan") {
                     w.issue({w.today(), "start_plan", w.actingHead(), m["plan"], toInt(m, "target"), toInt(m, "subject")});
+                    w.runCommands();
                 } else if (what == "cancel") {
                     w.issue({w.today(), "cancel_plan", w.actingHead(), "", kNone, kNone});
+                    w.runCommands();
                 } else if (what == "year") {
                     skipUntil = w.today() + kDaysPerYear;
+                    leave = true;
+                } else if (what == "regency") {
+                    // Until the child the house is held for comes of age; questions are still asked on the way.
+                    const Household& ph = w.households()[w.playerHousehold()];
+                    if (ph.ward != kNone && w.people()[ph.ward].alive())
+                        skipUntil = std::max(w.today() + 1, w.people()[ph.ward].birthDay + 16 * kDaysPerYear);
                     leave = true;
                 } else if (what == "quit") {
                     aiPlays = true;

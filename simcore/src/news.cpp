@@ -375,7 +375,9 @@ void World::attendOccasion(Id person, Id about, bool came, double value, const s
     }
     n->came.push_back(person);
     if (person == playerHead() && !names.empty())
-        seasonNotes_.push_back(std::string(n->kind == "death" ? "守靈那晚" : "喜酒席上") + "，你和" + names + "多說了好些話。");
+        // Sat up with the dead or only walked behind the coffin; stayed for the ale or only saw them wed.
+        seasonNotes_.push_back(std::string(n->kind == "death" ? (value >= 6 ? "守靈那晚" : "下葬那天") : (value >= 6 ? "喜酒席上" : "婚禮上")) +
+                               "，你和" + names + "多說了好些話。");
 }
 
 void World::learnNews(News& n, Id household, Id teller, double link) {

@@ -263,6 +263,9 @@ Defs Defs::loadFromDir(const std::string& dir) {
         pd.failLog = p.stringOr("fail_log", "");
         pd.exposedLog = p.stringOr("exposed_log", "");
         pd.victimLog = p.stringOr("victim_log", "");
+        pd.targetAsk = p.stringOr("target_ask", "");
+        if (p["target_answers"].isArray())
+            for (const auto& a : p["target_answers"].asArray()) pd.targetAnswers.push_back(a.asString());
         pd.foreshadow = p.stringOr("foreshadow", "");
         pd.retryYears = static_cast<int>(p.numberOr("retry_years", 0));
         pd.success = p["success"];

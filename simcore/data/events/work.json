@@ -22,7 +22,7 @@
        {"text": "錢先留著", "log": "", "effects": [], "ai": {"base": 10, "traits": {"greedy": 8, "content": 4}}}
      ]},
     {"id": "build_stone_house", "title": "蓋石屋", "prompt": "石匠說，1300 便士能把木屋改成石屋。全村還沒幾家住得起。", "scope": "player_head", "chance": 0.1, "cooldown_years": 1,
-     "conditions": {"age": [14, 120], "money_ge": 1600, "house": "timber", "acres_ge": 35},
+     "conditions": {"age": [14, 120], "money_ge": 1600, "house": "timber", "acres_ge": 18},
      "options": [
        {"text": "請石匠來蓋（1300 便士）", "log": "{name} 請來石匠，把木屋改建成石屋，全村都來看熱鬧。", "effects": [{"money": -1300}, {"house": "stone"}, {"prestige": 8}, {"reputation": 4}],
         "ai": {"base": 8, "traits": {"ambitious": 8, "greedy": -4}, "if": [{"cond": {"ambition": "stone_house"}, "add": 50}]}},

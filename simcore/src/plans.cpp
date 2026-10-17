@@ -50,14 +50,29 @@ void World::processCommands() {
         c.day = day_;
         commandLog_.push_back(c);
         if (c.type == "start_plan") {
-            // Setting a plan going takes the head a day of the season, like going to see someone.
-            if (c.actor == playerHead() && !spendTime(1)) continue;
-            startPlan(c.actor, c.plan, c.target, c.subject);
+            // Setting a plan going takes the one keeping the house a day of the season, like going to see someone:
+            // taken once it is known to start, and a plan that cannot start says why.
+            const bool ours = c.actor == actingHead();
+            const PlanDef* pd = defs_.plan(c.plan);
+            const std::string name = pd ? "「" + pd->name + "」" : "這件事";
+            if (ours && timeLeft() <= 0) {
+                log(1, "〔計畫〕" + name + "沒辦成：這一季沒有空閒了。");
+                continue;
+            }
+            if (ours && activePlan(c.actor)) {
+                log(1, "〔計畫〕" + name + "沒辦成：手上已經有一件事在辦。");
+                continue;
+            }
+            if (startPlan(c.actor, c.plan, c.target, c.subject)) {
+                if (ours) spendTime(1);
+            } else if (ours) {
+                log(1, "〔計畫〕" + name + "眼下辦不成。");
+            }
         } else if (c.type == "interact") {
             for (const auto& ev : defs_.events)
                 if (ev.id == c.plan && ev.scope == "interaction" && c.target != kNone) {
                     EventRunner er(*this);
-                    er.interact(ev, people_[c.target], playerHead());
+                    er.interact(ev, people_[c.target], actingHead());
                     break;
                 }
         } else if (c.type == "ask") {
@@ -206,6 +221,13 @@ void World::endPlan(size_t index, const std::string& requested) {
         if (actorHome) log(1, "「" + pd->name + "」落空了：" + fullName(plan.target) + " 已經不在了。");
         return;
     }
+    if (outcome == "married_off") {
+        Id wed = plan.subject != kNone && people_[plan.subject].spouse != kNone && people_[plan.subject].spouse != plan.target ? plan.subject
+               : plan.target != kNone && people_[plan.target].spouse != kNone && people_[plan.target].spouse != plan.subject && people_[plan.target].spouse != plan.actor
+                   ? plan.target : plan.actor;
+        if (actorHome) log(1, "「" + pd->name + "」落空了：" + fullName(wed) + " 已經另結了親。");
+        return;
+    }
     // Someone courting the player's head, or an unmarried child of the house: the family answers.
     if (plan.plan == "court" && !actorHome && victimHome && (outcome == "success" || outcome == "fail")) {
         Id acting = actingHead();
@@ -225,6 +247,15 @@ void World::endPlan(size_t index, const std::string& requested) {
             }
             if (r == 0) outcome = "success";
         }
+    }
+    // Someone after something of the head's own (a parcel, a hand): the head says yes or no, not the dice.
+    if (!pd->targetAsk.empty() && pd->targetAnswers.size() >= 2 && !actorHome && plan.target == actingHead() &&
+        (outcome == "success" || outcome == "fail")) {
+        std::string sit = ev.format(pd->targetAsk, actor, plan.target);
+        int r = askPlayer(pd->name, sit, pd->targetAnswers);
+        if (r == 0) outcome = "success";
+        else if (r == 1) outcome = "fail";
+        if (r >= 0) log(1, "〔" + pd->name + "〕" + sit + "（選擇：" + pd->targetAnswers[r] + "）");
     }
     const std::string& text = outcome == "success" ? pd->successLog : outcome == "exposed" ? pd->exposedLog : pd->failLog;
     const Json& effects = outcome == "success" ? pd->success : outcome == "exposed" ? pd->exposed : pd->fail;
@@ -261,10 +292,13 @@ void World::monthlyPlans() {
             endPlan(i, "lost_target");
             continue;
         }
-        // A match is off once either of the pair has married someone else.
-        if (plan.plan == "arrange_match" && ((plan.subject != kNone && people_[plan.subject].spouse != kNone) ||
-                                             (plan.target != kNone && people_[plan.target].spouse != kNone))) {
-            endPlan(i, "lost_target");
+        // A match or a courtship is off once either of the pair has married someone else.
+        auto wedElsewhere = [&](Id x, Id other) {
+            return x != kNone && people_[x].spouse != kNone && people_[x].spouse != other && people_[people_[x].spouse].alive();
+        };
+        if ((plan.plan == "arrange_match" && (wedElsewhere(plan.subject, plan.target) || wedElsewhere(plan.target, plan.subject))) ||
+            (plan.plan == "court" && (wedElsewhere(plan.actor, plan.target) || wedElsewhere(plan.target, plan.actor)))) {
+            endPlan(i, "married_off");
             continue;
         }
         if (plan.subject != kNone && (!people_[plan.subject].alive() || people_[plan.subject].household == kNone)) {
@@ -350,7 +384,7 @@ void World::npcStartPlans() {
     Id head = playerHead();
     for (size_t idx = 0; idx < people_.size(); ++idx) {
         Person& p = people_[idx];
-        if (!p.alive() || p.household == kNone || p.id == head) continue;
+        if (!p.alive() || p.household == kNone || p.id == head || p.id == actingHead()) continue;
         if (ageYears(p) < 16 || activePlan(p.id)) continue;
         // Beside what they mean to do (minds.cpp), people also act on impulse now and then.
         double c = inPlayerHouse(p.household) ? 0.006 : 0.006;

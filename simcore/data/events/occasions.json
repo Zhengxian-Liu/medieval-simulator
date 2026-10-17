@@ -28,7 +28,7 @@
     {"id": "wedding_invite", "title": "喜酒", "scope": "player_family", "chance": 1,
      "on": {"signal": "news:wedding", "after_months": [0, 0]},
      "conditions": {"age": [14, 120]},
-     "prompt": "{target_home}家的{target_first}要成親了，請你們去喝喜酒。",
+     "prompt": "{target_house}家的{target_first}要成親了，請你們去喝喜酒。",
      "options": [
       {"text": "帶一份賀禮去喝喜酒（3 便士，佔一段空閒）；這一季別家的紅白事也都去",
        "conditions": {"money_ge": 3},

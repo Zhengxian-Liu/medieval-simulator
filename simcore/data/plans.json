@@ -57,6 +57,7 @@
      "start_log": "{name} 看上了 {target} 家的地，開始盤算。",
      "success_log": "{target} 答應把地讓給 {name}。", "success": [{"take_acres": {"acres": 5, "price": 320}}, {"deed": {"type": "land_bought"}}],
      "fail_log": "{target} 說什麼也不肯賣祖上傳下來的地。", "fail": [{"opinion": {"value": -5, "mod": "land_dispute", "years": 5}}, {"deed": {"type": "refused_land", "doer": "target"}}],
+     "target_ask": "{name} 託人來問，想出 320 便士買你家 5 畝地。", "target_answers": ["賣", "不賣，這是祖上的地"],
      "ai": {"base": 6, "traits": {"ambitious": 8, "greedy": 6, "content": -6}, "if": [{"cond": {"ambition": "more_land"}, "add": 30}, {"cond": {"ambition": "big_landholder"}, "add": 30}]},
      "beats": [
        {"id": "land_rival", "prompt": "{target} 家的地，別家也看上了，出的價比你高。", "chance": 0.35, "options": [
@@ -244,8 +245,8 @@
      "max_months": 12,
      "progress": {"base": 9, "skill": {"charm": 0.6}, "opinion": 5, "reputation": 0.5, "traits": {"ambitious": 2}},
      "start_log": "{name} 托管家向 {target} 遞話，想替全家贖身。",
-     "success_log": "{target} 收下 120 便士，在特許狀上蓋了印：{name} 一家從此是自由人。",
-     "success": [{"money": -120}, {"target": [{"money": 120}]}, {"set_free": true}, {"deed": {"type": "granted_freedom", "doer": "target"}}, {"prestige": 3}],
+     "success_log": "{target} 收下 140 便士，在特許狀上蓋了印：{name} 一家從此是自由人。",
+     "success": [{"money": -140}, {"target": [{"money": 140}]}, {"set_free": true}, {"deed": {"type": "granted_freedom", "doer": "target"}}, {"prestige": 3}],
      "fail_log": "{target} 不肯放人：「放了你們，誰來種我的地？」", "fail": [{"need": {"spirit": -10}}],
      "ai": {"base": 3, "traits": {"ambitious": 8, "brave": 3, "content": -4}, "if": [{"cond": {"ambition": "free_family"}, "add": 40}]},
      "beats": [

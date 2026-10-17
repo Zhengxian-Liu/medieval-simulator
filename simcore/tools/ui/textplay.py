@@ -17,6 +17,8 @@ Actions (the page's buttons):
   {"do":"want","what":"drop","object":<want id>}     give up a want (its id is shown as want=N under 村裡在爭什麼)
   {"do":"focus","who":12,"focus":"letters"}          年度重心 (free, during a season)
   {"do":"pass"}   end this season          {"do":"year"}   let the AI play a whole year
+  {"do":"regency"}   holding the house for a child: hand the years to the steward until they come of age
+                     (big questions are still asked on the way)
 """
 import json
 import os
@@ -104,6 +106,9 @@ def render(v, full=False):
     out.append(f"\n=== {d['year']} 年 {d['season']} ｜ {h['surname']}家（{h['standing']}，住 {h['home']}）｜ 錢 {h['money']} 便士 ｜ 存糧 {h['food_days']} 天 ｜ "
                f"地 {h['acres']} 畝（自有 {h['freehold']}）｜ 欠債 {h['debt']}" + ("｜ 今年缺糧" if h.get("lean") else "")
                + (f" ｜ 這一季還有 {s.get('time_left')} 段空閒" if season else ""))
+    if season and s.get("regency"):
+        r = s["regency"]
+        out.append(f"（你在替 {r['ward']} 持家，還有約 {r['years_left']} 年。可以 act '{{\"do\":\"regency\"}}' 交給管家，直到{r['ward']}成年，路上有大事還是會問你。）")
     amb = s.get("ambition")
     if amb:
         out.append(f"志向：{amb['name']}（{amb.get('desc', '')}）" + " ".join(("✓" if x.get("done") else "○") + x["name"] for x in amb.get("steps", [])))
@@ -113,8 +118,14 @@ def render(v, full=False):
                    "交不出來要借、去求領主寬限，或讓出一塊地。")
     if s.get("summary"):
         out.append(s["summary"].rstrip())
-    if s.get("last_ask"):
-        out.append("上次開口：" + json.dumps(s["last_ask"], ensure_ascii=False)[:600])
+    la = s.get("last_ask")
+    if la:
+        out.append(f"上次開口（{la.get('name', '')}）：{la.get('text', '')}")
+        names = {"meet": "答應對方的條件", "gift": "送一份禮再說", "favour": "提起上回幫過的忙", "hook": "拿那件事壓對方"}
+        for lv in la.get("levers", []):
+            press = {"do": "ask", "who": la["who"], "ask": la["ask"], "object": la["object"], "subject": la["subject"],
+                     "office": la.get("office", ""), "lever": lv}
+            out.append(f"  再爭取一次：{names.get(lv, lv)} → act '{json.dumps(press, ensure_ascii=False)}'")
     out.append("―― 家人 ――")
     for p in s["family"]:
         t = f"[{p['id']}] {p['full']}（{p['kin']}，{p['age']} 歲）心情 {p['mood']}{('：' + p['mood_cause']) if p.get('mood_cause') else ''}，健康 {p['health']}"
@@ -237,7 +248,7 @@ elif cmd == "act":
         bad = "現在沒有在問你（遊戲還在跑或已結束），先 view。"
     elif a.get("kind") == "choice" and not (do == "ai" or (do == "choose" and 0 <= int(obj.get("index", -1)) < len(a.get("options", [])))):
         bad = "現在是在問一個問題：只能 choose（index 在選項範圍內）或 ai。"
-    elif a.get("kind") == "season" and do not in ("interact", "ask", "plan", "cancel", "want", "focus", "pass", "year", "quit"):
+    elif a.get("kind") == "season" and do not in ("interact", "ask", "plan", "cancel", "want", "focus", "pass", "year", "regency", "quit"):
         bad = "現在是一季的空閒：choose / ai 只能用在問題上。"
     if bad:
         print("不行：" + bad + "\n")
@@ -246,8 +257,14 @@ elif cmd == "act":
     post("/api/act", obj)
     print(render(wait_ask(v0["seq"])))
 elif cmd == "look":
+    if len(args) < 2 or not args[1].lstrip("-").isdigit():
+        print("用法：textplay.py look <人的編號>（編號是家人欄或名單裡 [ ] 中的數字）")
+        sys.exit(1)
     r = post("/api/look", {"do": "inspect", "who": int(args[1])})
     print(r.get("text", json.dumps(r, ensure_ascii=False)))
 elif cmd == "report":
     r = post("/api/look", {"do": "report"})
     print(r.get("text", json.dumps(r, ensure_ascii=False)))
+else:
+    print(__doc__)
+    sys.exit(0 if cmd in ("-h", "--help", "help") else 1)

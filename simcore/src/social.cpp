@@ -83,9 +83,13 @@ void World::electReeve() {
         Id fav = winner;
         // A lord overrides the vote once in his time, unless the man he picks is already his favourite.
         bool canOverride = lordOverrode_ != lord_ || (head != kNone && people_[head].flags.count("lord_favour"));
-        if (playerRuns && canOverride && people_[head].flags.count("campaign_lord") && opinion(lord_, head) >= 20 &&
-            rngSocial_.chance(people_[head].flags.count("lord_favour") ? 0.7 : 0.35))
+        bool asked = playerRuns && people_[head].flags.count("campaign_lord");
+        if (asked && canOverride && opinion(lord_, head) >= 20 && rngSocial_.chance(people_[head].flags.count("lord_favour") ? 0.7 : 0.35))
             fav = head;
+        else if (asked)
+            how = opinion(lord_, head) < 20 ? "（你求過領主點名，可老爺跟你家還沒那麼熟，沒有開口。）"
+                  : !canOverride            ? "（你求過領主點名，可老爺這一任已經插手過一回，這次不便再管。）"
+                                            : "（你求過領主點名，老爺想了想，還是讓村裡自己選。）";
         else if (lordOverrode_ != lord_ && opinion(lord_, winner) < -15)
             for (Id c : cands)
                 if (opinion(lord_, c) > opinion(lord_, fav)) fav = c;

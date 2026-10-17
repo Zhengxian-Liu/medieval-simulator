@@ -35,7 +35,7 @@ const std::map<std::string, std::string>& modNames() {
         {"refused_ask", "回絕過我的請求"}, {"pressed_with_secret", "拿把柄壓過我"}, {"haggled", "跟我討價還價過"}, {"helped_us", "替我家墊過租"}, {"lied_to_me", "瞞過我的帳"}, {"stood_aside", "讓過我一步"}, {"hard_words", "說過狠話"}, {"forbade_match", "不准我的親事"}, {"put_off", "推託過我的事"},
         {"cold_shoulder", "給過我冷臉"}, {"heeded", "把我的事放在心上"}, {"neglected", "冷落過我"},
         {"came_to_wake", "來守過靈"}, {"missed_funeral", "喪事沒來露面"}, {"came_to_wedding", "來喝過喜酒"},
-        {"wedding_gift", "送過賀禮"}, {"helps_at_home", "在家很幫忙"}, {"for_the_dead", "看在先人份上"}, {"against_the_dead", "記著先人的舊帳"}, {"missed_wedding", "喜事沒來"}};
+        {"wedding_gift", "送過賀禮"}, {"helps_at_home", "在家很幫忙"}, {"for_the_dead", "看在先人份上"}, {"same_house", "一家人"}, {"helped_the_manor", "替莊園解過圍"}, {"held_back", "要錢時推託過"}, {"paid_up", "欠債按時還清"}, {"against_the_dead", "記著先人的舊帳"}, {"missed_wedding", "喜事沒來"}};
     return names;
 }
 
@@ -352,14 +352,29 @@ std::string World::kinWord(Id a, Id b) const {
     const Person& pa = people_[a];
     const Person& pb = people_[b];
     bool f = pb.sex == Sex::Female;
-    if (pa.spouse == b) return f ? "妻子" : "丈夫";
-    if (pb.father == a || pb.mother == a) return f ? "女兒" : "兒子";
-    if (pa.father == b) return "父親";
-    if (pa.mother == b) return "母親";
-    if (pa.father != kNone && pa.father == pb.father) return f ? "姊妹" : "兄弟";
-    for (Id par : {pb.father, pb.mother})
-        if (par != kNone && (people_[par].father == a || people_[par].mother == a)) return f ? "孫女" : "孫子";
-    if (pb.spouse != kNone && (people_[pb.spouse].father == a || people_[pb.spouse].mother == a)) return f ? "媳婦" : "女婿";
+    const std::string t = kinTie(a, b);
+    if (t == "spouse" || pa.spouse == b) return f ? "妻子" : "丈夫";
+    if (t == "child") return f ? "女兒" : "兒子";
+    if (t == "parent") return f ? "母親" : "父親";
+    if (t == "sibling") return f ? "姊妹" : "兄弟";
+    if (t == "grandchild") return f ? "孫女" : "孫子";
+    if (t == "grandparent") return f ? "祖母" : "祖父";
+    if (t == "step_parent") return f ? "繼母" : "繼父";
+    if (t == "step_child") return f ? "繼女" : "繼子";
+    if (t == "child_in_law") return f ? "媳婦" : "女婿";
+    if (t == "parent_in_law") return pa.sex == Sex::Male ? (f ? "岳母" : "岳父") : (f ? "婆婆" : "公公");
+    if (t == "sibling_in_law") {
+        if (pb.spouse != kNone && kinTie(a, pb.spouse) == "sibling") return f ? "嫂嫂" : "姊夫";  // a brother's wife, a sister's husband
+        return pa.sex == Sex::Female ? (f ? "小姑" : "小叔") : (f ? "小姨" : "舅子");
+    }
+    if (t == "uncle") {
+        bool fatherSide = pa.father != kNone && kinTie(pa.father, b) == "sibling";
+        return f ? (fatherSide ? "姑姑" : "阿姨") : (fatherSide ? "叔伯" : "舅舅");
+    }
+    if (t == "nephew") {
+        bool brothers = pb.father != kNone && kinTie(a, pb.father) == "sibling";  // a brother's child is 姪, a sister's 外甥
+        return f ? (brothers ? "姪女" : "外甥女") : (brothers ? "姪子" : "外甥");
+    }
     if (closeKin(a, b)) return "親戚";
     return "";
 }

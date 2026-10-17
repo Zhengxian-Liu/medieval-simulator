@@ -149,7 +149,7 @@ int main() {
         checkInvariants(a, "prerun");
     }
     // Every ask on everyone, pressed with every lever offered: the family never spends money it does not have,
-    // and a no is pressed only once more, in the same season, for another free day.
+    // and a no is pressed only once more, in the same season and the same talk (no second day).
     std::map<std::string, int> presses;
     for (int seed : {3, 5, 8}) {
         Config c;
@@ -171,8 +171,8 @@ int main() {
                         w.issue({w.today(), "ask", w.playerHead(), o.ask + "|" + o.office + "|" + lever + "|" + sub, who, o.object});
                         w.runCommands();
                         CHECK(w.household(w.playerHousehold()).money > -0.01, "pressing an ask left the family in the red");
-                        if (w.lastAsk().text == said) break;  // not pressed (no time left, or no money for the lever)
-                        CHECK(w.timeLeft() == before - 1, "pressing an ask cost no time");
+                        if (w.lastAsk().text == said) break;  // not pressed (no money for the lever)
+                        CHECK(w.timeLeft() == before, "pressing an ask took another day (it is the same talk)");
                         ++presses[lever];
                         break;  // one press per answer
                     }
@@ -237,8 +237,8 @@ int main() {
                         const auto& lv = a.lastAsk().levers;
                         if (a.lastAsk().answer < 2 || std::find(lv.begin(), lv.end(), "gift") == lv.end() || a.timeLeft() < 1) continue;
                         // Every lever the answer offers, pressed with every sum of money: a press the family cannot
-                        // pay for takes no day and changes nothing; one it can takes exactly one day; the front ends
-                        // (leverOpen) offer exactly the presses that go through.
+                        // pay for changes nothing; none takes a day (it is the same talk); the front ends (leverOpen)
+                        // offer exactly the presses that go through.
                         for (const std::string& lever : std::vector<std::string>(lv)) {
                             for (double m = 0; m <= 400; m += 2) {
                                 World b = a;
@@ -248,10 +248,9 @@ int main() {
                                 std::string said = b.lastAsk().text;
                                 b.issue({b.today(), "ask", b.playerHead(), o.ask + "|" + o.office + "|" + lever + "|" + sub, who, o.object});
                                 b.runCommands();
-                                bool pressed = b.timeLeft() != before;
+                                bool pressed = b.lastAsk().text != said;
                                 CHECK(b.household(b.playerHousehold()).money > -0.01, "a press left the family in the red");
-                                CHECK(!pressed || b.timeLeft() == before - 1, "a press took more than one day");
-                                CHECK(pressed || b.lastAsk().text == said, "a press that took no day still changed the answer");
+                                CHECK(b.timeLeft() == before, "a press took a day");
                                 CHECK(pressed == offered, "the front ends offer a press the engine refuses, or hide one it takes");
                                 CHECK(!pressed || b.lastAsk().text.find("湊夠") == std::string::npos, "a press took the day only to say 湊夠");
                                 if (lever == "gift" && m < a.lastAsk().giftSum + a.lastAsk().dealCost) CHECK(!pressed, "a gift the family cannot afford took the day");

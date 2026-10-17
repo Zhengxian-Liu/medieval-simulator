@@ -205,7 +205,7 @@ void World::chooseIntention(Person& p) {
 }
 
 bool World::draftIntention(Person& p, IntentDraft& d) {
-    if (!p.alive() || p.household == kNone || p.id == playerHead()) return false;
+    if (!p.alive() || p.household == kNone || p.id == playerHead() || p.id == actingHead()) return false;
     if (const ActivePlan* ap = activePlan(p.id)) {
         // Already at it: the intention is the plan under way.
         if (p.intent.kind != "plan" || p.intent.plan != ap->plan) {
@@ -465,7 +465,7 @@ void World::yearlyIntentions() {
 
 void World::actOnIntentions() {
     for (auto& p : people_) {
-        if (!p.alive() || p.household == kNone || p.id == playerHead() || ageYears(p) < 16) continue;
+        if (!p.alive() || p.household == kNone || p.id == playerHead() || p.id == actingHead() || ageYears(p) < 16) continue;
         if (p.intent.kind != "plan" && p.intent.kind != "help") continue;
         // The same pace everywhere: the rings decide who the family notices and who the model decides for,
         // not how fast the rest of the village lives.

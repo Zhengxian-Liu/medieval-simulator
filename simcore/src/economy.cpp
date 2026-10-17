@@ -55,7 +55,7 @@ void World::harvest() {
         double avgSkill = count > 0 ? skill / count : 5;
         double headMod = h.head != kNone ? traitMod(people_[h.head], "harvest") : 0;
         // Week-work: villein households lose days to the lord's fields at the busiest time.
-        if (h.head != kNone && !people_[h.head].free && h.house != "manor") headMod -= 0.08;
+        if (h.head != kNone && !houseFree(h) && h.house != "manor") headMod -= 0.08;
         double yield = tilled * 120 * weather * mult * labour * (0.75 + avgSkill / 40) * (1 + headMod);
         if (h.noOxUntil > day_ && h.house != "manor") yield *= 0.88;  // ploughing with a borrowed beast
         if (h.boonUntil > day_) yield *= 0.85;                        // days owed on the demesne, not on their own strips
@@ -73,7 +73,8 @@ void World::harvest() {
             households_[people_[priest_].household].food += tithe;
         h.food += yield;
 
-        double reserve = consumption(h) * 340;
+        // Kept back: a year's bread and two months more, so the family does not sell at harvest and buy back in July.
+        double reserve = consumption(h) * (kDaysPerYear + 60);
         if (h.food > reserve) {
             double sold = (h.food - reserve) * 0.6;
             h.food -= sold;
@@ -83,7 +84,7 @@ void World::harvest() {
         // The harvest is news when it falls short, when the year is unusual, and once a decade as a ledger.
         h.lastYield = yield / std::max(0.01, consumption(h));
         if (inPlayerHouse(h.id)) {
-            bool lean = yield < consumption(h) * 360;
+            bool lean = h.food < consumption(h) * kDaysPerYear;  // what is in the barn now, not this crop alone
             bool news = lean != h.lean;  // a house that is always short does not hear it as news each year
             h.lean = lean;
             double mult = param("harvest_mult", 1);
@@ -127,7 +128,7 @@ void World::payRent() {
         for (Id m : h.members)
             if (people_[m].flags.count("hayward")) rent *= 0.85;  // and the hayward's part of his
         // Villeins pay part of their rent in labour on the lord's demesne; free tenants pay it all in coin.
-        if (h.head != kNone) rent *= people_[h.head].free ? 1.15 : 0.8;
+        if (h.head != kNone) rent *= houseFree(h) ? 1.15 : 0.8;
         // Short of coin, a family sells grain to the corn dealer to meet the rent, keeping enough to
         // reach the spring: rent first, hunger later.
         double daily = consumption(h);

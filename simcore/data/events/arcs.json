@@ -3,10 +3,12 @@
   // ("signal": "manual" keeps them off the monthly pulse); the feud events need a feud between
   // the two families at the stage given in "min_stage" (1 嫌隙, 2 結怨, 3 世仇).
   "events": [
-    {"id": "debt_steward", "title": "催租", "prompt": "管家上門來催 {debt} 便士的欠租。家裡拿不出這麼多錢。", "scope": "anyone", "chance": 1,
+    {"id": "debt_steward", "title": "催租", "prompt": "管家上門來催 {debt} 便士的欠租。", "scope": "anyone", "chance": 1,
      "on": {"signal": "manual"},
      "conditions": {"is_head": true, "in_debt": true},
      "options": [
+       {"text": "把 {debt} 便士一次還清", "conditions": {"money_covers_debt": true}, "log": "管家上門來催 {debt} 便士的欠租，{name} 當場數錢還清了。",
+        "effects": [{"pay_off_debt": true}, {"stress": -5}], "ai": {"base": 12, "traits": {"diligent": 4, "greedy": -4}}},
        {"text": "求管家寬限一年", "log": "管家上門來催 {debt} 便士的欠租，{name} 求他寬限到明年秋收。",
         "effects": [{"stress": 8}, {"random": {"percent": 55, "effects": [{"debt_grace": true}, {"log": "  管家答應了，臉色卻很難看。"}],
                                                "else": [{"reputation": -2}, {"log": "  管家冷笑一聲：「明年再交不出，就別怪我牽牛。」"}]}}],
@@ -32,6 +34,8 @@
      "on": {"signal": "manual"},
      "conditions": {"is_head": true, "in_debt": true},
      "options": [
+       {"text": "把 {debt} 便士一次還清", "conditions": {"money_covers_debt": true}, "log": "{target} 上門來討 {debt} 便士的債，{name} 當場數錢還清了。",
+        "effects": [{"pay_off_debt": true}, {"target_opinion": {"value": 4, "mod": "paid_up", "years": 5}}], "ai": {"base": 12, "traits": {"diligent": 4, "greedy": -4}}},
        {"text": "求對方寬限", "log": "{target} 上門來討 {debt} 便士的債，{name} 求{target_pron}再寬限一年。",
         "effects": [{"stress": 8}, {"random": {"percent": 50, "effects": [{"debt_grace": true}, {"log": "  {target} 嘆了口氣，答應了。"}],
                                                "else": [{"feud_heat": 8}, {"log": "  {target} 撂下話：「明年再還不上，我們法庭上見。」"}]}}],

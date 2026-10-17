@@ -101,6 +101,8 @@ struct PlanDef {
     double discovery = 0;  // monthly chance a secret plan is exposed
     bool npc = true;       // NPCs may start it
     bool notifyTarget = false;  // the target's family hears how it ended
+    std::string targetAsk;                  // when it targets the player's head: what they are asked (answers: yes = success, no = fail)
+    std::vector<std::string> targetAnswers;
     std::string startLog, successLog, failLog, exposedLog, victimLog;
     std::string foreshadow;  // a hint the target's family may notice while a secret plan is under way
     Json success, fail, exposed;  // effect arrays

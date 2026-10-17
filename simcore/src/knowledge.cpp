@@ -50,6 +50,8 @@ void World::knowAtDeed(const Deed& d, const DeedDef& def) {
 
 void World::addBelief(Id holder, Id deed, Id culprit, double confidence, Id source) {
     if (holder == kNone || culprit == kNone || !people_[holder].alive()) return;
+    // Nobody believes a child did it, or someone not yet born: a garbled tale lands on someone grown at the time.
+    if (deed != kNone && (deeds_[deed].day - people_[culprit].birthDay) < 12 * kDaysPerYear) return;
     confidence = std::clamp(confidence, 0.0, 100.0);
     auto& list = beliefs_[holder];
     Belief* b = nullptr;

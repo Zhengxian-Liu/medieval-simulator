@@ -144,7 +144,8 @@ std::string World::lifeLine(Id id) const {
     std::string out;
     std::vector<std::string> said;  // the same turn twice (elected hayward again) is told once
     for (const auto& r : p.road) {
-        if (r.note.empty() || std::find(said.begin(), said.end(), r.note) != said.end()) continue;
+        // "接著做…" only says the road went on: it is not a turn.
+        if (r.note.empty() || r.note.rfind("接著", 0) == 0 || std::find(said.begin(), said.end(), r.note) != said.end()) continue;
         out += (out.empty() ? "" : "，") + r.note;
         said.push_back(r.note);
     }

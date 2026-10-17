@@ -125,8 +125,19 @@ void World::monthlyHealth() {
             else if (p.needs[Hunger] < 25) cause = "飢餓";
             else if (isWinter() && rngLife_.chance(0.5)) cause = "風寒";
             else {
-                static const char* kCauses[] = {"熱病", "痢疾", "意外", "傷口感染", "咳疾"};
-                cause = kCauses[rngLife_.range(0, 4)];
+                // Fevers and the flux most of all; a wound that festers only in someone already low; and accidents
+                // of the work they did, told as what happened.
+                double r = rngLife_.uniform();
+                if (r < 0.32) cause = "熱病";
+                else if (r < 0.62) cause = "痢疾";
+                else if (r < 0.80) cause = "咳疾";
+                else if (r < 0.88 && p.health < 60) cause = "傷口感染";
+                else if (r < 0.88) cause = "熱病";
+                else {
+                    static const char* kMan[] = {"從乾草垛上摔了下來", "被受驚的牛車壓了", "砍樹時被倒下的樹壓住", "過河時被水沖走", "被馬踢中了胸口"};
+                    static const char* kWoman[] = {"打水時掉進了井裡", "灶火燒著了衣裳", "過河時被水沖走", "從閣樓的梯子上摔了下來", "被受驚的牛撞倒"};
+                    cause = std::string("意外（") + (p.sex == Sex::Male ? kMan : kWoman)[rngLife_.range(0, 4)] + "）";
+                }
             }
             if (line) --dynastyAlive;
             kill(p.id, cause);
@@ -196,7 +207,8 @@ void World::giveBirth(Person& mother) {
 void World::kill(Id id, const std::string& cause) {
     Person& p = people_[id];
     if (!p.alive()) return;
-    bool lingering = cause != "意外" && cause != "戰死沙場" && p.household != kNone;
+    if (ageYears(p) >= 14) noteLife(id, cause == "戰死沙場" ? "戰死沙場" : "死於" + cause);
+    bool lingering = cause.rfind("意外", 0) != 0 && cause != "戰死沙場" && p.household != kNone;
     // The head of the player's family gets a last word at the bedside, if a grown child is there to hear it.
     Id bedside = kNone;
     if (lingering && id == playerHead())
@@ -236,13 +248,17 @@ void World::kill(Id id, const std::string& cause) {
                 addStress(c, 15, std::string(male ? "父親 " : "母親 ") + p.firstName + " 的死");
     // What stays after the stress of the day: grief, to be lived with (and answered, design/season-loop.md).
     // "bereaved:<relation>" lets events give the mourner a moment with it, the dead as the target.
-    auto mourn = [&](Id who, double strength, const char* relation) {
+    auto mourn = [&](Id who, double strength, const char* relation, bool signal = true) {
         if (who == kNone || !people_[who].alive() || people_[who].household == kNone) return;
         // Love, not blood, sets the depth of it.
         double op = opinion(who, id);
         addConcern(who, "grief", id, std::clamp(strength + op * 0.2, 15.0, 100.0));
-        emit({std::string("bereaved:") + relation, kNone, who, id, false, 0});
+        if (signal) emit({std::string("bereaved:") + relation, kNone, who, id, false, 0});
     };
+    // A child's burial is one rite for the house: asked of the one keeping it when that is a parent, else the mother.
+    auto living = [&](Id x) { return x != kNone && people_[x].alive() && people_[x].household != kNone; };
+    bool together = living(p.mother) && living(p.father) && people_[p.mother].household == people_[p.father].household;
+    Id riteBy = !together ? kNone : p.father == actingHead() ? p.father : p.mother;
     // Gladness about the dead one (a birth, a match) turns to grief; it does not linger beside it.
     for (auto& o : people_)
         if (o.alive())
@@ -251,8 +267,8 @@ void World::kill(Id id, const std::string& cause) {
                              o.concerns.end());
     if (p.spouse != kNone) mourn(p.spouse, 75, "spouse");
     // Babies died often and were mourned all the same, the mother most.
-    mourn(p.mother, age < 1 ? 60 : age < 16 ? 70 : 65, "child");
-    mourn(p.father, age < 1 ? 50 : age < 16 ? 70 : 65, "child");
+    mourn(p.mother, age < 1 ? 60 : age < 16 ? 70 : 65, "child", riteBy == kNone || riteBy == p.mother);
+    mourn(p.father, age < 1 ? 50 : age < 16 ? 70 : 65, "child", riteBy == kNone || riteBy == p.father);
     if (age >= 1)
         for (Id c : p.children)
             if (people_[c].alive() && ageYears(people_[c]) < 40) mourn(c, ageYears(people_[c]) < 16 ? 60 : 45, "parent");
@@ -710,6 +726,7 @@ void World::mergeHousehold(Household& from, Household& to, const std::string& ho
 // half of how well they knew each other.
 void World::inheritRegard(Id dead, Id heir) {
     if (dead == kNone || heir == kNone || dead == heir) return;
+    carryHouseRegard(dead, heir);
     for (auto& q : people_) {
         if (!q.alive() || q.id == heir || q.id == dead || q.household == people_[heir].household) continue;
         double sum = 0;
@@ -727,6 +744,19 @@ void World::inheritRegard(Id dead, Id heir) {
     }
 }
 
+// Under one roof, the warmth the family had for the one who kept the house carries over in part to the next:
+// a brother who loved the dead head does not meet the widow keeping the house as a stranger.
+void World::carryHouseRegard(Id prev, Id next) {
+    if (prev == kNone || next == kNone || prev == next || people_[next].household == kNone) return;
+    for (Id m : households_[people_[next].household].members) {
+        if (m == next || m == prev || !people_[m].alive()) continue;
+        double diff = opinion(m, prev) - opinion(m, next);
+        if (diff > 6) addOpinion(m, next, "same_house", std::min(diff * 0.5, 25.0), 12);
+        diff = opinion(next, prev) - opinion(next, m);
+        if (diff > 6 && kinTie(next, m) != "") addOpinion(next, m, "same_house", std::min(diff * 0.25, 15.0), 12);
+    }
+}
+
 bool World::wardHeld(const Household& h) const {
     if (h.ward == kNone) return false;
     const Person& w = people_[h.ward];
@@ -740,6 +770,7 @@ bool World::wardHeld(const Household& h) const {
 void World::handOver(Household& h, Id to, const std::string& why) {
     Id regent = h.head;
     Person& w = people_[to];
+    carryHouseRegard(regent, to);
     h.ward = kNone;
     h.wardLine = kNone;
     h.head = to;
@@ -889,7 +920,7 @@ void World::marry(Id man, Id woman) {
         double op = opinion(a, b);
         if (op > -5) addConcern(a, "joy", b, std::clamp(30 + op * 0.5, 20.0, 70.0));
     }
-    bool family = isPlayerFamily(m) || isPlayerFamily(w);
+    bool family = isPlayerFamily(m) || isPlayerFamily(w) || inPlayerHouse(m.household) || inPlayerHouse(w.household);
     int imp = inPlayerHouse(m.household) || inPlayerHouse(w.household) ? 1 : 2;
 
     Id oldHouse = w.household;
@@ -1102,15 +1133,22 @@ void World::yearlyMarriages() {
             // A match for one of the player's unmarried children goes through the head.
             Id acting = actingHead();
             Id ours = inPlayerHouse(people_[best].household) ? best : inPlayerHouse(m.household) ? mid : kNone;
-            if (ours != kNone && ours != acting) {
+            if (ours != kNone) {
+                // The head's own match is the player's to make as well: a widow is not married off unasked.
                 Id other = ours == best ? mid : best;
                 const Household& oh = households_[people_[other].household];
                 std::string about = fullName(other) + "（" + std::to_string(int(ageYears(people_[other]))) + " 歲，家裡 " +
                                     std::to_string(int(oh.acres)) + " 畝地；你對他們 " + std::to_string(int(opinion(acting, other))) + "）";
-                std::string sit = other == mid ? about + "託人來說親，想娶 " + fullName(best) + "。"
-                                               : about + "家託人來說親，想把她嫁給 " + fullName(mid) + "。";
+                std::string whom = ours == acting ? std::string("你") : fullName(ours);
+                std::string sit = other == mid ? about + "託人來說親，想娶" + (ours == acting ? whom : " " + whom) + "。"
+                                               : about + "家託人來說親，想把她嫁給" + (ours == acting ? whom : " " + whom) + "。";
+                if (ours == acting && households_[playerHousehold_].ward != kNone)
+                    sit += "（家業還是你替 " + people_[households_[playerHousehold_].ward].firstName + " 管著。）";
                 if (askPlayer("說親", sit, {"答應", "回絕"}) == 1) {
-                    recordDeed("refused_proposal", ours, other);
+                    // The slight is felt by the house that sent the matchmaker, its head first.
+                    Id sender = people_[other].household != kNone && households_[people_[other].household].head != kNone
+                                    ? households_[people_[other].household].head : other;
+                    recordDeed("refused_proposal", ours, sender);
                     log(1, "〔說親〕" + sit.substr(0, sit.find("。") + 3) + "（選擇：回絕）");
                     continue;
                 }
@@ -1118,8 +1156,13 @@ void World::yearlyMarriages() {
             marry(mid, best);
             continue;
         }
-        // Nobody suitable at home: bring a bride from another village.
+        // Nobody suitable at home: bring a bride from another village (for the player's family, if the head agrees).
         if (age > 23 && rngSocial_.chance(0.5)) {
+            if (inPlayerHouse(m.household) &&
+                askPlayer("說親", "鄰村有戶人家託媒人來說，願意把女兒嫁給" + (mid == actingHead() ? std::string("你") : " " + fullName(mid)) +
+                                      "，嫁妝不多，人是勤快的。",
+                          {"答應", "再等等"}) == 1)
+                continue;
             std::string husbandOcc = m.occupation;
             Id dyn = addDynasty(defs_.surnames[rngNames_.range(0, int(defs_.surnames.size()) - 1)]);
             int bdays = day_ - static_cast<int>((age - rngSocial_.range(2, 7)) * kDaysPerYear);

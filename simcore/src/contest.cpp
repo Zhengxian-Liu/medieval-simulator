@@ -162,7 +162,7 @@ World::Tally World::countVotes(const std::string& id, const std::vector<Id>& can
         double best = -1e9;
         for (Id c : cands) {
             double s = people_[c].household == h.id ? 1e6 : opinion(voter.id, c) + officeMerit(people_[c], id) * 2 + noise(5);
-            if (pr != promises_.end() && pr->second == c) s += 40;  // gave his word (開口)
+            if (pr != promises_.end() && pr->second == c) s += 90;  // gave his word (開口): kept, short of his own house or a feud
             if (people_[c].household != h.id && people_[c].household != kNone &&
                 std::find_if(wants_.begin(), wants_.end(), [&](const Want& wt) {
                     return wt.open && wt.house == people_[c].household && wt.kind == "office" && wt.office == id; }) != wants_.end() &&
@@ -181,6 +181,7 @@ World::Tally World::countVotes(const std::string& id, const std::vector<Id>& can
         ++t.votes[pick];
         if (!familyRuns || inPlayerHouse(h.id)) continue;
         if (pick == head && pr != promises_.end() && pr->second == head) t.byWord.push_back(voter.id);
+        if (pick != head && pr != promises_.end() && pr->second == head) t.broke.push_back(voter.id);
         if (pick != head && people_[pick].household != h.id && feudStage(voter.id, head) >= 2) t.grudge.push_back(voter.id);
     }
     return t;
@@ -221,6 +222,8 @@ std::string World::voteWhy(const Tally& t, Id winner) const {
     std::string kept = houses(t.byWord), grudge = decided ? houses(t.grudge) : "", out;
     if (!kept.empty()) out += kept + "答應過你，說到做到";
     if (!grudge.empty()) out += (out.empty() ? "" : "；") + grudge + "記著舊仇，票投給了別人";
+    std::string broke = houses(t.broke);
+    if (!broke.empty()) out += (out.empty() ? "" : "；") + broke + "答應過你，臨了卻投了別人";
     return out.empty() ? out : "（" + out + "。）";
 }
 

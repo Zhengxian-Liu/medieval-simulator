@@ -136,7 +136,7 @@ svg text.mpoin { font-size: 7.5px; font-weight: 600; pointer-events: none; paint
   </div>
   <div id="col-mid">
     <section class="panel" id="turn"></section>
-    <section class="panel" id="summary-panel" style="display:none"><h2>上一季</h2><div class="summary" id="summary"></div></section>
+    <section class="panel" id="summary-panel" style="display:none"><h2>近況</h2><div class="summary" id="summary"></div></section>
     <section class="panel"><h2>發生的事 <small>最新的在上面</small></h2><div class="feed" id="feed"></div></section>
   </div>
   <div id="col-right">
@@ -242,6 +242,7 @@ function renderTurn() {
       <div class="turnbar">
         <button class="primary" onclick="act({do:'pass'})">過這一季</button>
         <button onclick="act({do:'year'})">一口氣過一年</button>
+        ${s.regency ? `<button onclick="act({do:'regency'})" title="家業交給管家打理，只在有大事要你拿主意時停下來">交給管家，直到${esc(s.regency.ward)}成年（約 ${s.regency.years_left} 年）</button>` : ""}
         <button onclick="look({do:'report'}, '家裡知道的事')">家裡知道什麼</button>
         <button class="link" onclick="if(confirm('結束這一局？'))act({do:'quit'})">結束這一局</button>
       </div>${answerCard(s)}`;

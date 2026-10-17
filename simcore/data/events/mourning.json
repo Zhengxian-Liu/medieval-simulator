@@ -63,15 +63,15 @@
        "ai": {"base": 8, "traits": {"content": 6}}}
      ]},
 
-    {"id": "grief_at_home", "title": "家裡的傷心人", "scope": "player_head", "chance": 0.8,
+    {"id": "grief_at_home", "title": "家裡的傷心人", "scope": "player_head", "chance": 0.8, "cooldown_months": 6,
      "on": {"signal": "concern:grief", "as": "head", "after_months": [1, 3]},
      "conditions": {"target": {"concern": {"kind": "grief", "min": 25}, "age": [8, 120]}},
      "target": {"conditions": {"same_household": true}},
      "prompt": "這幾個月，{target_first}常一個人坐在{target_about:grief}的墳邊，飯也吃得很少。",
      "options": [
-      {"text": "陪{target_pron}去墳前坐一下午",
-       "log": "{name}放下手上的活，陪{target_first}在{target_about:grief}的墳前坐了一下午。",
-       "effects": [{"on_target": [{"ease_concern": {"kind": "grief", "by": 25}}, {"stress": -8}]}, {"mutual_opinion": {"value": 10, "mod": "comforted", "years": 12}}],
+      {"text": "陪{target_pron}去墳前坐一下午，家裡傷心的人也一起去",
+       "log": "{name}放下手上的活，帶著家裡的人，陪{target_first}在{target_about:grief}的墳前坐了一下午。",
+       "effects": [{"on_target": [{"ease_concern": {"kind": "grief", "by": 25}}, {"stress": -8}]}, {"ease_concern_house": {"kind": "grief", "by": 12}}, {"mutual_opinion": {"value": 10, "mod": "comforted", "years": 12}}],
        "ai": {"base": 10, "traits": {"kind": 8, "gregarious": 3}}},
       {"text": "叫{target_pron}振作起來，日子還得過",
        "log": "{name}對{target_first}說：「人死不能復生，日子還得過。」{target_first}沒有回答。",

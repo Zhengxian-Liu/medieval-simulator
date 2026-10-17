@@ -154,6 +154,7 @@ void EventRunner::fire(const EventDef& ev, Person& p, Id target) {
     natureStress(ev, o, p, target);
     if (ev.once) p.flags.insert("ev_" + ev.id);
     if (!ev.budget.empty()) ++w_.budgetUsed_[{p.household, ev.budget, w_.year()}];
+    if (ev.cooldownMonths > 0) w_.cooldowns_[{p.id, ev.id}] = w_.day_ + ev.cooldownMonths * kDaysPerMonth;
     if (ev.cooldownYears > 0) {
         w_.cooldowns_[{p.id, ev.id}] = w_.day_ + ev.cooldownYears * kDaysPerYear;
         if (ev.householdCooldown && p.household != kNone)
@@ -199,15 +200,18 @@ void EventRunner::runEvent(const EventDef& ev, Person& p, Id target, int importa
 
 void EventRunner::interact(const EventDef& ev, Person& p, Id head) {
     if (!p.alive() || p.household == kNone || head == kNone) return;
-    if (!eval(ev.conditions, p, head)) return;
+    // Never silent: a visit that cannot be made says why.
+    auto no = [&](const std::string& why) { w_.log(1, "〔" + ev.title + "〕沒去成：" + why); };
+    if (!eval(ev.conditions, p, head)) return no("眼下找" + w_.shortName(p.id) + "不合適。");
     auto cd = w_.cooldowns_.find({p.id, ev.id});
-    if (cd != w_.cooldowns_.end() && cd->second > w_.day_) return;
+    if (cd != w_.cooldowns_.end() && cd->second > w_.day_) return no("才找過" + w_.shortName(p.id) + "，過些日子再說。");
     // Sheltering from the pestilence: nobody outside the house is seen.
-    if (w_.people_[head].flags.count("plague_shelter") && p.household != w_.people_[head].household) return;
+    if (w_.people_[head].flags.count("plague_shelter") && p.household != w_.people_[head].household)
+        return no("全家躲著瘟疫，不和外人來往。");
     double money = ev.interaction.numberOr("money", 0);  // what it costs
     Household& hh = w_.households_[w_.people_[head].household];
-    if (money > hh.money + 0.5) return;
-    if (!w_.spendTime(static_cast<int>(ev.interaction.numberOr("time", 1)))) return;
+    if (money > hh.money + 0.5) return no("錢不夠（要 " + std::to_string(int(money)) + " 便士）。");
+    if (!w_.spendTime(static_cast<int>(ev.interaction.numberOr("time", 1)))) return no("這一季沒有空閒了。");
     hh.money = std::max(0.0, hh.money - money);
     w_.book(hh, ev.title, -money);
     bookAs_ = ev.title;
@@ -402,18 +406,31 @@ int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
     std::vector<double> ws;
     for (const auto& o : ev.options) ws.push_back(optionOpen(o, p, target) ? weight(o.aiWeight, p, target, decider) : 0.0);
     // Nothing affordable: fall back to the conditions alone, so the event still resolves.
+    // Nothing anyone would pick: any open option, evenly; failing that (nothing affordable), the conditions alone,
+    // so the event still resolves. A priced option is never chosen without the coin for it.
+    if (std::all_of(ws.begin(), ws.end(), [](double v) { return v <= 0; })) {
+        ws.clear();
+        for (const auto& o : ev.options) ws.push_back(optionOpen(o, p, target) ? 1.0 : 0.0);
+    }
+    if (std::all_of(ws.begin(), ws.end(), [](double v) { return v <= 0; })) {
+        ws.clear();
+        for (const auto& o : ev.options)
+            ws.push_back((o.conditions.isNull() || eval(o.conditions, p, target)) && o.text.find("便士") == std::string::npos ? 1.0 : 0.0);
+    }
     if (std::all_of(ws.begin(), ws.end(), [](double v) { return v <= 0; })) {
         ws.clear();
         for (const auto& o : ev.options)
             ws.push_back(o.conditions.isNull() || eval(o.conditions, p, target) ? weight(o.aiWeight, p, target, decider) : 0.0);
     }
-    // The one keeping the house decides for themselves and for the young children in it.
+    // The one keeping the house decides for themselves, for the young children in it, and on the big roads
+    // (parent_decides: school, the cloister, the levy, a match) for anyone of the house, a brother or a
+    // stepchild as much as a son, at home or away from it.
     Id acting = w_.actingHead();
-    bool child = (p.household == w_.playerHousehold_ || (w_.isAway(p) && p.awayFrom == w_.playerHousehold_)) && acting != kNone &&
-                 (p.father == acting || p.mother == acting || p.father == w_.people_[acting].spouse || p.mother == w_.people_[acting].spouse);
+    bool ofHouse = acting != kNone && p.id != acting &&
+                   (p.household == w_.playerHousehold_ || (w_.isAway(p) && p.awayFrom == w_.playerHousehold_));
     // Someone the head goes to see answers for themselves, child or not.
     bool asks = ev.scope != "interaction" && (p.id == acting || (p.household == w_.playerHousehold_ && w_.ageYears(p) < 14) ||
-                (ev.parentDecides && child && p.spouse == kNone));
+                (ev.parentDecides && ofHouse && (p.spouse == kNone || p.household == w_.playerHousehold_)));
     asked_ = ev.ask && asks;
     if (w_.chooser_ && ev.ask && asks) {
         std::vector<int> open;
@@ -635,6 +652,8 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     if (k == "kin_boy_at_home") return (w.boyForMaster(p) != kNone) == v.asBool();
     if (k == "hired") return (h && h->hiredUntil > w.day_) == v.asBool();
     if (k == "hire_master") return (h && w.hireMaster(h->id) != kNone) == v.asBool();
+    if (k == "would_sell") return h && !w.sellReason(*h).empty() == v.asBool();  // a house that would let a few acres go
+    if (k == "money_covers_debt") return h && h->debt > 0.5 && (h->money + 0.5 >= h->debt) == v.asBool();
     if (k == "owes_lord_ge") return h && w.owedLord(*h) >= v.asNumber();
     if (k == "demesne_free") return (w.leasedOut() < 0.5) == v.asBool();  // nobody holds the lord's fields on lease
     if (k == "has_secret") {
@@ -719,7 +738,18 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     if (k == "plague_active") return (w.param("plague_monthly", 0) > 0) == v.asBool();
     if (k == "household_size_ge") return h && h->members.size() >= v.asNumber();
     if (k == "remembers") return remembers(v, p, target);
-    if (k == "free") return p.free == v.asBool();
+    if (k == "free") {
+        // For the one holding a house, the house's freedom (a stepfather keeping it for a free-born heir).
+        // And for the blood of a free house: the brothers and sons of a freed line are free with it.
+        bool f = p.free;
+        if (p.household != kNone) {
+            const Household& ph = w.households_[p.household];
+            Id line = w.lineHead(ph);
+            if (ph.head == p.id) f = w.houseFree(ph);
+            else if (!f && line != kNone && p.dynasty == w.people_[line].dynasty && w.houseFree(ph)) f = true;
+        }
+        return f == v.asBool();
+    }
     if (k == "deed_tried") return deed_ != kNone && w.deedTried(deed_) == v.asBool();
     if (k == "unsolved_secret") return (w.unsolvedDeed(p.id) != kNone) == v.asBool();
     if (k == "in_service") return (p.home != kNone) == v.asBool();
@@ -793,6 +823,9 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                     if (!td->opposite.empty())
                         p.traits.erase(std::remove(p.traits.begin(), p.traits.end(), td->opposite), p.traits.end());
                     p.traits.push_back(td->id);
+                    // Learning to read, coming back from the wars: turns in a life worth telling at the end of it.
+                    if (td->id == "literate") w.noteLife(p.id, "學會了讀寫");
+                    else if (td->id == "veteran") w.noteLife(p.id, "打過仗回來");
                 }
             } else if (k == "remove_trait") {
                 p.traits.erase(std::remove(p.traits.begin(), p.traits.end(), v.asString()), p.traits.end());
@@ -1209,6 +1242,18 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                     else h->heldDebt = 0, h->heldCreditor = kNone;
                 }
                 if (w.inPlayerHouse(th.id) || w.inPlayerHouse(h->id)) w.log(1, "  當庭還了 " + std::to_string(int(amount)) + " 便士" + (owed > 0.5 ? "，還欠 " + std::to_string(int(owed)) + " 便士。" : "，債清了。"));
+            } else if (k == "pay_off_debt") {
+                // Pay the whole debt out of what the house has, to whoever it is owed.
+                if (!h || h->debt <= 0.5 || h->money + 0.5 < h->debt) continue;
+                double d = h->debt;
+                h->money = std::max(0.0, h->money - d);
+                w.book(*h, "還債", -d);
+                Id cred = h->creditor != kNone ? h->creditor : w.lord_;
+                if (cred != kNone && w.people_[cred].household != kNone) {
+                    w.households_[w.people_[cred].household].money += d;
+                    w.book(w.households_[w.people_[cred].household], "收回借款", d);
+                }
+                w.clearDebt(*h);
             } else if (k == "pay_debt") {
                 if (h) h->debt = std::max(0.0, h->debt - v.asNumber());
             } else if (k == "sell_ox") {
@@ -1309,6 +1354,11 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                     a = c->about;
                 }
                 w.addConcern(p.id, v["kind"].asString(), a, v.numberOr("strength", 40));
+            } else if (k == "ease_concern_house") {
+                // Everyone in p's house who carries this concern, a little: {"kind": "grief", "by": 12}
+                if (!h) continue;
+                for (Id m : h->members)
+                    if (m != p.id) w.easeConcern(m, v["kind"].asString(), v.numberOr("by", 12), kNone);
             } else if (k == "ease_concern") {
                 // {"kind": "grief", "by": 25, "about": "any"|"target"}
                 w.easeConcern(p.id, v["kind"].asString(), v.numberOr("by", 20), v.stringOr("about", "any") == "target" ? target : kNone);
@@ -1566,6 +1616,8 @@ std::string EventRunner::format(const std::string& tmpl, const Person& p, Id tar
                 val = a == kNone ? "" : w_.isPlayerFamily(w_.people_[a]) ? w_.shortName(a) : w_.fullName(a);
             } else if (key == "kin") val = target != kNone ? w_.kinWord(target, p.id) : "";
             else if (key == "target_kin") val = target != kNone ? w_.kinWord(p.id, target) : "";
+            else if (key == "sell_reason")
+                val = target != kNone && w_.people_[target].household != kNone ? w_.sellReason(w_.households_[w_.people_[target].household]) : "";
             else if (key == "stress_cause") val = p.stressCause.empty() ? "說不出的心事" : p.stressCause;
             else if (key == "deed_actor" || key == "deed_victim") {
                 Id a = deed_ == kNone ? kNone : key == "deed_actor" ? w_.deeds_[deed_].actor : w_.deeds_[deed_].target;

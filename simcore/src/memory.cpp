@@ -241,22 +241,55 @@ std::vector<std::pair<std::string, double>> World::opinionBreakdown(Id from, Id 
     return out;
 }
 
-// Blood and marriage: what is felt before anything is done.
-double World::kinBase(Id from, Id to) const {
+// How b stands to a by blood or marriage, the near ties only ("" for none).
+std::string World::kinTie(Id from, Id to) const {
     const Person& a = people_[from];
     const Person& b = people_[to];
-    if (a.father == to || a.mother == to || b.father == from || b.mother == from) return 25;
-    if (a.spouse == to && b.spouse == from) return 20;
-    bool siblings = (a.father != kNone && a.father == b.father) || (a.mother != kNone && a.mother == b.mother);
-    return siblings ? 10 : 0;
+    auto sib = [&](const Person& x, const Person& y) {
+        return x.id != y.id && ((x.father != kNone && x.father == y.father) || (x.mother != kNone && x.mother == y.mother));
+    };
+    auto spouseOf = [&](const Person& x) -> const Person* { return x.spouse != kNone ? &people_[x.spouse] : nullptr; };
+    if (a.father == to || a.mother == to) return "parent";
+    if (b.father == from || b.mother == from) return "child";
+    if (a.spouse == to && b.spouse == from) return "spouse";
+    if (sib(a, b)) return "sibling";
+    // A parent's spouse who is not the parent; a spouse's child who is not one's own.
+    for (Id par : {a.father, a.mother})
+        if (par != kNone && people_[par].spouse == to) return "step_parent";
+    if (const Person* s = spouseOf(a); s && (b.father == s->id || b.mother == s->id)) return "step_child";
+    if (const Person* s = spouseOf(b); s && sib(a, *s)) return "sibling_in_law";  // a brother's wife, a sister's husband
+    if (const Person* s = spouseOf(a); s && sib(*s, b)) return "sibling_in_law";  // a husband's brother, a wife's sister
+    if (const Person* s = spouseOf(a); s && (s->father == to || s->mother == to)) return "parent_in_law";
+    if (const Person* s = spouseOf(b); s && (s->father == from || s->mother == from)) return "child_in_law";
+    for (Id par : {a.father, a.mother})
+        if (par != kNone && sib(people_[par], b)) return "uncle";
+    for (Id par : {b.father, b.mother})
+        if (par != kNone && sib(people_[par], a)) return "nephew";
+    for (Id par : {b.father, b.mother})
+        if (par != kNone && (people_[par].father == from || people_[par].mother == from)) return "grandchild";
+    for (Id par : {a.father, a.mother})
+        if (par != kNone && (people_[par].father == to || people_[par].mother == to)) return "grandparent";
+    return "";
+}
+
+// Blood and marriage: what is felt before anything is done.
+double World::kinBase(Id from, Id to) const {
+    const std::string t = kinTie(from, to);
+    if (t == "parent" || t == "child") return 25;
+    if (t == "spouse") return people_[to].spouse == from ? 20 : 0;
+    if (t == "sibling") return 10;
+    if (t == "grandparent" || t == "grandchild") return 12;
+    if (t == "step_parent" || t == "step_child" || t == "uncle" || t == "nephew" || t == "parent_in_law" || t == "child_in_law") return 6;
+    if (t == "sibling_in_law") return 4;
+    return 0;
 }
 
 std::string World::kinBaseLabel(Id from, Id to) const {
-    const Person& a = people_[from];
-    const Person& b = people_[to];
-    if (a.father == to || a.mother == to || b.father == from || b.mother == from) return "骨肉之親";
-    if (a.spouse == to) return "夫妻情分";
-    return "手足之情";
+    const std::string t = kinTie(from, to);
+    if (t == "parent" || t == "child" || t == "grandparent" || t == "grandchild") return "骨肉之親";
+    if (t == "spouse") return "夫妻情分";
+    if (t == "sibling") return "手足之情";
+    return "一家親戚";
 }
 
 }  // namespace sim

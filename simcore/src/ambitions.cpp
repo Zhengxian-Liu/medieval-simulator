@@ -5,13 +5,25 @@
 
 namespace sim {
 
+// Whose blood holds the house: the heir under age while a widow or stepfather keeps it for them, else the head.
+Id World::lineHead(const Household& h) const {
+    if (h.ward != kNone && people_[h.ward].alive() && h.head != kNone && people_[h.head].dynasty != people_[h.ward].dynasty) return h.ward;
+    return h.head;
+}
+
+// A house is free when the line that holds it is: a stepfather who married in does not make it villein again.
+bool World::houseFree(const Household& h) const {
+    Id l = lineHead(h);
+    return l != kNone && people_[l].free;
+}
+
 int World::standing(Id hid) const {
     if (hid == kNone) return 0;
     const Household& h = households_[hid];
     if (h.head == kNone) return 0;
     const Person& hp = people_[h.head];
     if (hp.occupation == "lord" || hp.occupation == "lady" || hp.occupation == "priest" || gentry(h.head)) return -1;
-    if (!hp.free) return 0;
+    if (!houseFree(h)) return 0;
     if (h.freehold >= 20 && h.acres >= 40) return 3;
     if (h.freehold >= 6) return 2;
     return 1;

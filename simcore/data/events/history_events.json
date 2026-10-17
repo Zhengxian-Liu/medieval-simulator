@@ -1,11 +1,11 @@
 {
   "events": [
-    {"id": "war_levy", "title": "徵兵", "prompt": "郡裡來徵弓兵，要去法蘭西打仗。{name} 被點了名。", "scope": "player_family", "chance": 0.012, "cooldown_years": 8,
-     "conditions": {"world_flag": "war", "sex": "male", "age": [18, 34], "occupation": ["peasant", "shepherd", "carpenter", "weaver", "smith"]},
+    {"id": "war_levy", "title": "徵兵", "prompt": "郡裡來徵弓兵，要去法蘭西打一季仗。當家的 {name} 也被點了名，家裡的地只好託給別人照看。", "scope": "player_family", "chance": 0.012, "cooldown_years": 8,
+     "conditions": {"world_flag": "war", "sex": "male", "age": [18, 34], "is_head": true, "occupation": ["peasant", "shepherd", "carpenter", "weaver", "smith"]},
      "options": [
        {"text": "去法蘭西當弓兵", "log": "郡裡來徵弓兵，{name} 背起長弓跟著隊伍去了法蘭西。",
         "effects": [{"random": {"percent": 22, "effects": [{"kill": "戰死沙場"}],
-                     "else": [{"add_trait": "veteran"}, {"money": 70}, {"add_item": "longbow"}, {"reputation": 4}, {"health": -10}, {"log": "{name} 從法蘭西回來了，帶回軍餉和一身傷疤。"}]}}],
+                     "else": [{"add_trait": "veteran"}, {"log": "打完那一季仗，{name} 從法蘭西回來了，帶回 70 便士軍餉和一身傷疤。"}, {"money": 70}, {"add_item": "longbow"}, {"reputation": 4}, {"health": -10}]}}],
         "ai": {"base": 8, "traits": {"brave": 12, "ambitious": 6, "craven": -8}}},
        {"text": "花錢找人頂替（40 便士）", "log": "{name} 花 40 便士找人頂替去當兵。", "effects": [{"money": -40}], "ai": {"base": 8, "traits": {"craven": 8, "greedy": -6}, "if": [{"cond": {"money_lt": 40}, "add": -20}]}},
        {"text": "躲進樹林", "log": "{name} 躲進樹林好幾天，等徵兵的人走了才回來。", "effects": [{"reputation": -5}, {"trait_chance": {"trait": "craven", "chance": 30}}], "ai": {"base": 4, "traits": {"craven": 10}}}

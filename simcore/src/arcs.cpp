@@ -471,6 +471,7 @@ void World::yearlyLiaisons() {
                 Person& p = people_[x];
                 p.reputation -= 15;
                 p.flags.insert("adulterer");
+                noteLife(x, "和 " + fullName(x == a ? b : a) + " 的私情敗露，在教堂當眾悔罪");
                 Household& ph = households_[p.household];
                 book(ph, "教會法庭罰款", -std::min(20.0, std::max(0.0, ph.money)));
                 ph.money = std::max(0.0, ph.money - 20);
