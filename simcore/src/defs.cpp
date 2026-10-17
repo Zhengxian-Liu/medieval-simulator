@@ -137,6 +137,10 @@ Defs Defs::loadFromDir(const std::string& dir) {
         f.priestKnown = static_cast<int>(o.numberOr("priest_known", 0));
         d.foci.push_back(f);
     }
+    for (const char* k : {"child_male", "child_female", "adult", "adult_craft"})
+        if (!d.focusDefaults.count(k)) throw JsonError(std::string("focus.json: defaults has no ") + k);
+    for (const char* id : {"errand", "letters"})  // named in focus.cpp (apprentices, schooled children)
+        if (!d.focus(id, "child")) throw JsonError(std::string("focus.json: no child focus ") + id);
     for (const auto& [k, id] : d.focusDefaults)
         if (!d.focus(id, k.rfind("child", 0) == 0 ? "child" : "adult")) throw JsonError("focus default " + k + ": unknown focus " + id);
 

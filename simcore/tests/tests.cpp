@@ -300,6 +300,29 @@ int main() {
         CHECK(w.person(kids[0]).focus.empty(), "a child took an adult's focus");
         std::printf("focus: %zu children, charm %.1f vs %.1f, farming %.1f vs %.1f after 3 years\n", kids.size(), play.first, field.first,
                     play.second, field.second);
+        CHECK(!w.steersFocus(-5), "a negative id was taken for a person");
+    }
+    // The chapman settles every year on the road, the last one too; a year's focus never carries past a harvest,
+    // with or without land; a child who goes to a master stops going to letters.
+    {
+        Config c;
+        c.seed = 5;
+        World w(defs, c);
+        int roadYears = 0, maxDrift = 0;
+        double drift = 0;
+        for (int y = 0; y < 40 && !w.gameOver(); ++y) {
+            w.runYears(1);
+            for (const auto& p : w.people())
+                if (p.alive() && p.station == "chapman" && w.today() - p.stationSince >= kDaysPerYear) ++roadYears;
+                else if (p.alive() && p.station == "apprentice" && p.focus == "letters") CHECK(false, "an apprentice still goes to letters");
+            for (const auto& h : w.households())
+                if (!h.extinct && std::abs(h.focusYield) > drift) drift = std::abs(h.focusYield), maxDrift = h.id;
+        }
+        auto n = [&](const std::string& k) { return w.counters().count(k) ? w.counters().at(k) : 0; };
+        std::printf("chapman: %d years on the road after the first, %d settled, %d lost; largest focus yield %.3f (house %d)\n", roadYears,
+                    n("event:chapman_year"), n("event:chapman_loss"), drift, maxDrift);
+        CHECK(roadYears < 5 || n("event:chapman_year") + n("event:chapman_loss") >= roadYears * 9 / 10, "chapman years on the road went unsettled");
+        CHECK(drift < 0.1, "a household's focus yield carried past the harvest");
     }
     // A run driven by the auto-player replays exactly from its command log alone.
     {

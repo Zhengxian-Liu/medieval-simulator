@@ -443,10 +443,10 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
                 th.money += pay;
                 book(ph, "拜師錢", -pay);
                 res.text += shortName(subject) + "跟著" + name + "學手藝去了。";
+                oweFavour(head, who, 8, "收你兒子當學徒");
             } else {
                 res.text += "可是" + shortName(subject) + "眼下去不了。";
             }
-            oweFavour(head, who, 8, "收你兒子當學徒");
         } else if (what == "speak") {
             if (EntryFine* f = fineOf(playerHousehold_)) {
                 f->amount = std::round(f->amount * 0.7);

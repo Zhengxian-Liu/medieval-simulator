@@ -906,6 +906,7 @@ private:
     Id openApprenticeship(const std::string& trade, Id except) const;  // a master of that trade with a place free
     // Any place of that kind free outside the household `except`: the lord's first for service, then in village order.
     Id openPlace(const std::string& kind, Id except) const;
+    bool villageCraft(Id except) const;  // a craftsman outside that house keeps a shop (taken place or not)
     EntryFine* fineOf(Id house);
     Id fineLender(const Household& h, double amount) const;
     void fineChoice(Household& h, const std::string& how);  // beg | borrow | forfeit (data/events/manor.json)

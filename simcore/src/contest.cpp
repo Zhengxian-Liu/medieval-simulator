@@ -190,6 +190,7 @@ bool World::takePlace(Id master, const std::string& kind, Id who) {
     Person& p = people_[who];
     if (!p.alive() || p.household == kNone || p.home != kNone) return false;  // dead since they asked, or already away
     if (households_[p.household].head == who || !p.station.empty()) return false;  // keeps a house now, or on another road
+    p.focus.clear();  // a new life: the days go where a servant's or an apprentice's go (no more letters)
     if (kind == "apprentice") {
         Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
         std::string trade;
@@ -258,6 +259,13 @@ Id World::openPlace(const std::string& kind, Id except) const {
         if (best == kNone) best = pl.master;
     }
     return best;
+}
+
+bool World::villageCraft(Id except) const {
+    Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
+    for (const auto& pl : placesOf(households_, people_, lordHouse))
+        if (pl.kind == "apprentice" && pl.master != except) return true;
+    return false;
 }
 
 // ---- Wants -------------------------------------------------------------------------------------

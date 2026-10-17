@@ -621,11 +621,8 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     }
     if (k == "vacant_acres_ge") return w.vacantAcres() >= v.asNumber();
     if (k == "village_craft") {
-        // Someone else in the village keeps a craft shop a child could run errands in.
-        bool any = false;
-        for (const auto& h : w.households_)
-            if (!h.extinct && h.head != kNone && !h.trade.empty() && h.id != p.household) any = true;
-        return any == v.asBool();
+        // Someone else in the village keeps a craft shop a child could run errands in (an apprentice has his master's).
+        return (p.station == "apprentice" || w.villageCraft(p.household)) == v.asBool();
     }
     if (k == "plague_active") return (w.param("plague_monthly", 0) > 0) == v.asBool();
     if (k == "household_size_ge") return h && h->members.size() >= v.asNumber();
@@ -804,7 +801,7 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
             } else if (k == "yield") {
                 // A side road takes days from the household's own fields this year (or adds hands to them).
                 Id yh = p.household != kNone ? p.household : w.isAway(p) ? p.awayFrom : kNone;
-                if (yh != kNone) w.households_[yh].focusYield = std::clamp(w.households_[yh].focusYield + v.asNumber(), -0.15, 0.15);
+                if (yh != kNone) w.households_[yh].focusYield += v.asNumber();  // capped at the harvest, with the foci
             } else if (k == "focus") {
                 p.focus = v.asString();  // a choice at a gate sets where the days go (跟神父認字 -> letters)
             } else if (k == "station") {
@@ -1180,8 +1177,15 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
             } else if (k == "set_free") {
                 w.setFree(p.id);
             } else if (k == "take_any_place") {
+                // No place after all: nothing after it in the list happens either (no fee, no "went to the master").
                 Id master = p.household != kNone ? w.openPlace(v.asString(), p.household) : kNone;
-                if (master != kNone) w.takePlace(master, v.asString(), p.id);
+                Id from = p.household;
+                if (master == kNone || !w.takePlace(master, v.asString(), p.id)) return;
+                if (v.asString() == "apprentice") {  // the master's fee, as when he is asked or takes a boy on himself
+                    w.households_[from].money -= 24;
+                    w.households_[master].money += 24;
+                    w.book(w.households_[from], "拜師錢", -24);
+                }
             } else if (k == "take_place") {
                 // The person (an apprentice) goes to the master of that trade who has a place free.
                 Id master = w.openApprenticeship(v.asString(), p.household);

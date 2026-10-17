@@ -19,7 +19,10 @@ void World::harvest() {
     else if (weather > 1.2) log(2, "風調雨順，今年是豐收年。");
 
     for (auto& h : households_) {
-        if (h.extinct || h.acres <= 0 || h.members.empty()) continue;
+        if (h.extinct || h.acres <= 0 || h.members.empty()) {
+            h.focusYield = 0;  // no crop this year: last year's days don't carry into a holding taken later
+            continue;
+        }
         double workers = 0, skill = 0, count = 0;
         for (Id m : h.members) {
             const Person& p = people_[m];

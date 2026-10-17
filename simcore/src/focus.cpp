@@ -56,7 +56,7 @@ const FocusDef* World::focusDefault(const Person& p) const {
 }
 
 bool World::steersFocus(Id who) const {
-    if (who == kNone || who >= static_cast<Id>(people_.size())) return false;
+    if (who == kNone || who < 0 || who >= static_cast<Id>(people_.size())) return false;
     const Person& p = people_[who];
     return p.home != kNone ? inPlayerHouse(p.home) : inPlayerHouse(p.household);
 }
