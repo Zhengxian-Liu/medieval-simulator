@@ -132,6 +132,7 @@ void World::stepDay() {
         monthlyStress();
         monthlyConcerns();
         monthlyFocus();
+        monthlyWards();
         growSkills();
         monthlyAway();
         if (month() % 3 == 0) computeRings();
@@ -404,6 +405,7 @@ uint64_t World::digest() const {
     for (const auto& hh : households_) {
         mix(uint64_t(std::llround(hh.money * 100)));
         mix(uint64_t(std::llround((hh.focusYield + 1) * 1e6)));
+        mix(uint64_t(hh.ward + 10));
         mix(uint64_t(std::llround(hh.food * 100)));
         mix(uint64_t(std::llround(hh.acres * 100)));
         mix(uint64_t(std::llround(hh.debt * 100)) + uint64_t(hh.debtYears));

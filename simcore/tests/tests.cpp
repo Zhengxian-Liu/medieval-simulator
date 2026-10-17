@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <map>
 #include <optional>
+#include <tuple>
 #include <set>
 #include <string>
 
@@ -22,6 +23,8 @@ static int failures = 0;
 
 static void checkInvariants(const World& w, const char* label) {
     std::set<Id> seen;
+    // The lord lives at the manor (the fines and rents are paid into his household).
+    if (w.lordId() != kNone && w.person(w.lordId()).alive()) CHECK(w.person(w.lordId()).household != kNone, "the lord has no household");
     for (const auto& h : w.households()) {
         if (h.extinct) {
             CHECK(h.members.empty(), "extinct household has members");
@@ -29,6 +32,11 @@ static void checkInvariants(const World& w, const char* label) {
         }
         if (h.members.empty()) continue;
         CHECK(h.head != kNone, "household without head");
+        // An heir held for (寡婦產 / 代管) is not the head, and is a child at home or away in service.
+        if (h.ward != kNone) {
+            const Person& wd = w.person(h.ward);
+            CHECK(wd.alive() && h.head != h.ward && ((wd.household == h.id && w.ageYears(wd) < 16.2) || wd.home == h.id), "ward not a child at home (or in service) held by another");
+        }
         bool headIn = false;
         for (Id m : h.members) {
             const Person& p = w.person(m);
@@ -267,38 +275,53 @@ int main() {
     // 年度重心 (data/focus.json): the same children, years spent playing or in the fields, grow up differently;
     // a focus the person cannot take is refused; the choice shows in the command log.
     {
-        // The first village (by seed) whose family has young children at home when the player takes over.
-        std::optional<World> found;
-        std::vector<Id> kids;
-        for (int seed = 4; kids.empty() && seed < 30; ++seed) {
+        // Villages (by seed) whose family has young children at home when the player takes over. Several, since a
+        // child's three years also hang on chance (a father who dies, a place in service): the sum shows the focus.
+        std::vector<std::pair<World, std::vector<Id>>> bases;
+        for (int seed = 4; bases.size() < 4 && seed < 40; ++seed) {
             Config c;
             c.seed = seed;
             c.prerun = 25;
-            found.emplace(defs, c);
-            for (Id m : found->household(found->playerHousehold()).members) {
-                double age = found->ageYears(found->person(m));
-                if (age >= 5 && age < 10) kids.push_back(m);
+            World v(defs, c);
+            std::vector<Id> ks;
+            for (Id m : v.household(v.playerHousehold()).members) {
+                double age = v.ageYears(v.person(m));
+                if (age >= 5 && age < 10) ks.push_back(m);
             }
+            if (!ks.empty()) bases.emplace_back(std::move(v), ks);
         }
-        const World& base = *found;
-        CHECK(!kids.empty(), "no young child at home to test the focus on");
-        auto grow = [&](const std::string& focus) {
+        CHECK(!bases.empty(), "no young child at home to test the focus on");
+        auto grow = [&](const World& base, const std::vector<Id>& kids, const std::string& focus) {
             World w = base;
             for (Id k : kids) w.issue({w.today(), "focus", w.playerHead(), focus, k, kNone});
             w.runCommands();
             for (Id k : kids) CHECK(w.person(k).focus == focus, "a focus the family chose was not taken");
             w.runYears(3);
-            double charm = 0, farming = 0;
-            for (Id k : kids) charm += w.person(k).skills[Charm], farming += w.person(k).skills[Farming];
-            return std::make_pair(charm, farming);
+            // Per child: skills, and whether they still spent their days that way (not sent to service or a master).
+            std::vector<std::tuple<double, double, bool>> out;
+            for (Id k : kids) out.push_back({w.person(k).skills[Charm], w.person(k).skills[Farming], w.person(k).alive() && w.person(k).focus == focus});
+            return out;
         };
-        auto play = grow("play"), field = grow("farmhand");
-        CHECK(play.first > field.first + 0.5 && field.second > play.second + 0.5, "years playing and years in the fields grew the same child");
+        std::pair<double, double> play{0, 0}, field{0, 0};
+        int both = 0;
+        for (const auto& [b, ks] : bases) {
+            auto pk = grow(b, ks, "play"), fk = grow(b, ks, "farmhand");
+            for (size_t i = 0; i < ks.size(); ++i)
+                if (std::get<2>(pk[i]) && std::get<2>(fk[i])) {
+                    ++both;
+                    play.first += std::get<0>(pk[i]), play.second += std::get<1>(pk[i]);
+                    field.first += std::get<0>(fk[i]), field.second += std::get<1>(fk[i]);
+                }
+        }
+        CHECK(both > 0, "no child kept the chosen focus for three years in both runs");
+        CHECK(play.first > field.first + 0.5 * both && field.second > play.second + 0.5 * both, "years playing and years in the fields grew the same child");
+        const World& base = bases[0].first;
+        const std::vector<Id>& kids = bases[0].second;
         World w = base;
         w.issue({w.today(), "focus", w.playerHead(), "craft", kids[0], kNone});  // an adult's focus, for a child
         w.runCommands();
         CHECK(w.person(kids[0]).focus.empty(), "a child took an adult's focus");
-        std::printf("focus: %zu children, charm %.1f vs %.1f, farming %.1f vs %.1f after 3 years\n", kids.size(), play.first, field.first,
+        std::printf("focus: %d children in %zu villages, charm %.1f vs %.1f, farming %.1f vs %.1f after 3 years\n", both, bases.size(), play.first, field.first,
                     play.second, field.second);
         CHECK(!w.steersFocus(-5), "a negative id was taken for a person");
     }

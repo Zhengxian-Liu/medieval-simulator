@@ -34,7 +34,7 @@ const std::map<std::string, std::string>& modNames() {
         {"refused_ask", "回絕過我的請求"}, {"pressed_with_secret", "拿把柄壓過我"}, {"stood_aside", "讓過我一步"}, {"hard_words", "說過狠話"}, {"forbade_match", "不准我的親事"}, {"put_off", "推託過我的事"},
         {"cold_shoulder", "給過我冷臉"}, {"heeded", "把我的事放在心上"}, {"neglected", "冷落過我"},
         {"came_to_wake", "來守過靈"}, {"missed_funeral", "喪事沒來露面"}, {"came_to_wedding", "來喝過喜酒"},
-        {"wedding_gift", "送過賀禮"}, {"helps_at_home", "在家很幫忙"}, {"missed_wedding", "喜事沒來"}};
+        {"wedding_gift", "送過賀禮"}, {"helps_at_home", "在家很幫忙"}, {"for_the_dead", "看在先人份上"}, {"against_the_dead", "記著先人的舊帳"}, {"missed_wedding", "喜事沒來"}};
     return names;
 }
 

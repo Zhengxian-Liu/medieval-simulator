@@ -164,6 +164,7 @@ struct Household {
     int timeLeft = 0;
     double workBonus = 0;  // seasons spent bent over the work: a slightly better harvest
     double focusYield = 0; // this year's 年度重心 and side roads against the defaults (more hands in the field, a pack to the fair)
+    Id ward = kNone;       // the heir under 16 while a widow or kinsman holds the land for them (寡婦產 / 代管)
 };
 
 // A quarrel between two families that grows by stages (Crusader Kings-style story arc).
@@ -771,6 +772,9 @@ private:
     void onHeadDied(Household& h, Id deadHead);
     void obituary(Id id);
     void followSurvivingBranch(bool lineEnded = false);
+    void mergeHousehold(Household& from, Household& to);  // members, land, money, food and goods move in; `from` ends
+    void inheritRegard(Id dead, Id heir);  // the village's regard for the dead, half of it, passes to the one taking over
+    void monthlyWards();                   // an heir held for turns 16: the land is handed over
     void marry(Id a, Id b);
     std::string pickName(Sex sex, Id father, Id mother);
     void growSkills();

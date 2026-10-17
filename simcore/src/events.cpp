@@ -910,6 +910,7 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 int age = w.rngEvents_.range(static_cast<int>(v.numberOr("min_age", 14)), static_cast<int>(v.numberOr("max_age", 20)));
                 Id id = w.addPerson(w.pickName(sex, kNone, kNone), p.dynasty, sex, w.day_ - age * kDaysPerYear - w.rngEvents_.range(0, 300), h->id);
                 Person& np = w.people_[id];
+                np.flags.insert("designated_heir");  // brought in to carry the land: ahead of the widow (life.cpp heirOf)
                 np.occupation = sex == Sex::Male ? w.people_[h->head].occupation : "housewife";
                 if (!w.defs_.occupation(np.occupation)) np.occupation = "peasant";
                 np.free = w.people_[h->head].free;
