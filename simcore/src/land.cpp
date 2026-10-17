@@ -327,7 +327,7 @@ std::string World::sellReason(const Household& h) const {
     return "";
 }
 
-World::LandDeal World::landDeal(const Household& buyer, const Household& seller, double acres, double price, bool wanted) const {
+World::LandDeal World::landDeal(const Household& buyer, const Household& seller, double acres, double price, bool wanted, double extra) const {
     LandDeal d;
     if (acres <= 0) return d;
     if (wanted)
@@ -336,12 +336,13 @@ World::LandDeal World::landDeal(const Household& buyer, const Household& seller,
     if (d.parcel != kNone) {
         d.acres = parcels_[d.parcel].acres;
         d.price = std::round(d.acres * price / acres);
-        d.what = parcelName(parcels_[d.parcel]) + "那 " + std::to_string(static_cast<int>(std::lround(d.acres))) + " 畝";
+        d.what = parcelName(parcels_[d.parcel]);  // "北田坡上那 3 畝": the acres are in the name already
     } else {
         d.acres = std::min(acres, seller.acres);
         d.price = std::round(price * d.acres / acres);
         d.what = " " + std::to_string(static_cast<int>(std::lround(d.acres))) + " 畝地";  // spaced like other numbers in text
     }
+    if (d.acres > 0) d.price += extra;  // raised in the haggling, on top of what the land is worth
     d.ok = d.acres > 0 && buyer.money >= d.price;
     return d;
 }

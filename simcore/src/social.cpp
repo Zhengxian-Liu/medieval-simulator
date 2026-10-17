@@ -41,7 +41,9 @@ void World::monthlySocial() {
             if (!family) continue;
             std::string friendFlag = "friend_" + std::to_string(b);
             std::string rivalFlag = "rival_" + std::to_string(b);
-            if (after >= 50 && before < 50 && !pa.flags.count(friendFlag)) {
+            // Fondness for a father or a sister-in-law in another house is kinship, not a new friend.
+            bool kin = closeKin(a, b) || !kinTie(a, b).empty();
+            if (after >= 50 && before < 50 && !pa.flags.count(friendFlag) && !kin) {
                 pa.flags.insert(friendFlag);
                 log(1, fullName(a) + " 和 " + fullName(b) + " 成了好朋友。");
             } else if (after <= -45 && before > -45 && !pa.flags.count(rivalFlag)) {

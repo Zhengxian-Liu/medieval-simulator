@@ -154,8 +154,9 @@ public:
     std::string reasons(Id from, Id to) {
         std::vector<std::string> out;
         auto br = w_.opinionBreakdown(from, to);
+        // A reason worn down to almost nothing reads as faded, not as a small push one way or the other.
         for (size_t i = 0; i < br.size() && i < 6; ++i)
-            out.push_back("[" + str(opinionLabel(br[i].first)) + "," + num(std::lround(br[i].second)) + "]");
+            out.push_back("[" + str(opinionLabel(br[i].first) + (std::abs(br[i].second) < 2 ? "…淡了" : "")) + "," + num(std::lround(br[i].second)) + "]");
         return arr(out);
     }
 
@@ -483,10 +484,14 @@ public:
                     if (op.target != kNone) {
                         const Person& tp = w.people()[op.target];
                         label += w.fullName(op.target) + "（" + std::to_string(int(w.ageYears(tp))) + " 歲，對你" + opinionWord(w.opinion(op.target, head));
-                        if (tp.household != kNone) {
-                            const Household& th = w.households()[tp.household];
-                            label += "，" + std::to_string(int(th.acres)) + " 畝" + (th.lean ? "，今年缺糧" : "") + (th.debt > 0.5 ? "，欠著債" : "");
+                        // A servant is of their own family's house, not the one they serve in (whose acres are not theirs).
+                        Id own = tp.home != kNone ? tp.home : tp.household;
+                        if (own != kNone) {
+                            const Household& th = w.households()[own];
+                            label += "，家裡 " + std::to_string(int(th.acres)) + " 畝" + (th.lean ? "，今年缺糧" : "") + (th.debt > 0.5 ? "，欠著債" : "");
                         }
+                        if (tp.home != kNone && tp.household != kNone && w.households()[tp.household].dynasty != kNone)
+                            label += "，在" + w.dynasties()[w.households()[tp.household].dynasty].surname + "家幫傭";
                         int st = w.feudStage(head, op.target);
                         if (st > 0) label += st == 3 ? "，世仇" : st == 2 ? "，結怨" : "，嫌隙";
                         label += "）";

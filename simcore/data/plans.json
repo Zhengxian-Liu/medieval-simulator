@@ -38,7 +38,9 @@
                                           "else": [{"log": "  媒人回來說：「人家早就看上了別家。」"}]}}]}}]}}],
      "ai": {"base": 12, "traits": {"ambitious": 6, "gregarious": 3}, "if": [{"cond": {"ambition": "good_match"}, "add": 40}, {"cond": {"tradition": "well_married"}, "add": 10}]},
      "beats": [
-       {"id": "dowry_haggle", "prompt": "{target} 家嫌嫁妝太少，親事卡住了。", "chance": 0.3, "options": [
+       // The bride's side gives the dowry: haggled over only when the one being matched is the girl (the target the groom).
+       {"id": "dowry_haggle", "prompt": "{target} 家嫌嫁妝太少，親事卡住了。", "chance": 0.3,
+        "conditions": {"target": {"sex": "male"}}, "options": [
          {"text": "多加 20 便士嫁妝", "log": "對方嫌嫁妝太少，{name} 咬牙多加了 20 便士。", "effects": [{"money": -20}, {"progress": 30}], "ai": {"base": 10, "traits": {"generous": 8, "greedy": -10}}},
          {"text": "加一頭小豬", "log": "對方嫌嫁妝太少，{name} 答應再加一頭小豬。", "effects": [{"food": -60}, {"progress": 20}], "ai": {"base": 8}},
          {"text": "堅持原價", "log": "對方嫌嫁妝太少，{name} 一步也不讓。", "effects": [{"progress": -15}], "ai": {"base": 6, "traits": {"greedy": 10, "ambitious": 4}}}]},
@@ -61,7 +63,7 @@
      "ai": {"base": 6, "traits": {"ambitious": 8, "greedy": 6, "content": -6}, "if": [{"cond": {"ambition": "more_land"}, "add": 30}, {"cond": {"ambition": "big_landholder"}, "add": 30}]},
      "beats": [
        {"id": "land_rival", "prompt": "{target} 家的地，別家也看上了，出的價比你高。", "chance": 0.35, "options": [
-         {"text": "再加 60 便士", "conditions": {"money_ge": 420}, "log": "別家也來搶 {target} 家的地，{name} 又加了 60 便士。", "effects": [{"money": -60}, {"target": [{"money": 60}]}, {"progress": 25}], "ai": {"base": 8, "traits": {"ambitious": 8, "greedy": -6}}},
+         {"text": "再加 60 便士", "conditions": {"money_ge": 420}, "log": "別家也來搶 {target} 家的地，{name} 又加了 60 便士。", "effects": [{"raise_price": 60}, {"progress": 25}], "ai": {"base": 8, "traits": {"ambitious": 8, "greedy": -6}}},
          {"text": "請 {target} 念在兩家的交情上先賣給你（一半一半）", "log": "{name} 去找 {target}，提起兩家多年的交情。", "effects": [{"random": {"percent": 50,
              "effects": [{"log": "  {target} 嘆了口氣：「也罷，先說好的先賣。」"}, {"progress": 20}],
              "else": [{"log": "  {target} 搖頭：「交情歸交情，錢歸錢。」"}, {"progress": -30}]}}], "ai": {"base": 8, "traits": {"gregarious": 6}}},
@@ -130,7 +132,7 @@
 
     {"id": "befriend", "name": "結交", "requires": "交心的朋友不到兩個", "desc": "和一個人交上朋友。",
      "actor": {"age": [14, 75], "sworn_friends_lt": 2},
-     "target": {"pick": "villager", "conditions": {"age": [14, 80], "not_kin": true, "not": {"remembers": {"holder": "target", "about": "other", "type": "sworn_friend"}}}},
+     "target": {"pick": "villager", "conditions": {"age": [14, 80], "not_kin": true, "kin_tie": false, "not": {"remembers": {"holder": "target", "about": "other", "type": "sworn_friend"}}}},
      "max_months": 12, "retry_years": 1,
      "progress": {"base": 6, "skill": {"charm": 1.0}, "opinion": 6, "traits": {"gregarious": 4, "shy": -3, "kind": 2}},
      "start_log": "",
@@ -210,8 +212,8 @@
   ,
     {"id": "send_to_service", "name": "送去幫傭", "requires": "家主，家裡有能出去幫傭的孩子", "notify_target": true,
      "desc": "把半大的孩子送到富戶、工匠或莊園家裡幫傭幾年：家裡少一張嘴，孩子學手藝、攢人脈，每年還有一點工錢。在當時，大多數年輕人都這樣過幾年。",
-     "actor": {"is_head": true},
-     "subject": {"pick": "any_child", "conditions": {"age": [10, 16], "married": false, "in_service": false, "is_head": false}},
+     "actor": {"is_head": true, "gentry": false, "not": {"occupation": ["lord", "lady", "priest"]}},
+     "subject": {"pick": "any_child", "conditions": {"age": [10, 16], "married": false, "in_service": false, "is_head": false, "gentry": false}},
      "target": {"pick": "villager", "conditions": {"is_head": true, "not_kin": true, "age": [20, 80],
                 "any": [{"acres_ge": 25}, {"occupation": ["lord", "smith", "carpenter", "miller", "weaver"]}], "service_place": true,
                 "not": {"target": {"house": "manor"}}}},

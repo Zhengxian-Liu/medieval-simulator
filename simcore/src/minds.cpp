@@ -107,7 +107,7 @@ bool World::seemsBusy(Id id) const { return id >= 0 && id < static_cast<Id>(show
 
 std::string World::mindOf(const Person& p) const {
     std::string s = fullName(p.id) + "，" + std::to_string(int(ageYears(p))) + " 歲";
-    if (const OccupationDef* od = defs_.occupation(p.occupation)) s += "，" + od->name;
+    if (std::string occ = occupationName(p); !occ.empty()) s += "，" + occ;
     std::string t;
     for (const auto& tr : p.traits)
         if (defs_.traits.at(tr).category == "personality") t += (t.empty() ? "" : "、") + defs_.traits.at(tr).name;

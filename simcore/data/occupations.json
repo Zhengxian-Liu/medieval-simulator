@@ -1,7 +1,7 @@
 {
   "occupations": [
     {"id": "peasant",   "name": "農夫",     "skill": "farming",  "farms": true,  "sex": "male"},
-    {"id": "housewife", "name": "主婦",     "skill": "farming",  "farms": true,  "sex": "female"},
+    {"id": "housewife", "name": "主婦",     "skill": "farming",  "farms": true,  "sex": "female", "unmarried_name": "閨女"},
     {"id": "alewife",   "name": "釀酒婦",   "skill": "craft",    "farms": true,  "sex": "female", "monthly_income": 8},
     {"id": "smith",     "name": "鐵匠",     "skill": "craft",    "sex": "male", "monthly_income": 20},
     {"id": "carpenter", "name": "木匠",     "skill": "craft",    "sex": "male", "monthly_income": 16},

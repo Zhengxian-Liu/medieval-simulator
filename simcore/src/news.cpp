@@ -304,7 +304,9 @@ bool World::occasionByPolicy(const std::string& invite, Id subject, double link)
     // Named for the one it is for, and the house they lived in (a wife's wake is her husband's house's).
     Id sh = people_[subject].household;
     Id dyn = sh != kNone ? households_[sh].dynasty : people_[subject].dynasty;
-    std::string where = fullName(subject) + (funeral ? "的喪事" : "的喜酒") + (dyn != kNone ? "（" + dynasties_[dyn].surname + "家）" : "");
+    // A wake is told as the invitation told it, by the house ("史密斯家的瑪麗的喪事"), not by her own maiden name.
+    std::string where = funeral && dyn != kNone ? dynasties_[dyn].surname + "家的" + shortName(subject) + "的喪事"
+                                                : fullName(subject) + (funeral ? "的喪事" : "的喜酒") + (dyn != kNone ? "（" + dynasties_[dyn].surname + "家）" : "");
     // The same answer as when asked: "all" goes properly (coin and a free day), "close" the plain way and only
     // to close houses, "none" stays home.
     double cost = funeral ? 2 : 3;
@@ -388,8 +390,11 @@ void World::learnNews(News& n, Id household, Id teller, double link) {
         Id idx = static_cast<Id>(&n - news_.data());
         const Person& t = people_[teller];
         std::string tn = fullName(teller);
-        if (tn == n.subjectName || tn == n.otherName ||
-            (n.subject != kNone && t.firstName == people_[n.subject].firstName && t.dynasty == people_[n.subject].dynasty))
+        // Only where the namesake is dead: a grandmother telling of the granddaughter named for her is just herself.
+        bool deadSubject = n.subject != kNone && !people_[n.subject].alive();
+        bool deadOther = n.other != kNone && !people_[n.other].alive();
+        if ((deadSubject && tn == n.subjectName) || (deadOther && tn == n.otherName) ||
+            (deadSubject && t.firstName == people_[n.subject].firstName && t.dynasty == people_[n.subject].dynasty))
             namesakeTeller_.insert({idx, teller});
     }
     const NewsKindDef* k = defs_.newsKind(n.kind);

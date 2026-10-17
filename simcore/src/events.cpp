@@ -12,6 +12,12 @@ bool inRange(double v, const Json& r) {
     return v >= r[0].asNumber() && v <= r[1].asNumber();
 }
 
+// A concern about a husband or wife now dead whom this person has since replaced: a widow who has remarried still
+// carries her first husband, but it is not hers to bring up with the new family.
+bool aboutFormerSpouse(const std::vector<Person>& people, const Person& who, const Concern& c) {
+    return c.about != kNone && c.about != who.spouse && people[c.about].spouse == who.id && !people[c.about].alive();
+}
+
 }  // namespace
 
 void EventRunner::pulse(const std::string& kind) {
@@ -610,12 +616,16 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     if (k == "health_lt") return p.health < v.asNumber();
     if (k == "health_ge") return p.health >= v.asNumber();
     // What is on someone's mind: "grief", or {"kind": "grief", "about": "target", "min": 20}.
+    // "own": true leaves out a remarried widow's grief for the spouse she had before.
     auto hasConcern = [&](const Person& who, const Json& c, Id other) {
         std::string kind = c.isString() ? c.asString() : c.stringOr("kind", "");
         std::string about = c.isObject() ? c.stringOr("about", "any") : "any";
         double min = c.isObject() ? c.numberOr("min", 5) : 5;
+        bool own = c.isObject() && c["own"].isBool() && c["own"].asBool();
         for (const auto& x : who.concerns)
-            if (x.kind == kind && x.strength >= min && (about == "any" || x.about == other)) return true;
+            if (x.kind == kind && x.strength >= min && (about == "any" || x.about == other) &&
+                !(own && aboutFormerSpouse(w.people_, who, x)))
+                return true;
         return false;
     };
     if (k == "concern") return hasConcern(p, v, target);
@@ -684,6 +694,8 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     if (k == "reeve") return (p.flags.count("reeve") > 0) == v.asBool();
     if (k == "opposite_sex") return target != kNone && (w.people_[target].sex != p.sex) == v.asBool();
     if (k == "not_kin") return target != kNone && (!w.closeKin(p.id, target)) == v.asBool();
+    // Kin by blood or marriage, the in-laws too: one does not become sworn friends with one's father-in-law.
+    if (k == "kin_tie") return target != kNone && (w.closeKin(p.id, target) || !w.kinTie(p.id, target).empty()) == v.asBool();
     if (k == "gentle") return (w.cfg_.harshness == Harshness::Gentle) == v.asBool();
     // Someone of the family, other than the head and spouse, lives at home to inherit.
     if (k == "heir_at_home") {
@@ -815,6 +827,7 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     if (k == "deed_tried") return deed_ != kNone && w.deedTried(deed_) == v.asBool();
     if (k == "unsolved_secret") return (w.unsolvedDeed(p.id) != kNone) == v.asBool();
     if (k == "in_service") return (p.home != kNone) == v.asBool();
+    if (k == "gentry") return w.gentry(p.id) == v.asBool();  // the lord's family
     // 處境 (design/life-paths.md): "home" is the empty station.
     if (k == "station") {
         std::string st = p.station.empty() ? "home" : p.station;
@@ -973,8 +986,13 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 if (w.lord_ == kNone || !w.people_[w.lord_].alive() || w.lord_ == p.id) continue;
                 w.addOpinion(w.lord_, p.id, v.stringOr("mod", "event"), v["value"].asNumber(), static_cast<int>(v.numberOr("years", 10)));
             } else if (k == "set_occupation") {
-                p.occupation = v.asString();
-                if (!w.defs_.occupation(p.occupation)) throw JsonError("unknown occupation " + p.occupation);
+                const OccupationDef* od = w.defs_.occupation(v.asString());
+                if (!od) throw JsonError("unknown occupation " + v.asString());
+                // A new trade is a turn in the life (開始賣酒, 當上書記), unless a change of station alongside it says so
+                // already ("學成回村當織工"); going back to the plough is not one.
+                bool told = std::any_of(effects.asArray().begin(), effects.asArray().end(), [](const Json& x) { return x.has("station"); });
+                if (p.occupation != od->id && od->id != "peasant" && od->id != "housewife" && !told) w.noteLife(p.id, "當了" + od->name);
+                p.occupation = od->id;
             } else if (k == "kill") {
                 w.kill(p.id, v.asString());
                 return;
@@ -1060,6 +1078,9 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 if (!p.alive()) return;
             } else if (k == "progress") {
                 if (plan_) plan_->progress += v.asNumber();
+            } else if (k == "raise_price") {
+                // The buyer bids more for the land (outbid by another house): paid to the seller when the deal is struck.
+                if (plan_) plan_->priceAdd += v.asNumber();
             } else if (k == "abort_plan") {
                 if (plan_) plan_->progress = -1000;  // resolved as a failure at month end
             } else if (k == "subject") {
@@ -1080,7 +1101,8 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 // ("wanted": false for a set lot, as when the seller names it).
                 if (!h || target == kNone || w.people_[target].household == kNone) continue;
                 Household& th = w.households_[w.people_[target].household];
-                World::LandDeal d = w.landDeal(*h, th, v["acres"].asNumber(), v["price"].asNumber(), !(v["wanted"].isBool() && !v["wanted"].asBool()));
+                World::LandDeal d = w.landDeal(*h, th, v["acres"].asNumber(), v["price"].asNumber(), !(v["wanted"].isBool() && !v["wanted"].asBool()),
+                                               plan_ ? plan_->priceAdd : 0);
                 if (!d.ok) continue;
                 double price = d.price;
                 if (d.parcel != kNone) {
@@ -1746,8 +1768,12 @@ std::string EventRunner::format(const std::string& tmpl, const Person& p, Id tar
                 Id dyn = th != kNone ? w_.households_[th].dynasty : kNone;
                 val = dyn != kNone ? w_.dynasties_[dyn].surname : "";
             } else if (key.rfind("about:", 0) == 0) {
-                // {about:grief}: who this person's grief (or other concern) is about.
-                const Concern* c = w_.concernOf(p, key.substr(6));
+                // {about:grief}: who this person's grief (or other concern) is about. A remarried widow speaks of
+                // her other griefs before the first husband (the "own" concern condition), if she has any.
+                const Concern* c = nullptr;
+                for (const auto& x : p.concerns)
+                    if (x.kind == key.substr(6) && !aboutFormerSpouse(w_.people_, p, x) && (!c || x.strength > c->strength)) c = &x;
+                if (!c) c = w_.concernOf(p, key.substr(6));
                 Id a = c ? c->about : kNone;
                 val = a == kNone ? "" : a == target && target == w_.playerHead() ? "你" : w_.isPlayerFamily(w_.people_[a]) ? w_.shortName(a) : w_.fullName(a);
             } else if (key.rfind("target_about:", 0) == 0) {

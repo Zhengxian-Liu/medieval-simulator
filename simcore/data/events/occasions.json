@@ -16,11 +16,11 @@
        "effects": [{"money": -2}, {"spend_time": 1}, {"occasion": {"came": true, "value": 8, "mod": "came_to_wake"}}, {"need": {"social": 15, "spirit": 10}}, {"occasion_policy": "all"}],
        "ai": {"base": 8, "traits": {"kind": 6, "pious": 4, "generous": 4, "greedy": -5, "shy": -3}, "if": [{"cond": {"news_link_ge": 0.6}, "add": 8}]}},
       {"text": "下葬那天去教堂墓地送一程；這一季別家的紅白事只去親近的",
-       "log": "{target}下葬那天，{name}站在教堂墓地的人群裡送了一程。",
+       "log": "{target_home}家的{target_first}下葬那天，{name}站在教堂墓地的人群裡送了一程。",
        "effects": [{"occasion": {"came": true, "value": 4, "mod": "came_to_wake"}}, {"need": {"spirit": 8}}, {"occasion_policy": "close"}],
        "ai": {"base": 8, "traits": {"pious": 3}}},
       {"text": "地裡的活走不開，不去了；這一季的紅白事都不去",
-       "log": "{target}下葬那天，{name}沒有去。",
+       "log": "{target_home}家的{target_first}下葬那天，{name}沒有去。",
        "effects": [{"occasion": {"came": false, "value": -6, "mod": "missed_funeral"}}, {"work_bonus": 0.01}, {"occasion_policy": "none"}],
        "ai": {"base": 3, "traits": {"greedy": 4, "shy": 4, "diligent": 3, "cruel": 3}, "if": [{"cond": {"news_link_ge": 0.6}, "add": -3}]}}
      ]},

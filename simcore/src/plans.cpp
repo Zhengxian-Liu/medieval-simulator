@@ -333,7 +333,7 @@ void World::endPlan(size_t index, const std::string& requested) {
     World::LandDeal deal;
     if (buy && (outcome == "success" || outcome == "fail") && plan.target != kNone && people_[plan.target].household != kNone) {
         deal = landDeal(households_[actor.household], households_[people_[plan.target].household], (*buy)["acres"].asNumber(),
-                        (*buy)["price"].asNumber(), !((*buy)["wanted"].isBool() && !(*buy)["wanted"].asBool()));
+                        (*buy)["price"].asNumber(), !((*buy)["wanted"].isBool() && !(*buy)["wanted"].asBool()), plan.priceAdd);
         if (!deal.ok) {
             if (actorHome) log(1, "「" + pd->name + "」沒談成：" + (deal.acres <= 0 ? fullName(plan.target) + " 家已經沒有地可讓" : "手上的錢不夠了") + "。");
             return;
@@ -434,7 +434,8 @@ void World::monthlyPlans() {
                 if (!rngPlans_.chance(beat.chance)) continue;
                 copy.beatsSeen.push_back(beat.id);
                 cooldowns_[{actor.id, beatKey}] = day_ + 6 * kDaysPerYear;
-                int importance = actorHome || (victimHome && pd->notifyTarget && !pd->secret) ? 1 : 0;
+                // A beat is the doer's side of it (their haggling, their doubts): told only when the doer is the family.
+                int importance = actorHome ? 1 : 0;
                 ev.runEvent(beat, actor, plan.target, importance);
                 break;
             }
@@ -443,6 +444,7 @@ void World::monthlyPlans() {
                 if (p.actor == copy.actor) {
                     p.progress = copy.progress;
                     p.beatsSeen = copy.beatsSeen;
+                    p.priceAdd = copy.priceAdd;
                 }
         }
         ActivePlan& cur = plans_[i];

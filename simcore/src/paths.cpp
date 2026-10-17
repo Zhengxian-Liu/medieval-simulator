@@ -13,6 +13,12 @@ std::string World::stationName(const Person& p) const {
     return sd ? sd->name : p.station;
 }
 
+std::string World::occupationName(const Person& p) const {
+    const OccupationDef* od = defs_.occupation(p.occupation);
+    if (!od) return "";
+    return p.spouse == kNone && !od->unmarriedName.empty() ? od->unmarriedName : od->name;
+}
+
 std::vector<Id> World::livingAway() const {
     std::vector<Id> v;
     for (const auto& p : people_)

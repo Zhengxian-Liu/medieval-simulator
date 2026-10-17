@@ -100,17 +100,27 @@ std::string World::opinionText(Id from, Id to, int maxReasons) const {
     double op = opinion(from, to);
     std::string s = std::string(opinionWord(op)) + " " + signedInt(op);
     std::string why;
-    double shown = 0;
-    int n = 0;
+    double shown = 0, faded = 0;
+    std::string fadedNames;  // old reasons worn down to almost nothing: told as faded, not left in "temperament"
+    int n = 0, nf = 0;
     for (const auto& [lab, v] : opinionBreakdown(from, to)) {
-        if (std::abs(v) < 2 || n >= maxReasons) continue;
+        if (std::abs(v) < 2) {
+            faded += v;
+            if (nf++ < 2) fadedNames += (fadedNames.empty() ? "" : "、") + opinionLabel(lab);
+            continue;
+        }
+        if (n >= maxReasons) continue;
         why += (why.empty() ? "" : "、") + opinionLabel(lab) + " " + signedInt(v);
         shown += v;
         ++n;
     }
-    // Whatever the listed reasons leave over is temperament and small dealings, so the parts add up.
-    double rest = op - shown;
-    if (std::abs(rest) >= 2) why += (why.empty() ? "" : "、") + std::string(rest > 0 ? "個性合得來、平常的往來 " : "個性不合、平常的摩擦 ") + signedInt(rest);
+    if (std::abs(faded) >= 2) why += (why.empty() ? "" : "、") + fadedNames + "…淡了 " + signedInt(faded);
+    else faded = 0;
+    // Whatever the listed reasons leave over is temperament and small dealings, so the parts add up. Not when the
+    // opinion is at its limit: reasons past it would leave a remainder of the wrong sign.
+    double rest = op - shown - faded;
+    bool capped = std::abs(op) >= 100 && rest * op < 0;
+    if (std::abs(rest) >= 2 && !capped) why += (why.empty() ? "" : "、") + std::string(rest > 0 ? "個性合得來、平常的往來 " : "個性不合、平常的摩擦 ") + signedInt(rest);
     return why.empty() ? s : s + "（" + why + "）";
 }
 
@@ -303,18 +313,31 @@ std::string World::familyReport() const {
         for (size_t i = 0; i < known.size() && i < 8; ++i) o << known[i] << "\n";
     }
 
-    // What the one deciding has done in secret, and could be held to account for.
-    std::vector<std::string> mine;
+    // What the one deciding has done in secret, and could be held to account for; what they have owned up to
+    // (to a wife, at the confessional) is no longer theirs alone.
+    std::vector<std::string> mine, owned;
     Id actor = actingHead();
     for (const auto& d : deeds_) {
         if (d.actor != actor || d.type == "affair") continue;
         const DeedDef* def = defs_.deed(d.type);
         if (!def || def->visibility != "secret") continue;
-        mine.push_back("  " + describeDeed(d.id) + (d.target != kNone ? "，對 " + fullName(d.target) : ""));
+        std::string line = "  " + describeDeed(d.id) + (d.target != kNone ? "，對 " + fullName(d.target) : "");
+        std::string toldTo;
+        for (const auto& q : people_) {
+            if (q.id == actor || !q.alive()) continue;
+            const Belief* b = beliefAbout(q.id, d.id);
+            if (b && b->culprit == actor && b->source == actor) toldTo += (toldTo.empty() ? "" : "、") + (q.id == priest_ ? "神父" : shortName(q.id));
+        }
+        if (toldTo.empty()) mine.push_back(line);
+        else owned.push_back(line + "：已經跟" + toldTo + "說了");
     }
     if (!mine.empty()) {
         o << "\n只有你自己知道的事：\n";
         for (size_t i = mine.size() > 5 ? mine.size() - 5 : 0; i < mine.size(); ++i) o << mine[i] << "\n";
+    }
+    if (!owned.empty()) {
+        o << "\n已經說出口的事：\n";
+        for (size_t i = owned.size() > 5 ? owned.size() - 5 : 0; i < owned.size(); ++i) o << owned[i] << "\n";
     }
 
     bool anyInquiry = false;
@@ -407,7 +430,7 @@ std::string World::personReport(Id id) const {
     Id head = playerHead();
     const char* pr = p.sex == Sex::Male ? "他" : "她";
     o << "【" << fullName(id) << "】" << int(ageYears(p)) << " 歲";
-    if (const OccupationDef* od = defs_.occupation(p.occupation)) o << "，" << od->name;
+    if (std::string occ = occupationName(p); !occ.empty()) o << "，" << occ;
     if (head != kNone && id != head) {
         std::string k = kinWord(head, id);
         if (!k.empty()) o << "，是你的" << k;
@@ -415,8 +438,10 @@ std::string World::personReport(Id id) const {
     if (!p.alive()) o << "，已經過世";
     o << "。\n";
     if (p.household != kNone) {
-        const Household& h = households_[p.household];
+        // A servant is of their own family's house: the acres of the house they serve in are not theirs.
+        const Household& h = households_[p.home != kNone ? p.home : p.household];
         o << (h.head == id ? "家主。" : (h.head != kNone ? fullName(h.head) + " 家的人。" : ""));
+        if (p.home != kNone && households_[p.household].head != kNone) o << "在 " << fullName(households_[p.household].head) << " 家幫傭。";
         int rung = standing(h.id);
         o << standingName(rung) << "，" << int(h.acres) << " 畝地" << (h.freehold >= 1 ? "（自由地 " + std::to_string(int(h.freehold)) + " 畝）" : "");
         if (h.lean) o << "，今年缺糧";

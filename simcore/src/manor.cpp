@@ -92,6 +92,7 @@ void World::sendToService(Id servant, Id master, int years) {
     Person& s = people_[servant];
     if (!s.alive() || s.household == kNone || master == kNone || people_[master].household == kNone) return;
     if (households_[s.household].head == servant || s.home != kNone) return;  // a head cannot leave to serve
+    if (gentry(servant) && !gentry(master)) return;  // the lord's children are not sent to scrub a tenant's floor
     s.home = s.household;
     s.serviceEnd = day_ + years * kDaysPerYear;
     moveTo(servant, people_[master].household);

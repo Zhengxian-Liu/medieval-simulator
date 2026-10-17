@@ -425,6 +425,7 @@ struct ActivePlan {
     double progress = 0;
     int startDay = 0;
     std::vector<std::string> beatsSeen;  // each beat happens at most once per plan
+    double priceAdd = 0;                 // what a buyer has offered on top of the asking price (outbid for land)
 };
 
 struct PlanOption {
@@ -591,6 +592,7 @@ public:
     std::vector<Interaction> interactionsWith(Id target);
     // 處境 and 人生路 (design/life-paths.md).
     std::string stationName(const Person& p) const;
+    std::string occupationName(const Person& p) const;  // "主婦", or "閨女" for a girl not yet married
     bool isAway(const Person& p) const { return p.alive() && p.awayFrom != kNone && p.household == kNone; }
     std::vector<Id> livingAway() const;  // alive and living outside the village, in id order
     std::string lifeLine(Id id) const;   // the road walked, as one line: "拜…為師，出師當鐵匠，娶了…，當了家"
@@ -947,7 +949,7 @@ private:
     // What a sale of `acres` for `price` between two houses would come to: the parcel the buyer is after when the
     // seller holds it (at the same price an acre), else acres off the seller's holding. ok: the buyer can pay.
     struct LandDeal { Id parcel = kNone; double acres = 0, price = 0; bool ok = false; std::string what; };
-    LandDeal landDeal(const Household& buyer, const Household& seller, double acres, double price, bool wanted) const;
+    LandDeal landDeal(const Household& buyer, const Household& seller, double acres, double price, bool wanted, double extra = 0) const;
     void clearDebt(Household& h);
     void promoteHeldDebt(Household& h);
     void runEventById(const std::string& id, Id person, Id target, Id deed = kNone);

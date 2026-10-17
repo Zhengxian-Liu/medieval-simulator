@@ -98,6 +98,7 @@ Defs Defs::loadFromDir(const std::string& dir) {
         od.sex = o.stringOr("sex", "any");
         od.monthlyIncome = o.numberOr("monthly_income", 0);
         od.farms = o["farms"].isBool() && o["farms"].asBool();
+        od.unmarriedName = o.stringOr("unmarried_name", "");
         d.occupations[od.id] = od;
     }
 

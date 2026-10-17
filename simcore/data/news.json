@@ -65,6 +65,7 @@
     "arson":     "{other}家那垛麥子是{subject}燒的",
     "slander":   "說{other}的那些閒話，是{subject}傳出來的",
     "affair":    "{subject}背著{other}在外頭有人",
-    "embezzled": "{subject}在帳上做了手腳，坑了{other}"
+    "embezzled": "{subject}在帳上做了手腳，坑了{other}",
+    "took_bribe": "{subject}當莊頭時收了人家的好處，替人瞞了欠租"
   }
 }

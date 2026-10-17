@@ -4,7 +4,7 @@
   // the last two years is skipped, and so is one listed `not_in` the interaction it would contradict, and a variant is not repeated twice running. {first}: the person; {target_first}:
   // the head; {about:<concern>}: whom that concern of theirs is about; {pron}: 他/她 for the person.
   "chatter": [
-    {"id": "grief", "weight": 5, "when": {"concern": {"kind": "grief", "min": 15}}, "lines": [
+    {"id": "grief", "weight": 5, "when": {"concern": {"kind": "grief", "min": 15, "own": true}}, "lines": [
       "說著說著，{first}又提起{about:grief}，眼眶一下就紅了。",
       "{first}說，夜裡還常夢見{about:grief}站在門口叫{pron}。",
       "{first}問你，{about:grief}走前那幾天有沒有說過什麼。"]},

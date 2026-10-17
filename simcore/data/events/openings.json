@@ -25,7 +25,7 @@
      ]},
     {"id": "opening_promised_match", "title": "說好的親事", "scope": "player_head", "chance": 1,
      "on": {"signal": "manual"},
-     "target": {"pick": "random_villager", "conditions": {"is_head": true, "other_dynasty": true, "same_class": true}},
+     "target": {"pick": "random_villager", "conditions": {"is_head": true, "other_dynasty": true, "same_class": true, "kin_tie": false}},
      "options": [
        {"text": "好", "log": "{name} 和 {target} 是一起長大的朋友，兩人喝酒時說好了：等孩子們長大，就讓兩家結親。",
         "effects": [{"mutual_opinion": {"value": 30, "mod": "promised_match", "years": 20}}, {"deed": {"type": "sworn_friend"}}]}

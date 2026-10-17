@@ -58,6 +58,7 @@ std::string nickname(const World& w, Id head, int from, int to, int reeveTerms =
     if (did["blackmailed"]) return "捏著把柄的";
     if (did["arson"] >= 2) return "放火的";
     if (did["embezzled"] >= 1) return "做假帳的";
+    if (did["took_bribe"] >= 1) return "收好處的";
     if (did["imposed_reeve"] >= 1) return "領主的人";
     if (suffered["convicted"]) return "吃過官司的";
     if (reeveTerms >= 3) return "十年莊頭";

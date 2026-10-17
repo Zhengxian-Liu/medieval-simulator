@@ -509,6 +509,7 @@ std::vector<Id> World::rivalsFor(const std::string& kind, Id object, const std::
 
 Id World::addWant(Id house, const std::string& kind, Id object, Id subject, const std::string& office, const std::string& why) {
     if (house == kNone || households_[house].extinct) return kNone;
+    if (kind == "parcel" && object != kNone && parcels_[object].holder == house) return kNone;  // theirs already
     if (Want* old = wantOf(house, kind, object, office)) return old->id;
     Want wt;
     wt.id = static_cast<Id>(wants_.size());

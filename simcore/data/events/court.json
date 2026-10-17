@@ -67,7 +67,7 @@
         "ai": {"base": 7, "traits": {"ambitious": 6, "diligent": 4, "cruel": 4, "kind": -6}, "if": [{"cond": {"feud_ge": 1}, "add": 10}]}},
        {"text": "收點好處，替他瞞著", "conditions": {"target": {"money_ge": 8}},
         "log": "當莊頭的 {name} 去 {target} 家收欠租，收了{target_pron} 8 便士，回去跟管家說這家今年實在拿不出來。",
-        "effects": [{"money": 8}, {"target": [{"money": -8}, {"debt_grace": true}]}, {"deed": {"type": "embezzled", "to": "lord"}}],
+        "effects": [{"money": 8}, {"target": [{"money": -8}, {"debt_grace": true}]}, {"deed": {"type": "took_bribe", "to": "lord"}}],
         "ai": {"base": 3, "traits": {"greedy": 12, "cynical": 4, "pious": -6}}}
      ]},
 

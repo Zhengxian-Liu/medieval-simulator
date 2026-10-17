@@ -28,6 +28,7 @@
     {"id": "land_bought",      "name": "買走了地",   "tags": ["money"],            "visibility": "public",  "roles": {"target": -6, "target_family": -6}, "half_life": 20, "inheritable": true, "family": true, "stress": {"target": 5}},
     {"id": "imposed_reeve",    "name": "領主硬塞的莊頭", "tags": ["honour"],   "visibility": "public",  "roles": {"target": -18, "target_family": -8, "witness": -4}, "half_life": 10, "inheritable": false, "stress": {"target": 6}},
     {"id": "embezzled",        "name": "在帳本上做手腳", "tags": ["crime", "money"], "visibility": "secret", "roles": {"target": -30, "target_family": -10, "actor": 0}, "half_life": 20, "stress": {"actor": 6}},
+    {"id": "took_bribe",       "name": "收好處瞞租", "tags": ["crime", "money"], "visibility": "secret", "roles": {"target": -20, "target_family": -6, "actor": 0}, "half_life": 15, "stress": {"actor": 4}},
     {"id": "reeve_lenient",    "name": "莊頭網開一面", "tags": ["help"],       "visibility": "private", "roles": {"target": 15, "target_family": 10}, "half_life": 15, "inheritable": true, "family": true, "stress": {"target": -6}},
     {"id": "reeve_strict",     "name": "莊頭上門逼租", "tags": ["money", "honour"], "visibility": "public", "roles": {"target": -14, "target_family": -8}, "half_life": 10, "inheritable": true, "family": true, "stress": {"target": 6}},
     {"id": "worst_boonwork",   "name": "派最苦的勞役", "tags": ["honour"],     "visibility": "public",  "roles": {"target": -12, "target_family": -6}, "half_life": 8, "family": true, "stress": {"target": 4}},

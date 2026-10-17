@@ -27,6 +27,7 @@ struct OccupationDef {
     std::string sex;         // any | male | female
     double monthlyIncome = 0;  // pence at skill 10, before wage multiplier
     bool farms = false;        // works the household land
+    std::string unmarriedName; // what one not yet married is called instead (主婦 -> 閨女); "" = the same
 };
 
 // 處境 (design/life-paths.md): where a person is in life. The forks between them are events (data/events/paths.json).

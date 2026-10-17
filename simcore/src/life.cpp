@@ -208,8 +208,10 @@ void World::giveBirth(Person& mother) {
 void World::kill(Id id, const std::string& cause) {
     Person& p = people_[id];
     if (!p.alive()) return;
-    if (ageYears(p) >= 14)  // a cause that says how ("戰死沙場", "…被絞死") stands as it is
-        noteLife(id, cause.find("死") != std::string::npos ? cause : cause == "年老" ? "壽終" : "死於" + cause);
+    // A cause that says how ("戰死沙場", "…被絞死") stands as it is; a sickness (黑死病 too) is what they died of.
+    auto endsWith = [&](const std::string& s) { return cause.size() >= s.size() && cause.compare(cause.size() - s.size(), s.size(), s) == 0; };
+    bool saysHow = cause.find("死") != std::string::npos && !endsWith("病");
+    if (ageYears(p) >= 14) noteLife(id, saysHow ? cause : cause == "年老" ? "壽終" : "死於" + cause);
     bool lingering = cause.rfind("意外", 0) != 0 && cause != "戰死沙場" && p.household != kNone;
     // The head of the player's family gets a last word at the bedside, if a grown child is there to hear it.
     Id bedside = kNone;
@@ -401,6 +403,10 @@ Id World::heirOf(const Household& h, Id dead) const {
                 (heir == kNone || people_[m].birthDay < people_[heir].birthDay))
                 heir = m;
     if (heir == kNone) heir = eldest(children, Sex::Female);
+    // A child who held the land dies (a boy left heading the house): a father or mother still at home takes it up
+    // before anyone further off.
+    if (heir == kNone) heir = eldest({d.father, d.mother}, Sex::Male);
+    if (heir == kNone) heir = eldest({d.father, d.mother}, Sex::Female);
     // One who married in holds the house's land for its line: past their own children, it goes back to the
     // blood of the one they married (a widow's late husband's brother or sister at home before her own kin).
     auto bornTo = [&](const Person& x) { return x.father != kNone ? people_[x.father].dynasty : x.mother != kNone ? people_[x.mother].dynasty : x.dynasty; };
@@ -420,7 +426,27 @@ Id World::heirOf(const Household& h, Id dead) const {
     // then the eldest.
     Id lordHouseId = lord_ != kNone ? people_[lord_].household : kNone;
     if (heir == kNone) {
+        // How near the blood: a parent, then a brother or grandparent, an uncle or nephew, a cousin.
+        auto parents = [&](const Person& x) {
+            std::vector<Id> v;
+            for (Id par : {x.father, x.mother})
+                if (par != kNone) v.push_back(par);
+            return v;
+        };
+        auto degree = [&](const Person& x) {
+            auto shares = [&](const std::vector<Id>& a, const std::vector<Id>& b) {
+                return std::any_of(a.begin(), a.end(), [&](Id i) { return std::find(b.begin(), b.end(), i) != b.end(); });
+            };
+            std::vector<Id> px = parents(x), pl = parents(lp), gx, gl;
+            for (Id par : px) for (Id g : parents(people_[par])) gx.push_back(g);
+            for (Id par : pl) for (Id g : parents(people_[par])) gl.push_back(g);
+            if (std::find(pl.begin(), pl.end(), x.id) != pl.end() || std::find(px.begin(), px.end(), line) != px.end()) return 1;
+            if (shares(px, pl) || std::find(gl.begin(), gl.end(), x.id) != gl.end() || std::find(gx.begin(), gx.end(), line) != gx.end()) return 2;
+            if (shares(px, gl) || shares(gx, pl)) return 3;
+            return 4;  // cousins, the furthest closeKin reaches
+        };
         auto nearer = [&](const Person& a, const Person& b) {
+            if (degree(a) != degree(b)) return degree(a) < degree(b);
             auto nephew = [&](const Person& x) { return lp.father != kNone && x.father != kNone && people_[x.father].father == lp.father; };
             if (nephew(a) != nephew(b)) return nephew(a);
             if ((a.sex == Sex::Male) != (b.sex == Sex::Male)) return a.sex == Sex::Male;
@@ -704,6 +730,10 @@ void World::mergeHousehold(Household& from, Household& to, const std::string& ho
     to.millUntil = std::max(to.millUntil, from.millUntil);
     for (const auto& [k, v] : from.ledger) to.ledger[k] += v;
     // The village's view of the old house is now of this one: its wants, the fine it owes, its servants away.
+    // A parcel either house was after that the joined house now holds is no longer wanted: it is theirs.
+    for (auto& wt : wants_)
+        if (wt.open && (wt.house == from.id || wt.house == to.id) && wt.kind == "parcel" && parcels_[wt.object].holder == to.id)
+            dropWant(wt, "兩家併了");
     for (auto& wt : wants_)
         if (wt.open && wt.house == from.id) {
             bool dup = false;
