@@ -55,7 +55,7 @@
 
     {"id": "reeve_collect", "title": "莊頭收租", "prompt": "當莊頭的 {name} 要去 {target} 家收欠租。那家人看起來真的拿不出來。", "scope": "player_head", "pulse": "yearly", "chance": 0.35, "cooldown_years": 1,
      "conditions": {"age": [14, 120], "reeve": true},
-     "target": {"conditions": {"is_head": true, "in_debt": true, "other_dynasty": true}},
+     "target": {"conditions": {"is_head": true, "owes_lord_ge": 5, "other_dynasty": true, "manor": false}},
      "options": [
        {"text": "網開一面", "log": "當莊頭的 {name} 去 {target} 家收欠租，看見一屋子餓得發慌的孩子，說今年先記在帳上。",
         "effects": [{"deed": {"type": "reeve_lenient"}}, {"target": [{"debt_grace": true}]}, {"lord_opinion": {"value": -6, "mod": "soft_reeve", "years": 5}}],

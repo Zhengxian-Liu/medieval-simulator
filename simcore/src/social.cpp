@@ -93,9 +93,9 @@ void World::electReeve() {
             how = opinion(lord_, head) < 20 ? "（你求過領主點名，可老爺跟你家還沒那麼熟，沒有開口。）"
                   : !canOverride            ? "（你求過領主點名，可老爺這一任已經插手過一回，這次不便再管。）"
                   : fav == winner           ? "（你求過領主點名，老爺想了想，還是讓村裡自己選。）"
-                                            : "（你求過領主點名，老爺卻另有屬意的人。）";
+                                            : "（你求過領主點名，老爺卻另有屬意的人。）";  // followed by whom he named
         if (fav != winner) {
-            how = "領主不管票數，硬是指派了 " + fullName(fav) + "。";
+            how += "領主不管票數，硬是指派了 " + fullName(fav) + "。";
             imposed = true;
             lordOverrode_ = lord_;
             Id passedOver = winner;

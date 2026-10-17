@@ -319,6 +319,8 @@ std::string World::sellReason(const Household& h) const {
         if (q.sex == Sex::Male && ageYears(q) >= 14 && q.health >= 40) hands += 1;
         if (m != h.head && q.sex == Sex::Male && ageYears(q) >= 14 && (q.father == h.head || q.mother == h.head)) son = true;
     }
+    for (const auto& q : people_)  // a son away in service comes home to it
+        if (!son && q.alive() && q.home == h.id && q.sex == Sex::Male && ageYears(q) >= 14 && (q.father == h.head || q.mother == h.head)) son = true;
     if (h.debt >= 20 && h.creditor != playerHead()) return "欠著債，等錢用";
     if (!son && ageYears(people_[h.head]) > 55) return "沒有兒子接手，老人家種不動了";
     if (h.acres > hands * 12 + 4) return worldFlags_.count("post_plague") ? "瘟疫以後人手不夠，地荒著" : "地多人少，種不過來";
@@ -338,7 +340,7 @@ World::LandDeal World::landDeal(const Household& buyer, const Household& seller,
     } else {
         d.acres = std::min(acres, seller.acres);
         d.price = std::round(price * d.acres / acres);
-        d.what = std::to_string(static_cast<int>(std::lround(d.acres))) + " 畝地";
+        d.what = " " + std::to_string(static_cast<int>(std::lround(d.acres))) + " 畝地";  // spaced like other numbers in text
     }
     d.ok = d.acres > 0 && buyer.money >= d.price;
     return d;

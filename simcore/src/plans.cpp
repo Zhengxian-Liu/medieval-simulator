@@ -234,6 +234,8 @@ void World::endPlan(size_t index, const std::string& requested) {
         const Person& t = people_[plan.target];
         bool ours = plan.target == acting || t.father == acting || t.mother == acting ||
                     (acting != kNone && (t.father == people_[acting].spouse || t.mother == people_[acting].spouse));
+        auto quiet = matchQuietUntil_.find(plan.target);
+        if (ours && acting != kNone && quiet != matchQuietUntil_.end() && quiet->second > day_) return;  // the family said no lately
         if (ours && acting != kNone) {
             const Household& ah = households_[actor.household];
             std::string sit = fullName(plan.actor) + "（" + std::to_string(int(ageYears(actor))) + " 歲，家裡 " +
@@ -243,6 +245,7 @@ void World::endPlan(size_t index, const std::string& requested) {
             if (r == 1) {
                 log(1, "〔求親〕" + sit + "（選擇：回絕）");
                 recordDeed("refused_proposal", plan.target, plan.actor);
+                matchQuietUntil_[plan.target] = day_ + 2 * kDaysPerYear;
                 return;
             }
             if (r == 0) outcome = "success";
@@ -258,13 +261,13 @@ void World::endPlan(size_t index, const std::string& requested) {
     if (buy && (outcome == "success" || outcome == "fail") && plan.target != kNone && people_[plan.target].household != kNone) {
         deal = landDeal(households_[actor.household], households_[people_[plan.target].household], (*buy)["acres"].asNumber(),
                         (*buy)["price"].asNumber(), !((*buy)["wanted"].isBool() && !(*buy)["wanted"].asBool()));
-        if (!deal.ok && outcome == "success") {
+        if (!deal.ok) {
             if (actorHome) log(1, "「" + pd->name + "」沒談成：" + (deal.acres <= 0 ? fullName(plan.target) + " 家已經沒有地可讓" : "手上的錢不夠了") + "。");
             return;
         }
     }
     // Someone after something of the head's own (a parcel, a hand): the head says yes or no, not the dice.
-    if (!pd->targetAsk.empty() && pd->targetAnswers.size() >= 2 && !actorHome && plan.target == actingHead() && (!buy || deal.ok) &&
+    if (!pd->targetAsk.empty() && pd->targetAnswers.size() >= 2 && !actorHome && plan.target == actingHead() &&
         (outcome == "success" || outcome == "fail")) {
         std::string ask = pd->targetAsk;
         for (auto [key, val] : {std::pair<std::string, std::string>{"{deal}", deal.what},

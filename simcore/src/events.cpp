@@ -680,6 +680,8 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     // In an event about a deed: p really did it.
     if (k == "deed_actor") return (deed_ != kNone && w.deeds_[deed_].actor == p.id) == v.asBool();
     if (k == "in_debt") return (h && h->debt > 0.5) == v.asBool();
+    // p's house is the manor (its debts are paid on the steward's terms, not sued for or collected).
+    if (k == "manor") return (h && w.lord_ != kNone && w.people_[w.lord_].household == h->id) == v.asBool();
     if (k == "owes_target") {  // this house owes the target (a loan, an old debt) money
         bool owes = h && target != kNone && ((h->debt > 0.5 && h->creditor == target) || (h->heldDebt > 0.5 && h->heldCreditor == target));
         return owes == v.asBool();

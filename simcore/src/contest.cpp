@@ -181,7 +181,7 @@ World::Tally World::countVotes(const std::string& id, const std::vector<Id>& can
         ++t.votes[pick];
         if (!familyRuns || inPlayerHouse(h.id)) continue;
         if (pick == head && pr != promises_.end() && pr->second == head) t.byWord.push_back(voter.id);
-        if (pick != head && pr != promises_.end() && pr->second == head) t.broke.push_back(voter.id);
+        if (pick != head && pr != promises_.end() && pr->second == head && feudStage(voter.id, head) < 2) t.broke.push_back(voter.id);
         if (pick != head && people_[pick].household != h.id && feudStage(voter.id, head) >= 2) t.grudge.push_back(voter.id);
     }
     return t;

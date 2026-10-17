@@ -162,9 +162,12 @@ void World::addDebt(Household& h, double amount, Id creditor) {
         h.debtYears = 0;
     } else if (creditor != h.creditor) {
         // Owed to someone else: it waits its turn rather than being added to the wrong account.
-        h.heldDebt += amount;
-        h.heldCreditor = creditor;
-        return;
+        if (h.heldDebt <= 0.5 || h.heldCreditor == creditor) {
+            h.heldDebt += amount;
+            h.heldCreditor = creditor;
+            return;
+        }
+        // A third creditor: lumped with the first, as when households merge (life.cpp); the books are not so fine.
     }
     h.debt += amount;
 }
@@ -226,6 +229,10 @@ void World::monthlyDebts() {
         // The manor pays what it borrowed after the Michaelmas rents, half a year's loan at a time, as the steward wrote it.
         bool manor = lord_ != kNone && people_[lord_].household == h.id;
         if (manor && month() != 9) continue;
+        if (manor && (h.creditor == kNone || people_[h.creditor].household == kNone || households_[people_[h.creditor].household].extinct)) {
+            h.debt = 0, h.debtYears = 0, h.creditor = kNone;  // the house it owed is gone: nobody left to pay
+            continue;
+        }
         if (h.head != kNone && !manor && month() % 3 == 0) addStress(h.head, 2, "還不清的債");
         // Bread first: only money beyond a few months' food goes to the creditor.
         double need = consumption(h) * 360 - h.food;

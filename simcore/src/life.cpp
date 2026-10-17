@@ -1193,9 +1193,11 @@ void World::yearlyMarriages() {
     // village, who marries in and carries the family name on through her.
     Id ph = playerHead();
     if (ph != kNone && people_[ph].sex == Sex::Female && available(people_[ph]) && ageYears(people_[ph]) >= 18 &&
-        ageYears(people_[ph]) <= 38 && rngSocial_.chance(0.35)) {
+        ageYears(people_[ph]) <= 38 && rngSocial_.chance(0.35) &&
+        !(matchQuietUntil_.count(ph) && matchQuietUntil_[ph] > day_)) {
         int r = askPlayer("入贅", "鄰村有個後生託媒人來說，願意入贅 " + dynasties_[playerDynasty_].surname + " 家，幫著種地。",
                           {"答應", "再等等"});
+        if (r == 1) matchQuietUntil_[ph] = day_ + 2 * kDaysPerYear;
         if (r != 1) {
             Id dyn = addDynasty(defs_.surnames[rngNames_.range(0, int(defs_.surnames.size()) - 1)]);
             int bdays = day_ - static_cast<int>((ageYears(people_[ph]) + rngSocial_.range(0, 6)) * kDaysPerYear);

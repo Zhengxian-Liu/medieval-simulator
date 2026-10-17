@@ -10,7 +10,7 @@
         "ai": {"base": 8, "traits": {"greedy": 10, "generous": -6}}},
        {"text": "要地", "conditions": {"target": {"acres_ge": 12}},
         "log": "{name} 提起 {hook}，{target} 只好把河邊的 3 畝地「便宜」賣給了{pron}。",
-        "effects": [{"take_acres": {"acres": 3, "price": 15}}, {"deed": {"type": "blackmailed"}}, {"use_hook": true}],
+        "effects": [{"take_acres": {"acres": 3, "price": 15, "wanted": false}}, {"deed": {"type": "blackmailed"}}, {"use_hook": true}],
         "ai": {"base": 6, "traits": {"ambitious": 8, "greedy": 4}}},
        {"text": "要一門親事", "conditions": {"peace_match": true},
         "log": "{name} 提起 {hook}，{target} 只能點頭，答應把家裡的孩子許給 {name} 家。",

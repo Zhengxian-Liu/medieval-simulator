@@ -291,7 +291,7 @@
 
     {"id": "talk_sue_debtor", "title": "上莊園法庭討債", "scope": "interaction", "cooldown_months": 12,
      "interaction": {"who": "outsider", "time": 1, "money": 2, "desc": "到莊園法庭告{pron}欠錢不還（2 便士訴訟費；兩家從此結下梁子）"},
-     "conditions": {"is_head": true, "owes_target": true},
+     "conditions": {"is_head": true, "owes_target": true, "manor": false},
      "options": [
       {"text": "陪審團判他照數還錢",
        "log": "{target_first}在莊園法庭上告{first}欠錢不還，十二個陪審的鄰居判{first}家照數還錢。",
