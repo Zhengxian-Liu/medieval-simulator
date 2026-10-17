@@ -387,7 +387,11 @@ std::string World::kinWord(Id a, Id b) const {
     if (t == "child_in_law") return f ? "媳婦" : "女婿";
     if (t == "parent_in_law") return pa.sex == Sex::Male ? (f ? "岳母" : "岳父") : (f ? "婆婆" : "公公");
     if (t == "sibling_in_law") {
-        if (pb.spouse != kNone && kinTie(a, pb.spouse) == "sibling") return f ? "嫂嫂" : "姊夫";  // a brother's wife, a sister's husband
+        // A brother's wife, a sister's husband: older or younger than a goes by the sibling's age.
+        if (pb.spouse != kNone && kinTie(a, pb.spouse) == "sibling") {
+            bool older = people_[pb.spouse].birthDay < pa.birthDay;
+            return f ? (older ? "嫂嫂" : "弟媳") : (older ? "姊夫" : "妹夫");
+        }
         return pa.sex == Sex::Female ? (f ? "小姑" : "小叔") : (f ? "小姨" : "舅子");
     }
     if (t == "uncle") {
