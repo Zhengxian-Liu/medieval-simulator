@@ -413,7 +413,7 @@ public:
                                      .n("month", (f.due % kDaysPerYear) / kDaysPerMonth + 1).b("extended", f.extended).done());
             o.raw("contest", c.done());
             const AskResult& la = w.lastAsk();
-            // Only the levers that can work now: the season it was given, a free day, the money it takes.
+            // Only the levers that can work now: the season it was given and the money it takes (a press is part of the same talk).
             if (la.who != kNone && la.day >= w.today() - 2)
                 o.raw("last_ask", Obj().n("who", la.who).text("name", w.fullName(la.who)).text("ask", la.ask).text("office", la.office)
                                       .n("object", la.object).n("subject", la.subject).n("answer", la.answer).text("text", la.text)
@@ -494,7 +494,7 @@ public:
         if (sum.rfind("這一季", 0) == 0) sum = "上一季" + sum.substr(std::string("這一季").size());
         else if (sum.rfind("這 ", 0) == 0) sum = "過去 " + sum.substr(std::string("這 ").size());
         else if (!sum.empty()) sum = "【上一季】\n" + sum;
-        if (w.playerHead() != kNone && seasonStart.head != kNone &&
+        if (withActions && w.playerHead() != kNone && seasonStart.head != kNone &&
             std::abs(w.households()[w.playerHousehold()].money - seasonStart.money) >= 1)
             sum += "【這一季到現在】" + w.moneySince(seasonStart) + "\n";
         o.text("summary", sum);
@@ -595,8 +595,13 @@ int main(int argc, char** argv) {
     npc.attach(w, npcModel, npcLogPath, npcScope);
 
     int skipUntil = 0;
+    Id regencyFor = kNone;  // the child a regency skip is for: if they die or the house passes, the skip ends
     World::FamilySnapshot before = w.snapshot();
     for (int d = 0; d < years * kDaysPerYear && !w.gameOver() && !aiPlays; ++d) {
+        if (regencyFor != kNone && w.households()[w.playerHousehold()].ward != regencyFor) {
+            regencyFor = kNone;
+            skipUntil = 0;
+        }
         if (d > 0 && w.dayOfMonth() == 0 && w.month() % 3 == 0 && w.today() >= skipUntil) {
             w.startSeason();
             web.summary = w.seasonChanges(before);
@@ -631,12 +636,15 @@ int main(int argc, char** argv) {
                     w.runCommands();
                 } else if (what == "year") {
                     skipUntil = w.today() + kDaysPerYear;
+                    regencyFor = kNone;
                     leave = true;
                 } else if (what == "regency") {
                     // Until the child the house is held for comes of age; questions are still asked on the way.
                     const Household& ph = w.households()[w.playerHousehold()];
-                    if (ph.ward != kNone && w.people()[ph.ward].alive())
+                    if (ph.ward != kNone && w.people()[ph.ward].alive()) {
                         skipUntil = std::max(w.today() + 1, w.people()[ph.ward].birthDay + 16 * kDaysPerYear);
+                        regencyFor = ph.ward;
+                    }
                     leave = true;
                 } else if (what == "quit") {
                     aiPlays = true;

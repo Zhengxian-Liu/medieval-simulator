@@ -248,7 +248,9 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
         fs.push_back({-10, ""});
         if (wantOf(th.id, "office", kNone, officeId)) hardNo = true, hardWhy = "我家自己也要選";
         // One of the likeliest men for it does not promise his vote away.
-        for (Id c : officeCandidates(officeId, kNone, [](double) { return 0.0; }))
+        const Office* of = office(officeId);
+        Id incumbent = officeId == "reeve" ? currentReeve() : of ? of->holder : kNone;
+        for (Id c : officeCandidates(officeId, incumbent, [](double) { return 0.0; }))
             if (c != head && people_[c].household == th.id) hardNo = true, hardWhy = "我家自己也有人要出來選";
         auto pr = promises_.find({who, officeId});
         if (pr != promises_.end() && pr->second != head) fs.push_back({-30, "我已經答應投給" + fullName(pr->second) + "了"});

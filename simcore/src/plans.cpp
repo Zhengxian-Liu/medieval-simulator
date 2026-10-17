@@ -248,10 +248,29 @@ void World::endPlan(size_t index, const std::string& requested) {
             if (r == 0) outcome = "success";
         }
     }
+    // A land deal is struck at what the buyer can pay for what the seller holds now; if it no longer adds up, it
+    // comes to nothing rather than to a sale that moves no land.
+    const Json* buy = nullptr;
+    if (pd->success.isArray())
+        for (const auto& e : pd->success.asArray())
+            if (e.has("take_acres")) buy = &e["take_acres"];
+    World::LandDeal deal;
+    if (buy && (outcome == "success" || outcome == "fail") && plan.target != kNone && people_[plan.target].household != kNone) {
+        deal = landDeal(households_[actor.household], households_[people_[plan.target].household], (*buy)["acres"].asNumber(),
+                        (*buy)["price"].asNumber(), !((*buy)["wanted"].isBool() && !(*buy)["wanted"].asBool()));
+        if (!deal.ok && outcome == "success") {
+            if (actorHome) log(1, "「" + pd->name + "」沒談成：" + (deal.acres <= 0 ? fullName(plan.target) + " 家已經沒有地可讓" : "手上的錢不夠了") + "。");
+            return;
+        }
+    }
     // Someone after something of the head's own (a parcel, a hand): the head says yes or no, not the dice.
-    if (!pd->targetAsk.empty() && pd->targetAnswers.size() >= 2 && !actorHome && plan.target == actingHead() &&
+    if (!pd->targetAsk.empty() && pd->targetAnswers.size() >= 2 && !actorHome && plan.target == actingHead() && (!buy || deal.ok) &&
         (outcome == "success" || outcome == "fail")) {
-        std::string sit = ev.format(pd->targetAsk, actor, plan.target);
+        std::string ask = pd->targetAsk;
+        for (auto [key, val] : {std::pair<std::string, std::string>{"{deal}", deal.what},
+                                {"{deal_price}", std::to_string(static_cast<long>(deal.price))}})
+            for (size_t at; (at = ask.find(key)) != std::string::npos;) ask.replace(at, key.size(), val);
+        std::string sit = ev.format(ask, actor, plan.target);
         int r = askPlayer(pd->name, sit, pd->targetAnswers);
         if (r == 0) outcome = "success";
         else if (r == 1) outcome = "fail";

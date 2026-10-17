@@ -10,11 +10,11 @@
      "options": [
       {"text": "守靈三天，給孩子點長明燈（3 便士）",
        "log": "{name}替{target}守了三天靈，長明燈一直沒熄。",
-       "effects": [{"money": -3}, {"ease_concern": {"kind": "grief", "by": 10}}, {"need": {"spirit": 20}}],
+       "effects": [{"money": -3}, {"ease_concern": {"kind": "grief", "by": 10}}, {"ease_concern_house": {"kind": "grief", "by": 6}}, {"need": {"spirit": 20}}],
        "ai": {"base": 10, "traits": {"pious": 6, "kind": 3}}},
       {"text": "求神父替孩子做一場彌撒（6 便士）",
        "log": "{name}求神父替{target}做了一場彌撒，願{target_first}的靈魂早日安息。",
-       "effects": [{"money": -6}, {"ease_concern": {"kind": "grief", "by": 18}}, {"need": {"spirit": 40}}, {"stress": -5}],
+       "effects": [{"money": -6}, {"ease_concern": {"kind": "grief", "by": 18}}, {"ease_concern_house": {"kind": "grief", "by": 10}}, {"need": {"spirit": 40}}, {"stress": -5}],
        "ai": {"base": 8, "traits": {"pious": 10, "generous": 3, "greedy": -6}}},
       {"text": "去酒館喝到不省人事",
        "log": "埋了{target}那晚，{name}在酒館喝到不省人事，被人抬回了家。",

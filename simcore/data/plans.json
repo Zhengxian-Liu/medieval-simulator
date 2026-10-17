@@ -57,7 +57,7 @@
      "start_log": "{name} 看上了 {target} 家的地，開始盤算。",
      "success_log": "{target} 答應把地讓給 {name}。", "success": [{"take_acres": {"acres": 5, "price": 320}}, {"deed": {"type": "land_bought"}}],
      "fail_log": "{target} 說什麼也不肯賣祖上傳下來的地。", "fail": [{"opinion": {"value": -5, "mod": "land_dispute", "years": 5}}, {"deed": {"type": "refused_land", "doer": "target"}}],
-     "target_ask": "{name} 託人來問，想出 320 便士買你家 5 畝地。", "target_answers": ["賣", "不賣，這是祖上的地"],
+     "target_ask": "{name} 託人來問，想出 {deal_price} 便士買你家{deal}。", "target_answers": ["賣", "不賣，這是祖上的地"],
      "ai": {"base": 6, "traits": {"ambitious": 8, "greedy": 6, "content": -6}, "if": [{"cond": {"ambition": "more_land"}, "add": 30}, {"cond": {"ambition": "big_landholder"}, "add": 30}]},
      "beats": [
        {"id": "land_rival", "prompt": "{target} 家的地，別家也看上了，出的價比你高。", "chance": 0.35, "options": [

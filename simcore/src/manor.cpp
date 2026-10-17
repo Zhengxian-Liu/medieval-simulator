@@ -78,6 +78,14 @@ void World::setFree(Id id) {
     for (auto& q : people_)
         if (q.alive() && q.home == p.household) q.free = true;
     for (Id c : p.children) people_[c].free = true;
+    // A stepfather who buys the house free buys it for the line he holds it for.
+    Household& h = households_[p.household];
+    if (h.head == id && h.ward != kNone && people_[h.ward].alive()) {
+        Id line = people_[h.ward].dynasty;
+        people_[h.ward].free = true;
+        for (Id m : h.members)
+            if (line != kNone && people_[m].dynasty == line) people_[m].free = true;
+    }
 }
 
 void World::sendToService(Id servant, Id master, int years) {

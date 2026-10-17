@@ -86,13 +86,14 @@ void World::electReeve() {
         bool asked = playerRuns && people_[head].flags.count("campaign_lord");
         if (asked && canOverride && opinion(lord_, head) >= 20 && rngSocial_.chance(people_[head].flags.count("lord_favour") ? 0.7 : 0.35))
             fav = head;
-        else if (asked)
-            how = opinion(lord_, head) < 20 ? "（你求過領主點名，可老爺跟你家還沒那麼熟，沒有開口。）"
-                  : !canOverride            ? "（你求過領主點名，可老爺這一任已經插手過一回，這次不便再管。）"
-                                            : "（你求過領主點名，老爺想了想，還是讓村裡自己選。）";
         else if (lordOverrode_ != lord_ && opinion(lord_, winner) < -15)
             for (Id c : cands)
                 if (opinion(lord_, c) > opinion(lord_, fav)) fav = c;
+        if (asked && fav != head)
+            how = opinion(lord_, head) < 20 ? "（你求過領主點名，可老爺跟你家還沒那麼熟，沒有開口。）"
+                  : !canOverride            ? "（你求過領主點名，可老爺這一任已經插手過一回，這次不便再管。）"
+                  : fav == winner           ? "（你求過領主點名，老爺想了想，還是讓村裡自己選。）"
+                                            : "（你求過領主點名，老爺卻另有屬意的人。）";
         if (fav != winner) {
             how = "領主不管票數，硬是指派了 " + fullName(fav) + "。";
             imposed = true;

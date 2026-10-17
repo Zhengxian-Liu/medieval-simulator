@@ -739,6 +739,7 @@ private:
     int lastForeshadow_ = -100000;  // the family senses a plot against it at most once every few years
     std::map<Id, int> reeveTerms_;  // consecutive terms served
     Id lordOverrode_ = kNone;       // the lord who last overrode the vote
+    std::map<Id, int> matchQuietUntil_;  // a match the player turned down or put off: no matchmaker until this day
     mutable std::map<Id, std::string> bynames_;
     std::vector<std::string> seasonNotes_;            // what the head did this season and what came of it
     mutable std::vector<std::string> lastSeasonNotes_;  // the ended season's, until the summary shows them
@@ -927,6 +928,10 @@ private:
     Id splitParcel(Id parcel, double acres);    // cuts off a new parcel of `acres`; returns it
     void placeHouse(Id household);
     std::string movedText() const;              // the parcels the last moveLand moved, by name
+    // What a sale of `acres` for `price` between two houses would come to: the parcel the buyer is after when the
+    // seller holds it (at the same price an acre), else acres off the seller's holding. ok: the buyer can pay.
+    struct LandDeal { Id parcel = kNone; double acres = 0, price = 0; bool ok = false; std::string what; };
+    LandDeal landDeal(const Household& buyer, const Household& seller, double acres, double price, bool wanted) const;
     void clearDebt(Household& h);
     void promoteHeldDebt(Household& h);
     void runEventById(const std::string& id, Id person, Id target, Id deed = kNone);

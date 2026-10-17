@@ -317,7 +317,7 @@ std::string World::sellReason(const Household& h) const {
     for (Id m : h.members) {
         const Person& q = people_[m];
         if (q.sex == Sex::Male && ageYears(q) >= 14 && q.health >= 40) hands += 1;
-        if (m != h.head && q.sex == Sex::Male && q.father == h.head) son = true;
+        if (m != h.head && q.sex == Sex::Male && ageYears(q) >= 14 && (q.father == h.head || q.mother == h.head)) son = true;
     }
     if (h.debt >= 20 && h.creditor != playerHead()) return "欠著債，等錢用";
     if (!son && ageYears(people_[h.head]) > 55) return "沒有兒子接手，老人家種不動了";
@@ -325,5 +325,23 @@ std::string World::sellReason(const Household& h) const {
     return "";
 }
 
-}  // namespace sim
+World::LandDeal World::landDeal(const Household& buyer, const Household& seller, double acres, double price, bool wanted) const {
+    LandDeal d;
+    if (acres <= 0) return d;
+    if (wanted)
+        for (const auto& wt : wants_)
+            if (wt.open && wt.house == buyer.id && wt.kind == "parcel" && parcels_[wt.object].holder == seller.id) d.parcel = wt.object;
+    if (d.parcel != kNone) {
+        d.acres = parcels_[d.parcel].acres;
+        d.price = std::round(d.acres * price / acres);
+        d.what = parcelName(parcels_[d.parcel]) + "那 " + std::to_string(static_cast<int>(std::lround(d.acres))) + " 畝";
+    } else {
+        d.acres = std::min(acres, seller.acres);
+        d.price = std::round(price * d.acres / acres);
+        d.what = std::to_string(static_cast<int>(std::lround(d.acres))) + " 畝地";
+    }
+    d.ok = d.acres > 0 && buyer.money >= d.price;
+    return d;
+}
 
+}  // namespace sim

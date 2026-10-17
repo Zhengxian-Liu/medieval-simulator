@@ -1008,31 +1008,22 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 Json one = Json::parse("[{\"marry_target\": true}]");
                 apply(one, sub, target);
             } else if (k == "take_acres") {
-                // Buy land from the target's household: the parcel this house was after, if it is theirs.
+                // Buy land from the target's household: the parcel this house was after, if it is theirs
+                // ("wanted": false for a set lot, as when the seller names it).
                 if (!h || target == kNone || w.people_[target].household == kNone) continue;
                 Household& th = w.households_[w.people_[target].household];
-                Id wanted = kNone;
-                for (const auto& wt : w.wants_)
-                    if (wt.open && wt.house == h->id && wt.kind == "parcel" && w.parcels_[wt.object].holder == th.id) wanted = wt.object;
-                if (wanted != kNone) {
-                    double perAcre = v["price"].asNumber() / v["acres"].asNumber();
-                    double price = std::round(w.parcels_[wanted].acres * perAcre);
-                    if (h->money < price) continue;
-                    std::string name = w.parcelName(w.parcels_[wanted]);
-                    w.moveParcel(wanted, h->id, "買來");
-                    th.money += price;
-                    w.book(th, "賣地", price);
-                    h->money -= price;
-                    w.book(*h, "買地", -price);
+                World::LandDeal d = w.landDeal(*h, th, v["acres"].asNumber(), v["price"].asNumber(), !(v["wanted"].isBool() && !v["wanted"].asBool()));
+                if (!d.ok) continue;
+                double price = d.price;
+                if (d.parcel != kNone) {
+                    std::string name = w.parcelName(w.parcels_[d.parcel]);
+                    w.moveParcel(d.parcel, h->id, "買來");
                     if (h->id == w.playerHousehold_ || th.id == w.playerHousehold_)
                         w.log(1, "  " + name + "換了 " + std::to_string(static_cast<long>(price)) + " 便士。");
-                    continue;
+                } else {
+                    double moved = w.moveLand(th.id, h->id, d.acres, LandPick::CustomaryFirst, "買來");
+                    price = std::round(price * moved / d.acres);
                 }
-                double acres = std::min(v["acres"].asNumber(), th.acres);
-                double price = v["price"].asNumber();
-                if (acres <= 0 || h->money < price) continue;
-                acres = w.moveLand(th.id, h->id, acres, LandPick::CustomaryFirst, "買來");
-                price *= acres / v["acres"].asNumber();
                 th.money += price;
                 w.book(th, "賣地", price);
                 h->money -= price;
@@ -1146,7 +1137,7 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                     w.log(1, "  " + w.fullName(target) + (amends ? " 咬著牙賠了 " : " 付了 ") + std::to_string(int(amount)) + " 便士" + (amends ? "。" : "封口費。"));
             } else if (k == "owe_target") {
                 // p's house owes the target money (an old loan, a debt from the father's time).
-                if (h && target != kNone && h->debt <= 0.5) w.addDebt(*h, v.asNumber(), target);
+                if (h && target != kNone) w.addDebt(*h, v.asNumber(), target);  // a second debt waits its turn
             } else if (k == "beat_children") {
                 // The young ones in the house remember it, and it shapes who they become.
                 if (!h) continue;

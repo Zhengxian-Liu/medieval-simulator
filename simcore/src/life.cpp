@@ -207,7 +207,8 @@ void World::giveBirth(Person& mother) {
 void World::kill(Id id, const std::string& cause) {
     Person& p = people_[id];
     if (!p.alive()) return;
-    if (ageYears(p) >= 14) noteLife(id, cause == "戰死沙場" ? "戰死沙場" : "死於" + cause);
+    if (ageYears(p) >= 14)  // a cause that says how ("戰死沙場", "…被絞死") stands as it is
+        noteLife(id, cause.find("死") != std::string::npos ? cause : cause == "年老" ? "壽終" : "死於" + cause);
     bool lingering = cause.rfind("意外", 0) != 0 && cause != "戰死沙場" && p.household != kNone;
     // The head of the player's family gets a last word at the bedside, if a grown child is there to hear it.
     Id bedside = kNone;
@@ -258,7 +259,8 @@ void World::kill(Id id, const std::string& cause) {
     // A child's burial is one rite for the house: asked of the one keeping it when that is a parent, else the mother.
     auto living = [&](Id x) { return x != kNone && people_[x].alive() && people_[x].household != kNone; };
     bool together = living(p.mother) && living(p.father) && people_[p.mother].household == people_[p.father].household;
-    Id riteBy = !together ? kNone : p.father == actingHead() ? p.father : p.mother;
+    Id keeper = !together ? kNone : people_[p.father].household == playerHousehold_ ? actingHead() : households_[people_[p.father].household].head;
+    Id riteBy = !together ? kNone : p.father == keeper ? p.father : p.mother;
     // Gladness about the dead one (a birth, a match) turns to grief; it does not linger beside it.
     for (auto& o : people_)
         if (o.alive())
@@ -1134,6 +1136,8 @@ void World::yearlyMarriages() {
             Id acting = actingHead();
             Id ours = inPlayerHouse(people_[best].household) ? best : inPlayerHouse(m.household) ? mid : kNone;
             if (ours != kNone) {
+                // Turned down or put off lately: no matchmaker comes about them for a while.
+                if (auto q = matchQuietUntil_.find(ours); q != matchQuietUntil_.end() && q->second > day_) continue;
                 // The head's own match is the player's to make as well: a widow is not married off unasked.
                 Id other = ours == best ? mid : best;
                 const Household& oh = households_[people_[other].household];
@@ -1149,6 +1153,7 @@ void World::yearlyMarriages() {
                     Id sender = people_[other].household != kNone && households_[people_[other].household].head != kNone
                                     ? households_[people_[other].household].head : other;
                     recordDeed("refused_proposal", ours, sender);
+                    matchQuietUntil_[ours] = day_ + 2 * kDaysPerYear;
                     log(1, "〔說親〕" + sit.substr(0, sit.find("。") + 3) + "（選擇：回絕）");
                     continue;
                 }
@@ -1158,11 +1163,17 @@ void World::yearlyMarriages() {
         }
         // Nobody suitable at home: bring a bride from another village (for the player's family, if the head agrees).
         if (age > 23 && rngSocial_.chance(0.5)) {
+            if (inPlayerHouse(m.household)) {
+                auto q = matchQuietUntil_.find(mid);
+                if (q != matchQuietUntil_.end() && q->second > day_) continue;
+            }
             if (inPlayerHouse(m.household) &&
                 askPlayer("說親", "鄰村有戶人家託媒人來說，願意把女兒嫁給" + (mid == actingHead() ? std::string("你") : " " + fullName(mid)) +
                                       "，嫁妝不多，人是勤快的。",
-                          {"答應", "再等等"}) == 1)
+                          {"答應", "再等等"}) == 1) {
+                matchQuietUntil_[mid] = day_ + 2 * kDaysPerYear;
                 continue;
+            }
             std::string husbandOcc = m.occupation;
             Id dyn = addDynasty(defs_.surnames[rngNames_.range(0, int(defs_.surnames.size()) - 1)]);
             int bdays = day_ - static_cast<int>((age - rngSocial_.range(2, 7)) * kDaysPerYear);

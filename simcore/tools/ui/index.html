@@ -299,7 +299,7 @@ function answerCard(s) {
   const a = s && s.last_ask;
   if (!a) return "";
   const [k, word] = ANSWER[a.answer] || ["", ""];
-  const more = a.answer >= 2 && a.levers.length && seasonOpen() && s.time_left > 0
+  const more = a.answer >= 2 && a.levers.length && seasonOpen()
     ? `<div class="actions">${a.levers.map((l) => `<button onclick="${askCall(a.who, a, l)}">${esc(LEVERS[l] || l)}</button>`).join("")}</div>` : "";
   return `<div class="answer ${k}"><span class="verdict">${esc(a.name)}：${word}</span><div>${esc(a.text)}</div>${more}</div>`;
 }

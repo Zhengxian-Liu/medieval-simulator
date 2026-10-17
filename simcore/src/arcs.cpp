@@ -223,24 +223,31 @@ Id World::findLender(const Household& h) const {
 void World::monthlyDebts() {
     for (auto& h : households_) {
         if (h.extinct || h.members.empty() || h.debt <= 0) continue;
-        if (h.head != kNone && month() % 3 == 0) addStress(h.head, 2, "還不清的債");
+        // The manor pays what it borrowed after the Michaelmas rents, half a year's loan at a time, as the steward wrote it.
+        bool manor = lord_ != kNone && people_[lord_].household == h.id;
+        if (manor && month() != 9) continue;
+        if (h.head != kNone && !manor && month() % 3 == 0) addStress(h.head, 2, "還不清的債");
         // Bread first: only money beyond a few months' food goes to the creditor.
         double need = consumption(h) * 360 - h.food;
         double spare = h.money - 40 - std::max(0.0, need) * param("grain_price", 0.5);
         if (spare <= 0) continue;
-        double pay = std::min(h.debt, spare * 0.4);
+        double pay = manor ? std::min({h.debt, spare, std::max(110.0, std::round(h.debt * 0.5))}) : std::min(h.debt, spare * 0.4);
         h.debt -= pay;
         h.money -= pay;
         book(h, "還債", -pay);
         if (h.creditor != kNone && people_[h.creditor].household != kNone) {
             households_[people_[h.creditor].household].money += pay;
             book(households_[people_[h.creditor].household], "收回借款", pay);
+            if (manor && inPlayerHouse(people_[h.creditor].household) && h.debt > 0.5)
+                log(1, "莊園按帳還了 " + std::to_string(static_cast<long>(pay)) + " 便士，還欠 " + std::to_string(static_cast<long>(h.debt)) + " 便士。");
         }
         if (h.debt <= 0.5) {
             h.debt = 0;
             h.debtYears = 0;
             if (inPlayerHouse(h.id))
                 log(1, h.creditor == lord_ ? std::string("總算還清了欠領主的債。") : "總算還清了欠 " + fullName(h.creditor) + " 的債。");
+            else if (manor && h.creditor != kNone && people_[h.creditor].household != kNone && inPlayerHouse(people_[h.creditor].household))
+                log(1, "莊園把借你家的錢連本帶利還清了。");
             if (h.head != kNone) addStress(h.head, -15, "");
             h.creditor = kNone;
         }
@@ -256,6 +263,7 @@ void World::yearlyDebts() {
     for (auto& h : households_) {
         promoteHeldDebt(h);
         if (h.extinct || h.members.empty() || h.debt <= 0.5 || h.head == kNone) continue;
+        if (lord_ != kNone && people_[lord_].household == h.id) continue;  // the manor pays on its own terms (monthlyDebts)
         if (hardTimes || h.debt < 20) continue;  // small arrears just stay on the books
         ++h.debtYears;
         bool lordIsCreditor = h.creditor == lord_ || h.creditor == kNone ||

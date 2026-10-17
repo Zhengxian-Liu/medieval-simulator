@@ -162,7 +162,7 @@ World::Tally World::countVotes(const std::string& id, const std::vector<Id>& can
         double best = -1e9;
         for (Id c : cands) {
             double s = people_[c].household == h.id ? 1e6 : opinion(voter.id, c) + officeMerit(people_[c], id) * 2 + noise(5);
-            if (pr != promises_.end() && pr->second == c) s += 90;  // gave his word (開口): kept, short of his own house or a feud
+            if (pr != promises_.end() && pr->second == c && feudStage(voter.id, c) < 2) s += 90;  // gave his word (開口): kept, short of his own house or a feud
             if (people_[c].household != h.id && people_[c].household != kNone &&
                 std::find_if(wants_.begin(), wants_.end(), [&](const Want& wt) {
                     return wt.open && wt.house == people_[c].household && wt.kind == "office" && wt.office == id; }) != wants_.end() &&
