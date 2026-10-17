@@ -40,6 +40,8 @@ section.panel h2 small { font-weight: normal; color: var(--muted); font-size: 12
 .mood { font-size: 13px; }
 .want { color: var(--accent); font-weight: 600; margin: 3px 0; }
 .station { font-size: 13px; margin: 2px 0; }
+.focus { font-size: 13px; margin: 3px 0; color: var(--muted); }
+.focus select { font: inherit; font-size: 13px; padding: 1px 4px; border: 1px solid var(--line); border-radius: 4px; background: var(--card, transparent); color: inherit; }
 .card.away { opacity: 0.85; border-style: dashed; }
 .op { font-size: 13px; cursor: pointer; }
 .op .reasons { display: none; color: var(--muted); font-size: 12px; margin-top: 2px; }
@@ -264,6 +266,15 @@ function actionButtons(p) {
     return `<button ${x.open && can ? "" : "disabled"} class="${x.wanted ? "wanted" : ""}" title="${esc(tip)}" onclick="act({do:'interact',who:${p.id},event:'${x.event}'})">${x.wanted ? "★ " : ""}${esc(x.title)}</button>`;
   }).join("")}</div>`;
 }
+// 年度重心: where the person's days go. Changing it is free; it stays until changed.
+function focusLine(p) {
+  if (!p.focus) return "";
+  const desc = (p.foci || []).find((f) => f.id === p.focus);
+  if (!p.foci || p.foci.length < 2 || !seasonOpen())
+    return `<div class="focus">重心：${esc(p.focus_name)}</div>`;
+  return `<div class="focus">重心：<select title="${esc(desc ? desc.desc : "")}" onchange="act({do:'focus',who:${p.id},focus:this.value})">${p.foci.map((f) =>
+    `<option value="${esc(f.id)}" title="${esc(f.desc)}" ${f.id === p.focus ? "selected" : ""}>${esc(f.name)}</option>`).join("")}</select></div>`;
+}
 // 開口: ask someone for a thing. Same buttons for a follow-up, with a lever on top.
 const LEVERS = { gift: "送點禮再說", favour: "提他欠的人情", hook: "拿把柄壓他", meet: "答應他的條件" };
 const ANSWER = { 1: ["yes", "答應了"], 2: ["cond", "有條件"], 3: ["no", "不肯"], 4: ["no", "惱了"] };
@@ -309,6 +320,7 @@ function renderFamily() {
       ${me ? "" : `<div class="op" onclick="toggle(this)">對你 <b class="${cls(p.opinion)}">${esc(p.opinion_word)} ${signed(p.opinion)}</b> <span class="muted">▾</span><div class="reasons">${reasonsLine(p.reasons)}</div></div>`}
       ${needBars(p.needs)}
       ${p.traits.length ? `<div class="traits">${p.traits.map(esc).join("、")}</div>` : ""}
+      ${focusLine(p)}
       ${roadLine(p.road)}
       ${actionButtons(p)}
     </div>`;

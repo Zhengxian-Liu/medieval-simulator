@@ -109,6 +109,30 @@ void inspectMenu(World& w) {
     std::cout << w.personReport(note[n - 1]);
 }
 
+// 年度重心: where each person at home puts their days. Free, and it stays until changed.
+void focusMenu(World& w) {
+    std::vector<Id> who;
+    if (w.playerHousehold() == kNone) return;
+    for (Id m : w.household(w.playerHousehold()).members)
+        if (w.focusOf(w.person(m)) && w.focusChoices(m).size() > 1) who.push_back(m);
+    if (who.empty()) {
+        std::cout << "家裡眼下沒有人能換重心。\n";
+        return;
+    }
+    for (size_t i = 0; i < who.size(); ++i)
+        std::cout << "  " << i + 1 << ". " << w.fullName(who[i]) << "（" << int(w.ageYears(w.person(who[i]))) << " 歲）：" << w.focusOf(w.person(who[i]))->name << "\n";
+    int n = number(ask("換誰的重心（直接 Enter 取消）："));
+    if (n < 1 || n > static_cast<int>(who.size())) return;
+    Id m = who[static_cast<size_t>(n - 1)];
+    std::vector<const FocusDef*> fs = w.focusChoices(m);
+    for (size_t i = 0; i < fs.size(); ++i) std::cout << "  " << i + 1 << ". " << fs[i]->name << "：" << fs[i]->desc << "\n";
+    int k = number(ask("換成哪個（直接 Enter 取消）："));
+    if (k < 1 || k > static_cast<int>(fs.size())) return;
+    w.issue({w.today(), "focus", w.playerHead(), fs[static_cast<size_t>(k - 1)]->id, m, kNone});
+    w.runCommands();
+    std::cout << w.fullName(m) << " 往後的重心：" << w.focusOf(w.person(m))->name << "。\n";
+}
+
 // 找人: pick someone, then what to do with them; they answer in their own way (design/season-loop.md).
 // Returns true when something was done, so the caller can show what came of it.
 bool seeMenu(World& w, const std::function<void()>& flush) {
@@ -360,12 +384,14 @@ int main(int argc, char** argv) {
             // From here: what the player does this season counts toward the season's changes.
             before = w.snapshot();
             while (!eof) {
-                std::string a = ask("Enter 過這一季　t 找人　p 定計畫　k 家裡知道什麼　i 看一個人　c 放棄計畫　y 過一年　q 結束：");
+                std::string a = ask("Enter 過這一季　t 找人　p 定計畫　f 換重心　k 家裡知道什麼　i 看一個人　c 放棄計畫　y 過一年　q 結束：");
                 if (a == "t") {
                     if (seeMenu(w, flush)) {
                         flush();
                         std::cout << "（這一季還有 " << w.timeLeft() << " 段空閒）\n";
                     }
+                } else if (a == "f") {
+                    focusMenu(w);
                 } else if (a == "k") {
                     std::cout << w.familyReport();
                 } else if (a == "i") {

@@ -112,6 +112,34 @@ Defs Defs::loadFromDir(const std::string& dir) {
         d.stations[sd.id] = sd;
     }
 
+    Json focusRoot = Json::parseFile(dir + "/focus.json");
+    for (const auto& [k, v] : focusRoot["defaults"].asObject()) d.focusDefaults[k] = v.asString();
+    for (const auto& o : focusRoot["foci"].asArray()) {
+        FocusDef f;
+        f.id = o["id"].asString();
+        f.stage = o["stage"].asString();
+        if (f.stage != "child" && f.stage != "adult") throw JsonError("focus " + f.id + ": stage must be child or adult");
+        f.name = o["name"].asString();
+        f.desc = o.stringOr("desc", "");
+        f.conditions = o["conditions"];
+        if (o["skills"].isObject())
+            for (const auto& [k, v] : o["skills"].asObject()) f.skills[k] = v.asNumber();
+        if (o["need"].isObject())
+            for (const auto& [k, v] : o["need"].asObject()) f.needs[k] = v.asNumber();
+        f.work = o.numberOr("work", 0);
+        f.income = o.numberOr("income", 0);
+        f.reputation = o.numberOr("reputation", 0);
+        f.stress = o.numberOr("stress", 0);
+        f.health = o.numberOr("health", 0);
+        f.opinionParents = o.numberOr("opinion_parents", 0);
+        f.knownPeers = static_cast<int>(o.numberOr("known_peers", 0));
+        f.knownVillage = static_cast<int>(o.numberOr("known_village", 0));
+        f.priestKnown = static_cast<int>(o.numberOr("priest_known", 0));
+        d.foci.push_back(f);
+    }
+    for (const auto& [k, id] : d.focusDefaults)
+        if (!d.focus(id, k.rfind("child", 0) == 0 ? "child" : "adult")) throw JsonError("focus default " + k + ": unknown focus " + id);
+
     std::vector<fs::path> eventFiles;
     for (const auto& entry : fs::directory_iterator(dir + "/events"))
         if (entry.path().extension() == ".json") eventFiles.push_back(entry.path());
@@ -310,6 +338,12 @@ const OccupationDef* Defs::occupation(const std::string& id) const {
     auto it = occupations.find(id);
     return it == occupations.end() ? nullptr : &it->second;
 }
+const FocusDef* Defs::focus(const std::string& id, const std::string& stage) const {
+    for (const auto& f : foci)
+        if (f.id == id && f.stage == stage) return &f;
+    return nullptr;
+}
+
 const StationDef* Defs::station(const std::string& id) const {
     auto it = stations.find(id);
     return it == stations.end() ? nullptr : &it->second;

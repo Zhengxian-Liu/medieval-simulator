@@ -620,6 +620,13 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
         return pending == v.asBool();
     }
     if (k == "vacant_acres_ge") return w.vacantAcres() >= v.asNumber();
+    if (k == "village_craft") {
+        // Someone else in the village keeps a craft shop a child could run errands in.
+        bool any = false;
+        for (const auto& h : w.households_)
+            if (!h.extinct && h.head != kNone && !h.trade.empty() && h.id != p.household) any = true;
+        return any == v.asBool();
+    }
     if (k == "plague_active") return (w.param("plague_monthly", 0) > 0) == v.asBool();
     if (k == "household_size_ge") return h && h->members.size() >= v.asNumber();
     if (k == "remembers") return remembers(v, p, target);
@@ -794,6 +801,8 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 if (!h) continue;
                 w.setStation(p.id, "town_apprentice", 7, "進城拜師");
                 return;
+            } else if (k == "focus") {
+                p.focus = v.asString();  // a choice at a gate sets where the days go (跟神父認字 -> letters)
             } else if (k == "station") {
                 // { "station": "archer" } or { "station": { "id": "archer", "years": [2, 4], "note": "應徵出征" } }
                 std::string id = v.isString() ? v.asString() : v["id"].asString();

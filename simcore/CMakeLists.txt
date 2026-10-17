@@ -15,6 +15,7 @@ add_library(simcore
   src/setup.cpp
   src/life.cpp
   src/paths.cpp
+  src/focus.cpp
   src/economy.cpp
   src/social.cpp
   src/events.cpp

@@ -8,6 +8,7 @@
     {"id": "veteran",         "name": "打完仗回了村", "occupation": "peasant"},
     {"id": "retainer",        "name": "當領主的護衛", "occupation": "soldier"},
     {"id": "clerk",           "name": "當書記", "occupation": "clerk"},
+    {"id": "chapman",         "name": "農閒時挑擔子做小買賣"},
     {"id": "town_apprentice", "name": "在鎮上當學徒", "away": true},
     {"id": "town_journeyman", "name": "在鎮上當伙計", "away": true},
     {"id": "town_master",     "name": "在鎮上當師傅", "away": true, "lasting": true},

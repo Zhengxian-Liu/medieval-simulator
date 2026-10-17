@@ -5,7 +5,7 @@
      "conditions": {"age": [7, 9], "station": "home", "no_flag": "school_decided", "is_head": false},
      "options": [
        {"text": "跟神父認字（12 便士）", "conditions": {"money_ge": 12}, "log": "{name} 開始跟神父認字。",
-        "effects": [{"money": -12}, {"set_flag": "schooled"}, {"set_flag": "school_decided"}],
+        "effects": [{"money": -12}, {"set_flag": "schooled"}, {"set_flag": "school_decided"}, {"focus": "letters"}],
         "ai": {"base": 4, "traits": {"pious": 4, "ambitious": 4, "greedy": -4, "clever": 6, "dull": -6},
                "if": [{"cond": {"standing_ge": 2}, "add": 6}, {"cond": {"money_lt": 40}, "add": -3}, {"cond": {"tradition": "lettered"}, "add": 20}, {"cond": {"ambition": "educate_child"}, "add": 40}]}},
        {"text": "留在家幫忙", "log": "", "effects": [{"set_flag": "school_decided"}, {"skill": {"farming": 1}}], "ai": {"base": 12}},
@@ -19,8 +19,10 @@
      "options": [
        {"text": "留在家裡，跟著家裡的活", "log": "", "effects": [{"set_flag": "trade_decided"}],
         "ai": {"base": 12, "traits": {"content": 4}, "if": [{"cond": {"heir_apparent": true}, "add": 20}]}},
-       {"text": "拜村裡的師傅學手藝（24 便士）", "conditions": {"any_place": "apprentice", "money_ge": 24}, "log": "{name} 拜了村裡的師傅學手藝。",
-        "effects": [{"money": -24}, {"take_any_place": "apprentice"}],
+       {"text": "拜村裡的師傅學手藝（24 便士，{odds}）", "conditions": {"any_place": "apprentice", "money_ge": 24}, "log": "",
+        "effects": [{"odds": {"base": 30, "skill": {"craft": 14}, "traits": {"diligent": 10, "lazy": -12, "clever": 6}, "depends": "他手巧不巧",
+                              "effects": [{"money": -24}, {"tell": "{name} 拜了村裡的師傅學手藝。"}, {"take_any_place": "apprentice"}],
+                              "else": [{"tell": "師傅讓 {name} 試了幾天，嫌他手笨，不肯收。"}]}}],
         "ai": {"base": 5, "traits": {"ambitious": 5, "diligent": 3}, "if": [{"cond": {"heir_apparent": true}, "add": -6}, {"cond": {"money_lt": 50}, "add": -3}]}},
        {"text": "送進莊園或大戶當差", "conditions": {"any_place": "service"}, "log": "{name} 被送去當差。",
         "effects": [{"set_flag": "trade_decided"}, {"take_any_place": "service"}],
@@ -31,14 +33,14 @@
        {"text": "送去鎮上當學徒（50 便士，外加 15 便士給領主，准他離開莊園）", "conditions": {"free": false, "money_ge": 65}, "log": "{name} 家付了領主 15 便士，把他送進城拜了一個織布師傅，要學七年。",
         "effects": [{"money": -65}, {"set_flag": "trade_decided"}, {"station": {"id": "town_apprentice", "years": 7, "note": "進城拜師"}}],
         "ai": {"base": 2, "traits": {"ambitious": 6, "content": -4}, "if": [{"cond": {"heir_apparent": true}, "add": -12}, {"cond": {"money_ge": 150}, "add": 4}]}},
-       {"text": "送去讀文法學校（40 便士，{odds}）", "conditions": {"flag": "schooled", "free": true, "money_ge": 40},
+       {"text": "送去讀文法學校（40 便士，{odds}）", "conditions": {"flag": "schooled", "skill_ge": {"learning": 2.5}, "free": true, "money_ge": 40},
         "log": "",
         "effects": [{"set_flag": "trade_decided"},
                     {"odds": {"base": 35, "skill": {"learning": 8}, "traits": {"literate": 20, "clever": 15, "dull": -20}, "depends": "認字的底子",
                               "effects": [{"money": -40}, {"tell": "文法學校的先生考了 {name} 幾句拉丁文，收下了他。"}, {"station": {"id": "scholar", "years": [3, 4], "note": "進了文法學校"}}],
                               "else": [{"tell": "文法學校的先生考了 {name} 幾句拉丁文，搖了搖頭，叫他回家。"}]}}],
         "ai": {"base": 3, "traits": {"pious": 6, "ambitious": 4, "clever": 8}, "if": [{"cond": {"heir_apparent": true}, "add": -10}, {"cond": {"tradition": "lettered"}, "add": 15}]}},
-       {"text": "送去讀文法學校（40 便士，外加 10 便士求領主准許，{odds}）", "conditions": {"flag": "schooled", "free": false, "money_ge": 50},
+       {"text": "送去讀文法學校（40 便士，外加 10 便士求領主准許，{odds}）", "conditions": {"flag": "schooled", "skill_ge": {"learning": 2.5}, "free": false, "money_ge": 50},
         "log": "",
         "effects": [{"set_flag": "trade_decided"},
                     {"odds": {"base": 25, "skill": {"learning": 8}, "traits": {"literate": 20, "clever": 15, "dull": -20}, "lord_opinion": 0.4, "depends": "認字的底子和領主肯不肯放人",
@@ -139,6 +141,40 @@
         "ai": {"base": 4, "traits": {"brave": 6, "ambitious": 6}}},
        {"text": "再出征", "conditions": {"any": [{"year": [1333, 1360]}, {"year": [1369, 1389]}]}, "log": "{name} 在家待不住，又跟著出征了。",
         "effects": [{"station": {"id": "archer", "years": [2, 4], "note": "再次出征"}}], "ai": {"base": 2, "traits": {"brave": 8, "wrathful": 4}}}
+     ]},
+
+    {"id": "chapman_start", "title": "小買賣", "prompt": "趕集的商販說，鎮上的羊毛、鹽和鐵釘，跟村裡的價錢差得多。手上有點本錢的人，農閒時也能挑擔子去做點買賣。", "scope": "anyone", "pulse": "yearly", "chance": 0.12, "cooldown_years": 5,
+     "conditions": {"is_head": true, "age": [22, 55], "station": "home", "money_ge": 60},
+     "options": [
+       {"text": "湊 40 便士本錢，農閒時挑擔子去賣", "log": "{name} 湊了 40 便士本錢，農閒時挑著擔子到鄰近的集上做起小買賣。",
+        "effects": [{"money": -40}, {"station": {"id": "chapman", "years": [3, 5], "note": "農閒時做起小買賣"}}],
+        "ai": {"base": 4, "traits": {"ambitious": 6, "greedy": 5, "gregarious": 5, "shy": -5, "content": -4}, "if": [{"cond": {"money_ge": 200}, "add": 3}]}},
+       {"text": "種地要緊，算了", "log": "", "effects": [], "ai": {"base": 10, "traits": {"content": 5, "craven": 3}}}
+     ]},
+
+    {"id": "chapman_year", "title": "這一年的買賣", "ask": false, "scope": "anyone", "pulse": "yearly", "chance": 1,
+     "conditions": {"station": "chapman", "station_due": false, "no_flag": "chapman_lost"},
+     "options": [{"text": "好", "log": "", "effects": [{"work_bonus": -0.03},
+        {"odds": {"base": 40, "skill": {"charm": 4, "craft": 1}, "traits": {"gregarious": 10, "clever": 8, "greedy": 4, "diligent": 4, "shy": -10, "dull": -8},
+                  "effects": [{"money": 45}, {"reputation": 1}, {"tell": "{name} 這一年的買賣做得順，淨賺了 45 便士。"}],
+                  "else": [{"money": -30}, {"set_flag": "chapman_lost"}, {"tell": "這一年行情不好，{name} 的貨砸在手上，賠了 30 便士。"}]}}]}]},
+
+    {"id": "chapman_loss", "title": "買賣賠了", "prompt": "{name} 去年的買賣賠了錢，貨主還等著結帳。地裡的活也荒了一些。", "scope": "anyone", "pulse": "yearly", "chance": 1,
+     "conditions": {"station": "chapman", "flag": "chapman_lost"},
+     "options": [
+       {"text": "咬牙再做一年，把本錢賺回來", "log": "{name} 不服氣，咬著牙又挑起了擔子。", "effects": [{"clear_flag": "chapman_lost"}, {"stress": 8}],
+        "ai": {"base": 5, "traits": {"ambitious": 6, "wrathful": 4, "greedy": 4, "content": -4}}},
+       {"text": "收手，回去好好種地", "log": "{name} 收了擔子，從此不再做買賣。", "effects": [{"clear_flag": "chapman_lost"}, {"station": {"id": "home", "note": "買賣賠了錢，收手回去種地"}}],
+        "ai": {"base": 8, "traits": {"content": 6, "craven": 4}}}
+     ]},
+
+    {"id": "chapman_due", "title": "做了幾年買賣", "prompt": "做了幾年小買賣，{name} 在集上也認得一些人了。往後還做不做？", "scope": "anyone", "pulse": "yearly", "chance": 1,
+     "conditions": {"station": "chapman", "station_due": true},
+     "options": [
+       {"text": "接著做", "log": "", "effects": [{"clear_flag": "chapman_lost"}, {"station": {"id": "chapman", "years": [3, 5], "note": "接著做買賣"}}],
+        "ai": {"base": 6, "traits": {"ambitious": 5, "gregarious": 4, "greedy": 4}}},
+       {"text": "收手，專心種地", "log": "{name} 收了買賣，專心種自家的地。", "effects": [{"clear_flag": "chapman_lost"}, {"station": {"id": "home", "note": "收了買賣，回去種地"}}],
+        "ai": {"base": 6, "traits": {"content": 6}}}
      ]},
 
     {"id": "clerk_road", "title": "書記的路", "prompt": "{name} 當書記有幾年了。往後是一輩子替人寫字，還是往上走？", "scope": "anyone", "pulse": "yearly", "chance": 0.4,

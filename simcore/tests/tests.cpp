@@ -2,6 +2,7 @@
 #include <cmath>
 #include <cstdio>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 
@@ -50,8 +51,13 @@ static void checkInvariants(const World& w, const char* label) {
             if (p.awayFrom >= 0 && p.awayFrom < static_cast<Id>(w.households().size()))
                 CHECK(!w.household(p.awayFrom).extinct || sd->lasting, "away person belongs to a house that is gone");
         }
-        if (p.alive() && p.household != kNone && w.household(p.household).head == p.id)
-            CHECK(p.station != "labourer" && p.station != "veteran" && p.station != "apprentice", "a head still on a youth's station");
+        if (p.alive() && p.household != kNone && w.household(p.household).head == p.id &&
+            (p.station == "labourer" || p.station == "veteran" || p.station == "apprentice")) {
+            std::string road;
+            for (const auto& r : p.road) road += " " + std::to_string(r.day / kDaysPerYear) + ":" + r.station + "/" + r.note;
+            std::printf("  (%s) %s on %s:%s\n", label, w.fullName(p.id).c_str(), p.station.c_str(), road.c_str());
+            CHECK(false, "a head still on a youth's station");
+        }
         if (p.alive() && p.household == kNone && !w.isAway(p)) CHECK(p.station.empty(), "married away but still on a station");
         if (p.alive() && p.household != kNone && !p.station.empty()) {
             const StationDef* sd = w.defs().station(p.station);
@@ -258,6 +264,43 @@ int main() {
         }
         CHECK(giftTried && seasonTried, "found no ask to press with a gift");
     }
+    // 年度重心 (data/focus.json): the same children, years spent playing or in the fields, grow up differently;
+    // a focus the person cannot take is refused; the choice shows in the command log.
+    {
+        // The first village (by seed) whose family has young children at home when the player takes over.
+        std::optional<World> found;
+        std::vector<Id> kids;
+        for (int seed = 4; kids.empty() && seed < 30; ++seed) {
+            Config c;
+            c.seed = seed;
+            c.prerun = 25;
+            found.emplace(defs, c);
+            for (Id m : found->household(found->playerHousehold()).members) {
+                double age = found->ageYears(found->person(m));
+                if (age >= 5 && age < 10) kids.push_back(m);
+            }
+        }
+        const World& base = *found;
+        CHECK(!kids.empty(), "no young child at home to test the focus on");
+        auto grow = [&](const std::string& focus) {
+            World w = base;
+            for (Id k : kids) w.issue({w.today(), "focus", w.playerHead(), focus, k, kNone});
+            w.runCommands();
+            for (Id k : kids) CHECK(w.person(k).focus == focus, "a focus the family chose was not taken");
+            w.runYears(3);
+            double charm = 0, farming = 0;
+            for (Id k : kids) charm += w.person(k).skills[Charm], farming += w.person(k).skills[Farming];
+            return std::make_pair(charm, farming);
+        };
+        auto play = grow("play"), field = grow("field");
+        CHECK(play.first > field.first + 0.5 && field.second > play.second + 0.5, "years playing and years in the fields grew the same child");
+        World w = base;
+        w.issue({w.today(), "focus", w.playerHead(), "craft", kids[0], kNone});  // an adult's focus, for a child
+        w.runCommands();
+        CHECK(w.person(kids[0]).focus.empty(), "a child took an adult's focus");
+        std::printf("focus: %zu children, charm %.1f vs %.1f, farming %.1f vs %.1f after 3 years\n", kids.size(), play.first, field.first,
+                    play.second, field.second);
+    }
     // A run driven by the auto-player replays exactly from its command log alone.
     {
         Config c;
@@ -270,6 +313,8 @@ int main() {
             a.stepDay();
         }
         CHECK(!a.commandLog().empty(), "auto-player issued no commands");
+        CHECK(std::any_of(a.commandLog().begin(), a.commandLog().end(), [](const Command& x) { return x.type == "focus"; }),
+              "auto-player never chose a focus");
         World b(defs, c);
         for (const auto& cmd : a.commandLog()) b.issue(cmd);
         for (int d = 0; d < steps; ++d) b.stepDay();

@@ -73,6 +73,9 @@ void World::processCommands() {
             else if (c.plan.rfind("office:", 0) == 0) addWant(playerHousehold_, "office", kNone, playerHead(), c.plan.substr(7), "想當");
             else if (c.plan == "drop" && c.subject >= 0 && c.subject < static_cast<Id>(wants_.size()) && inPlayerHouse(wants_[c.subject].house))
                 dropWant(wants_[c.subject], "放下了");
+        } else if (c.type == "focus") {
+            // plan = the focus id, target = whose (design/life-paths.md 年度重心). Free: it is how they spend the year.
+            setFocus(c.target, c.plan);
         } else if (c.type == "cancel_plan") {
             for (size_t k = 0; k < plans_.size(); ++k)
                 if (plans_[k].actor == c.actor) {

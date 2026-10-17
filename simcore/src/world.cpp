@@ -131,6 +131,7 @@ void World::stepDay() {
         monthlyRumours();
         monthlyStress();
         monthlyConcerns();
+        monthlyFocus();
         growSkills();
         monthlyAway();
         if (month() % 3 == 0) computeRings();
@@ -394,6 +395,7 @@ uint64_t World::digest() const {
         mix(hashString(p.occupation));
         mix(uint64_t(p.free) * 7 + uint64_t(p.home + 10));
         mix(hashString(p.station) + uint64_t(p.awayFrom + 10) * 13 + uint64_t(p.road.size()));
+        mix(hashString(p.focus));
         for (const auto& b : beliefs_[p.id]) mix(uint64_t(b.deed) * 31 + uint64_t(b.culprit + 10));
         for (const auto& t : p.traits) mix(hashString(t));
         mix(uint64_t(std::llround(p.health * 1000)));

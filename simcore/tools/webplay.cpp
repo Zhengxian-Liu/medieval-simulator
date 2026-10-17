@@ -12,6 +12,7 @@
 //       {"do":"want","what":"parcel"|"office:reeve"|"drop","object":30}
 //       {"do":"plan","plan":"arrange_match","target":3,"subject":5} {"do":"cancel"}
 //       {"do":"choose","index":0} {"do":"ai"} {"do":"inspect","who":12} {"do":"report"}
+//       {"do":"focus","who":12,"focus":"letters"}   (年度重心; free, any time in the season)
 #include <algorithm>
 #include <cmath>
 #include <fstream>
@@ -208,6 +209,14 @@ public:
                 .n("age", std::floor(w.ageYears(p))).b("female", p.sex == Sex::Female).text("mood", mv.word).text("mood_cause", mv.cause)
                 .n("mood_value", std::lround(mv.value)).n("health", std::lround(p.health)).raw("needs", arr(needs)).raw("traits", arr(traits));
             f.text("station", p.station.empty() ? "" : w.stationName(p)).raw("road", road(p));
+            // 年度重心: where their days go, and what else is open to them now.
+            if (const FocusDef* fd = w.focusOf(p)) {
+                f.text("focus", fd->id).text("focus_name", fd->name);
+                std::vector<std::string> foci;
+                if (withActions)
+                    for (const FocusDef* o : w.focusChoices(m)) foci.push_back(Obj().text("id", o->id).text("name", o->name).text("desc", o->desc).done());
+                f.raw("foci", arr(foci));
+            }
             if (m != head) {
                 double op = w.opinion(m, head);
                 f.n("opinion", std::lround(op)).text("opinion_word", opinionWord(op)).raw("reasons", reasons(m, head)).text("want", w.wantText(p));
@@ -594,6 +603,9 @@ int main(int argc, char** argv) {
                     w.runCommands();
                 } else if (what == "want") {
                     w.issue({w.today(), "want", head, m["what"], kNone, toInt(m, "object")});
+                    w.runCommands();
+                } else if (what == "focus") {
+                    w.issue({w.today(), "focus", head, m["focus"], toInt(m, "who"), kNone});
                     w.runCommands();
                 } else if (what == "plan") {
                     w.issue({w.today(), "start_plan", w.actingHead(), m["plan"], toInt(m, "target"), toInt(m, "subject")});

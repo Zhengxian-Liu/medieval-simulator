@@ -15,6 +15,7 @@ public:
         if (w.dayOfMonth() != 0 || w.gameOver()) return;
         Id head = w.playerHead();
         if (head == kNone) return;
+        if (w.month() == 0) chooseFoci(w, head);
         if (w.month() % 3 == 0) seePeople(w, head);
         if (w.activePlan(head) || !rng_.chance(0.35)) return;
         std::vector<PlanOption> opts = w.availablePlans(head);
@@ -26,6 +27,17 @@ public:
 
 private:
     Rng rng_;
+
+    // At the turn of the year, now and then point someone's days somewhere else (年度重心).
+    void chooseFoci(World& w, Id head) {
+        Id hh = w.people()[head].household;
+        if (hh == kNone) return;
+        for (Id m : w.household(hh).members) {
+            std::vector<const FocusDef*> fs = w.focusChoices(m);
+            if (fs.size() < 2 || !rng_.chance(0.4)) continue;
+            w.issue({w.today(), "focus", head, fs[static_cast<size_t>(rng_.range(0, static_cast<int>(fs.size()) - 1))]->id, m, kNone});
+        }
+    }
 
     // At the start of a season: answer most of what the family wants of the head, and now and then go and
     // see someone, keeping a day for a plan.

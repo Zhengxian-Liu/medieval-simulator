@@ -124,6 +124,7 @@ struct Person {
     int stationUntil = -1;      // a term (school, a campaign, years in service in town) is up on this day
     Id awayFrom = kNone;        // living outside the village: the household they belong to and would come back to
     std::vector<RoadStep> road;
+    std::string focus;          // 年度重心 (data/focus.json) the family chose; empty = what a family like theirs would do
 
     bool alive() const { return deathDay < 0; }
 };
@@ -635,6 +636,10 @@ public:
     // Whether the last answer can be pressed with this lever now: same season, a free day, the money it takes,
     // the secret still unused, the parcel asked for still the family's. The front ends show only these.
     bool leverOpen(const std::string& lever) const;
+    // 年度重心 (data/focus.json): the foci open to someone now, the one they follow, and the family choosing one.
+    std::vector<const FocusDef*> focusChoices(Id who) const;
+    const FocusDef* focusOf(const Person& p) const;
+    void setFocus(Id who, const std::string& id);
 
     // --- player interface
     void issue(const Command& c);
@@ -795,6 +800,7 @@ private:
     void noteLife(Id who, const std::string& note);  // a turn on the road that is not a change of station
     void yearlyAway();
     void monthlyAway();
+    void monthlyFocus();
     void rehomeAway(Id from, Id to);
     Id leaving_ = kNone;              // the head walking out right now (setStation): not one of the house's people away
     void settleAsHead(Id who);        // someone takes up a house: a youth's station (labourer, veteran, apprentice) ends  // the house the people away belong to is gone: re-point them

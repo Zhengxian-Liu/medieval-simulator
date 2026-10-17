@@ -890,7 +890,8 @@ void World::growSkills() {
                 int s = tod ? skillFromKey(tod->skill) : Farming;
                 p.skills[s] += 0.04 * learn * (people_[teacher].skills[s] / 10);
             }
-            if (p.flags.count("schooled")) p.skills[Learning] += 0.06 * learn;
+            // What sticks from the priest's first lessons; the reading itself comes from the focus (跟神父認字).
+            if (p.flags.count("schooled")) p.skills[Learning] += 0.02 * learn;
         }
         p.skills[Charm] += 0.015 * std::max(0.0, 1 + traitMod(p, "charm"));
         if (age > 60)

@@ -182,6 +182,7 @@ void World::monthlyEconomy() {
         if (!od || od->monthlyIncome <= 0) continue;
         double skill = p.skills[skillFromKey(od->skill)];
         double income = od->monthlyIncome * (0.5 + skill / 20) * wage * std::max(0.2, 1 + traitMod(p, "income"));
+        if (const FocusDef* f = focusOf(p)) income *= 1 + f->income;
         households_[p.household].money += income;
         book(households_[p.household], "手藝收入", income);
     }

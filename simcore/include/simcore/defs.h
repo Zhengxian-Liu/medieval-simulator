@@ -38,6 +38,15 @@ struct StationDef {
     bool lasting = false;    // away for good (settled in town, married there): nobody waits for them to come back
 };
 
+// 年度重心 (data/focus.json): where someone puts their days; a little each month.
+struct FocusDef {
+    std::string id, stage, name, desc;  // stage: child (5-13) | adult (14+)
+    Json conditions;                    // on the person, as in events
+    std::map<std::string, double> skills, needs;  // per month
+    double work = 0, income = 0, reputation = 0, stress = 0, health = 0, opinionParents = 0;
+    int knownPeers = 0, knownVillage = 0, priestKnown = 0;
+};
+
 struct OptionDef {
     std::string text;
     std::string log;  // chronicle line, may be empty
@@ -202,6 +211,8 @@ struct Defs {
     std::vector<std::string> traitOrder;  // deterministic iteration
     std::map<std::string, OccupationDef> occupations;
     std::map<std::string, StationDef> stations;
+    std::vector<FocusDef> foci;
+    std::map<std::string, std::string> focusDefaults;  // child_male | child_female | adult | adult_craft -> focus id
     std::vector<EventDef> events;
     std::vector<HistoryDef> history;
     std::vector<AmbitionDef> ambitions;
@@ -223,6 +234,7 @@ struct Defs {
     const TraitDef* trait(const std::string& id) const;
     const OccupationDef* occupation(const std::string& id) const;
     const StationDef* station(const std::string& id) const;
+    const FocusDef* focus(const std::string& id, const std::string& stage) const;
     const AmbitionDef* ambition(const std::string& id) const;
     const ItemDef* item(const std::string& id) const;
     const PlanDef* plan(const std::string& id) const;

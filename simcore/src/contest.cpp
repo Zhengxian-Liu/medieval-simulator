@@ -189,6 +189,7 @@ bool World::takePlace(Id master, const std::string& kind, Id who) {
     if (!placeOpen(master, kind) || who == kNone) return false;
     Person& p = people_[who];
     if (!p.alive() || p.household == kNone || p.home != kNone) return false;  // dead since they asked, or already away
+    if (households_[p.household].head == who || !p.station.empty()) return false;  // keeps a house now, or on another road
     if (kind == "apprentice") {
         Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
         std::string trade;
@@ -230,14 +231,14 @@ void World::fillPlaces() {
         if (!best) continue;
         Id house = best->house, who = best->subject;
         if (bestScore < -20) continue;
-        if (pl.kind == "apprentice") {
+        bool known = familyKnows(*best);
+        std::string what = pl.kind == "apprentice" ? "當學徒" : "幫傭";
+        if (!takePlace(pl.master, pl.kind, who)) continue;
+        if (pl.kind == "apprentice") {  // the fee, once the place is taken
             households_[house].money -= 24;
             households_[pl.master].money += 24;
         }
-        bool known = familyKnows(*best);
-        std::string what = pl.kind == "apprentice" ? "當學徒" : "幫傭";
-        if (takePlace(pl.master, pl.kind, who) && known)
-            log(2, fullName(mh) + " 收了 " + fullName(who) + " 到家裡" + what + "。");
+        if (known) log(2, fullName(mh) + " 收了 " + fullName(who) + " 到家裡" + what + "。");
     }
 }
 
