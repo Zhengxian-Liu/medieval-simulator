@@ -70,7 +70,13 @@ void World::processCommands() {
         } else if (c.type == "want") {
             // The family lets it be known it wants a parcel (plan "parcel") or a post (plan "office:<id>"), or drops it.
             if (c.plan == "parcel") addWant(playerHousehold_, "parcel", c.subject, kNone, "", "盯上了");
-            else if (c.plan.rfind("office:", 0) == 0) addWant(playerHousehold_, "office", kNone, playerHead(), c.plan.substr(7), "想當");
+            else if (c.plan.rfind("office:", 0) == 0) {
+                std::string bar = officeBar(playerHead(), c.plan.substr(7));
+                const Office* of = office(c.plan.substr(7));
+                if (!of) continue;
+                if (bar.empty()) addWant(playerHousehold_, "office", kNone, playerHead(), of->id, "想當");
+                else log(1, "【差事】你家爭不了" + of->name + "：" + bar + "。");
+            }
             else if (c.plan == "drop" && c.subject >= 0 && c.subject < static_cast<Id>(wants_.size()) && inPlayerHouse(wants_[c.subject].house))
                 dropWant(wants_[c.subject], "放下了");
         } else if (c.type == "focus") {
@@ -103,7 +109,14 @@ std::vector<PlanOption> World::availablePlans(Id actorId) {
         std::vector<Id> subjects{kNone};
         if (!pd.subject.isNull()) {
             subjects.clear();
-            for (Id c : actor.children) {
+            std::vector<Id> pool = actor.children;
+            // "kin_at_home": also the others living under the actor's roof (a brother, a niece), not servants.
+            if (pd.subject.stringOr("pick", "any_child") == "kin_at_home")
+                for (Id m : households_[actor.household].members)
+                    if (m != actorId && m != actor.spouse && people_[m].home == kNone &&
+                        std::find(pool.begin(), pool.end(), m) == pool.end())
+                        pool.push_back(m);
+            for (Id c : pool) {
                 const Person& cp = people_[c];
                 if (cp.alive() && cp.household != kNone && ev.eval(pd.subject["conditions"], cp, actorId))
                     subjects.push_back(c);
@@ -138,6 +151,8 @@ std::vector<PlanOption> World::availablePlans(Id actorId) {
                 if (pick == "friend" && op < 30) continue;
                 // Prefer targets the person feels strongly about; a family feud makes anyone of that house a target.
                 double tw = pick == "rival" ? 1 + std::max(0.0, -op - 30) / 40 + feud * 0.5 : 1 + std::max(0.0, op) / 50;
+                // The one the subject has set their heart on comes first.
+                if (sub != kNone && concernOf(people_[sub], "longing", tp.id)) tw += 6;
                 out.push_back({pd.id, tp.id, sub, w, tw});
             }
         }

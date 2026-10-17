@@ -83,16 +83,17 @@ std::vector<AskOption> World::asksFor(Id target) {
     }
     // A match between one of theirs and one of ours.
     auto single = [&](const Person& x) { return x.alive() && !(x.spouse != kNone && people_[x.spouse].alive()) && x.home == kNone; };
-    for (Id x : t.children) {
+    // Anyone single of age on either side: a son or daughter, a younger brother, a niece taken in.
+    for (Id x : th.members) {
         const Person& xp = people_[x];
-        if (!single(xp) || xp.household != t.household || xp.occupation == "priest") continue;
+        if (!single(xp) || xp.occupation == "priest") continue;
         double xa = ageYears(xp);
         if (xa < 16) continue;
         for (Id y : ph.members) {
             const Person& yp = people_[y];
             if (!single(yp) || yp.sex == xp.sex || y == head || closeKin(x, y) || gentry(x) != gentry(y)) continue;
             double ya = ageYears(yp);
-            if (ya < 16 || (yp.father != head && yp.mother != head)) continue;
+            if (ya < 16 || yp.occupation == "priest") continue;
             double gap = yp.sex == Sex::Male ? ya - xa : xa - ya;
             if (gap < -4 || gap > 14) continue;
             push(opt("match", "替" + shortName(y) + "向" + shortName(x) + "提親", x, y));
@@ -160,7 +161,10 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
     if (!again) {
         if (what == "sell_parcel" || what == "rent_vacant") addWant(playerHousehold_, "parcel", object, kNone, "", "開口要了");
         else if (what == "vote") addWant(playerHousehold_, "office", kNone, head, officeId, "開口拉票");
-        else if (what == "match") addWant(playerHousehold_, "match", object, subject, "", "開口提親");
+        else if (what == "match") {
+            addWant(playerHousehold_, "match", object, subject, "", "開口提親");
+            answerWant(subject, "plan:arrange_match");  // going to ask is what they were waiting for
+        }
         else if (what == "apprentice") addWant(playerHousehold_, "place", object, subject, "apprentice", "開口求師");
     }
 

@@ -533,7 +533,7 @@ function renderContest(s) {
   }).join("")}</div>` : '<p class="muted">還沒聽說村裡有誰在爭什麼。</p>';
   html += `<h3>村裡的差事</h3>` + c.offices.map((o) => `<div class="item" style="display:flex;justify-content:space-between;gap:6px;padding:4px 0">
       <span><b>${esc(o.name)}</b>　${o.mine ? '<span class="pos">你家的人</span> ' : ""}${o.holder ? esc(o.holder) : '<span class="muted">空著</span>'}</span>
-      ${o.wanted ? '<span class="muted">你家想當</span>' : o.can && !o.mine ? `<button ${can ? "" : "disabled"} onclick="act({do:'want',what:'office:${o.id}',object:-1})">想當</button>` : ""}</div>`).join("");
+      ${o.wanted ? '<span class="muted">你家想當</span>' : o.can && !o.mine ? `<button ${can ? "" : "disabled"} onclick="act({do:'want',what:'office:${o.id}',object:-1})">想當</button>` : !o.mine && o.why ? `<span class="muted" style="font-size:12px">爭不了：${esc(o.why)}</span>` : ""}</div>`).join("");
   if (c.past.length) html += `<h3>你家最近的結果</h3>` + c.past.map((p) => `<div style="font-size:13px">${p.year} 年　${esc(p.thing)}：<b>${esc(p.outcome)}</b></div>`).join("");
   html += `<p class="legend">只列你家聽說的。去「村民」那一欄找人開口：買地、租地、請他投票、借錢、說親、收學徒。</p>`;
   $("tab-body").innerHTML = html;

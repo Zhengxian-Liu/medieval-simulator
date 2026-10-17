@@ -54,24 +54,37 @@ void World::setOffice(const std::string& id, Id holder, const std::string& how) 
     }
 }
 
-bool World::officeEligible(Id who, const std::string& id) const {
-    if (who == kNone) return false;
+std::string World::officeBar(Id who, const std::string& id) const {
+    if (who == kNone) return "家裡沒有當家的";
     const Person& p = people_[who];
     Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
-    if (!p.alive() || p.household == kNone || p.household == lordHouse || p.sex != Sex::Male) return false;
-    if (p.occupation == "priest" || p.occupation == "lord" || p.home != kNone) return false;
-    double age = ageYears(p);
+    if (!p.alive() || p.household == kNone) return "人已經不在了";
+    if (p.household == lordHouse || p.occupation == "lord") return "領主家的人不當村裡的差事";
+    if (p.occupation == "priest") return "神父不當村裡的差事";
+    if (p.home != kNone) return shortName(who) + "在別人家幫傭";
+    if (p.sex != Sex::Male) return "村裡的差事只有男人能當，當家的" + shortName(who) + "是女人";
+    int age = static_cast<int>(ageYears(p));
     const Household& h = households_[p.household];
-    if (id == "reeve")
-        return h.head == who && age >= 25 && age <= 65 && p.occupation == "peasant" && h.debt < 20;
-    if (p.flags.count("reeve")) return false;
-    if (id == "aletaster") {
-        if (age < 25 || age > 65 || h.head != p.id) return false;
-        for (Id m : h.members)
-            if (people_[m].occupation == "alewife") return false;  // no one tastes his own wife's ale
-        return true;
+    std::string years = "，" + shortName(who) + "現在 " + std::to_string(age) + " 歲";
+    if (id == "reeve") {
+        if (h.head != who) return "莊頭得是一家之主";
+        if (age < 25 || ageYears(p) > 65) return "莊頭要 25 到 65 歲" + years;
+        if (p.occupation != "peasant") return "莊頭得是種地的人，做手藝和買賣的不當";
+        if (h.debt >= 20) return "家裡欠著 20 便士以上的債，沒人放心讓欠債的人收租";
+        auto bound = cooldowns_.find({who, "lords_debtor"});
+        if (bound != cooldowns_.end() && bound->second > day_) return "欠著領主免債的人情，村裡人不會選領主捏在手裡的人";
+        return "";
     }
-    return age >= 20 && age <= 60;
+    if (p.flags.count("reeve")) return "已經是莊頭了，不能兼";
+    if (id == "aletaster") {
+        if (age < 25 || ageYears(p) > 65) return "嚐酒官要 25 到 65 歲" + years;
+        if (h.head != who) return "嚐酒官得是一家之主";
+        for (Id m : h.members)
+            if (people_[m].occupation == "alewife") return "家裡有人釀酒賣，不能自己嚐自己的酒";
+        return "";
+    }
+    if (age < 20 || ageYears(p) > 60) return "看籬人要 20 到 60 歲" + years;
+    return "";
 }
 
 void World::officeVacated(Id person) {
@@ -79,55 +92,195 @@ void World::officeVacated(Id person) {
         if (o.holder == person) o.holder = kNone;
 }
 
-// Michaelmas court: the ale-taster (who tests the alewives' ale and presents short measures) and the hayward
-// (who keeps the hedges and the crops from straying beasts) are chosen for the year by the heads of household.
-// Those who let it be known they want the post stand; the others are the likeliest men.
-void World::chooseOfficers() {
+// ---- Elections ---------------------------------------------------------------------------------
+// The reeve at Lammas (every three years, or when the post falls vacant), the ale-taster and the hayward at
+// Michaelmas. The heads of household vote for whom they like best; a promise (開口) and a feud weigh heavily.
+
+double World::officeMerit(const Person& p, const std::string& id) const {
+    if (id == "reeve") return p.skills[Charm] + p.reputation / 4 + p.skills[Farming] / 3 + traitMod(p, "charm") * 3;
+    if (id == "aletaster") return p.reputation / 4 + p.skills[Charm] / 2;
+    return p.skills[Farming] / 3 + (hasTrait(p, "strong") ? 3 : 0) + (households_[p.household].acres < 10 ? 2 : 0);
+}
+
+Id World::currentReeve() const {
+    for (const auto& p : people_)
+        if (p.flags.count("reeve")) return p.id;
+    return kNone;
+}
+
+bool World::reeveDue() const {
+    Id old = currentReeve();
+    return old == kNone || !officeEligible(old, "reeve") || year() >= nextReeveYear_;
+}
+
+std::vector<Id> World::officeCandidates(const std::string& id, Id old, const std::function<double(double)>& noise) const {
+    Id head = playerHead();
+    std::vector<Id> cands;
+    auto add = [&](Id c) {
+        if (c != kNone && officeEligible(c, id) && std::find(cands.begin(), cands.end(), c) == cands.end()) cands.push_back(c);
+    };
+    auto wanter = [&](const Want& wt) { return wt.subject != kNone ? wt.subject : households_[wt.house].head; };
+    std::vector<std::pair<double, Id>> ranked;
+    if (id == "reeve") {
+        // The likeliest three, those who let it be known they want it, and the family's man if he wants it or is
+        // among the likeliest five.
+        for (const auto& p : people_)
+            if (officeEligible(p.id, id)) ranked.push_back({officeMerit(p, id) + noise(4) + (p.id == old ? 3 : 0), p.id});
+        std::sort(ranked.rbegin(), ranked.rend());
+        for (size_t i = 0; i < ranked.size() && cands.size() < 3; ++i) add(ranked[i].second);
+        for (const auto& wt : wants_)
+            if (wt.open && wt.kind == "office" && wt.office == id && cands.size() < 4 && wanter(wt) != head) add(wanter(wt));
+        bool runs = head != kNone && officeEligible(head, id) && std::find_if(wants_.begin(), wants_.end(), [&](const Want& wt) {
+                        return wt.open && wt.house == playerHousehold_ && wt.kind == "office" && wt.office == id; }) != wants_.end();
+        for (size_t i = 0; i < ranked.size() && i < 5; ++i) runs = runs || ranked[i].second == head;
+        if (runs) add(head);
+        return cands;
+    }
+    // Minor posts: those who want it, the man who has it, then the likeliest others until there are two.
+    for (const auto& wt : wants_)
+        if (wt.open && wt.kind == "office" && wt.office == id) add(wanter(wt));
+    if (old != kNone && people_[old].alive() && old != head) add(old);
+    for (const auto& p : people_)
+        if (officeEligible(p.id, id) && !inPlayerHouse(p.household)) ranked.push_back({officeMerit(p, id) + noise(4), p.id});
+    std::sort(ranked.rbegin(), ranked.rend());
+    for (size_t i = 0; i < ranked.size() && cands.size() < 2; ++i) add(ranked[i].second);
+    return cands;
+}
+
+World::Tally World::countVotes(const std::string& id, const std::vector<Id>& cands, Id old, const std::function<double(double)>& noise) const {
+    Tally t;
+    Id head = playerHead();
+    bool familyRuns = head != kNone && std::find(cands.begin(), cands.end(), head) != cands.end();
     Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
+    for (const auto& h : households_) {
+        if (h.extinct || h.members.empty() || h.head == kNone || h.id == lordHouse) continue;
+        const Person& voter = people_[h.head];
+        if (voter.occupation == "priest" || ageYears(voter) < 21) continue;
+        auto pr = promises_.find({voter.id, id});
+        Id pick = kNone;
+        double best = -1e9;
+        for (Id c : cands) {
+            double s = people_[c].household == h.id ? 1e6 : opinion(voter.id, c) + officeMerit(people_[c], id) * 2 + noise(5);
+            if (pr != promises_.end() && pr->second == c) s += 40;  // gave his word (開口)
+            if (people_[c].household != h.id && people_[c].household != kNone &&
+                std::find_if(wants_.begin(), wants_.end(), [&](const Want& wt) {
+                    return wt.open && wt.house == people_[c].household && wt.kind == "office" && wt.office == id; }) != wants_.end() &&
+                opinion(voter.id, c) >= 20)
+                s += 6;  // he asked around for it
+            if (id == "reeve") {
+                if (people_[c].flags.count("campaign_ale")) s += 10;
+                // After two terms the village tires of the same man collecting its rents.
+                auto terms = reeveTerms_.find(c);
+                if (c == old && terms != reeveTerms_.end() && terms->second >= 2) s -= 6 * (terms->second - 1);
+            }
+            if (feudStage(voter.id, c) >= 2) s -= 40;
+            if (s > best) best = s, pick = c;
+        }
+        if (pick == kNone) continue;
+        ++t.votes[pick];
+        if (!familyRuns || inPlayerHouse(h.id)) continue;
+        if (pick == head && pr != promises_.end() && pr->second == head) t.byWord.push_back(voter.id);
+        if (pick != head && feudStage(voter.id, head) >= 2) t.grudge.push_back(voter.id);
+    }
+    return t;
+}
+
+std::string World::tallyText(const std::vector<Id>& cands, const Tally& t, bool forecast) const {
+    Id head = playerHead();
+    std::vector<Id> order = cands;
+    std::stable_sort(order.begin(), order.end(), [&](Id a, Id b) {
+        auto va = t.votes.find(a), vb = t.votes.find(b);
+        return (va != t.votes.end() ? va->second : 0) > (vb != t.votes.end() ? vb->second : 0);
+    });
+    std::string out;
+    for (Id c : order) {
+        auto v = t.votes.find(c);
+        out += (out.empty() ? "" : "、") + fullName(c) + (c == head ? "（你）" : "") + (forecast ? " 約 " : " ") +
+               std::to_string(v != t.votes.end() ? v->second : 0) + " 票";
+    }
+    return out;
+}
+
+std::string World::voteWhy(const Tally& t) const {
+    auto houses = [&](const std::vector<Id>& ids) {
+        std::vector<std::string> names;
+        for (Id v : ids)
+            if (people_[v].dynasty != kNone) names.push_back(dynasties_[people_[v].dynasty].surname + "家");
+        std::sort(names.begin(), names.end());
+        names.erase(std::unique(names.begin(), names.end()), names.end());
+        std::string out;
+        for (const auto& n : names) out += (out.empty() ? "" : "、") + n;
+        return out;
+    };
+    std::string kept = houses(t.byWord), grudge = houses(t.grudge), out;
+    if (!kept.empty()) out += kept + "答應過你，說到做到";
+    if (!grudge.empty()) out += (out.empty() ? "" : "；") + grudge + "記著舊仇，票投給了別人";
+    return out.empty() ? out : "（" + out + "。）";
+}
+
+void World::electionNotice() {
+    Id head = playerHead();
+    if (head == kNone) return;
+    std::vector<std::string> ids;
+    if (month() == 6 && reeveDue()) ids.push_back("reeve");
+    if (month() == 9) ids.push_back("aletaster"), ids.push_back("hayward");
+    auto mid = [](double m) { return m / 2; };
+    std::vector<std::string> names, parts, could, barred;
+    bool loud = false;
+    for (const auto& id : ids) {
+        const Office* of = office(id);
+        if (!of) continue;
+        Id old = id == "reeve" ? currentReeve() : of->holder;
+        std::vector<Id> cands = officeCandidates(id, old, mid);
+        if (cands.empty()) continue;
+        Tally t = countVotes(id, cands, old, mid);
+        names.push_back(of->name);
+        std::string part = (ids.size() > 1 ? of->name + "：" : "") + tallyText(cands, t, true);
+        bool wanted = std::find_if(wants_.begin(), wants_.end(), [&](const Want& wt) {
+                          return wt.open && wt.house == playerHousehold_ && wt.kind == "office" && wt.office == id; }) != wants_.end();
+        std::string bar = officeBar(head, id);
+        if (std::find(cands.begin(), cands.end(), head) != cands.end()) {
+            int ours = t.votes.count(head) ? t.votes.at(head) : 0, top = 0;
+            for (const auto& [c, n] : t.votes)
+                if (c != head) top = std::max(top, n);
+            part += ours > top ? "，你暫時領先，可是還沒投票，人心會變"
+                               : "，你落後 " + std::to_string(top - ours) + " 票，去找各家家主「開口」拉票，答應了的人多半會投你";
+            if (!t.grudge.empty()) part += "；有 " + std::to_string(t.grudge.size()) + " 家記著和你家的舊仇，不會投你";
+            loud = true;
+        } else if (bar.empty()) {
+            could.push_back(of->name);
+        } else {
+            barred.push_back(of->name + "（" + bar + "）");
+            loud = loud || wanted;
+        }
+        parts.push_back(part);
+    }
+    if (parts.empty()) return;
+    auto join = [](const std::vector<std::string>& v, const char* sep) {
+        std::string o;
+        for (const auto& x : v) o += (o.empty() ? "" : sep) + x;
+        return o;
+    };
+    std::string when = ids.front() == "reeve" ? "八月初要選莊頭（一任三年）" : "米迦勒節要選" + join(names, "和") + "（一任一年）";
+    std::string tail;
+    if (!could.empty()) tail += "你夠資格爭" + join(could, "、") + "：在「村裡在爭什麼」按「想當」，再去拉票。";
+    if (!barred.empty()) tail += "你家這回爭不了" + join(barred, "、") + "。";
+    log(loud || !could.empty() ? 1 : 2, "【選舉在即】這一季" + when + "。照現在看，" + join(parts, "；") + "。" + tail);
+}
+
+void World::chooseOfficers() {
     for (const char* oid : {"aletaster", "hayward"}) {
         const std::string id = oid;
         const Office* cur = office(id);
         if (!cur) continue;
         Id old = cur->holder;
-        auto eligible = [&](const Person& p) { return officeEligible(p.id, id); };
-        auto merit = [&](const Person& p) {
-            if (id == "aletaster") return p.reputation / 4 + p.skills[Charm] / 2;
-            return p.skills[Farming] / 3 + (hasTrait(p, "strong") ? 3 : 0) + (households_[p.household].acres < 10 ? 2 : 0);
-        };
-        std::vector<Id> cands;
-        auto addCand = [&](Id c) {
-            if (c != kNone && eligible(people_[c]) && std::find(cands.begin(), cands.end(), c) == cands.end()) cands.push_back(c);
-        };
-        // Who let it be known they want it.
-        for (const auto& wt : wants_)
-            if (wt.open && wt.kind == "office" && wt.office == id) addCand(wt.subject != kNone ? wt.subject : households_[wt.house].head);
-        if (old != kNone && people_[old].alive() && old != playerHead()) addCand(old);
-        std::vector<std::pair<double, Id>> ranked;
-        for (const auto& p : people_)
-            if (eligible(p) && !inPlayerHouse(p.household)) ranked.push_back({merit(p) + rngContest_.range(0, 4), p.id});
-        std::sort(ranked.rbegin(), ranked.rend());
-        for (size_t i = 0; i < ranked.size() && cands.size() < 2; ++i) addCand(ranked[i].second);
+        auto noise = [&](double m) { return static_cast<double>(rngContest_.range(0, static_cast<int>(m))); };
+        std::vector<Id> cands = officeCandidates(id, old, noise);
         if (cands.empty()) continue;
-        std::map<Id, int> votes;
-        for (const auto& h : households_) {
-            if (h.extinct || h.members.empty() || h.head == kNone || h.id == lordHouse) continue;
-            const Person& voter = people_[h.head];
-            if (voter.occupation == "priest" || ageYears(voter) < 21) continue;
-            Id pick = kNone;
-            double best = -1e9;
-            for (Id c : cands) {
-                double s = people_[c].household == h.id ? 1e6 : opinion(voter.id, c) + merit(people_[c]) * 2 + rngContest_.range(0, 5);
-                auto pr = promises_.find({voter.id, id});
-                if (pr != promises_.end() && pr->second == c) s += 40;
-                if (wantOf(people_[c].household, "office", kNone, id) && opinion(voter.id, c) >= 20) s += 6;  // he asked
-                if (feudStage(voter.id, c) >= 2) s -= 40;
-                if (s > best) best = s, pick = c;
-            }
-            if (pick != kNone) ++votes[pick];
-        }
+        Tally t = countVotes(id, cands, old, noise);
         Id winner = kNone;
         for (Id c : cands)
-            if (winner == kNone || votes[c] > votes[winner]) winner = c;
+            if (winner == kNone || t.votes[c] > t.votes[winner]) winner = c;
         for (auto it = promises_.begin(); it != promises_.end();) it = it->first.second == id ? promises_.erase(it) : std::next(it);
         bool familyIn = false;
         for (Id c : cands) familyIn = familyIn || isPlayerFamily(people_[c]);
@@ -140,9 +293,7 @@ void World::chooseOfficers() {
         else wh.food += consumption(wh) * 30;  // a sheaf from every house at harvest
         if (winner != old) people_[winner].reputation += 2;
         if (familyIn && cands.size() > 1) {
-            std::string tally;
-            for (Id c : cands) tally += (tally.empty() ? "" : "、") + fullName(c) + " " + std::to_string(votes[c]) + " 票";
-            log(1, "【選" + name + "】" + tally + "。" + fullName(winner) + " 當選，做到明年米迦勒節。");
+            log(1, "【選" + name + "】" + tallyText(cands, t, false) + "。" + voteWhy(t) + fullName(winner) + " 當選，做到明年米迦勒節。");
         } else if (winner != old) {
             log(isPlayerFamily(people_[winner]) ? 1 : 2, fullName(winner) + " 被選為" + name + "。");
         }
@@ -653,9 +804,8 @@ void World::callInFavour(Id debtor, Id creditor) {
 // is wanted, and dearer for an heir he does not like. Half a year to find it.
 // A widow holds by free bench and pays nothing; a son or daughter of the dead pays the customary fine; anyone
 // else (a brother, a nephew, a second husband) pays what the lord thinks the land will bear.
-void World::chargeEntryFine(Household& h, Id heir, Id dead) {
+void World::chargeEntryFine(Household& h, Id heir, Id dead, double customary) {
     if (lord_ == kNone || people_[lord_].household == kNone || h.id == people_[lord_].household || heir == kNone) return;
-    double customary = h.acres - h.freehold;
     if (customary < 1) return;
     const Person& hp = people_[heir];
     if (dead != kNone && people_[dead].spouse == heir) return;

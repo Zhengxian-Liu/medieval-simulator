@@ -56,78 +56,23 @@ void World::monthlySocial() {
 // whom they like best. He serves three years unless he dies, stops heading his house or falls into
 // arrears. The lord can overrule the vote, but a man he forces on the village is resented for it.
 void World::electReeve() {
-    Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
-    auto eligible = [&](const Person& p) {
-        if (!p.alive() || p.household == kNone || p.household == lordHouse) return false;
-        if (p.sex != Sex::Male || ageYears(p) < 25 || ageYears(p) > 65 || p.occupation != "peasant") return false;
-        const Household& h = households_[p.household];
-        auto bound = cooldowns_.find({p.id, "lords_debtor"});
-        if (bound != cooldowns_.end() && bound->second > day_) return false;
-        return h.head == p.id && h.debt < 20;
-    };
-    Id old = kNone;
-    for (auto& p : people_)
-        if (p.flags.count("reeve")) old = p.id;
-    bool vacant = old == kNone || !eligible(people_[old]);
-    if (!vacant && year() < nextReeveYear_) return;
+    Id old = currentReeve();
+    if (!reeveDue()) return;
     if (old != kNone) people_[old].flags.erase("reeve");
     nextReeveYear_ = year() + 3;
 
-    auto merit = [&](const Person& p) {
-        return p.skills[Charm] + p.reputation / 4 + p.skills[Farming] / 3 + traitMod(p, "charm") * 3;
-    };
-    std::vector<std::pair<double, Id>> ranked;
-    for (auto& p : people_)
-        if (eligible(p)) ranked.push_back({merit(p) + rngSocial_.range(0, 4) + (p.id == old ? 3 : 0), p.id});
-    if (ranked.empty()) return;
-    std::sort(ranked.rbegin(), ranked.rend());
-    std::vector<Id> cands;
-    for (size_t i = 0; i < ranked.size() && cands.size() < 3; ++i) cands.push_back(ranked[i].second);
-    // Those who let it be known they want it stand too (contest.cpp).
-    for (const auto& wt : wants_) {
-        if (!wt.open || wt.kind != "office" || wt.office != "reeve" || cands.size() >= 4) continue;
-        Id c = wt.subject != kNone ? wt.subject : households_[wt.house].head;
-        if (c != kNone && eligible(people_[c]) && std::find(cands.begin(), cands.end(), c) == cands.end() && c != playerHead()) cands.push_back(c);
-    }
+    auto noise = [&](double m) { return static_cast<double>(rngSocial_.range(0, static_cast<int>(m))); };
+    std::vector<Id> cands = officeCandidates("reeve", old, noise);
+    if (cands.empty()) return;
     Id head = playerHead();
-    bool playerRuns = head != kNone && eligible(people_[head]) && wantOf(playerHousehold_, "office", kNone, "reeve");
-    for (size_t i = 0; i < ranked.size() && i < 5; ++i)
-        if (ranked[i].second == head) playerRuns = true;
-    if (playerRuns && std::find(cands.begin(), cands.end(), head) == cands.end()) cands.push_back(head);
+    bool playerRuns = head != kNone && std::find(cands.begin(), cands.end(), head) != cands.end();
     if (playerRuns) {
         people_[head].flags.erase("campaign_ale");
         people_[head].flags.erase("campaign_lord");
         runEventById("reeve_campaign", head, lord_);
     }
-
-    std::map<Id, int> votes;
-    std::vector<std::string> grudgeHouses;  // houses whose feud with the player decided their vote
-    for (const auto& h : households_) {
-        if (h.extinct || h.members.empty() || h.head == kNone || h.id == lordHouse) continue;
-        const Person& voter = people_[h.head];
-        if (voter.occupation == "priest" || ageYears(voter) < 21) continue;
-        Id pick = kNone;
-        double best = -1e9;
-        for (Id c : cands) {
-            double s = c == voter.id ? 1e6 : opinion(voter.id, c) + merit(people_[c]) * 2 + rngSocial_.range(0, 5);
-            if (people_[c].flags.count("campaign_ale")) s += 10;
-            auto pr = promises_.find({voter.id, "reeve"});
-            if (pr != promises_.end() && pr->second == c) s += 40;  // gave his word (開口)
-            if (c != voter.id && people_[c].household != kNone && wantOf(people_[c].household, "office", kNone, "reeve") && opinion(voter.id, c) >= 20) s += 6;
-            // After two terms the village tires of the same man collecting its rents.
-            auto t = reeveTerms_.find(c);
-            if (c == old && t != reeveTerms_.end() && t->second >= 2) s -= 6 * (t->second - 1);
-            if (feudStage(voter.id, c) >= 2) s -= 40;
-            if (s > best) {
-                best = s;
-                pick = c;
-            }
-        }
-        if (pick == kNone) continue;
-        ++votes[pick];
-        if (playerRuns && pick != head && feudStage(voter.id, head) >= 2 && voter.dynasty != kNone)
-            grudgeHouses.push_back(dynasties_[voter.dynasty].surname);
-    }
+    Tally tally = countVotes("reeve", cands, old, noise);
+    std::map<Id, int>& votes = tally.votes;
     Id winner = kNone;
     for (Id c : cands)
         if (winner == kNone || votes[c] > votes[winner]) winner = c;
@@ -159,17 +104,7 @@ void World::electReeve() {
     if (playerRuns && cands.size() == 1 && winner == head) {
         log(winner == old ? 2 : 1, "【選莊頭】沒有人出來爭，" + fullName(head) + (winner == old ? " 又當了三年莊頭。" : " 當上了莊頭，這一任三年。"));
     } else if (playerRuns) {
-        std::string tally;
-        for (Id c : cands) tally += (tally.empty() ? "" : "、") + fullName(c) + " " + std::to_string(votes[c]) + " 票";
-        std::string grudge;
-        std::sort(grudgeHouses.begin(), grudgeHouses.end());
-        grudgeHouses.erase(std::unique(grudgeHouses.begin(), grudgeHouses.end()), grudgeHouses.end());
-        for (const auto& g : grudgeHouses) grudge += (grudge.empty() ? "" : "、") + g;
-        // Only worth saying when those votes would have changed the result.
-        bool decided = winner != head && votes[head] + static_cast<int>(grudgeHouses.size()) >= votes[winner];
-        if (!grudge.empty() && decided) grudge = "（" + grudge + " 家記著舊仇，票都投給了別人。）";
-        else grudge.clear();
-        log(1, "【選莊頭】" + tally + "。" + grudge + how +
+        log(1, "【選莊頭】" + tallyText(cands, tally, false) + "。" + voteWhy(tally) + how +
                    (winner == head ? fullName(head) + (old == head ? " 連任莊頭，再做三年。" : " 當上了莊頭，這一任三年。") : fullName(winner) + " 當選。"));
         if (winner != head) addStress(head, 6, "落選的難堪");
     } else if (winner != old) {

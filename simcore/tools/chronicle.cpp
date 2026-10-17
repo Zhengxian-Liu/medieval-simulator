@@ -188,10 +188,13 @@ int main(int argc, char** argv) {
 
     // One chapter per head of the family, titled with a byname earned in their time.
     std::vector<std::pair<int, Id>> chapters;
+    std::vector<Id> chapterWard;  // a regent's chapter: the child they held the house for
     for (size_t i = 0; i < dyn.heads.size(); ++i) {
         int since = i < dyn.headSince.size() ? dyn.headSince[i] : 0;
-        if (!chapters.empty() && chapters.back().first == since) chapters.back().second = dyn.heads[i];
-        else chapters.push_back({since, dyn.heads[i]});
+        auto held = dyn.heldFor.find(i);
+        Id ward = held != dyn.heldFor.end() ? held->second : kNone;
+        if (!chapters.empty() && chapters.back().first == since) chapters.back().second = dyn.heads[i], chapterWard.back() = ward;
+        else chapters.push_back({since, dyn.heads[i]}), chapterWard.push_back(ward);
     }
     size_t chapter = 0;
     std::vector<int> reeveTerms(chapters.size(), 0);
@@ -209,7 +212,12 @@ int main(int argc, char** argv) {
         std::string nick = nickname(w, head, from, to, reeveTerms[c]);
         std::string years = std::to_string(w.config().startYear + from / kDaysPerYear) + "–" +
                             (c + 1 < chapters.size() || w.gameOver() ? std::to_string(w.config().startYear + to / kDaysPerYear) : "");
-        return "## 第 " + std::to_string(c + 1) + " 代　" + (nick.empty() ? "" : "「" + nick + "」") + w.fullName(head) +
+        int generation = 0;
+        for (size_t k = 0; k <= c; ++k) generation += chapterWard[k] == kNone ? 1 : 0;
+        if (chapterWard[c] != kNone)  // a regency is not a generation of its own
+            return "## 代管　" + std::string(nick.empty() ? "" : "「" + nick + "」") + w.fullName(head) + "（替 " + w.fullName(chapterWard[c]) +
+                   " 持家 " + years + "）";
+        return "## 第 " + std::to_string(generation) + " 代　" + (nick.empty() ? "" : "「" + nick + "」") + w.fullName(head) +
                "（家主 " + years + "）";
     };
     if (!chapters.empty()) md << chapterTitle(0) << "\n";

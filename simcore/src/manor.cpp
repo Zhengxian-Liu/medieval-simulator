@@ -38,11 +38,11 @@ void World::chargeMerchet(Id woman, bool outsideManor) {
 
 // Heriot and mortuary: when a villein tenant dies the lord takes the best beast
 // and the parish priest the second best.
-void World::chargeHeriot(Household& h, Id dead) {
+void World::chargeHeriot(Household& h, Id dead, double acres, double money) {
     const Person& d = people_[dead];
     if (d.free || lord_ == kNone || people_[lord_].household == kNone || h.id == people_[lord_].household || h.extinct) return;
-    if (h.acres < 1) return;
-    double beast = std::clamp(h.money * 0.15 + h.acres * 2, 20.0, 160.0);
+    if (acres < 1) return;
+    double beast = std::clamp(money * 0.15 + acres * 2, 20.0, 160.0);
     double heriot = std::min(h.money, beast);
     h.money -= heriot;
     households_[people_[lord_].household].money += heriot;

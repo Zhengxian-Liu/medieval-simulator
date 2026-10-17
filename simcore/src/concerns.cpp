@@ -167,6 +167,7 @@ void World::rollSeason() {
     lastSeasonNotes_.insert(lastSeasonNotes_.end(), seasonNotes_.begin(), seasonNotes_.end());
     seasonNotes_.clear();
     seasonWants();
+    electionNotice();
     if (lastSeasonNotes_.size() > 40) lastSeasonNotes_.erase(lastSeasonNotes_.begin(), lastSeasonNotes_.end() - 40);
     ++counters_["season"];
     bool concern = false, wish = false;
@@ -183,6 +184,15 @@ void World::seasonWants() {
     Id head = playerHead();
     if (head == kNone) return;
     int season = year() * 4 + month() / 3;
+    // A post the family wanted but its head can no longer stand for (a widow holds the house now, debt, age):
+    // said at once, not left to end as "taken by another house".
+    for (auto& wt : wants_)
+        if (wt.open && wt.kind == "office" && wt.house == playerHousehold_) {
+            std::string bar = officeBar(head, wt.office);
+            if (bar.empty()) continue;
+            dropWant(wt, "當不了");
+            log(1, "【差事】你家只好放下" + wantThing(wt) + "：" + bar + "。");
+        }
     EventRunner er(*this);
     std::vector<Id> members = households_[playerHousehold_].members;
     std::set<std::string> held;

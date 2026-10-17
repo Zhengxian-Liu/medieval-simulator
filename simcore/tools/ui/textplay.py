@@ -177,7 +177,15 @@ def render(v, full=False):
             out.append(f"  {ids}{it['thing']}（{it['holder']}）想要的：{ws or '沒人'}")
         for o in c.get("offices", []):
             who = f"{o['holder']}，到 {o['until']} 年" if o.get("holder") else "空著"
-            out.append(f"  {o['name']}：{who}{'（你家的）' if o.get('mine') else ''}")
+            if o.get("mine"):
+                tail = "（你家的）"
+            elif o.get("wanted"):
+                tail = "（你家想當）"
+            elif o.get("can"):
+                tail = f"（可以爭：act {{\"do\":\"want\",\"what\":\"office:{o['id']}\",\"object\":-1}}）"
+            else:
+                tail = f"（爭不了：{o.get('why', '')}）"
+            out.append(f"  {o['name']}：{who}{tail}")
         for pst in c.get("past", [])[:4]:
             out.append(f"  {pst['year']} {pst['thing']}：{pst['outcome']}")
     heard = [x for x in s.get("heard", []) if x.get("recent")]

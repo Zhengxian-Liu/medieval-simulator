@@ -35,7 +35,9 @@ static void checkInvariants(const World& w, const char* label) {
         // An heir held for (寡婦產 / 代管) is not the head, and is a child at home or away in service.
         if (h.ward != kNone) {
             const Person& wd = w.person(h.ward);
-            CHECK(wd.alive() && h.head != h.ward && ((wd.household == h.id && w.ageYears(wd) < 16.2) || wd.home == h.id), "ward not a child at home (or in service) held by another");
+            // At home (a child, or just back from the road and handed the house at the month's end), in service, or away.
+            bool held = wd.household == h.id || wd.home == h.id || (w.isAway(wd) && wd.awayFrom == h.id);
+            CHECK(wd.alive() && h.head != h.ward && held, "ward not this house's child, held by another");
         }
         bool headIn = false;
         for (Id m : h.members) {

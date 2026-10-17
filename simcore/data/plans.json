@@ -18,13 +18,13 @@
        {"id": "court_rival", "prompt": "另一個小伙子也在追 {target}，還在酒館裡放話。", "chance": 0.08, "options": [
          {"text": "在酒館跟情敵打一架", "log": "另一個小伙子也在追 {target}，{name} 跟他在酒館外打了一架。", "effects": [{"health": -8}, {"progress": 10}, {"trait_chance": {"trait": "scarred", "chance": 15}}], "ai": {"base": 8, "traits": {"brave": 10, "wrathful": 8, "craven": -8}}},
          {"text": "請神父幫忙說好話", "log": "{name} 請神父在 {target} 家人面前替自己說好話。", "effects": [{"money": -3}, {"progress": 8}], "ai": {"base": 8, "traits": {"pious": 6, "calm": 4}}}]},
-       {"id": "court_family_says_no", "chance": 0.06, "options": [
+       {"id": "court_family_says_no", "chance": 0.06, "conditions": {"poorer_than_target": true}, "options": [
          {"text": "繼續", "log": "{target} 的家人嫌 {name} 家太窮，叫{target_pron}別再理{pron}。", "effects": [{"progress": -25}]}]}
      ]},
 
-    {"id": "arrange_match", "name": "說親", "requires": "家主，存錢 40 便士以上，家裡有到了年紀的孩子", "notify_target": true, "desc": "替成年的兒女談一門親事。在這個時代，婚事是兩家人的生意。",
+    {"id": "arrange_match", "name": "說親", "requires": "家主，存錢 40 便士以上，家裡有到了年紀還沒成親的人", "notify_target": true, "desc": "替家裡成年未婚的人（兒女、弟妹、姪子）談一門親事。在這個時代，婚事是兩家人的生意。",
      "actor": {"is_head": true, "money_ge": 40},
-     "subject": {"pick": "any_child", "conditions": {"age": [15, 30], "married": false}},
+     "subject": {"pick": "kin_at_home", "conditions": {"age": [15, 40], "married": false, "not": {"occupation": ["priest", "monk", "nun"]}}},
      "target": {"pick": "villager", "conditions": {"opposite_sex": true, "not_kin": true, "married": false, "age": [15, 35], "same_class": true}},
      "max_months": 10,
      "progress": {"base": 7, "skill": {"charm": 0.8}, "reputation": 0.4, "opinion": 3},
@@ -34,7 +34,7 @@
      "fail": [{"reputation": -1}, {"deed": {"type": "refused_proposal", "doer": "target"}},
               {"if": {"cond": {"feud_ge": 1}, "then": [{"log": "  媒人回來說：「兩家的舊帳還沒算清，人家不想結這門親。」"}],
                       "else": [{"if": {"cond": {"reputation_lt": 0}, "then": [{"log": "  媒人回來說：「人家嫌我們家名聲不好。」"}],
-                                "else": [{"if": {"cond": {"money_lt": 120}, "then": [{"log": "  媒人回來說：「人家嫌我們家窮，嫁妝拿不出手。」"}],
+                                "else": [{"if": {"cond": {"poorer_than_target": true}, "then": [{"log": "  媒人回來說：「人家嫌我們家窮，嫁妝拿不出手。」"}],
                                           "else": [{"log": "  媒人回來說：「人家早就看上了別家。」"}]}}]}}]}}],
      "ai": {"base": 12, "traits": {"ambitious": 6, "gregarious": 3}, "if": [{"cond": {"ambition": "good_match"}, "add": 40}, {"cond": {"tradition": "well_married"}, "add": 10}]},
      "beats": [

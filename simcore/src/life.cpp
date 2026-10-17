@@ -258,7 +258,7 @@ void World::kill(Id id, const std::string& cause) {
     emit({"death", kNone, id, p.spouse != kNone && people_[p.spouse].alive() ? p.spouse : kNone, h.head == id});
     h.members.erase(std::remove(h.members.begin(), h.members.end(), id), h.members.end());
     if (h.head == id) {
-        onHeadDied(h, id);
+        Estate left = onHeadDied(h, id);
         if (id == lord_) {
             // The manor passes to the lord's heir, who carries his father's grudges at half strength like any heir.
             if (!h.extinct && h.head != kNone && h.head != id) {
@@ -268,15 +268,24 @@ void World::kill(Id id, const std::string& cause) {
                     if (oh.heldCreditor == id) oh.heldCreditor = h.head;
                 }
                 lord_ = h.head;
-                if (people_[lord_].sex == Sex::Male) people_[lord_].occupation = "lord";
-                log(1, "【領主】" + fullName(id) + " 去世了，" + (people_[lord_].father == id ? std::string(people_[lord_].sex == Sex::Male ? "他的兒子 " : "他的女兒 ") : std::string()) +
-                           fullName(lord_) + " 繼承了莊園，成了新的領主。");
+                if (h.ward != kNone) {
+                    // Held for a child: the one holding it acts as lord until the heir is grown.
+                    Person& r = people_[lord_];
+                    if (r.sex == Sex::Male && r.occupation != "lord") r.flags.insert("occ:" + r.occupation), r.occupation = "lord";
+                    log(1, "【領主】" + fullName(id) + " 去世了，莊園歸 " + fullName(h.ward) + "（" + std::to_string(int(ageYears(people_[h.ward]))) +
+                               " 歲），由 " + fullName(lord_) + " 代管到繼承人成年。");
+                } else {
+                    if (people_[lord_].sex == Sex::Male) people_[lord_].occupation = "lord";
+                    log(1, "【領主】" + fullName(id) + " 去世了，" + (people_[lord_].father == id ? std::string(people_[lord_].sex == Sex::Male ? "他的兒子 " : "他的女兒 ") : std::string()) +
+                               fullName(lord_) + " 繼承了莊園，成了新的領主。");
+                }
             }
             return;
         }
-        if (!h.extinct && h.head != kNone) {
-            chargeHeriot(h, id);
-            chargeEntryFine(h, h.head, id);
+        // The dues are on what the dead held, not on what an heir brought with them; none on one who only held it for a child.
+        if (!h.extinct && h.head != kNone && !left.regent) {
+            chargeHeriot(h, id, left.acres, left.money);
+            chargeEntryFine(h, h.ward != kNone ? h.ward : h.head, id, left.acres - left.freehold);
         }
     }
     // What was owed to the dead is owed to their house, to whoever heads it now (the manor's, if nobody is left).
@@ -328,11 +337,12 @@ void World::obituary(Id id) {
 // apprenticed in town) counts as if at home: he is called back for it.
 Id World::heirOf(const Household& h, Id dead) const {
     const Person& d = people_[dead];
-    if (h.ward != kNone && h.ward != dead && people_[h.ward].alive() && (people_[h.ward].household == h.id || people_[h.ward].home == h.id)) return h.ward;
+    if (h.ward != kNone && h.ward != dead && wardHeld(h)) return h.ward;
     auto inHouse = [&](Id x) {
         if (x == kNone || x == dead || !people_[x].alive()) return false;
         const Person& q = people_[x];
-        if (q.household == h.id) return true;
+        if (q.home != kNone && q.home != h.id) return false;  // a servant from another house: theirs, not ours
+        if (q.household == h.id || q.home == h.id) return true;
         const StationDef* sd = defs_.station(q.station);
         return isAway(q) && q.awayFrom == h.id && !(sd && sd->lasting);
     };
@@ -344,7 +354,11 @@ Id World::heirOf(const Household& h, Id dead) const {
                 best = c;
         return best;
     };
-    heir = eldest(d.children, Sex::Male);
+    // The dead's own lawful children: a by-blow raised under another name does not take the land.
+    std::vector<Id> children;
+    for (Id c : d.children)
+        if (d.dynasty == kNone || people_[c].dynasty == d.dynasty) children.push_back(c);
+    heir = eldest(children, Sex::Male);
     if (heir == kNone) {
         std::vector<Id> grandsons;
         for (Id c : d.children)
@@ -356,11 +370,12 @@ Id World::heirOf(const Household& h, Id dead) const {
             if (m != dead && people_[m].alive() && people_[m].flags.count("designated_heir") && people_[m].home == kNone &&
                 (heir == kNone || people_[m].birthDay < people_[heir].birthDay))
                 heir = m;
-    if (heir == kNone) heir = eldest(d.children, Sex::Female);
+    if (heir == kNone) heir = eldest(children, Sex::Female);
     if (heir == kNone && d.father != kNone) heir = eldest(people_[d.father].children, Sex::Male);
     // Of the blood but keeping a house of their own here: the dead's own kin first (a brother's son), men first,
     // then the eldest.
-    if (heir == kNone && d.dynasty != kNone) {
+    Id lordHouseId = lord_ != kNone ? people_[lord_].household : kNone;
+    if (heir == kNone && h.id != lordHouseId) {  // the manor stays in the lord's own family
         auto nearer = [&](const Person& a, const Person& b) {
             auto nephew = [&](const Person& x) { return d.father != kNone && x.father != kNone && people_[x.father].father == d.father; };
             if (nephew(a) != nephew(b)) return nephew(a);
@@ -369,9 +384,11 @@ Id World::heirOf(const Household& h, Id dead) const {
         };
         Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
         for (const auto& q : people_)
-            if (q.alive() && q.id != dead && q.dynasty == d.dynasty && q.household != kNone && q.household != h.id &&
+            // Blood, not name: a wife takes her husband's name but is no kin of his brother's.
+            if (q.alive() && q.id != dead && closeKin(q.id, dead) && q.household != kNone && q.household != h.id &&
                 q.household != lordHouse && households_[q.household].house != "manor" &&  // the manor is not given up for a cottage
-                households_[q.household].head == q.id && !households_[q.household].extinct && ageYears(q) >= 16 &&
+                households_[q.household].head == q.id && households_[q.household].ward == kNone &&  // not one holding for a child
+                !households_[q.household].extinct && ageYears(q) >= 16 &&
                 q.occupation != "priest" && (heir == kNone || nearer(q, people_[heir])))
                 heir = q.id;
     }
@@ -390,31 +407,20 @@ Id World::heirOf(const Household& h, Id dead) const {
     return heir;
 }
 
-void World::onHeadDied(Household& h, Id dead) {
+World::Estate World::onHeadDied(Household& h, Id dead) {
     recallServants(h.id);
-    // What the dead leaves, for the 【分家產】 line: before anyone moves in with their own.
-    double leftAcres = h.acres, leftFree = h.freehold, leftMoney = h.money;
-    std::string leftHouse = h.house;
-    size_t leftItems = h.items.size();
+    // What the dead leaves, for the 【分家產】 line and the lord's dues: before anyone moves in with their own.
+    Estate left{h.acres, h.freehold, h.money, h.house, h.items.size(), false};
+    // One holding the land for a child dies: it stays the child's, and owes no death duty or entry fine of its own.
+    left.regent = h.ward != kNone && h.ward != dead && wardHeld(h);
+    const Id heldFor = left.regent ? h.ward : kNone;
     Id heir = heirOf(h, dead);
     if (heir != kNone && isAway(people_[heir])) setStation(heir, "home", 0, "回家接下家裡的地");
-    // Kin keeping a house of their own come home to the holding, with their household and goods.
-    std::string cameBack;
-    if (heir != kNone && people_[heir].household != kNone && people_[heir].household != h.id) {
-        Household& theirs = households_[people_[heir].household];
-        bool wasPlayer = theirs.id == playerHousehold_;
-        cameBack = fullName(heir) + (theirs.members.size() > 1 ? " 帶著一家人" : " ") + "搬回老家，接下這份地";
-        if (theirs.acres > 0) cameBack += "，自己租的 " + std::to_string(int(theirs.acres)) + " 畝也一併帶過來";
-        cameBack += "。";
-        mergeHousehold(theirs, h);
-        if (wasPlayer) playerHousehold_ = h.id;
-        noteLife(heir, "搬回老家接下家裡的地");
-    }
-
     bool player = inPlayerHouse(h.id);
     if (heir == kNone) {
         h.extinct = true;
         h.head = kNone;
+        h.ward = kNone;
         // Servants living here go back to their own families.
         for (Id m : std::vector<Id>(h.members))
             if (people_[m].home != kNone) {
@@ -429,29 +435,67 @@ void World::onHeadDied(Household& h, Id dead) {
         for (Id it : h.items) items_[it].lost = true;
         rehomeAway(h.id, kNone);
         if (player) followSurvivingBranch();
-        return;
+        return left;
+    }
+    for (Id m : h.members) people_[m].flags.erase("designated_heir");  // named for this succession only
+    const Person& d = people_[dead];
+    auto plural = [](double x) { return std::to_string(int(std::lround(x))); };
+    auto houseName = [](const std::string& k) {
+        return std::string(k == "stone" ? "石屋" : k == "timber" ? "木屋" : k == "manor" ? "莊園宅邸" : "泥牆茅屋");
+    };
+    auto estateText = [&](const Estate& e) {
+        std::string t = e.acres >= 0.5 ? "地 " + plural(e.acres) + " 畝" : "沒有地";
+        if (e.freehold >= 1) t += "（其中自由地 " + plural(e.freehold) + " 畝）";
+        t += "、" + houseName(e.house);
+        if (e.money >= 0.5) t += "、" + plural(e.money) + " 便士";
+        if (e.items > 0) t += "、家什 " + std::to_string(e.items) + " 件";
+        return t;
+    };
+
+    // The nearest of the blood is the family the player plays: the holding comes to the player's house, which stays
+    // where it is (its people, its wants, its ledger), rather than the family moving into a cottage.
+    if (!player && playerHousehold_ != kNone && people_[heir].household == playerHousehold_ &&
+        (lord_ == kNone || people_[lord_].household != h.id)) {
+        Household& ours = households_[playerHousehold_];
+        h.head = heir;
+        chargeHeriot(h, dead, left.acres, left.money);
+        h.head = kNone;
+        for (auto& oh : households_) {
+            if (oh.creditor == dead) oh.creditor = heir;
+            if (oh.heldCreditor == dead) oh.heldCreditor = heir;
+        }
+        std::string rel = kinWord(heir, dead);
+        log(1, "【繼承】" + (rel.empty() ? std::string() : rel + " ") + fullName(dead) + " 去世了，身後沒有更近的人，家業歸了你家的 " + fullName(heir) + "。");
+        log(1, "【分家產】" + d.firstName + " 留下" + estateText(left) + "，" + (h.members.empty() ? "" : "家裡的人也一起搬過來，") + "全併進你家。");
+        mergeHousehold(h, ours, "繼承時併進來");
+        noteLife(heir, "接下" + fullName(dead) + "的家業");
+        chargeEntryFine(ours, heir, dead, left.acres - left.freehold);
+        return left;
     }
 
     h.head = heir;
-    h.ward = kNone;
+    if (!left.regent) h.ward = kNone;
     // An heir under 16: the widow (or the eldest grown kinsman at home) holds the land for them until then.
     Id regent = kNone;
     if (ageYears(people_[heir]) < 16) {
-        const Person& d = people_[dead];
-        if (d.spouse != kNone && people_[d.spouse].alive() && people_[d.spouse].household == h.id && ageYears(people_[d.spouse]) >= 16)
+        if (d.spouse != kNone && people_[d.spouse].alive() && people_[d.spouse].household == h.id && ageYears(people_[d.spouse]) >= 16 &&
+            people_[d.spouse].home == kNone)
             regent = d.spouse;
         for (int pass = 0; pass < 2 && regent == kNone; ++pass)
             for (Id m : h.members) {
                 const Person& q = people_[m];
-                if (m == heir || m == dead || !q.alive() || q.home != kNone || ageYears(q) < 18) continue;
-                if (pass == 0 && q.dynasty != people_[heir].dynasty) continue;  // the blood first, then anyone grown at home
+                if (m == heir || m == dead || !q.alive() || q.home != kNone || ageYears(q) < 16) continue;
+                if (pass == 0 && !closeKin(m, heir)) continue;  // the blood first, then anyone grown at home
                 if (regent == kNone || q.birthDay < people_[regent].birthDay) regent = m;
             }
     }
     if (regent != kNone) {
+        if (!left.regent) h.wardLine = dead;  // whose heirs the land is held for (the line, should this child be lost)
         h.ward = heir;
         heir = regent;
         h.head = regent;
+    } else {
+        h.ward = kNone;
     }
     // The house goes on, but to someone not of the player's blood (a widower who married in, a
     // stepchild): the family line ends here unless another branch carries it. With a minor heir held for, it is the
@@ -486,18 +530,30 @@ void World::onHeadDied(Household& h, Id dead) {
             h.ward = kNone;
         }
     }
+    // Kin keeping a house of their own come to the holding, with their household and goods.
+    std::string cameBack;
+    if (people_[heir].household != kNone && people_[heir].household != h.id) {
+        Household& theirs = households_[people_[heir].household];
+        cameBack = fullName(heir) + (theirs.members.size() > 1 ? " 帶著一家人" : " ") + "搬過來，接下這份地";
+        if (theirs.acres >= 0.5) cameBack += "，自家原有的 " + plural(theirs.acres) + " 畝也一併帶過來";
+        cameBack += "。";
+        mergeHousehold(theirs, h, "搬來接家業時帶過來");
+        noteLife(heir, "搬進" + fullName(dead) + "家，接下那份地");
+    }
     noteLife(heir, h.ward != kNone ? "替" + shortName(h.ward) + "持家" : "當了家");
     settleAsHead(heir);
-    inheritRegard(dead, heir);
-    if (h.ward != kNone) inheritRegard(dead, h.ward);
+    if (!left.regent) {
+        inheritRegard(dead, heir);
+        if (h.ward != kNone) inheritRegard(dead, h.ward);
+    }
     if (player && outside(h.ward != kNone ? h.ward : heir)) {
         log(1, "房子和地傳給了 " + fullName(heir) + "，可是" + fullName(heir) + "不姓 " + dynasties_[playerDynasty_].surname + "。");
         h.dynasty = people_[heir].dynasty;
         followSurvivingBranch(true);
-        return;
+        return left;
     }
     for (Id it : h.items) items_[it].owners.push_back(heir);
-    if (!player) return;
+    if (!player) return left;
 
     Person& hp = people_[heir];
     // What the family wanted of the old head (to be comforted, a match spoken for) is not what they want of the new.
@@ -507,27 +563,34 @@ void World::onHeadDied(Household& h, Id dead) {
     }
     dynasties_[playerDynasty_].heads.push_back(heir);
     dynasties_[playerDynasty_].headSince.push_back(day_);
-    const Person& d = people_[dead];
+    if (h.ward != kNone) dynasties_[playerDynasty_].heldFor[dynasties_[playerDynasty_].heads.size() - 1] = h.ward;
     if (!cameBack.empty()) log(1, cameBack);
     std::string line;
+    // Namesakes (a son named for his father): the dead is "已故的…", the heir by what they were to the dead.
+    bool same = d.firstName == hp.firstName || (h.ward != kNone && people_[h.ward].firstName == d.firstName);
+    std::string deadRel = kinWord(dead, heir);
+    std::string heirName = d.firstName == hp.firstName && !deadRel.empty() ? deadRel + " " + hp.firstName : hp.firstName;
+    std::string deadName = same ? "已故的" + d.firstName : d.firstName;
     if (h.ward != kNone) {
         const Person& wd = people_[h.ward];
         std::string rel = kinWord(h.ward, heir);
-        line = "【繼承】家業歸 " + fullName(h.ward) + "（" + std::to_string(int(ageYears(wd))) + " 歲），" + (wd.sex == Sex::Male ? "他" : "她") +
-               "還小，由" + (rel.empty() ? "" : rel + " ") + fullName(heir) + " 代為持家，等" + (wd.sex == Sex::Male ? "他" : "她") +
-               "滿 16 歲再交出去。往後由你扮演 " + hp.firstName + "。";
+        std::string pron = wd.sex == Sex::Male ? "他" : "她";
+        line = "【繼承】家業歸 " + fullName(h.ward) + "（" + std::to_string(int(ageYears(wd))) + " 歲），" + pron +
+               "還小，由" + (rel.empty() ? "" : rel + " ") + fullName(heir) + " 代為持家，等" + pron + "滿 16 歲再交出去。往後由你扮演 " +
+               heirName + "。";
     } else {
         line = "【繼承】" + fullName(heir) + "（" + std::to_string(int(ageYears(hp))) + " 歲）成為新的家主。";
     }
     log(1, line);
     // What came down, and to whom (分家產): nothing changes hands unseen.
-    std::string left = "地 " + std::to_string(int(std::lround(leftAcres))) + " 畝";
-    if (leftFree >= 1) left += "（其中自由地 " + std::to_string(int(std::lround(leftFree))) + " 畝）";
-    left += std::string("、") + (leftHouse == "stone" ? "石屋" : leftHouse == "timber" ? "木屋" : leftHouse == "manor" ? "莊園宅邸" : "泥牆茅屋") + "、" + std::to_string(int(std::lround(leftMoney))) + " 便士";
-    if (leftItems > 0) left += "、家什 " + std::to_string(leftItems) + " 件";
-    log(1, "【分家產】" + d.firstName + " 留下" + left + "，全歸這個家，由 " + hp.firstName + " 掌管。" +
-               (h.acres > leftAcres + 0.5 ? "連同帶回來的，家裡現在有地 " + std::to_string(int(std::lround(h.acres))) + " 畝、" +
-                                                std::to_string(int(std::lround(h.money))) + " 便士。" : ""));
+    std::string merged = h.acres > left.acres + 0.5 ? "連同帶過來的，家裡現在有地 " + plural(h.acres) + " 畝" +
+                                                          (h.money >= 0.5 ? "、" + plural(h.money) + " 便士" : "") + "。"
+                                                    : "";
+    if (left.regent)
+        log(1, "【分家產】" + deadName + " 代管的家業（" + estateText(left) + "）照舊是 " + people_[heldFor].firstName + " 的，" +
+                   (heir == heldFor ? "沒有別人能代管，由" + people_[heldFor].firstName + "自己當家。" : "改由 " + heirName + " 接著代管。") + merged);
+    else
+        log(1, "【分家產】" + deadName + " 留下" + estateText(left) + "，全歸這個家，由 " + heirName + " 掌管。" + merged);
     for (Id it : h.items) {
         const Item& item = items_[it];
         if (item.owners.size() >= 3)
@@ -539,9 +602,12 @@ void World::onHeadDied(Household& h, Id dead) {
     if (!d.ambition.empty()) dynasties_[playerDynasty_].regret = d.ambition;
     hp.ambition.clear();
     if (ageYears(hp) >= 16) chooseAmbition(hp);
+    return left;
 }
 
-void World::mergeHousehold(Household& from, Household& to) {
+// Two households become one (an heir with a house of their own takes up the holding): people, goods, land, money and
+// debts, the better house and the trade, and what the village knows the house is after or owes.
+void World::mergeHousehold(Household& from, Household& to, const std::string& how) {
     if (from.id == to.id || from.extinct) return;
     for (Id x : from.members) {
         people_[x].household = to.id;
@@ -551,15 +617,47 @@ void World::mergeHousehold(Household& from, Household& to) {
         items_[it].household = to.id;
         to.items.push_back(it);
     }
-    moveLand(from.id, to.id, from.acres, LandPick::CustomaryFirst, "搬回老家時帶過來");
+    moveLand(from.id, to.id, from.acres, LandPick::CustomaryFirst, how);
     to.money += from.money;
     to.food += from.food;
     to.firewood += from.firewood;
-    to.debt += from.debt;  // what they owed comes with them
-    if (to.creditor == kNone) to.creditor = from.creditor;
+    auto rank = [](const std::string& k) { return k == "manor" ? 3 : k == "stone" ? 2 : k == "timber" ? 1 : 0; };
+    if (rank(from.house) > rank(to.house)) to.house = from.house;
+    if (to.trade.empty() && !from.trade.empty()) to.trade = from.trade, to.tradeLet = from.tradeLet;
+    // What they owed comes with them, still owed to whom it was owed.
+    auto owe = [&](double amount, Id creditor) {
+        if (amount <= 0.5) return;
+        if (to.debt <= 0.5) to.debt = amount, to.creditor = creditor;
+        else if (to.creditor == creditor) to.debt += amount;
+        else if (to.heldDebt <= 0.5 || to.heldCreditor == creditor) to.heldDebt += amount, to.heldCreditor = creditor;
+        else to.debt += amount;  // a third creditor: lumped with the first, the books of a village are not so fine
+    };
+    owe(from.debt, from.creditor);
+    owe(from.heldDebt, from.heldCreditor);
+    to.debtYears = std::max(to.debtYears, from.debtYears);
+    to.noOxUntil = std::max(to.noOxUntil, from.noOxUntil);
+    to.rentFactor = std::max(to.rentFactor, from.rentFactor);
+    for (const auto& [k, v] : from.ledger) to.ledger[k] += v;
+    // The village's view of the old house is now of this one: its wants, the fine it owes, its servants away.
+    for (auto& wt : wants_)
+        if (wt.open && wt.house == from.id) {
+            bool dup = false;
+            for (const auto& o : wants_)
+                dup = dup || (o.open && o.house == to.id && o.kind == wt.kind && o.object == wt.object && o.office == wt.office);
+            if (dup) dropWant(wt, "兩家併了");
+            else wt.house = to.id;
+        }
+    for (auto& f : fines_)
+        if (f.house == from.id) f.house = to.id;
+    for (auto& p : people_) {
+        if (!p.alive()) continue;
+        if (p.home == from.id) p.home = to.id;
+        if (p.flags.erase("apprentice_at_" + std::to_string(from.id))) p.flags.insert("apprentice_at_" + std::to_string(to.id));
+    }
     from.members.clear();
     from.items.clear();
-    from.money = from.food = from.firewood = from.debt = 0;
+    from.money = from.food = from.firewood = from.debt = from.heldDebt = 0;
+    from.creditor = from.heldCreditor = kNone;
     from.head = kNone;
     from.ward = kNone;
     from.extinct = true;
@@ -588,45 +686,83 @@ void World::inheritRegard(Id dead, Id heir) {
     }
 }
 
-// An heir the land was held for comes of age, or is gone: the house is theirs, or stays with whoever holds it.
+bool World::wardHeld(const Household& h) const {
+    if (h.ward == kNone) return false;
+    const Person& w = people_[h.ward];
+    if (!w.alive()) return false;
+    if (w.household == h.id || w.home == h.id) return true;  // at home, or serving in another house for a few years
+    const StationDef* sd = defs_.station(w.station);
+    return isAway(w) && w.awayFrom == h.id && !(sd && sd->lasting);  // at school, in town, at the war: coming back
+}
+
+// The house passes from whoever held it for a child to the child, now grown (or to the next of the line).
+void World::handOver(Household& h, Id to, const std::string& why) {
+    Id regent = h.head;
+    Person& w = people_[to];
+    h.ward = kNone;
+    h.wardLine = kNone;
+    h.head = to;
+    if (regent != kNone && regent == lord_) {  // the manor's heir comes of age: the lordship is theirs now
+        for (auto& oh : households_) {
+            if (oh.creditor == regent) oh.creditor = to;
+            if (oh.heldCreditor == regent) oh.heldCreditor = to;
+        }
+        lord_ = to;
+        if (w.sex == Sex::Male) w.occupation = "lord";
+        Person& r = people_[regent];
+        for (auto it = r.flags.begin(); it != r.flags.end(); ++it)
+            if (it->rfind("occ:", 0) == 0) {
+                r.occupation = it->substr(4);  // back to what they were before holding the manor
+                r.flags.erase(it);
+                break;
+            }
+        log(1, "【領主】" + fullName(to) + " 從 " + fullName(regent) + " 手上接下莊園。");
+    }
+    noteLife(to, why);
+    settleAsHead(to);
+    if (!inPlayerHouse(h.id)) return;
+    for (Id m : h.members) {
+        people_[m].want.clear();
+        people_[m].wantSince = -1;
+    }
+    dynasties_[playerDynasty_].heads.push_back(to);
+    dynasties_[playerDynasty_].headSince.push_back(day_);
+    std::string pron = w.sex == Sex::Male ? "他" : "她";
+    log(1, "【交家】" + fullName(to) + "（" + std::to_string(int(ageYears(w))) + " 歲）" + why + "，" +
+               (regent != kNone ? fullName(regent) + " 把家交給了" + pron + "。" : "從此當家。") + "往後由你扮演 " + w.firstName + "。");
+    if (regent != kNone && !people_[regent].ambition.empty()) dynasties_[playerDynasty_].regret = people_[regent].ambition;
+    if (regent != kNone) people_[regent].ambition.clear();
+    w.ambition.clear();
+    chooseAmbition(w);
+}
+
+// An heir the land was held for comes of age, or is lost: the house is theirs, or goes to the next of the line.
 void World::monthlyWards() {
     for (auto& h : households_) {
         if (h.extinct || h.ward == kNone) continue;
-        Person& w = people_[h.ward];
-        bool inService = w.home == h.id;  // serving in another house for a few years: still the heir
-        if (!w.alive() || (w.household != h.id && !inService)) {
+        if (!wardHeld(h)) {
+            // Dead, or settled away for good: the next of the same line, not the one holding the land.
+            Id lost = h.ward;
             h.ward = kNone;
+            Id next = h.wardLine != kNone ? heirOf(h, h.wardLine) : kNone;
+            if (next == kNone || next == h.head || people_[next].household != h.id) {
+                h.wardLine = kNone;
+                continue;
+            }
+            if (ageYears(people_[next]) < 16) {
+                h.ward = next;
+                if (inPlayerHouse(h.id))
+                    log(1, "【繼承】家業本來是 " + people_[lost].firstName + " 的，如今改歸 " + fullName(next) + "（" +
+                               std::to_string(int(ageYears(people_[next]))) + " 歲），仍由 " + fullName(h.head) + " 代為持家。");
+                continue;
+            }
+            handOver(h, next, "接下" + people_[lost].firstName + "沒能接的家業");
             continue;
         }
-        if (ageYears(w) < 16 || inService) continue;  // a servant takes the house over when the term is up
-        Id regent = h.head;
-        h.ward = kNone;
-        h.head = w.id;
-        if (regent != kNone && regent == lord_) {  // the manor's heir comes of age: the lordship is theirs now
-            for (auto& oh : households_) {
-                if (oh.creditor == regent) oh.creditor = w.id;
-                if (oh.heldCreditor == regent) oh.heldCreditor = w.id;
-            }
-            lord_ = w.id;
-            if (w.sex == Sex::Male) w.occupation = "lord";
-            log(1, "【領主】" + fullName(w.id) + " 成年了，從 " + fullName(regent) + " 手上接下莊園。");
-        }
-        noteLife(w.id, "滿 16 歲，當了家");
-        settleAsHead(w.id);
-        if (regent != kNone) inheritRegard(regent, w.id);
-        if (!inPlayerHouse(h.id)) continue;
-        for (Id m : h.members) {
-            people_[m].want.clear();
-            people_[m].wantSince = -1;
-        }
-        dynasties_[playerDynasty_].heads.push_back(w.id);
-        dynasties_[playerDynasty_].headSince.push_back(day_);
-        log(1, "【交家】" + fullName(w.id) + " 滿 16 歲了，" + (regent != kNone ? fullName(regent) + " 把家交給了" + std::string(w.sex == Sex::Male ? "他" : "她") + "。" : "從此當家。") +
-                   "往後由你扮演 " + w.firstName + "。");
-        if (regent != kNone && !people_[regent].ambition.empty()) dynasties_[playerDynasty_].regret = people_[regent].ambition;
-        if (regent != kNone) people_[regent].ambition.clear();
-        w.ambition.clear();
-        chooseAmbition(w);
+        Person& w = people_[h.ward];
+        // A servant takes the house over when the term is up; one away at school or in town, when back.
+        if (ageYears(w) < 16 || w.household != h.id || w.home != kNone) continue;
+        handOver(h, w.id, ageYears(w) < 17 ? "滿 16 歲，當了家" : "回到家裡，當了家");
     }
 }
 
@@ -664,6 +800,8 @@ void World::marry(Id man, Id woman) {
             if (x->station == "servant") setStation(x->id, "home", 0, "");  // the wedding itself is the note (noteLife below)
             if (x == &m && x->household != kNone && households_[x->household].head != man && !households_[home].extinct)
                 moveTo(man, home);
+            // A girl the land is held for marries from her own house, as the heiress she is.
+            if (x == &w && households_[home].ward == woman && !households_[home].extinct) moveTo(woman, home);
         }
     recordDeed("married", man, woman);
     noteLife(man, "娶了" + fullName(woman));
@@ -709,7 +847,22 @@ void World::marry(Id man, Id woman) {
     int imp = inPlayerHouse(m.household) || inPlayerHouse(w.household) ? 1 : 2;
 
     Id oldHouse = w.household;
-    bool heiress = oldHouse != kNone && households_[oldHouse].head == woman;
+    bool wardBride = oldHouse != kNone && households_[oldHouse].ward == woman;
+    bool regentBride = oldHouse != kNone && households_[oldHouse].head == woman && households_[oldHouse].ward != kNone;
+    bool heiress = oldHouse != kNone && (households_[oldHouse].head == woman || wardBride);
+    // A widow holding the land for a child weds a man with a house of his own: the land is the child's, so she goes
+    // to him and the eldest grown at home (or the child alone) holds it on; with nobody to, his house joins the child's.
+    Id holdsOn = kNone;
+    if (regentBride && households_[m.household].head == man && !inPlayerHouse(oldHouse)) {
+        const Household& oh = households_[oldHouse];
+        for (Id x : oh.members) {
+            const Person& q = people_[x];
+            if (x == woman || x == oh.ward || !q.alive() || q.home != kNone || ageYears(q) < 16) continue;
+            if (holdsOn == kNone || q.birthDay < people_[holdsOn].birthDay) holdsOn = x;
+        }
+        if (holdsOn == kNone && people_[oh.ward].household == oldHouse) holdsOn = oh.ward;
+        if (holdsOn != kNone) heiress = false;
+    }
     // A family with no son keeps one daughter at home; her husband marries in to carry the land.
     if (!heiress && inPlayerHouse(oldHouse) && households_[m.household].head != man) {
         bool heirAtHome = false;
@@ -728,26 +881,11 @@ void World::marry(Id man, Id woman) {
     if (heiress && households_[m.household].head == man) {
         // Two heads marry: her household, land and goods join his, unless hers is the player's,
         // in which case he brings his into hers so the player's line goes on.
-        bool intoHers = inPlayerHouse(oldHouse);
+        // A regent's house is the child's: his joins it (unless his is the player's, which stays where it is).
+        bool intoHers = inPlayerHouse(oldHouse) || (regentBride && !inPlayerHouse(m.household));
         Household& from = households_[intoHers ? m.household : oldHouse];
         Household& to = households_[intoHers ? oldHouse : m.household];
-        for (Id x : from.members) {
-            people_[x].household = to.id;
-            to.members.push_back(x);
-        }
-        for (Id it : from.items) {
-            items_[it].household = to.id;
-            to.items.push_back(it);
-        }
-        moveLand(from.id, to.id, from.acres, LandPick::CustomaryFirst, "成親時帶進門");
-        to.money += from.money;
-        to.food += from.food;
-        from.members.clear();
-        from.items.clear();
-        from.money = from.food = 0;
-        from.head = kNone;
-        from.extinct = true;
-        rehomeAway(from.id, to.id);
+        mergeHousehold(from, to, "成親時帶進門");
         if (intoHers) {
             if (family) log(imp, fullName(man) + " 娶了 " + fullName(woman) + "，帶著家當搬進她家，兩家合為一戶。");
             return;
@@ -773,6 +911,13 @@ void World::marry(Id man, Id woman) {
         from.money -= dowry;
         households_[m.household].money += dowry;
         from.members.erase(std::remove(from.members.begin(), from.members.end(), woman), from.members.end());
+        if (regentBride && holdsOn != kNone) {
+            if (holdsOn == from.ward) from.ward = kNone, from.wardLine = kNone;
+            from.head = holdsOn;
+            if (inPlayerHouse(m.household) || inPlayerHouse(from.id))
+                log(1, "  " + fullName(woman) + " 改嫁出去，" + (from.ward != kNone ? fullName(holdsOn) + " 接著替 " + fullName(from.ward) + " 持家。"
+                                                                                  : fullName(holdsOn) + " 自己當家。"));
+        }
         std::string gift;
         Id movable = kNone;
         for (Id it : from.items)

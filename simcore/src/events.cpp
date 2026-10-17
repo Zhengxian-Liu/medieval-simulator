@@ -497,6 +497,13 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     if (k == "target_concern") return target != kNone && hasConcern(w.people_[target], v, p.id);
     if (k == "child_of_target") return target != kNone && (p.father == target || p.mother == target) == v.asBool();
     if (k == "parent_of_target") return target != kNone && (w.people_[target].father == p.id || w.people_[target].mother == p.id) == v.asBool();
+    if (k == "poorer_than_target") {
+        // Standing as a family weighs it in a match: land, savings, name (the same yardstick as an ask for a match).
+        if (target == kNone || !h || w.people_[target].household == kNone) return false;
+        const Household& th = w.households_[w.people_[target].household];
+        double ours = h->acres + h->money / 30 + p.reputation, theirs = th.acres + th.money / 30 + w.people_[target].reputation;
+        return (ours < theirs * 0.8) == v.asBool();
+    }
     if (k == "same_household") return target != kNone && (p.household == w.people_[target].household) == v.asBool();
     if (k == "opinion_from_target_ge") return target != kNone && w.opinion(target, p.id) >= v.asNumber();
     if (k == "opinion_from_target_lt") return target != kNone && w.opinion(target, p.id) < v.asNumber();

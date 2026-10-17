@@ -165,6 +165,7 @@ struct Household {
     double workBonus = 0;  // seasons spent bent over the work: a slightly better harvest
     double focusYield = 0; // this year's 年度重心 and side roads against the defaults (more hands in the field, a pack to the fair)
     Id ward = kNone;       // the heir under 16 while a widow or kinsman holds the land for them (寡婦產 / 代管)
+    Id wardLine = kNone;   // the head whose heir the ward is: should the ward be lost, the land goes to the next of that line
 };
 
 // A quarrel between two families that grows by stages (Crusader Kings-style story arc).
@@ -185,6 +186,7 @@ struct Dynasty {
     std::vector<std::string> traditions;
     std::vector<Id> heads;  // for the player dynasty: every head in order
     std::vector<int> headSince;  // day each of them became head
+    std::map<size_t, Id> heldFor;  // by index into heads: the child that head only held the house for (a regent, not a generation)
     double prestige = 0;
     std::string regret;          // the ambition the last head died without reaching; the next one may take it up
     Id townKin = kNone;          // a son sent to town to learn a trade (the town branch of the ladder)
@@ -627,7 +629,8 @@ public:
     const std::vector<Place>& places() const { return places_; }
     int placeTaken(const Place& pl) const;  // how many of its slots are filled
     bool placeOpen(Id master, const std::string& kind) const;
-    bool officeEligible(Id who, const std::string& id) const;
+    bool officeEligible(Id who, const std::string& id) const { return officeBar(who, id).empty(); }
+    std::string officeBar(Id who, const std::string& id) const;  // why they cannot stand for it: "" when they can
     const std::vector<Want>& wants() const { return wants_; }
     std::string wantThing(const Want& wt) const;   // "北田坡上那 3 畝", "莊頭的位子", "替威廉娶艾瑪"
     bool familyKnows(const Want& wt) const;        // the family's own, or the talk of it reached them
@@ -769,10 +772,19 @@ private:
     void yearlyAdulthood();
     void giveBirth(Person& mother);
     void kill(Id id, const std::string& cause);
-    void onHeadDied(Household& h, Id deadHead);
+    // What a head left behind (before an heir moved in with their own), for the lord's dues and the 【分家產】 line.
+    struct Estate {
+        double acres = 0, freehold = 0, money = 0;
+        std::string house;
+        size_t items = 0;
+        bool regent = false;  // the dead only held it for a child
+    };
+    Estate onHeadDied(Household& h, Id deadHead);
+    bool wardHeld(const Household& h) const;  // the ward is alive and still this house's: at home, in service, or away and coming back
+    void handOver(Household& h, Id to, const std::string& why);
     void obituary(Id id);
     void followSurvivingBranch(bool lineEnded = false);
-    void mergeHousehold(Household& from, Household& to);  // members, land, money, food and goods move in; `from` ends
+    void mergeHousehold(Household& from, Household& to, const std::string& how);  // the land notes: how it came  // members, land, money, food and goods move in; `from` ends
     void inheritRegard(Id dead, Id heir);  // the village's regard for the dead, half of it, passes to the one taking over
     void monthlyWards();                   // an heir held for turns 16: the land is handed over
     void marry(Id a, Id b);
@@ -798,7 +810,7 @@ private:
     // manor.cpp: serfdom, manorial dues and life-cycle service
     void moveTo(Id person, Id household);
     void chargeMerchet(Id woman, bool outsideManor);
-    void chargeHeriot(Household& h, Id dead);
+    void chargeHeriot(Household& h, Id dead, double acres, double money);  // on what the dead held
     void recallServants(Id household);
     void yearlyService();
     // Moves a person to another station: leaves the village for an away one, comes back for a home one.
@@ -888,6 +900,21 @@ private:
     // contest.cpp
     void setupOffices();
     void chooseOfficers();       // Michaelmas: the ale-taster and the hayward
+    // Elections (contest.cpp): who stands and how the heads of household vote. noise(max) is a random draw
+    // in [0, max) for a real vote and max / 2 for the forecast the family hears beforehand.
+    struct Tally {
+        std::map<Id, int> votes;
+        std::vector<Id> byWord;  // heads who promised the family's man their vote and kept it
+        std::vector<Id> grudge;  // heads an old feud with the family turned against him
+    };
+    double officeMerit(const Person& p, const std::string& id) const;
+    std::vector<Id> officeCandidates(const std::string& id, Id old, const std::function<double(double)>& noise) const;
+    Tally countVotes(const std::string& id, const std::vector<Id>& cands, Id old, const std::function<double(double)>& noise) const;
+    std::string tallyText(const std::vector<Id>& cands, const Tally& t, bool forecast) const;
+    std::string voteWhy(const Tally& t) const;  // "（艾爾家、柯克家答應過你，說到做到；…家記著舊仇…）"
+    Id currentReeve() const;
+    bool reeveDue() const;
+    void electionNotice();       // the season of a vote, before it: who stands, how it looks, whether the family can
     void setOffice(const std::string& id, Id holder, const std::string& how);
     void officeVacated(Id person);
     bool takePlace(Id master, const std::string& kind, Id who);
@@ -901,7 +928,7 @@ private:
     void fillPlaces();           // masters take on whom they like from those asking
     void oweFavour(Id debtor, Id creditor, double weight, const std::string& why);
     void callInFavour(Id debtor, Id creditor);
-    void chargeEntryFine(Household& h, Id heir, Id dead);
+    void chargeEntryFine(Household& h, Id heir, Id dead, double customary);
     void monthlyFines();
     void resolveFine(EntryFine& f);
     void forfeitForFine(Household& h, double share);

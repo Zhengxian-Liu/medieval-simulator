@@ -397,7 +397,7 @@ public:
             for (const auto& of : w.offices())
                 offs.push_back(Obj().text("id", of.id).text("name", of.name).text("holder", of.holder != kNone ? w.fullName(of.holder) : "")
                                    .b("mine", of.holder != kNone && w.people()[of.holder].household == hh).n("until", of.until)
-                                   .b("can", w.officeEligible(head, of.id)).b("wanted", w.wants().end() != std::find_if(w.wants().begin(), w.wants().end(), [&](const Want& x) {
+                                   .b("can", w.officeEligible(head, of.id)).text("why", w.officeBar(head, of.id)).b("wanted", w.wants().end() != std::find_if(w.wants().begin(), w.wants().end(), [&](const Want& x) {
                                        return x.open && x.house == hh && x.kind == "office" && x.office == of.id; })).done());
             Obj c;
             c.raw("items", arr(items)).raw("past", arr(past)).raw("offices", arr(offs));
