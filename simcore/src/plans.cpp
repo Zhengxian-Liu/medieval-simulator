@@ -383,6 +383,12 @@ void World::monthlyPlans() {
             plans_.erase(plans_.begin() + static_cast<long>(i));
             continue;
         }
+        // A suit to the lord goes on to the new lord when the old one dies: it is the manor that is asked.
+        if (plan.target != kNone && !people_[plan.target].alive() && pd && pd->target.stringOr("pick", "") == "lord" && lord_ != kNone &&
+            lord_ != plan.target && people_[lord_].alive()) {
+            plan.target = lord_;
+            if (inPlayerHouse(actor.household)) log(1, "「" + pd->name + "」改向新的領主 " + fullName(lord_) + " 說。");
+        }
         if (plan.target != kNone && (!people_[plan.target].alive() || people_[plan.target].household == kNone)) {
             endPlan(i, "lost_target");
             continue;

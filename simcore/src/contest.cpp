@@ -526,6 +526,7 @@ Id World::addWant(Id house, const std::string& kind, Id object, Id subject, cons
     // What they are after goes round the village like any news (the family's own included: others hear of it).
     Id about = kind == "place" || kind == "match" ? subject : kind == "office" && subject != kNone ? subject : head;
     std::string said = thing;
+    if (kind == "office") if (const Office* o = this->office(office)) said = o->name;  // "想當看籬人", not "想當看籬人的位子"
     if (kind == "place") said = (households_[object].dynasty != kNone ? dynasties_[households_[object].dynasty].surname : "") + (office == "apprentice" ? "家當學徒" : "家幫傭");
     wt.news = addNews("want:" + kind, about, kind == "match" ? object : kNone, house, kNone, said);
     wants_.push_back(wt);

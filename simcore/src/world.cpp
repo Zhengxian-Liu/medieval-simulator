@@ -181,11 +181,15 @@ std::string World::fullName(Id id) const {
         }
         // An elder namesake of the house who died lately still holds the plain name for a while: the son stays
         // 小威廉 the first years after his father's death, rather than turning into the one just buried.
-        if (p.alive() && p.dynasty != kNone)
+        // (Only when this one would otherwise go plain and alone: with a younger namesake at home he stays plain, the
+        // child takes the 小, and nobody is a 二 to a dead man.)
+        if (p.alive() && p.dynasty != kNone && older == 0 && younger == 0)
             for (const auto& o : people_)
                 if (o.id != id && !o.alive() && o.household == p.household && o.dynasty == p.dynasty && o.firstName == p.firstName &&
-                    o.birthDay < p.birthDay && day_ - o.deathDay <= 5 * kDaysPerYear)
-                    ++older;
+                    o.birthDay < p.birthDay && day_ - o.deathDay <= 5 * kDaysPerYear) {
+                    older = 1;
+                    break;
+                }
         static const char* nth[] = {"二", "三", "四", "五", "六", "七", "八", "九", "十"};
         if (older > 0) s = (younger == 0 ? std::string("小") : std::string(nth[std::min(older, 9) - 1])) + s;
     }

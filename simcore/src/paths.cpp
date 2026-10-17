@@ -9,6 +9,9 @@
 namespace sim {
 
 std::string World::stationName(const Person& p) const {
+    // A servant is in someone else's house, seen from her own; under the player's roof she is serving the family.
+    if (p.station == "servant" && p.home != kNone && p.household != kNone && households_[p.household].dynasty != kNone)
+        return inPlayerHouse(p.household) ? "在你家幫傭" : "在" + dynasties_[households_[p.household].dynasty].surname + "家幫傭";
     const StationDef* sd = defs_.station(p.station.empty() ? "home" : p.station);
     return sd ? sd->name : p.station;
 }

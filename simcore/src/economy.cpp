@@ -452,11 +452,11 @@ void World::askToFeed(Household& h) {
         if (ageYears(people_[m]) < 12) ++children;
     std::string who = kin != kNone ? fullName(kin) + "（" + kinWord(ours, kin) + "）住的 " + fullName(h.head) + " 家" : "好朋友 " + fullName(h.head) + " 家";
     std::string sit = who + "只剩不到二十天的糧了" + (children ? "，" + std::to_string(children) + " 個孩子已經餓瘦了" : "") + "。";
-    int r = askPlayer("親人挨餓", sit, opts);
+    int r = askPlayer("親友挨餓", sit, opts);
     if (r < 0) r = static_cast<int>(opts.size()) - 1;  // no one to ask: the family does not give the house's bread away unasked
     int w = what[r];
     if (w == 3) {
-        log(1, "〔親人挨餓〕" + sit + "家裡沒有伸手。");
+        log(1, "〔親友挨餓〕" + sit + "家裡沒有伸手。");
         if (kin != kNone) addOpinion(kin, ours, "left_us_hungry", -10, 10);
         return;
     }
@@ -464,14 +464,14 @@ void World::askToFeed(Household& h) {
         double amount = daily * 90;
         ph.food -= amount;
         h.food += amount;
-        log(1, "〔親人挨餓〕" + fullName(ours) + " 讓人背了幾袋麥子送到 " + fullName(h.head) + " 家，夠他們吃到下一季。");
+        log(1, "〔親友挨餓〕" + fullName(ours) + " 讓人背了幾袋麥子送到 " + fullName(h.head) + " 家，夠他們吃到下一季。");
     } else if (w == 1) {
         ph.money -= coin;
         book(ph, "接濟別人", -coin);
         h.money += coin;
-        log(1, "〔親人挨餓〕" + fullName(ours) + " 送了 " + std::to_string(int(coin)) + " 便士到 " + fullName(h.head) + " 家買糧。");
+        log(1, "〔親友挨餓〕" + fullName(ours) + " 送了 " + std::to_string(int(coin)) + " 便士到 " + fullName(h.head) + " 家買糧。");
     } else {
-        log(1, "〔親人挨餓〕" + fullName(ours) + " 把 " + fullName(h.head) + " 家欠的債一筆勾銷，讓他們先顧著吃。");
+        log(1, "〔親友挨餓〕" + fullName(ours) + " 把 " + fullName(h.head) + " 家欠的債一筆勾銷，讓他們先顧著吃。");
         clearDebt(h);
     }
     ensureFood(h);

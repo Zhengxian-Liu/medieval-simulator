@@ -33,6 +33,7 @@ if args[:1] == ["--port"]:
     args = args[2:]
 BASE = f"http://127.0.0.1:{port}"
 CURSOR = os.path.join(os.environ.get("TMPDIR", "/tmp"), f".textplay_cursor_{port}")  # where the last view stopped
+HOUSE = {"cottage": "泥牆茅屋", "timber": "木屋", "stone": "石屋", "manor": "莊園宅邸"}
 OPEN = urllib.request.build_opener(urllib.request.ProxyHandler({})).open  # never through a system proxy
 
 
@@ -103,7 +104,7 @@ def render(v, full=False):
         return "\n".join(out)
     season = bool(a) and a.get("kind") == "season"
     d, h = s["date"], s["house"]
-    out.append(f"\n=== {d['year']} 年 {d['season']} ｜ {h['surname']}家（{h['standing']}，住 {h['home']}）｜ 錢 {h['money']} 便士 ｜ 存糧 {h['food_days']} 天 ｜ "
+    out.append(f"\n=== {d['year']} 年 {d['season']} ｜ {h['surname']}家（{h['standing']}，住 {HOUSE.get(h['home'], h['home'])}）｜ 錢 {h['money']} 便士 ｜ 存糧 {h['food_days']} 天 ｜ "
                f"地 {h['acres']} 畝（自有 {h['freehold']}）｜ 欠債 {h['debt']}" + ("｜ 今年缺糧" if h.get("lean") else "")
                + (f" ｜ 這一季還有 {s.get('time_left')} 段空閒" if season else ""))
     if season and s.get("regency"):
