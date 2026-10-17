@@ -489,7 +489,11 @@ public:
         }
         o.raw("chronicle", arr(lines));
         // What the last season came to, until the next one; and what has moved since, so the header's money adds up.
-        std::string sum = summary.empty() ? "" : "【上一季】\n" + summary;
+        std::string sum = summary;
+        // seasonChanges says 這一季 / 這 N 季 while the season is running; shown afterwards it is the one just past.
+        if (sum.rfind("這一季", 0) == 0) sum = "上一季" + sum.substr(std::string("這一季").size());
+        else if (sum.rfind("這 ", 0) == 0) sum = "過去 " + sum.substr(std::string("這 ").size());
+        else if (!sum.empty()) sum = "【上一季】\n" + sum;
         if (w.playerHead() != kNone && seasonStart.head != kNone &&
             std::abs(w.households()[w.playerHousehold()].money - seasonStart.money) >= 1)
             sum += "【這一季到現在】" + w.moneySince(seasonStart) + "\n";

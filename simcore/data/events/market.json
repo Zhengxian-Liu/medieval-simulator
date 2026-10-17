@@ -1,6 +1,6 @@
 {
   "events": [
-    {"id": "land_offer", "title": "有地要賣", "prompt": "{target} 家{sell_reason}，托人來問你家要不要買下他家 4 畝地，開價 260 便士。",
+    {"id": "land_offer", "title": "有地要賣", "prompt": "{target} 家{sell_reason}，托人來問你家要不要買下{target_pron}家 4 畝地，開價 260 便士。",
      "scope": "player_head", "pulse": "yearly", "chance": 0.55, "cooldown_years": 2,
      "conditions": {"is_head": true, "money_ge": 260, "not": {"occupation": ["lord", "lady", "priest"]}},
      "target": {"pick": "random_villager", "conditions": {"is_head": true, "would_sell": true, "acres_ge": 8, "not": {"occupation": ["lord", "lady", "priest"]}}},
@@ -8,7 +8,7 @@
        {"text": "買下（260 便士）", "log": "{name} 數了 260 便士，從 {target} 家手上買下 4 畝地。",
         "effects": [{"take_acres": {"acres": 4, "price": 260}}, {"target_opinion": {"value": 6, "mod": "helped_us", "years": 6}}, {"deed": {"type": "land_bought"}}],
         "ai": {"base": 8, "traits": {"ambitious": 8, "greedy": 2, "content": -4}}},
-       {"text": "壓價到 200 便士（他家急著用錢，也許肯）",
+       {"text": "壓價到 200 便士（不一定肯）",
         "log": "{name} 只肯出 200 便士。",
         "effects": [{"random": {"percent": 50,
             "effects": [{"log": "  {target_first}嘆了口氣，答應了。"}, {"take_acres": {"acres": 4, "price": 200}}, {"target_opinion": {"value": -8, "mod": "haggled", "years": 8}}, {"deed": {"type": "land_bought"}}],
