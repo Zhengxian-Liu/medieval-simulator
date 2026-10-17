@@ -195,7 +195,7 @@
 
     {"id": "path_midlife", "title": "半輩子", "prompt": "{name} {age} 歲了，沒有成家，一直在家裡幫忙。往後就這樣過一輩子，還是換條路走？",
      "scope": "anyone", "pulse": "yearly", "chance": 0.3, "parent_decides": true,
-     "conditions": {"age": [23, 45], "station": "home", "no_flag": "midlife_decided", "is_head": false, "married": false},
+     "conditions": {"age": [23, 45], "station": "home", "no_flag": "midlife_decided", "is_head": false, "married": false, "widowed": false},
      "options": [
        {"text": "留在家裡", "log": "", "effects": [{"set_flag": "midlife_decided"}], "ai": {"base": 10, "traits": {"content": 6}, "if": [{"cond": {"heir_apparent": true}, "add": 40}]}},
        {"text": "進修道院（帶 40 便士入院的布施）", "conditions": {"sex": "male", "money_ge": 40},

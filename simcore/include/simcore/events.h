@@ -36,6 +36,7 @@ private:
     Id pickTarget(const EventDef& ev, const Person& p);
     Id cause_ = kNone;  // deed being answered, for causality
     Id deed_ = kNone;   // the deed a signal-driven event is about
+    double writtenOff_ = 0;  // what target_lord_debt last wrote off the manor book without payment
     bool eligible(const EventDef& ev, const Person& p, Id playerHead) const;
     void fire(const EventDef& ev, Person& p, Id target);
     const std::string& pickLog(const OptionDef& o, Id who);  // a variant this person was not told last time

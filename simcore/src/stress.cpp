@@ -81,14 +81,15 @@ bool World::hasUntoldSecret(Id id, Id to) const {
     return false;
 }
 
-// "1317 年背著羅伯特和尼可拉斯·史密斯好過" / "1322 年的「放火」，苦主是威廉·格林"
-std::string World::secretWords(Id deed) const {
+// "1317 年背著羅伯特和尼可拉斯·史密斯好過" / "1322 年的「放火」，苦主是威廉·格林"; told to the one wronged, 你.
+std::string World::secretWords(Id deed, Id to) const {
     const Deed& d = deeds_[deed];
     std::string year = std::to_string(cfg_.startYear + d.day / kDaysPerYear) + " 年";
     if (d.type == "affair" && d.with != kNone)
-        return year + (d.target != kNone ? "背著" + people_[d.target].firstName : std::string()) + "和 " + fullName(d.with) + " 好過";
+        return year + (d.target != kNone ? "背著" + (d.target == to ? std::string("你") : people_[d.target].firstName) : std::string()) + "和 " +
+               (d.with == to ? std::string("你") : fullName(d.with)) + " 好過";
     std::string out = describeDeed(deed);
-    if (d.target != kNone && d.target != d.actor) out += "，苦主是 " + fullName(d.target);
+    if (d.target != kNone && d.target != d.actor) out += "，苦主是" + (d.target == to ? std::string("你") : " " + fullName(d.target));
     return out;
 }
 
@@ -96,7 +97,7 @@ std::string World::secretWords(Id deed) const {
 Id World::knownFlame(Id who, Id member) const {
     if (who == kNone || member == kNone) return kNone;
     for (const auto& b : beliefs_[who]) {
-        if (b.culprit != member || b.confidence < 60) continue;
+        if (b.culprit != member || b.confidence < 60 || deedSpoken(b.deed) || people_[member].flags.count("adulterer")) continue;
         const Deed& d = deeds_[b.deed];
         if (d.type == "affair" && d.actor == member && d.with != kNone) return d.with;
     }

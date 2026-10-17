@@ -635,6 +635,8 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     if (k == "kin_boy_at_home") return (w.boyForMaster(p) != kNone) == v.asBool();
     if (k == "hired") return (h && h->hiredUntil > w.day_) == v.asBool();
     if (k == "hire_master") return (h && w.hireMaster(h->id) != kNone) == v.asBool();
+    if (k == "owes_lord_ge") return h && w.owedLord(*h) >= v.asNumber();
+    if (k == "demesne_free") return (w.leasedOut() < 0.5) == v.asBool();  // nobody holds the lord's fields on lease
     if (k == "has_secret") {
         // Something this person did in secret that `to` (the target, or nobody: anyone) is not yet sure of.
         Id to = v.asString() == "target" ? target : kNone;
@@ -753,6 +755,17 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
             if (q.alive() && p.dynasty != kNone && q.dynasty == p.dynasty &&
                 (k == "kin_priest" ? q.occupation == "priest" : q.station == "town_master")) any = true;
         return any == v.asBool();
+    }
+    if (k == "kin_station") {
+        // Someone of the blood, alive, on one of these roads (a clerk who can be ordained, a lad learning a trade in town).
+        std::set<std::string> ids;
+        if (v.isArray())
+            for (const auto& x : v.asArray()) ids.insert(x.asString());
+        else
+            ids.insert(v.asString());
+        for (const auto& q : w.people_)
+            if (q.alive() && p.dynasty != kNone && q.dynasty == p.dynasty && ids.count(q.station)) return true;
+        return false;
     }
     if (k == "lord_opinion_ge")
         return w.lord_ != kNone && w.people_[w.lord_].alive() && w.lord_ != p.id && w.opinion(w.lord_, p.id) >= v.asNumber();
@@ -1052,17 +1065,52 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                         b.used = true;
                         if (k == "doubt_hook") b.confidence = std::min(b.confidence, 20.0);
                     }
+            } else if (k == "target_lord_debt") {
+                // What the target's house owes the manor comes down: paid by the lord's man out of his own purse
+                // ("payer": "actor"), in kind straight to the manor ("lord"), or only written off in the book ("none").
+                if (target == kNone || w.people_[target].household == kNone) continue;
+                Household& th = w.households_[w.people_[target].household];
+                const std::string payer = v.stringOr("payer", "lord");
+                double amount = std::min(v.numberOr("reduce", 0), w.owedLord(th));
+                if (payer == "actor" && h) amount = std::min(amount, std::max(0.0, h->money));
+                amount = w.reduceLordDebt(th, amount);
+                if (payer == "none") writtenOff_ = amount;
+                if (amount < 0.5) continue;
+                Id lordHouse = w.lord_ != kNone ? w.people_[w.lord_].household : kNone;
+                if (payer == "actor" && h) {
+                    h->money -= amount;
+                    w.book(*h, "替人墊租", -amount);
+                }
+                if (payer != "none" && lordHouse != kNone) {
+                    w.households_[lordHouse].money += amount;
+                    w.book(w.households_[lordHouse], "收欠租", amount);
+                }
+                if (h && (h->id == w.playerHousehold_ || th.id == w.playerHousehold_))
+                    w.log(1, "  " + w.fullName(target) + " 家欠莊園的帳" + (payer == "none" ? "在帳本上" : "") + "少了 " + std::to_string(int(amount)) +
+                                 " 便士（還欠 " + std::to_string(int(w.owedLord(th))) + "）。");
+            } else if (k == "target_owes_lord") {
+                // The write-off found out: what came off the book goes back on it.
+                if (target == kNone || w.people_[target].household == kNone || writtenOff_ < 0.5) continue;
+                w.addDebt(w.households_[w.people_[target].household], writtenOff_, w.lord_);
+                writtenOff_ = 0;
             } else if (k == "hook_payment") {
-                // Hush money: up to the amount, or what the target's house can spare.
+                // Money pressed out of the target with what p knows: hush money (a number), or amends ({amount, label: "賠償"}),
+                // up to the amount or what the target's house can spare.
                 if (!h || target == kNone || w.people_[target].household == kNone) continue;
                 Household& th = w.households_[w.people_[target].household];
-                double amount = std::min(v.asNumber(), std::max(0.0, th.money * 0.4));
+                const bool amends = v.isObject() && v.stringOr("label", "") == "賠償";
+                double amount = std::round(std::min(v.isObject() ? v.numberOr("amount", 40) : v.asNumber(), std::max(0.0, th.money * 0.4)));
+                const bool seen = h->id == w.playerHousehold_ || th.id == w.playerHousehold_;
+                if (amount < 1) {
+                    if (seen) w.log(1, "  " + w.fullName(target) + " 家裡實在拿不出錢來。");
+                    continue;
+                }
                 th.money -= amount;
-                w.book(th, "封口費", -amount);
+                w.book(th, amends ? "賠人家的錢" : "封口費", -amount);
                 h->money += amount;
-                w.book(*h, "封口費", amount);
-                if (h->id == w.playerHousehold_ || th.id == w.playerHousehold_)
-                    w.log(1, "  " + w.fullName(target) + " 付了 " + std::to_string(int(amount)) + " 便士封口費。");
+                w.book(*h, amends ? "人家賠的錢" : "封口費", amount);
+                if (seen)
+                    w.log(1, "  " + w.fullName(target) + (amends ? " 咬著牙賠了 " : " 付了 ") + std::to_string(int(amount)) + " 便士" + (amends ? "。" : "封口費。"));
             } else if (k == "owe_target") {
                 // p's house owes the target money (an old loan, a debt from the father's time).
                 if (h && target != kNone && h->debt <= 0.5) w.addDebt(*h, v.asNumber(), target);
@@ -1287,7 +1335,16 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 else if (w.isPlayerFamily(p)) w.log(1, "  可是眼下這件事辦不成。");
             } else if (k == "lease_demesne") {
                 // Take the lord's own fields on a lease of so many years.
-                if (!h) continue;
+                // One lease at a time; the deposit goes to the manor, as much of it as the house still has.
+                if (!h || w.leasedOut() > 0.5) continue;
+                double deposit = std::min(v.numberOr("deposit", 0), std::max(0.0, h->money));
+                h->money -= deposit;
+                w.book(*h, "包租押金", -deposit);
+                Id lordHouse = w.lord_ != kNone ? w.people_[w.lord_].household : kNone;
+                if (lordHouse != kNone) {
+                    w.households_[lordHouse].money += deposit;
+                    w.book(w.households_[lordHouse], "收包租押金", deposit);
+                }
                 h->leaseAcres = v.numberOr("acres", 30);
                 h->leaseUntil = w.day_ + static_cast<int>(v.numberOr("years", 7)) * kDaysPerYear;
             } else if (k == "pay_share") {
@@ -1356,7 +1413,7 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 if (to != "priest" && (w.isPlayerFamily(p) || w.isPlayerFamily(w.people_[who]))) {
                     if (told.empty()) w.log(1, "  說來說去，也沒有什麼見不得人的事。");
                     for (size_t i = 0; i < told.size() && i < 3; ++i)
-                        w.log(1, "  「" + w.secretWords(told[i]) + "。」");
+                        w.log(1, "  「" + w.secretWords(told[i], who) + "。」");
                     if (told.size() > 3) w.log(1, "  還有幾件，" + w.people_[who].firstName + "聽不下去了。");
                 }
             } else if (k == "household_opinion") {

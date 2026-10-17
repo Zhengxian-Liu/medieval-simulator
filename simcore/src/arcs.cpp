@@ -169,6 +169,31 @@ void World::addDebt(Household& h, double amount, Id creditor) {
     h.debt += amount;
 }
 
+double World::owedLord(const Household& h) const {
+    if (lord_ == kNone) return 0;
+    return (h.debt > 0.5 && h.creditor == lord_ ? h.debt : 0.0) + (h.heldCreditor == lord_ ? h.heldDebt : 0.0);
+}
+
+// Takes up to `amount` off what the house owes the manor; returns how much came off.
+double World::reduceLordDebt(Household& h, double amount) {
+    double done = 0;
+    if (lord_ == kNone || amount <= 0) return 0;
+    if (h.debt > 0.5 && h.creditor == lord_) {
+        double d = std::min(h.debt, amount);
+        h.debt -= d;
+        done += d;
+        if (h.debt <= 0.5) h.debt = 0;
+    }
+    if (done < amount && h.heldCreditor == lord_ && h.heldDebt > 0.5) {
+        double d = std::min(h.heldDebt, amount - done);
+        h.heldDebt -= d;
+        done += d;
+        if (h.heldDebt <= 0.5) h.heldDebt = 0, h.heldCreditor = kNone;
+    }
+    promoteHeldDebt(h);
+    return done;
+}
+
 void World::promoteHeldDebt(Household& h) {
     if (h.debt > 0.5 || h.heldDebt <= 0.5) return;
     h.debt = h.heldDebt;
@@ -451,6 +476,7 @@ void World::yearlyLiaisons() {
                 ph.money = std::max(0.0, ph.money - 20);
                 if (p.loverDeed != kNone && p.spouse != kNone && people_[p.spouse].alive())
                     addBelief(p.spouse, p.loverDeed, x, 100, kNone);
+                if (p.loverDeed != kNone) deedNotes_.insert({p.loverDeed, "spoken"});
             }
             recordDeed("affair_exposed", a, b);
             recordDeed("affair_exposed", b, a);

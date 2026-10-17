@@ -110,12 +110,12 @@ void World::rehomeAway(Id from, Id to) {
     }
 }
 
-// A head works his own land: hired labour, the walk home from the wars and a village apprenticeship end
-// when someone takes up a house.
+// A head works his own land: hired labour, service in another house, the walk home from the wars and a village
+// apprenticeship end when someone takes up a house.
 void World::settleAsHead(Id who) {
     if (who == kNone) return;
     const std::string& st = people_[who].station;
-    if (st == "labourer" || st == "veteran" || st == "apprentice") setStation(who, "home", 0, "");
+    if (st == "labourer" || st == "veteran" || st == "apprentice" || (st == "servant" && people_[who].home == kNone)) setStation(who, "home", 0, "");
 }
 
 Id World::boyForMaster(const Person& master) const {

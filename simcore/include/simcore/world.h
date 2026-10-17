@@ -879,15 +879,21 @@ private:
     std::vector<Id> confessSecrets(Id id, Id to);  // the secrets newly told
     Id knownFlame(Id who, Id member) const;      // the lover `who` believes `member` had, if any
     bool hasUntoldSecret(Id id, Id to) const;
-    std::string secretWords(Id deed) const;     // a secret as the one who did it would tell it
+    std::string secretWords(Id deed, Id to) const;  // a secret as the one who did it would tell it to `to`
 
     // hooks.cpp: secrets as leverage, and the truth coming out at the end of a life
     Id hireMaster(Id household) const;          // who would take this house's hands on for a year: the biggest farm, else the demesne
     int hiredHands(const Household& h) const;
+    double leasedOut() const;                   // demesne acres let on lease
+    int boardedHands(Id master) const;          // hands other houses have hired on with this one
+    bool canHire(const Household& m, int n) const;
     std::string rentVacantOnCredit(Household& h, double minAcres);  // "" when done, else why not
     Id boyForMaster(const Person& master) const;  // a boy of 11-16 at the master's old home with no trade yet
     int nextMilestone(const Person& head) const;  // the first step of the ambition not yet reached, -1 if none
-    void secretSurfaces();                     // once a season: a secret the head keeps may come up
+    void secretSurfaces();
+    bool deedSpoken(Id deed) const;
+    double owedLord(const Household& h) const;         // rent arrears and loans the house owes the manor
+    double reduceLordDebt(Household& h, double amount);                     // once a season: a secret the head keeps may come up
     Id hookDeed(Id holder, Id culprit) const;  // a secret holder believes culprit did, usable as leverage
     bool hasHook(Id holder) const;
     void deathbedConfession(Id dying);

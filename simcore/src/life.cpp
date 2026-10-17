@@ -915,6 +915,7 @@ void World::marry(Id man, Id woman) {
                 c.serviceEnd = -1;
                 c.flags.erase("in_service");
                 moveTo(ward, oldHouse);
+                if (people_[ward].station == "servant") setStation(ward, "home", 0, "母親改嫁，回村守家");
             } else if (isAway(c) && c.awayFrom == oldHouse) {
                 setStation(ward, "home", 0, "母親改嫁，回村守家");
             }

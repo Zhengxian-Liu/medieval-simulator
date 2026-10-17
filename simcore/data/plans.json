@@ -291,13 +291,13 @@
 
     {"id": "lease_demesne", "name": "包租自營地", "requires": "家主，存錢 400 便士以上，自己有 25 畝以上的地", "notify_target": true,
      "desc": "向領主把莊園自己經營的 30 畝包租下來，一租七年：押金 200 便士，往後每年多交 120 便士租錢。收成全歸你家，人手不夠就得雇人。",
-     "actor": {"is_head": true, "money_ge": 400, "acres_ge": 25, "age": [22, 65], "no_flag": "demesne_farmer", "not": {"occupation": ["lord", "priest"]}},
+     "actor": {"is_head": true, "money_ge": 400, "acres_ge": 25, "age": [22, 65], "no_flag": "demesne_farmer", "demesne_free": true, "not": {"occupation": ["lord", "priest"]}},
      "target": {"pick": "lord", "conditions": {}},
      "max_months": 12, "retry_years": 3,
      "progress": {"base": 6, "skill": {"charm": 0.5}, "opinion": 5, "reputation": 0.5, "traits": {"ambitious": 2, "diligent": 2}},
      "start_log": "{name} 托管家向 {target} 遞話，想把莊園的自營地包租下來。",
      "success_log": "{target} 在租約上蓋了印：莊園自營地的 30 畝，往後七年歸 {name} 家種。",
-     "success": [{"money": -200}, {"target": [{"money": 200}]}, {"lease_demesne": {"acres": 30, "years": 7}}, {"set_flag": "demesne_farmer"}, {"prestige": 5}, {"reputation": 2}],
+     "success": [{"lease_demesne": {"acres": 30, "years": 7, "deposit": 200}}, {"set_flag": "demesne_farmer"}, {"prestige": 5}, {"reputation": 2}],
      "fail_log": "{target} 說自營地還是自己種放心。", "fail": [{"need": {"spirit": -8}}],
      "ai": {"base": 1, "traits": {"ambitious": 6, "greedy": 3}, "if": [{"cond": {"ambition": "lease_demesne"}, "add": 40}]},
      "beats": [

@@ -549,7 +549,10 @@ void World::helpFriend(Person& p) {
             addStress(head, -5, "");
             if (p.lover == t) endLiaison(p.id);
             for (const auto& b : beliefs_[head])
-                if (b.culprit == p.id && deeds_[b.deed].type == "affair" && deeds_[b.deed].with == t) addBelief(p.id, b.deed, p.id, 100, head);
+                if (b.culprit == p.id && deeds_[b.deed].type == "affair" && deeds_[b.deed].with == t) {
+                    addBelief(p.id, b.deed, p.id, 100, head);
+                    deedNotes_.insert({b.deed, "spoken"});
+                }
             return;
         }
         if (r == 1) {

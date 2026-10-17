@@ -37,6 +37,9 @@ bool World::hasHook(Id holder) const {
     return false;
 }
 
+// A secret that is no longer one between the people in it: said out loud, or tried in a court.
+bool World::deedSpoken(Id deed) const { return deedNotes_.count({deed, "spoken"}) > 0 || deedTried(deed); }
+
 // What the head knows and has never said comes up when the people in it cross paths: a wife's old lover at the
 // church door, the man who fired the ricks greeting you at the mill. Now and then, once for each secret.
 void World::secretSurfaces() {
@@ -46,7 +49,9 @@ void World::secretSurfaces() {
     const Household& home = households_[playerHousehold_];
     std::vector<std::pair<Id, Id>> found;  // (deed, the other party)
     for (const auto& b : beliefs_[head]) {
-        if (b.confidence < 60 || deedNotes_.count({b.deed, "surfaced"})) continue;
+        // Not what has been said out loud already (shouted in the street, taken to court, thrown in someone's face),
+        // nor what was turned into money once.
+        if (b.confidence < 60 || b.used || deedSpoken(b.deed) || deedNotes_.count({b.deed, "surfaced"})) continue;
         const Deed& d = deeds_[b.deed];
         const DeedDef* def = defs_.deed(d.type);
         if (!def || def->visibility != "secret" || day_ - d.day > 30 * kDaysPerYear || d.actor == head) continue;
@@ -54,7 +59,7 @@ void World::secretSurfaces() {
         if (!a.alive() || b.culprit != d.actor) continue;
         if (d.type == "affair") {
             // One of the family with someone outside it.
-            if (a.household != home.id || d.with == kNone || d.with == head) continue;
+            if (a.household != home.id || d.with == kNone || d.with == head || a.flags.count("adulterer")) continue;
             const Person& o = people_[d.with];
             if (!o.alive() || o.household == kNone || o.household == home.id) continue;
             found.push_back({d.id, d.with});

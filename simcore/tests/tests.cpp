@@ -337,8 +337,9 @@ int main() {
         double drift = 0;
         for (int y = 0; y < 40 && !w.gameOver(); ++y) {
             w.runYears(1);
+            // A year on the road is settled at the next yearly pulse, so the run's last year is not counted.
             for (const auto& p : w.people())
-                if (p.alive() && p.station == "chapman" && w.today() - p.stationSince >= kDaysPerYear) ++roadYears;
+                if (p.alive() && p.station == "chapman" && w.today() - p.stationSince >= kDaysPerYear) roadYears += y < 39;
                 else if (p.alive() && p.station == "apprentice" && p.focus == "letters") CHECK(false, "an apprentice still goes to letters");
             for (const auto& h : w.households())
                 if (!h.extinct && std::abs(h.focusYield) > drift) drift = std::abs(h.focusYield), maxDrift = h.id;
@@ -346,7 +347,7 @@ int main() {
         auto n = [&](const std::string& k) { return w.counters().count(k) ? w.counters().at(k) : 0; };
         std::printf("chapman: %d years on the road after the first, %d settled, %d lost; largest focus yield %.3f (house %d)\n", roadYears,
                     n("event:chapman_year"), n("event:chapman_loss"), drift, maxDrift);
-        CHECK(roadYears < 5 || n("event:chapman_year") + n("event:chapman_loss") >= roadYears * 9 / 10, "chapman years on the road went unsettled");
+        CHECK(roadYears < 5 || n("event:chapman_year") + n("event:chapman_loss") + n("event:chapman_due") >= roadYears * 9 / 10, "chapman years on the road went unsettled");
         CHECK(drift < 0.1, "a household's focus yield carried past the harvest");
     }
     // A run driven by the auto-player replays exactly from its command log alone.

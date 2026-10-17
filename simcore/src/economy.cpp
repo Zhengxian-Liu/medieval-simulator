@@ -19,7 +19,8 @@ void World::harvest() {
     else if (weather > 1.2) log(2, "風調雨順，今年是豐收年。");
 
     for (auto& h : households_) {
-        const double tilled = h.acres + (h.leaseUntil > day_ ? h.leaseAcres : 0);  // its own holding and any leased demesne
+        // Its own holding and any leased demesne; the manor tills what it has not let.
+        const double tilled = h.acres + (h.leaseUntil > day_ ? h.leaseAcres : 0) - (h.house == "manor" ? leasedOut() : 0);
         if (h.extinct || tilled <= 0 || h.members.empty()) {
             h.focusYield = 0;  // no crop this year: last year's days don't carry into a holding taken later
             continue;
@@ -39,7 +40,8 @@ void World::harvest() {
             skill += p.skills[Farming];
             ++count;
         }
-        if (h.house == "manor") workers = h.acres;  // the lord's demesne is worked by tenants' labour
+        if (h.house == "manor") workers = tilled;  // the lord's demesne is worked by tenants' labour
+        else workers += boardedHands(h.id) * 0.8;  // hands hired on for the year
         // Short of hands: hire harvest labourers, if the household can pay them.
         double needed = tilled / 12;
         if (workers < needed) {
@@ -114,7 +116,8 @@ void World::payRent() {
         // The demesne lease: its rent is set in the lease, paid with the rest at Michaelmas.
         if (h.leaseUntil > day_) rent += h.leaseAcres * 4 * rentMult;
         else if (h.leaseUntil >= 0) {
-            if (inPlayerHouse(h.id)) log(1, "包租領主自營地的七年到期了，那 " + std::to_string(int(h.leaseAcres)) + " 畝地還給了莊園。");
+            if (inPlayerHouse(h.id)) log(1, "包租領主自營地的租約到期了，那 " + std::to_string(int(h.leaseAcres)) + " 畝地還給了莊園。");
+            for (Id m : h.members) people_[m].flags.erase("demesne_farmer");  // free to lease again
             h.leaseUntil = -1;
             h.leaseAcres = 0;
         }
@@ -236,19 +239,31 @@ void World::monthlyEconomy() {
             if (od && od->farms) hands += p.sex == Sex::Male ? 1.0 : 0.5;
         }
         double spare = std::max(0.0, hands - h.acres / 12);
+        // A master who has died out, or whose own granary is down to two months, lets the hired hands go early.
+        if (h.hiredUntil > day_ && (h.hiredBy == kNone || households_[h.hiredBy].extinct || households_[h.hiredBy].head == kNone ||
+                                    households_[h.hiredBy].food < consumption(households_[h.hiredBy]) * 60)) {
+            h.hiredUntil = -1;
+            h.hiredBy = kNone;
+            if (inPlayerHouse(h.id) && h.head != kNone) log(1, "東家那邊自己也揭不開鍋了，" + fullName(h.head) + " 家的長工提早散了。");
+        }
         if (h.hiredUntil > day_) {
-            // Hired on for the year: the grown eat at the master's table and are paid at Michaelmas, a little each month here.
+            // Hired on for the year: the grown eat at the master's table (a month's board here, the rest of the
+            // household eats what they bring home) and the master pays a little of the wage each month.
             int n = hiredHands(h);
-            h.food += n * 40;
-            h.money += n * 4 * wage;
-            book(h, "長工工錢", n * 4 * wage);
-            if (h.hiredBy != kNone && !households_[h.hiredBy].extinct)
-                households_[h.hiredBy].food = std::max(0.0, households_[h.hiredBy].food - n * 30);
+            Household& mh = households_[h.hiredBy];
+            double board = std::min(n * 40.0, std::max(0.0, mh.food - consumption(mh) * 60));
+            mh.food -= board;
+            h.food += board;
+            double pay = std::min(n * 4 * wage, std::max(0.0, mh.money));
+            mh.money -= pay;
+            book(mh, "雇長工", -pay);
+            h.money += pay;
+            book(h, "長工工錢", pay);
             spare = 0;
         } else if (h.hiredUntil >= 0) {
             h.hiredUntil = -1;
             if (inPlayerHouse(h.id) && h.head != kNone)
-                log(1, "長工做滿了一年，" + fullName(h.head) + " 從" + (h.hiredBy != kNone && households_[h.hiredBy].head != kNone ? " " + fullName(households_[h.hiredBy].head) + " 家" : "莊園") + "回來了。");
+                log(1, "長工做完了，" + fullName(h.head) + " 從" + (h.hiredBy != kNone && households_[h.hiredBy].head != kNone ? " " + fullName(households_[h.hiredBy].head) + " 家" : "莊園") + "回來了。");
             h.hiredBy = kNone;
         }
         h.money += spare * 7 * wage;
@@ -269,7 +284,7 @@ void World::monthlyEconomy() {
         double daily = consumption(h);
         if (!inPlayerHouse(h.id) && h.head != kNone && h.food < daily * 20) {
             Id master = h.acres < 12 && h.hiredUntil <= day_ ? hireMaster(h.id) : kNone;
-            if (master != kNone && hiredHands(h) > 0) {
+            if (master != kNone) {
                 h.hiredUntil = day_ + kDaysPerYear;
                 h.hiredBy = master;
                 log(2, fullName(h.head) + " 家沒了口糧，" + (households_[master].head != kNone && master != (lord_ != kNone ? people_[lord_].household : kNone)
@@ -292,15 +307,52 @@ int World::hiredHands(const Household& h) const {
     return n;
 }
 
+// Demesne acres let to a tenant on lease.
+double World::leasedOut() const {
+    double a = 0;
+    for (const auto& o : households_)
+        if (!o.extinct && o.leaseUntil > day_) a += o.leaseAcres;
+    return a;
+}
+
+// Hands a house has boarded with it this year.
+int World::boardedHands(Id master) const {
+    int n = 0;
+    for (const auto& o : households_)
+        if (!o.extinct && o.hiredBy == master && o.hiredUntil > day_) n += hiredHands(o);
+    return n;
+}
+
+// Takes on hired hands: the land wants them (a hand to 12 acres), and the granary can feed them for the year
+// on top of the house's own two months' reserve.
+bool World::canHire(const Household& m, int n) const {
+    if (m.extinct || m.head == kNone) return false;
+    const double tilled = m.acres + (m.leaseUntil > day_ ? m.leaseAcres : 0);
+    int room = static_cast<int>(tilled / 12) - boardedHands(m.id);
+    if (m.house != "manor") {
+        int own = 0;
+        for (Id x : m.members)
+            if (ageYears(people_[x]) >= 14 && people_[x].home == kNone) ++own;
+        room -= own;
+    }
+    return room >= n && m.food - consumption(m) * 60 >= (boardedHands(m.id) + n) * 40.0 * 12;
+}
+
 Id World::hireMaster(Id household) const {
+    const int n = hiredHands(households_[household]);
+    if (n == 0) return kNone;
     Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
     Id best = kNone;
     for (const auto& o : households_) {
-        if (o.extinct || o.id == household || o.id == lordHouse || o.head == kNone || o.acres < 25 || o.hiredUntil > day_) continue;
+        // Not the player's house: whom the family feeds and pays is the family's call, not the village's.
+        if (o.extinct || o.id == household || o.id == lordHouse || o.head == kNone || o.acres < 25 || o.hiredUntil > day_ ||
+            inPlayerHouse(o.id) || !canHire(o, n))
+            continue;
         if (people_[o.head].occupation == "priest") continue;
         if (best == kNone || o.acres > households_[best].acres) best = o.id;
     }
-    return best != kNone ? best : lordHouse;
+    if (best != kNone) return best;
+    return lordHouse != kNone && !inPlayerHouse(lordHouse) && canHire(households_[lordHouse], n) ? lordHouse : kNone;
 }
 
 // A vacant parcel taken from the lord with the entry fine on the manor's books, for a house with no coin to pay it.
@@ -323,7 +375,10 @@ std::string World::rentVacantOnCredit(Household& h, double minAcres) {
     Id lordHouse = people_[lord_].household;
     h.money -= paid;
     book(h, "入地費", -paid);
-    if (lordHouse != kNone) households_[lordHouse].money += paid;
+    if (lordHouse != kNone) {
+        households_[lordHouse].money += paid;
+        book(households_[lordHouse], "收入地費", paid);
+    }
     if (fine - paid > 0.5) addDebt(h, fine - paid, lord_);
     if (inPlayerHouse(h.id))
         log(1, "  " + name + "租給了你家，入地費 " + std::to_string(int(fine)) + " 便士" +
