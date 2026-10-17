@@ -193,6 +193,82 @@
         "ai": {"base": 4, "traits": {"lustful": 8, "pious": -4}}}
      ]},
 
+    {"id": "path_midlife", "title": "半輩子", "prompt": "{name} {age} 歲了，沒有成家，一直在家裡幫忙。往後就這樣過一輩子，還是換條路走？",
+     "scope": "anyone", "pulse": "yearly", "chance": 0.3, "parent_decides": true,
+     "conditions": {"age": [23, 45], "station": "home", "no_flag": "midlife_decided", "is_head": false, "married": false},
+     "options": [
+       {"text": "留在家裡", "log": "", "effects": [{"set_flag": "midlife_decided"}], "ai": {"base": 10, "traits": {"content": 6}, "if": [{"cond": {"heir_apparent": true}, "add": 40}]}},
+       {"text": "進修道院（帶 40 便士入院的布施）", "conditions": {"sex": "male", "money_ge": 40},
+        "log": "{name} 把頭髮剃了，進了山那邊的修道院。家裡少了一雙手，可往後在修士面前也有人說話了。",
+        "effects": [{"money": -40}, {"set_flag": "midlife_decided"}, {"prestige": 3}, {"station": {"id": "monastery", "note": "進了修道院"}}],
+        "ai": {"base": 3, "traits": {"pious": 12, "melancholy": 6, "gregarious": -4, "lustful": -8}, "if": [{"cond": {"heir_apparent": true}, "add": -20}]}},
+       {"text": "進修女院（帶 40 便士入院的布施）", "conditions": {"sex": "female", "money_ge": 40},
+        "log": "{name} 披上了黑紗，進了鎮外的修女院。",
+        "effects": [{"money": -40}, {"set_flag": "midlife_decided"}, {"prestige": 3}, {"station": {"id": "nunnery", "note": "進了修女院"}}],
+        "ai": {"base": 3, "traits": {"pious": 12, "melancholy": 6, "gregarious": -4, "lustful": -8}, "if": [{"cond": {"heir_apparent": true}, "add": -20}]}},
+       {"text": "去莊園或大戶當差", "conditions": {"any_place": "service"},
+        "log": "{name} 去當差了，管吃管住，一年到頭有幾個錢。", "effects": [{"set_flag": "midlife_decided"}, {"take_any_place": "service"}],
+        "ai": {"base": 4, "traits": {"diligent": 4}, "if": [{"cond": {"heir_apparent": true}, "add": -10}]}},
+       {"text": "進城找活路", "conditions": {"free": true},
+        "log": "{name} 收拾了一個包袱，進城找活路去了。", "effects": [{"set_flag": "midlife_decided"}, {"station": {"id": "town_labourer", "note": "半輩子後進城找活"}}],
+        "ai": {"base": 2, "traits": {"ambitious": 6, "brave": 4, "content": -6}, "if": [{"cond": {"heir_apparent": true}, "add": -15}]}}
+     ]},
+
+    {"id": "archer_letter", "title": "從法國來的信", "prompt": "隨軍的書記替 {name} 寫了封信捎回來：仗打得苦，軍餉欠了好幾個月。{pron}想回家，可坐船回來的錢要 20 便士。",
+     "scope": "away", "pulse": "yearly", "chance": 0.15, "cooldown_years": 3, "parent_decides": true,
+     "conditions": {"station": "archer"},
+     "options": [
+       {"text": "托人捎 20 便士去，叫{pron}回家", "conditions": {"money_ge": 20}, "log": "家裡湊了 20 便士托同鄉捎去法國。",
+        "effects": [{"money": -20}, {"tell": "過了幾個月，{name} 瘦了一大圈，背著弓走回了村子。"}, {"add_trait": "veteran"}, {"station": {"id": "veteran", "note": "家裡捎錢叫了回來"}}],
+        "ai": {"base": 8, "traits": {"kind": 6, "greedy": -4}}},
+       {"text": "回信叫{pron}再撐一撐，搶到東西就有錢了", "log": "家裡回信叫 {name} 再撐一撐。",
+        "effects": [{"random": {"percent": 40,
+            "effects": [{"tell": "下一封信裡夾著 40 便士：{name} 跟著隊伍攻下了一座城，分到了戰利品。"}, {"money": 40}],
+            "else": [{"tell": "後來的消息說，{name} 在行軍路上染了痢疾，差點沒挺過來。"}, {"health": -25}]}}],
+        "ai": {"base": 6, "traits": {"greedy": 6, "brave": 4}}}
+     ]},
+
+    {"id": "master_takes_kin", "title": "鎮上的舖子", "prompt": "在鎮上開舖子的 {name} 捎信回來：舖子裡缺個學徒，家裡要是有半大的小子，可以送來跟{pron}學，不收拜師錢。",
+     "scope": "away", "pulse": "yearly", "chance": 0.2, "cooldown_years": 4,
+     "conditions": {"station": "town_master", "kin_boy_at_home": true},
+     "options": [
+       {"text": "把家裡的小子送去", "log": "家裡把一個半大的小子送進城，交給了 {name}。", "effects": [{"kin_to_master": true}],
+        "ai": {"base": 8, "traits": {"ambitious": 6}}},
+       {"text": "家裡缺人手，回絕了", "log": "家裡捎話回去：地裡離不開人，這回就算了。", "effects": [],
+        "ai": {"base": 5, "traits": {"content": 4}}}
+     ]},
+
+    {"id": "scholar_fees", "title": "學費", "prompt": "文法學校的先生寫信來：{name} 這一年的學費和食宿，要 15 便士。",
+     "scope": "away", "pulse": "yearly", "chance": 0.35, "cooldown_years": 1, "parent_decides": true,
+     "conditions": {"station": "scholar"},
+     "options": [
+       {"text": "湊錢寄去", "conditions": {"money_ge": 15}, "log": "家裡湊了 15 便士寄給文法學校的先生。", "effects": [{"money": -15}],
+        "ai": {"base": 10, "traits": {"greedy": -4}}},
+       {"text": "交不起了，叫{pron}回家", "log": "家裡交不起學費，捎信叫 {name} 回家。",
+        "effects": [{"tell": "{name} 背著幾本抄來的書回了村，識的字倒是丟不掉了。"}, {"add_trait": "literate"}, {"station": {"id": "home", "note": "交不起學費回了家"}}],
+        "ai": {"base": 3, "traits": {"greedy": 8}, "if": [{"cond": {"money_lt": 15}, "add": 30}]}}
+     ]},
+
+    {"id": "town_labourer_letter", "title": "鎮上的口信", "prompt": "從鎮上捎來口信：{name} 在碼頭扛貨，活時有時無。{pron}想讓家裡捎 30 便士，拜個師傅學門手藝。",
+     "scope": "away", "pulse": "yearly", "chance": 0.2, "cooldown_years": 3, "parent_decides": true,
+     "conditions": {"station": ["town_labourer", "fled"], "age": [14, 30]},
+     "options": [
+       {"text": "捎 30 便士去，讓{pron}拜師", "conditions": {"money_ge": 30}, "log": "家裡湊了 30 便士捎去鎮上。",
+        "effects": [{"money": -30}, {"tell": "{name} 拜了一個桶匠當師傅，要學五年。"}, {"station": {"id": "town_apprentice", "years": 5, "note": "家裡捎錢拜了師"}}],
+        "ai": {"base": 7, "traits": {"ambitious": 6, "greedy": -4}}},
+       {"text": "叫{pron}回家種地", "log": "家裡捎話叫 {name} 回來。", "effects": [{"tell": "{name} 回到了村裡。"}, {"station": {"id": "home", "note": "從鎮上回了家"}}],
+        "ai": {"base": 5, "traits": {"content": 4}}},
+       {"text": "家裡也沒錢，讓{pron}自己想辦法", "log": "家裡捎話說手頭也緊，讓 {name} 自己想辦法。", "effects": [], "ai": {"base": 5, "traits": {"greedy": 4}}}
+     ]},
+
+    {"id": "town_wife_visit", "title": "回娘家", "ask": false, "scope": "away", "pulse": "yearly", "chance": 0.15, "cooldown_years": 3,
+     "conditions": {"station": "town_wife"},
+     "options": [{"text": "好", "log": "", "effects": [{"tell": "嫁到鎮上的 {name} 回娘家住了幾天，帶回一匹布和 10 便士，講了一晚上鎮上的新鮮事。"}, {"money": 10}]}]},
+
+    {"id": "monk_letter", "title": "修道院的信", "ask": false, "scope": "away", "pulse": "yearly", "chance": 0.12, "cooldown_years": 3,
+     "conditions": {"station": ["monastery", "nunnery"]},
+     "options": [{"text": "好", "log": "", "effects": [{"tell": "在修道院的 {name} 托人捎話：每天的晚禱都替家裡的人念一遍名字。"}]}]},
+
     {"id": "town_hard_master", "title": "狠心的師傅", "prompt": "從鎮上捎來口信：{name} 的師傅動不動就打人，飯也不給吃飽。", "scope": "away", "pulse": "yearly", "chance": 0.08, "cooldown_years": 3, "parent_decides": true,
      "conditions": {"station": "town_apprentice"},
      "options": [

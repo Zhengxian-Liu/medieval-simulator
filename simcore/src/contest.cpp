@@ -47,6 +47,7 @@ void World::setOffice(const std::string& id, Id holder, const std::string& how) 
     for (auto& o : offices_) {
         if (o.id != id) continue;
         if (o.holder != kNone && o.holder != holder) people_[o.holder].flags.erase(id);
+        if (holder != kNone && o.holder != holder) noteLife(holder, "當上了" + o.name);
         o.holder = holder;
         o.how = how;
         o.until = id == "reeve" ? nextReeveYear_ : year() + 1;

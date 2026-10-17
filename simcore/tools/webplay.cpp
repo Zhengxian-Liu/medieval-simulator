@@ -187,7 +187,7 @@ public:
         if (const AmbitionDef* a = w.defs().ambition(hp.ambition)) {
             std::vector<std::string> steps;
             for (size_t i = 0; i < a->milestones.size(); ++i)
-                steps.push_back(Obj().text("name", a->milestones[i].name).b("done", static_cast<int>(i) < hp.ambitionStep).done());
+                steps.push_back(Obj().text("name", a->milestones[i].name).b("done", i < 32 && (hp.ambitionDone & (1u << i))).done());
             o.raw("ambition", Obj().text("name", a->name).text("desc", a->desc).raw("steps", arr(steps)).done());
         }
 

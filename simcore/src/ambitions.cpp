@@ -30,7 +30,7 @@ const char* World::standingName(int rung) {
 bool World::kinInChurch(Id dyn) const {
     if (dyn == kNone) return false;
     for (const auto& p : people_)
-        if (p.alive() && p.dynasty == dyn && (p.occupation == "clerk" || p.occupation == "priest")) return true;
+        if (p.alive() && p.dynasty == dyn && (p.occupation == "clerk" || p.occupation == "priest" || p.station == "monastery")) return true;
     return false;
 }
 
@@ -53,6 +53,9 @@ void World::chooseAmbition(Person& head) {
         pool.push_back(&a);
         double w = ev.weight(a.aiWeight, head);
         if (a.id == regret) w = w * 2 + 10;  // a parent's unfinished wish weighs on the child
+        // What the last goal done opened up: the harder next step on the same road.
+        if (const AmbitionDef* last = defs_.ambition(head.lastAmbition))
+            if (std::find(last->next.begin(), last->next.end(), a.id) != last->next.end()) w = w * 3 + 20;
         weights.push_back(w);
     }
     if (pool.empty()) return;
@@ -96,6 +99,7 @@ void World::chooseAmbition(Person& head) {
     ++counters_[std::string(player ? "ambition_family:" : "ambition:") + pick->id + ":chosen"];
     head.ambitionSince = day_;
     head.ambitionStep = 0;
+    head.ambitionDone = 0;
     if (player) {
         log(1, "【志向】" + fullName(head.id) + " 立志「" + pick->name + "」：" + pick->desc);
         if (!pick->milestones.empty()) log(1, "  第一步：" + pick->milestones[0].name + "。");
@@ -108,20 +112,30 @@ void World::checkMilestones(Person& head, bool quiet) {
     if (!a) return;
     EventRunner ev(*this);
     bool player = inPlayerHouse(head.household) && head.id == playerHead();
-    while (head.ambitionStep < static_cast<int>(a->milestones.size()) && ev.eval(a->milestones[head.ambitionStep].goal, head, kNone)) {
-        const auto& m = a->milestones[head.ambitionStep];
+    // Steps count whenever they are reached, in any order: 35 acres held before the freehold is still 35 acres.
+    for (size_t i = 0; i < a->milestones.size() && i < 32; ++i) {
+        if (head.ambitionDone & (1u << i) || !ev.eval(a->milestones[i].goal, head, kNone)) continue;
+        const auto& m = a->milestones[i];
+        head.ambitionDone |= 1u << i;
         ++head.ambitionStep;
         if (quiet) continue;
         head.reputation += 1;
         addStress(head.id, -5, "");
         if (player) {
-            std::string next = head.ambitionStep < static_cast<int>(a->milestones.size())
-                                   ? "下一步：" + a->milestones[head.ambitionStep].name + "。"
-                                   : "只差最後一步了。";
+            int nx = nextMilestone(head);
+            std::string next = nx >= 0 ? "下一步：" + a->milestones[nx].name + "。" : "只差最後一步了。";
             log(1, "【里程碑】「" + a->name + "」：" + m.name + "（" + std::to_string(head.ambitionStep) + "/" +
                        std::to_string(a->milestones.size() + 1) + "）。" + next);
         }
     }
+}
+
+int World::nextMilestone(const Person& head) const {
+    const AmbitionDef* a = defs_.ambition(head.ambition);
+    if (!a) return -1;
+    for (size_t i = 0; i < a->milestones.size() && i < 32; ++i)
+        if (!(head.ambitionDone & (1u << i))) return static_cast<int>(i);
+    return -1;
 }
 
 void World::yearlyAmbitions() {
@@ -149,6 +163,8 @@ void World::yearlyAmbitions() {
                 if (regret) dyn->regret.clear();
             }
             head.reputation += 5;
+            head.lastAmbition = a->id;
+            noteLife(head.id, "做成了「" + a->name + "」");
             if (dyn && !a->tradition.empty() &&
                 std::find(dyn->traditions.begin(), dyn->traditions.end(), a->tradition) == dyn->traditions.end()) {
                 dyn->traditions.push_back(a->tradition);

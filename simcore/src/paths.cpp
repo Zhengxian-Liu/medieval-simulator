@@ -118,6 +118,21 @@ void World::settleAsHead(Id who) {
     if (st == "labourer" || st == "veteran" || st == "apprentice") setStation(who, "home", 0, "");
 }
 
+Id World::boyForMaster(const Person& master) const {
+    Id home = master.awayFrom;
+    if (home == kNone || households_[home].extinct) return kNone;
+    Id best = kNone;
+    for (Id m : households_[home].members) {
+        const Person& q = people_[m];
+        double a = ageYears(q);
+        if (!q.alive() || q.sex != Sex::Male || a < 11 || a > 16 || q.home != kNone || q.flags.count("trade_decided") ||
+            households_[home].head == m || (households_[home].head != kNone && heirOf(households_[home], households_[home].head) == m))
+            continue;
+        if (best == kNone || q.birthDay < people_[best].birthDay) best = m;
+    }
+    return best;
+}
+
 void World::noteLife(Id who, const std::string& note) {
     if (who == kNone) return;
     Person& p = people_[who];
@@ -127,11 +142,11 @@ void World::noteLife(Id who, const std::string& note) {
 std::string World::lifeLine(Id id) const {
     const Person& p = people_[id];
     std::string out;
-    std::string last;
+    std::vector<std::string> said;  // the same turn twice (elected hayward again) is told once
     for (const auto& r : p.road) {
-        if (r.note.empty() || r.note == last) continue;
+        if (r.note.empty() || std::find(said.begin(), said.end(), r.note) != said.end()) continue;
         out += (out.empty() ? "" : "，") + r.note;
-        last = r.note;
+        said.push_back(r.note);
     }
     return out;
 }

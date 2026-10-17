@@ -632,6 +632,7 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     if (k == "deed_noted") return deed_ != kNone && w.deedNotes_.count({deed_, v.asString()}) > 0;
     if (k == "heir_apparent") return (h && h->head != kNone && h->head != p.id && w.heirOf(*h, h->head) == p.id) == v.asBool();
     if (k == "has_lover") return (p.lover != kNone) == v.asBool();
+    if (k == "kin_boy_at_home") return (w.boyForMaster(p) != kNone) == v.asBool();
     if (k == "hired") return (h && h->hiredUntil > w.day_) == v.asBool();
     if (k == "hire_master") return (h && w.hireMaster(h->id) != kNone) == v.asBool();
     if (k == "has_secret") {
@@ -745,6 +746,14 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     if (k == "customary_ge") return h && h->acres - h->freehold >= v.asNumber();
     if (k == "kin_in_church") return w.kinInChurch(p.dynasty) == v.asBool();
     if (k == "kin_in_town") return w.kinInTown(p.dynasty) == v.asBool();
+    if (k == "kin_priest" || k == "kin_town_master") {
+        // Someone of the blood ordained, or a master with his own shop in town.
+        bool any = false;
+        for (const auto& q : w.people_)
+            if (q.alive() && p.dynasty != kNone && q.dynasty == p.dynasty &&
+                (k == "kin_priest" ? q.occupation == "priest" : q.station == "town_master")) any = true;
+        return any == v.asBool();
+    }
     if (k == "lord_opinion_ge")
         return w.lord_ != kNone && w.people_[w.lord_].alive() && w.lord_ != p.id && w.opinion(w.lord_, p.id) >= v.asNumber();
     if (k == "feud_any_ge") {
@@ -874,7 +883,10 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 if (d > 0) w.moveLand(kNone, h->id, d, LandPick::CustomaryFirst, "向領主租來");
                 else w.moveLand(h->id, kNone, -d, LandPick::CustomaryFirst, "交回領主");
             } else if (k == "house") {
-                if (h) h->house = v.asString();
+                if (!h) continue;
+                if (h->head != kNone && h->house != v.asString() && (v.asString() == "stone" || v.asString() == "timber"))
+                    w.noteLife(h->head, v.asString() == "stone" ? "蓋起了石屋" : "蓋起了木屋");
+                h->house = v.asString();
             } else if (k == "target") {
                 if (target != kNone) apply(v, w.people_[target], p.id);
             } else if (k == "world_flag") {
@@ -887,6 +899,7 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 // Turn held acres into freehold (bought by charter).
                 if (!h) continue;
                 w.makeFree(*h, v.asNumber());
+                if (h->head != kNone) w.noteLife(h->head, "把 " + std::to_string(int(v.asNumber())) + " 畝地買成了自由地");
             } else if (k == "to_town") {
                 // Off to a master in town: the family's town branch.
                 if (!h) continue;
@@ -1272,6 +1285,33 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                     if (o.plan == plan && o.target == tgt && (subj == kNone || o.subject == subj)) ok = true;
                 if (ok) w.startPlan(p.id, plan, tgt, subj);
                 else if (w.isPlayerFamily(p)) w.log(1, "  可是眼下這件事辦不成。");
+            } else if (k == "lease_demesne") {
+                // Take the lord's own fields on a lease of so many years.
+                if (!h) continue;
+                h->leaseAcres = v.numberOr("acres", 30);
+                h->leaseUntil = w.day_ + static_cast<int>(v.numberOr("years", 7)) * kDaysPerYear;
+            } else if (k == "pay_share") {
+                // A price set by what the house has, not by what was agreed: a share of its savings to the target.
+                if (!h) continue;
+                double amount = std::round(std::min(std::max(0.0, h->money) * v.numberOr("share", 0.2), v.numberOr("max", 1e9)));
+                if (amount < 1) continue;
+                h->money -= amount;
+                w.book(*h, v.stringOr("label", "加價"), -amount);
+                if (target != kNone && w.people_[target].household != kNone) {
+                    w.households_[w.people_[target].household].money += amount;
+                    w.book(w.households_[w.people_[target].household], v.stringOr("label", "加價"), amount);
+                }
+                if (w.isPlayerFamily(p)) w.log(1, "  多付了 " + std::to_string(int(amount)) + " 便士。");
+            } else if (k == "note_life") {
+                w.noteLife(p.id, format(v.asString(), p, target));  // a line in the person's road through life
+            } else if (k == "kin_to_master") {
+                // A master in town takes a boy of the family at home into his own shop.
+                Id boy = w.boyForMaster(p);
+                if (boy == kNone) continue;
+                w.people_[boy].flags.insert("trade_decided");
+                w.setStation(boy, "town_apprentice", 7, "去鎮上跟" + p.firstName + "學手藝");
+                if (w.isPlayerFamily(p) || w.inPlayerHouse(w.people_[boy].awayFrom))
+                    w.log(1, "  " + w.fullName(boy) + " 跟著趕集的人進了城，到 " + p.firstName + " 的舖子裡當學徒。");
             } else if (k == "hire_on") {
                 // The grown of the house hire on with the biggest farm (or the manor) for a year: board and a wage.
                 if (!h) continue;
@@ -1339,6 +1379,7 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 }
             } else if (k == "set_free") {
                 w.setFree(p.id);
+                w.noteLife(p.id, "替全家贖了身");
             } else if (k == "take_any_place") {
                 // No place after all: nothing after it in the list happens either (no fee, no "went to the master").
                 Id master = p.household != kNone ? w.openPlace(v.asString(), p.household) : kNone;

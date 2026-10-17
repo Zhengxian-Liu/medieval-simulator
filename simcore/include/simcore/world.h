@@ -95,6 +95,8 @@ struct Person {
     std::string ambition;
     int ambitionSince = 0;
     int ambitionStep = 0;       // milestones of the ambition reached so far
+    std::string lastAmbition;   // the last one completed: its harder sequels are offered first
+    uint32_t ambitionDone = 0;  // which of them (bit i: milestone i), in whatever order they came
     Intention intent;
     std::string lastReason;     // why they chose what they last chose, when a model decided for them
     bool free = true;           // false = villein (unfree), bound to the manor
@@ -151,6 +153,8 @@ struct Household {
     int debtYears = 0;     // rent days passed with the debt unpaid
     int noOxUntil = -1;    // the plough ox was sold or seized: poorer harvests until then
     double rentFactor = 1; // the lord raises the rent of households that do well
+    double leaseAcres = 0; // the lord's demesne farmed on a lease (包租), with its own rent, until leaseUntil
+    int leaseUntil = -1;
     int hiredUntil = -1;   // the grown hands are hired on for the year by another house (bed and board, a wage)
     Id hiredBy = kNone;
     int boonUntil = -1;    // working off a debt on the lord's demesne: fewer days on their own land
@@ -881,6 +885,8 @@ private:
     Id hireMaster(Id household) const;          // who would take this house's hands on for a year: the biggest farm, else the demesne
     int hiredHands(const Household& h) const;
     std::string rentVacantOnCredit(Household& h, double minAcres);  // "" when done, else why not
+    Id boyForMaster(const Person& master) const;  // a boy of 11-16 at the master's old home with no trade yet
+    int nextMilestone(const Person& head) const;  // the first step of the ambition not yet reached, -1 if none
     void secretSurfaces();                     // once a season: a secret the head keeps may come up
     Id hookDeed(Id holder, Id culprit) const;  // a secret holder believes culprit did, usable as leverage
     bool hasHook(Id holder) const;

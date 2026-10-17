@@ -202,6 +202,7 @@ Defs Defs::loadFromDir(const std::string& dir) {
             for (const auto& m : a["milestones"].asArray()) ad.milestones.push_back({m["name"].asString(), m["goal"]});
         if (a["plans"].isArray())
             for (const auto& pl : a["plans"].asArray()) ad.plans.push_back(pl.asString());
+        ad.next = readStrings(a["next"]);
         d.ambitions.push_back(ad);
     }
 

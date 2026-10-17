@@ -137,7 +137,9 @@ def render(v, full=False):
     if s.get("away"):
         out.append("―― 在外的家人 ――")
         for p in s["away"]:
-            out.append("  " + json.dumps(p, ensure_ascii=False)[:300])
+            out.append(f"  {p.get('kin', '')} {p['name']}（{p.get('age', '?')} 歲）：{p.get('station', '')}")
+            if p.get("road"):
+                out.append("    人生路：" + "；".join(f"{r['year']} {r['text']}" for r in p["road"]))
     if s.get("plan"):
         out.append("―― 進行中的計畫 ―― " + json.dumps(s["plan"], ensure_ascii=False)[:500])
     ops = [p for p in s.get("plans", []) if p.get("open")]

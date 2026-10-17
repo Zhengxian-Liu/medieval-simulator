@@ -272,6 +272,8 @@ void World::moveParcel(Id parcel, Id to, const std::string& how) {
     pc.holder = to;
     pc.since = day_;
     pc.how = how;
+    if (to != kNone && (how == "買來" || how == "向領主租來") && households_[to].head != kNone)
+        noteLife(households_[to].head, (how == "買來" ? "買下了" : "租下了") + parcelName(pc));
     if (to == kNone) pc.free = false;
     lastMoved_ = {parcel};
     syncLand(from);

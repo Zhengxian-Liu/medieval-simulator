@@ -133,6 +133,7 @@ struct AmbitionDef {
     };
     std::vector<Milestone> milestones;  // steps on the way, reached in order; the goal is the last step
     std::vector<std::string> plans;     // plans that move it forward: listed first and wanted more
+    std::vector<std::string> next;      // the harder goals it opens up once done: offered first afterwards
 };
 
 struct DeedDef {

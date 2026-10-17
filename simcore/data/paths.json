@@ -19,6 +19,8 @@
     {"id": "priest_away",     "name": "在外地當神父", "occupation": "priest", "away": true, "lasting": true},
     {"id": "archer",          "name": "出征當弓兵", "occupation": "soldier", "away": true},
     {"id": "fled",            "name": "逃到了鎮上", "away": true},
-    {"id": "elsewhere",       "name": "在外地落了腳", "away": true, "lasting": true}
+    {"id": "elsewhere",       "name": "在外地落了腳", "away": true, "lasting": true},
+    {"id": "monastery",       "name": "在修道院當修士", "away": true, "lasting": true},
+    {"id": "nunnery",         "name": "在修女院", "away": true, "lasting": true}
   ]
 }

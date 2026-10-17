@@ -19,7 +19,8 @@ void World::harvest() {
     else if (weather > 1.2) log(2, "風調雨順，今年是豐收年。");
 
     for (auto& h : households_) {
-        if (h.extinct || h.acres <= 0 || h.members.empty()) {
+        const double tilled = h.acres + (h.leaseUntil > day_ ? h.leaseAcres : 0);  // its own holding and any leased demesne
+        if (h.extinct || tilled <= 0 || h.members.empty()) {
             h.focusYield = 0;  // no crop this year: last year's days don't carry into a holding taken later
             continue;
         }
@@ -40,7 +41,7 @@ void World::harvest() {
         }
         if (h.house == "manor") workers = h.acres;  // the lord's demesne is worked by tenants' labour
         // Short of hands: hire harvest labourers, if the household can pay them.
-        double needed = h.acres / 12;
+        double needed = tilled / 12;
         if (workers < needed) {
             double cost = 120 * param("wage_mult", 1);  // a hired hand's wages and keep for the year
             double hired = std::min(needed - workers, h.money / cost);
@@ -48,12 +49,12 @@ void World::harvest() {
             book(h, "雇人收割", -hired * cost);
             workers += hired;
         }
-        double labour = std::min(1.0, workers * 12 / h.acres);
+        double labour = std::min(1.0, workers * 12 / tilled);
         double avgSkill = count > 0 ? skill / count : 5;
         double headMod = h.head != kNone ? traitMod(people_[h.head], "harvest") : 0;
         // Week-work: villein households lose days to the lord's fields at the busiest time.
         if (h.head != kNone && !people_[h.head].free && h.house != "manor") headMod -= 0.08;
-        double yield = h.acres * 120 * weather * mult * labour * (0.75 + avgSkill / 40) * (1 + headMod);
+        double yield = tilled * 120 * weather * mult * labour * (0.75 + avgSkill / 40) * (1 + headMod);
         if (h.noOxUntil > day_ && h.house != "manor") yield *= 0.88;  // ploughing with a borrowed beast
         if (h.boonUntil > day_) yield *= 0.85;                        // days owed on the demesne, not on their own strips
         yield *= 1 + h.workBonus;  // the head's spare days, spent in the fields
@@ -110,8 +111,16 @@ void World::payRent() {
         if (h.head != kNone && people_[h.head].occupation == "priest") continue;
         // Freehold pays a small fixed quit-rent; the rest is customary rent.
         double rent = ((h.acres - h.freehold) * 5 + h.freehold + 10) * rentMult * h.rentFactor;
+        // The demesne lease: its rent is set in the lease, paid with the rest at Michaelmas.
+        if (h.leaseUntil > day_) rent += h.leaseAcres * 4 * rentMult;
+        else if (h.leaseUntil >= 0) {
+            if (inPlayerHouse(h.id)) log(1, "包租領主自營地的七年到期了，那 " + std::to_string(int(h.leaseAcres)) + " 畝地還給了莊園。");
+            h.leaseUntil = -1;
+            h.leaseAcres = 0;
+        }
         if (h.head != kNone && people_[h.head].flags.count("lord_favour")) rent *= 0.7;
         if (h.head != kNone && people_[h.head].flags.count("reeve")) rent *= 0.6;  // the reeve's service is his rent
+        if (h.head != kNone && people_[h.head].flags.count("steward_man")) rent *= 0.8;  // the steward's man, likewise
         for (Id m : h.members)
             if (people_[m].flags.count("hayward")) rent *= 0.85;  // and the hayward's part of his
         // Villeins pay part of their rent in labour on the lord's demesne; free tenants pay it all in coin.

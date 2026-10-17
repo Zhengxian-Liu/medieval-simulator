@@ -32,7 +32,7 @@ const std::map<std::string, std::string>& modNames() {
         {"slighted", "給過我臉色"}, {"helped_me", "借糧給我"}, {"helped_them", "幫過他們"}, {"refused_help", "不肯幫忙"},
         {"condolence", "來弔唁過"}, {"took_our_want", "搶了我們看中的"}, {"took_our_land", "趁機拿走我家的地"},
         {"asked_too_much", "開口要得太過分"}, {"no_mercy", "不肯寬限"}, {"spoken_for", "有人替他說過話"}, {"granted_ask", "答應過我的請求"},
-        {"refused_ask", "回絕過我的請求"}, {"pressed_with_secret", "拿把柄壓過我"}, {"stood_aside", "讓過我一步"}, {"hard_words", "說過狠話"}, {"forbade_match", "不准我的親事"}, {"put_off", "推託過我的事"},
+        {"refused_ask", "回絕過我的請求"}, {"pressed_with_secret", "拿把柄壓過我"}, {"haggled", "跟我討價還價過"}, {"helped_us", "替我家墊過租"}, {"lied_to_me", "瞞過我的帳"}, {"stood_aside", "讓過我一步"}, {"hard_words", "說過狠話"}, {"forbade_match", "不准我的親事"}, {"put_off", "推託過我的事"},
         {"cold_shoulder", "給過我冷臉"}, {"heeded", "把我的事放在心上"}, {"neglected", "冷落過我"},
         {"came_to_wake", "來守過靈"}, {"missed_funeral", "喪事沒來露面"}, {"came_to_wedding", "來喝過喜酒"},
         {"wedding_gift", "送過賀禮"}, {"helps_at_home", "在家很幫忙"}, {"for_the_dead", "看在先人份上"}, {"against_the_dead", "記著先人的舊帳"}, {"missed_wedding", "喜事沒來"}};
@@ -225,8 +225,9 @@ std::string World::familyReport() const {
         if (const AmbitionDef* a = defs_.ambition(hp.ambition)) {
             o << "這一代的志向：「" << a->name << "」，" << a->desc;
             int total = static_cast<int>(a->milestones.size()) + 1;
-            if (hp.ambitionStep < static_cast<int>(a->milestones.size()))
-                o << "（第 " << hp.ambitionStep + 1 << "/" << total << " 步：" << a->milestones[hp.ambitionStep].name << "）";
+            int nx = nextMilestone(hp);
+            if (nx >= 0)
+                o << "（已做到 " << hp.ambitionStep << "/" << total << " 步；還差：" << a->milestones[nx].name << "）";
             else if (!a->milestones.empty())
                 o << "（最後一步）";
             int left = a->maxYears - (day_ - hp.ambitionSince) / kDaysPerYear;

@@ -59,6 +59,12 @@
      "fail_log": "{target} 說什麼也不肯賣祖上傳下來的地。", "fail": [{"opinion": {"value": -5, "mod": "land_dispute", "years": 5}}, {"deed": {"type": "refused_land", "doer": "target"}}],
      "ai": {"base": 6, "traits": {"ambitious": 8, "greedy": 6, "content": -6}, "if": [{"cond": {"ambition": "more_land"}, "add": 30}, {"cond": {"ambition": "big_landholder"}, "add": 30}]},
      "beats": [
+       {"id": "land_rival", "prompt": "{target} 家的地，別家也看上了，出的價比你高。", "chance": 0.35, "options": [
+         {"text": "再加 60 便士", "conditions": {"money_ge": 420}, "log": "別家也來搶 {target} 家的地，{name} 又加了 60 便士。", "effects": [{"money": -60}, {"target": [{"money": 60}]}, {"progress": 25}], "ai": {"base": 8, "traits": {"ambitious": 8, "greedy": -6}}},
+         {"text": "請 {target} 念在兩家的交情上先賣給你（一半一半）", "log": "{name} 去找 {target}，提起兩家多年的交情。", "effects": [{"random": {"percent": 50,
+             "effects": [{"log": "  {target} 嘆了口氣：「也罷，先說好的先賣。」"}, {"progress": 20}],
+             "else": [{"log": "  {target} 搖頭：「交情歸交情，錢歸錢。」"}, {"progress": -30}]}}], "ai": {"base": 8, "traits": {"gregarious": 6}}},
+         {"text": "讓給人家", "log": "{name} 不想跟人搶，這塊地讓別家買去了。", "effects": [{"abort_plan": true}], "ai": {"base": 3, "traits": {"content": 6, "kind": 4}}}]},
        {"id": "land_charter", "prompt": "談地的事有了點眉目。萬一 {target} 點頭，要不要先請書記把契約備好？", "chance": 0.2, "options": [
          {"text": "請書記寫一份契約（10 便士）", "log": "{name} 請書記寫好轉讓契約，打算在莊園法庭登記。", "effects": [{"money": -10}, {"progress": 20}], "ai": {"base": 10, "traits": {"greedy": -4}}},
          {"text": "口頭說好就行", "log": "", "effects": [{"progress": 5}], "ai": {"base": 8}}]},
@@ -243,6 +249,12 @@
      "fail_log": "{target} 不肯放人：「放了你們，誰來種我的地？」", "fail": [{"need": {"spirit": -10}}],
      "ai": {"base": 3, "traits": {"ambitious": 8, "brave": 3, "content": -4}, "if": [{"cond": {"ambition": "free_family"}, "add": 40}]},
      "beats": [
+       {"id": "freedom_price", "prompt": "管家傳話回來：老爺聽說你家這些年攢了不少錢，開的價比說好的高出一大截。", "chance": 1, "conditions": {"money_ge": 400}, "options": [
+         {"text": "照{target_pron}開的價（再多付家裡存錢的四分之一，最多 300 便士）", "log": "{name} 咬咬牙，答應了 {target} 開的價。", "effects": [{"pay_share": {"share": 0.25, "max": 300, "label": "贖身加價"}}, {"progress": 30}], "ai": {"base": 8, "traits": {"greedy": -8, "ambitious": 6}}},
+         {"text": "討價還價（一半一半）", "log": "{name} 托管家去跟 {target} 講價。", "effects": [{"random": {"percent": 50,
+             "effects": [{"log": "  {target} 哼了一聲，到底還是按原來的價。"}, {"progress": 10}],
+             "else": [{"log": "  {target} 惱了：「嫌貴就別買。」這事眼看要黃。"}, {"progress": -40}, {"lord_opinion": {"value": -5, "mod": "haggled", "years": 5}}]}}], "ai": {"base": 8, "traits": {"greedy": 8, "brave": 4}}},
+         {"text": "不買了", "log": "{name} 說這個價買不起，事情就這麼擱下了。", "effects": [{"abort_plan": true}], "ai": {"base": 3, "traits": {"greedy": 6, "content": 4}}}]},
        {"id": "lord_wants_more", "prompt": "管家傳話說，領主嫌贖身的錢少了。", "chance": 0.2, "options": [
          {"text": "再加 30 便士", "log": "管家說領主嫌錢少，{name} 咬牙又加了 30 便士。", "effects": [{"money": -30}, {"target": [{"money": 30}]}, {"progress": 30}], "ai": {"base": 10, "traits": {"greedy": -8}}},
          {"text": "不加", "log": "管家說領主嫌錢少，{name} 不肯再加。", "effects": [{"progress": -20}], "ai": {"base": 6, "traits": {"greedy": 10}}}]},
@@ -263,12 +275,41 @@
      "fail_log": "{target} 不肯賣：「地是我祖上傳下來的，佃給你種已經是恩典。」", "fail": [{"need": {"spirit": -8}}],
      "ai": {"base": 1.5, "traits": {"ambitious": 6, "greedy": 3}},
      "beats": [
+       {"id": "freehold_price", "prompt": "管家傳話回來：老爺聽說你家這些年攢了不少錢，開的價比說好的高出一大截。", "chance": 1, "conditions": {"money_ge": 400}, "options": [
+         {"text": "照{target_pron}開的價（再多付家裡存錢的四分之一，最多 300 便士）", "log": "{name} 咬咬牙，答應了 {target} 開的價。", "effects": [{"pay_share": {"share": 0.25, "max": 300, "label": "買自由地加價"}}, {"progress": 30}], "ai": {"base": 8, "traits": {"greedy": -8, "ambitious": 6}}},
+         {"text": "討價還價（一半一半）", "log": "{name} 托管家去跟 {target} 講價。", "effects": [{"random": {"percent": 50,
+             "effects": [{"log": "  {target} 哼了一聲，到底還是按原來的價。"}, {"progress": 10}],
+             "else": [{"log": "  {target} 惱了：「嫌貴就別買。」這事眼看要黃。"}, {"progress": -40}, {"lord_opinion": {"value": -5, "mod": "haggled", "years": 5}}]}}], "ai": {"base": 8, "traits": {"greedy": 8, "brave": 4}}},
+         {"text": "不買了", "log": "{name} 說這個價買不起，事情就這麼擱下了。", "effects": [{"abort_plan": true}], "ai": {"base": 3, "traits": {"greedy": 6, "content": 4}}}]},
        {"id": "freehold_neighbours", "prompt": "村裡有人說閒話：「佃戶也想當地主了？」", "chance": 0.15, "options": [
          {"text": "在酒館請大家喝一輪（6 便士）", "log": "{name} 在酒館請大家喝了一輪，閒話少了些。", "effects": [{"money": -6}, {"reputation": 2}], "ai": {"base": 8, "traits": {"generous": 8, "gregarious": 4}}},
          {"text": "不理他們", "log": "", "effects": [{"reputation": -1}], "ai": {"base": 8, "traits": {"shy": 4, "greedy": 4}}}]},
        {"id": "freehold_bribe", "prompt": "買地的事要經過管家的嘴。", "chance": 0.15, "options": [
          {"text": "塞給管家 8 便士", "log": "{name} 塞給管家 8 便士，請他在領主面前說好話。", "effects": [{"money": -8}, {"progress": 15}], "ai": {"base": 10}},
          {"text": "不必", "log": "", "effects": [], "ai": {"base": 6, "traits": {"pious": 4}}}]}
+     ]},
+
+    {"id": "lease_demesne", "name": "包租自營地", "requires": "家主，存錢 400 便士以上，自己有 25 畝以上的地", "notify_target": true,
+     "desc": "向領主把莊園自己經營的 30 畝包租下來，一租七年：押金 200 便士，往後每年多交 120 便士租錢。收成全歸你家，人手不夠就得雇人。",
+     "actor": {"is_head": true, "money_ge": 400, "acres_ge": 25, "age": [22, 65], "no_flag": "demesne_farmer", "not": {"occupation": ["lord", "priest"]}},
+     "target": {"pick": "lord", "conditions": {}},
+     "max_months": 12, "retry_years": 3,
+     "progress": {"base": 6, "skill": {"charm": 0.5}, "opinion": 5, "reputation": 0.5, "traits": {"ambitious": 2, "diligent": 2}},
+     "start_log": "{name} 托管家向 {target} 遞話，想把莊園的自營地包租下來。",
+     "success_log": "{target} 在租約上蓋了印：莊園自營地的 30 畝，往後七年歸 {name} 家種。",
+     "success": [{"money": -200}, {"target": [{"money": 200}]}, {"lease_demesne": {"acres": 30, "years": 7}}, {"set_flag": "demesne_farmer"}, {"prestige": 5}, {"reputation": 2}],
+     "fail_log": "{target} 說自營地還是自己種放心。", "fail": [{"need": {"spirit": -8}}],
+     "ai": {"base": 1, "traits": {"ambitious": 6, "greedy": 3}, "if": [{"cond": {"ambition": "lease_demesne"}, "add": 40}]},
+     "beats": [
+       {"id": "demesne_rival", "prompt": "管家說，村裡還有一家也想包這片地，出的押金比你多。", "chance": 0.4, "options": [
+         {"text": "押金再加 80 便士", "conditions": {"money_ge": 480}, "log": "{name} 聽說有人搶著包自營地，押金又加了 80 便士。", "effects": [{"money": -80}, {"target": [{"money": 80}]}, {"progress": 30}], "ai": {"base": 8, "traits": {"ambitious": 8, "greedy": -6}}},
+         {"text": "答應每年替莊園多出幾天工（一半一半）", "log": "{name} 說，除了押金，每年農忙再替莊園多出幾天工。", "effects": [{"random": {"percent": 50,
+             "effects": [{"log": "  管家點了頭：「老爺要的就是信得過的人。」"}, {"progress": 25}],
+             "else": [{"log": "  管家搖頭：「人家出的是現錢。」"}, {"progress": -30}]}}], "ai": {"base": 8, "traits": {"diligent": 6}}},
+         {"text": "不跟人搶了", "log": "{name} 不想跟人搶，包租的事就這麼算了。", "effects": [{"abort_plan": true}], "ai": {"base": 3, "traits": {"content": 6}}}]},
+       {"id": "demesne_steward", "prompt": "包租的事要經過管家的嘴。", "chance": 0.2, "options": [
+         {"text": "送管家一頭小豬", "log": "{name} 給管家送去一頭小豬。", "effects": [{"food": -60}, {"progress": 15}], "ai": {"base": 10}},
+         {"text": "不必", "log": "", "effects": [], "ai": {"base": 6, "traits": {"pious": 4, "greedy": 4}}}]}
      ]},
 
     {"id": "school_child", "name": "送孩子讀書", "requires": "家主，存錢 20 便士以上，家裡有 7 到 14 歲還沒讀書的孩子",

@@ -663,6 +663,7 @@ void World::mergeHousehold(Household& from, Household& to, const std::string& ho
     to.debtYears = std::max(to.debtYears, from.debtYears);
     to.noOxUntil = std::max(to.noOxUntil, from.noOxUntil);
     to.rentFactor = std::max(to.rentFactor, from.rentFactor);
+    if (from.leaseUntil > to.leaseUntil) to.leaseAcres = from.leaseAcres, to.leaseUntil = from.leaseUntil;
     for (const auto& [k, v] : from.ledger) to.ledger[k] += v;
     // The village's view of the old house is now of this one: its wants, the fine it owes, its servants away.
     for (auto& wt : wants_)
@@ -1223,6 +1224,11 @@ void World::yearlyAdulthood() {
                     if (occ == "housewife" || occ == "lady" || occ.empty()) occ = "peasant";
                     if (occ == "lord") occ = "lord";
                 }
+            }
+            // A son does not take up his widowed mother's brewing (釀酒婦), nor a daughter her father's forge.
+            if (const OccupationDef* od = defs_.occupation(occ)) {
+                if (od->sex == "female" && p.sex == Sex::Male) occ = "peasant";
+                if (od->sex == "male" && p.sex == Sex::Female) occ = "housewife";
             }
             p.occupation = occ;
             if (p.station == "apprentice") setStation(p.id, "home", 0, "出師，當" + defs_.occupation(occ)->name);
