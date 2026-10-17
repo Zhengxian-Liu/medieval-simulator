@@ -17,8 +17,8 @@
     {"id": "pilgrimage", "title": "朝聖", "prompt": "一群朝聖者路過村子，要往坎特伯雷去。這一趟要花上 50 便士和一個多月。", "scope": "player_head", "chance": 0.06, "cooldown_years": 3,
      "conditions": {"money_ge": 70, "age": [22, 60], "no_flag": "pilgrim", "month": [3, 6]},
      "options": [
-       {"text": "去坎特伯雷朝聖（50 便士）", "log": "{name} 跟著一群朝聖者走到坎特伯雷，在聖湯瑪斯的墓前跪了一整夜。",
-        "effects": [{"money": -50}, {"set_flag": "pilgrim"}, {"add_item": "pilgrim_badge"}, {"need": {"spirit": 40}}, {"reputation": 3},
+       {"text": "去坎特伯雷朝聖（50 便士）", "log": "{name} 跟著一群朝聖者走到坎特伯雷，在聖湯瑪斯的墓前跪了一整夜。回來時胸前別著一枚朝聖徽章，心裡踏實多了，村裡人見了也高看一眼（聲望 +3）；只是一個多月不在家，田裡少了一雙手。",
+        "effects": [{"money": -50}, {"set_flag": "pilgrim"}, {"yield": -0.03}, {"add_item": "pilgrim_badge"}, {"need": {"spirit": 40}}, {"reputation": 3},
                     {"random": {"percent": 10, "effects": [{"health": -25}, {"log": "{name} 在回程路上染了病。"}], "else": []}}],
         "ai": {"base": 3, "traits": {"pious": 15, "cynical": -5}, "if": [{"cond": {"ambition": "pious_life"}, "add": 50}]}},
        {"text": "今年不去", "log": "", "effects": [], "ai": {"base": 10}}

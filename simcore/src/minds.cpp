@@ -534,7 +534,12 @@ void World::helpFriend(Person& p) {
         Id head = actingHead();
         bool flame = head != kNone && head != p.id && knownFlame(head, p.id) == t;
         std::vector<std::string> opts = {"答應", "不准"};
-        std::string sit = fullName(p.id) + " 想給 " + fullName(t) + " 家送去" + gift + "：他們家今年日子難過" + because + "。";
+        // Asked of the head once in a while, not every year the same.
+        auto asked = cooldowns_.find({p.id, "help_ask"});
+        if (asked != cooldowns_.end() && asked->second > day_) return;
+        cooldowns_[{p.id, "help_ask"}] = day_ + 2 * kDaysPerYear;
+        std::string sit = fullName(p.id) + " 想給 " + fullName(t) + " 家送去" + gift + "：" +
+                          (giveFood ? "他們家今年日子難過" : "不為什麼，就是想表一表心意") + because + "。";
         if (flame) {
             sit += "你心裡清楚，" + fullName(t) + " 是" + pron(p) + "當年的人。";
             opts.push_back("不准，而且挑明了：「你以為我不知道？」");

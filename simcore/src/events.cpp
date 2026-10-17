@@ -55,7 +55,12 @@ bool EventRunner::eligible(const EventDef& ev, const Person& p, Id playerHead) c
 // A signal-driven event whose day has come: the target and the deed come from the signal.
 void EventRunner::fireScheduled(const EventDef& ev, Person& p, Id target, Id deed) {
     Id playerHead = w_.playerHousehold_ != kNone ? w_.households_[w_.playerHousehold_].head : kNone;
-    if (!eligible(ev, p, playerHead)) return;
+    if (!eligible(ev, p, playerHead)) {
+        // The same blow again before the last has healed: a quiet line, not the same card a second time.
+        if (!ev.quietLog.empty() && target != kNone && p.alive() && w_.inPlayerHouse(p.household) && eval(ev.conditions, p, target))
+            w_.log(1, format(ev.quietLog, p, target));
+        return;
+    }
     // A mourner's moment is about the dead; every other target has to be still about.
     std::string sig = ev.on.stringOr("signal", "");
     bool aboutDead = sig.rfind("bereaved:", 0) == 0 || sig == "news:funeral";
@@ -202,7 +207,10 @@ void EventRunner::interact(const EventDef& ev, Person& p, Id head) {
     if (!p.alive() || p.household == kNone || head == kNone) return;
     // Never silent: a visit that cannot be made says why.
     auto no = [&](const std::string& why) { w_.log(1, "〔" + ev.title + "〕沒去成：" + why); };
-    if (!eval(ev.conditions, p, head)) return no("眼下找" + w_.shortName(p.id) + "不合適。");
+    // Things may have changed since the button was shown (a wake eased the whole house's grief): say what.
+    if (!eval(ev.conditions, p, head))
+        return no(ev.interaction["gone"].isString() ? format(ev.interaction["gone"].asString(), p, head) + "。"
+                                                    : w_.shortName(p.id) + "那邊的情形變了，眼下用不著" + ev.title + "。");
     auto cd = w_.cooldowns_.find({p.id, ev.id});
     if (cd != w_.cooldowns_.end() && cd->second > w_.day_) return no("才找過" + w_.shortName(p.id) + "，過些日子再說。");
     // Sheltering from the pestilence: nobody outside the house is seen.
@@ -215,8 +223,13 @@ void EventRunner::interact(const EventDef& ev, Person& p, Id head) {
     hh.money = std::max(0.0, hh.money - money);
     w_.book(hh, ev.title, -money);
     bookAs_ = ev.title;
-    // How they take it is up to them: their nature, their mood, what they feel for the head.
-    const OptionDef& o = ev.options[chooseOption(ev, p, head)];
+    // How they take it is up to them: their nature, their mood, what they feel for the head. Except when it is the
+    // very thing they were hoping for: that is taken gladly.
+    const WantDef* hoped = w_.defs_.want(p.want);
+    bool wanted = hoped && std::find(hoped->answeredBy.begin(), hoped->answeredBy.end(), ev.id) != hoped->answeredBy.end() &&
+                  optionOpen(ev.options.front(), p, head);
+    int pick = wanted ? 0 : chooseOption(ev, p, head);
+    const OptionDef& o = ev.options[pick];
     natureStress(ev, o, p, head);
     if (ev.cooldownMonths > 0) w_.cooldowns_[{p.id, ev.id}] = w_.day_ + ev.cooldownMonths * kDaysPerMonth;
     ++w_.counters_["interaction:" + ev.id];
@@ -227,11 +240,18 @@ void EventRunner::interact(const EventDef& ev, Person& p, Id head) {
         w_.opinion(p.id, head) > -40) {
         std::vector<double> pool;  // weight of each of ids
         std::vector<std::string> ids;
+        // The family does not hear the same words twice in five years, whoever says them.
+        Id ear = w_.people_[head].household;
+        auto heardLately = [&](const std::string& l) {
+            auto it = w_.chatterHeard_.find({ear, l});
+            return it != w_.chatterHeard_.end() && w_.day_ - it->second < 5 * kDaysPerYear;
+        };
         for (const auto& c : w_.defs_.chatter) {
             auto said = w_.chatterSaid_.find({p.id, c.id});
             if (c.lines.empty() || (said != w_.chatterSaid_.end() && w_.day_ - said->second < 2 * kDaysPerYear)) continue;
             if (std::find(c.notIn.begin(), c.notIn.end(), ev.id) != c.notIn.end()) continue;
             if (!eval(c.when, p, head)) continue;
+            if (std::none_of(c.lines.begin(), c.lines.end(), [&](const std::string& l) { return !heardLately(l); })) continue;
             pool.push_back(c.weight);
             ids.push_back(c.id);
         }
@@ -267,9 +287,12 @@ void EventRunner::interact(const EventDef& ev, Person& p, Id head) {
                     if (c.id == ids[k]) {
                         OptionDef tmp;
                         tmp.text = "chatter:" + c.id;
-                        tmp.log = c.lines[0];
-                        tmp.logs = c.lines;
-                        extra = format(pickLog(tmp, p.id), p, head);
+                        for (const auto& l : c.lines)
+                            if (!heardLately(l)) tmp.logs.push_back(l);
+                        tmp.log = tmp.logs.front();
+                        const std::string& said = pickLog(tmp, p.id);
+                        w_.chatterHeard_[{ear, said}] = w_.day_;
+                        extra = format(said, p, head);
                         break;
                     }
             }
@@ -277,6 +300,13 @@ void EventRunner::interact(const EventDef& ev, Person& p, Id head) {
         }
     }
     if (!line.empty()) w_.log(1, "〔" + ev.title + "〕" + line);
+    // A cold answer says why, so the next visit can be better chosen.
+    if (!line.empty() && pick != 0 && w_.pendingReason_.empty() && ev.options.size() > 1) {
+        double op = w_.opinion(p.id, head);
+        w_.pendingReason_ = op < 0 ? p.firstName + " 對你家沒什麼好感（好感 " + std::to_string(std::lround(op)) + "）"
+                            : w_.mood(p) < 35 ? p.firstName + " 這陣子心裡不痛快"
+                                              : "看 " + p.firstName + " 的脾氣，這回就是不領情；交情再深一點會好些";
+    }
     if (!w_.pendingReason_.empty()) {
         if (!line.empty()) w_.log(1, "  （" + w_.pendingReason_ + "）");
         w_.pendingReason_.clear();
@@ -449,7 +479,8 @@ int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
             lines.push_back(format(o.logs.empty() ? o.log : o.logs[0], p, target));
         }
         if (!ev.prompt.empty()) {
-            prompt.situation = format(ev.prompt, p, target);
+            const std::string& said = ev.prompts.size() > 1 ? ev.prompts[w_.rngEvents_.range(0, static_cast<int>(ev.prompts.size()) - 1)] : ev.prompt;
+            prompt.situation = format(said, p, target);
         } else {
             // The situation: what every option's line agrees on, up to the last full stop or comma in it,
             // is what is happening before the choice is made.
@@ -1257,8 +1288,14 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 auto it = w.lastMatchSubject_.find(p.id);
                 if (it == w.lastMatchSubject_.end() || !w.people_[it->second].alive()) continue;
                 w.cooldowns_.erase({it->second, "plan:arrange_match"});
-                if (w.inPlayerHouse(p.household))
-                    w.log(1, "  （" + w.people_[it->second].firstName + " 的親事不用再等了，計畫裡的「說親」可以另找人家。）");
+                if (w.inPlayerHouse(p.household)) {
+                    bool open = false;
+                    for (const auto& op : w.availablePlans(p.id)) open = open || (op.plan == "arrange_match" && op.subject == it->second);
+                    const PlanDef* pd = w.defs_.plan("arrange_match");
+                    std::string why = open || !pd ? "" : w.planBlock(p.id, *pd);
+                    w.log(1, "  （" + w.people_[it->second].firstName + " 的親事不用再等了" +
+                                 (open ? "，計畫裡的「說親」可以另找人家。）" : "，可是眼下說不成：" + why + "。）"));
+                }
             } else if (k == "feed_from_target") {
                 // The target's house sends p's v days of bread from its own store.
                 if (!h || target == kNone || w.people_[target].household == kNone) continue;

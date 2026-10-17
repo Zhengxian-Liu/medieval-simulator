@@ -60,6 +60,8 @@ struct EventDef {
     std::string id;
     std::string title;
     std::string prompt;  // what the player is told when asked to choose; optional
+    std::vector<std::string> prompts;  // other ways of telling it, picked at random (with prompt)
+    std::string quietLog;  // said instead when it comes again while still on cooldown (a second child buried)
     bool ask = true;     // false: routine, the AI chooses even for a human player
     bool parentDecides = false;  // the head chooses for their unmarried children living at home
     std::string pulse;  // monthly | yearly

@@ -53,7 +53,9 @@
         "ai": {"base": 4, "traits": {"brave": 8, "wrathful": 6, "ambitious": 3, "craven": -8}}}
      ]},
 
-    {"id": "reeve_collect", "title": "莊頭收租", "prompt": "當莊頭的 {name} 要去 {target} 家收欠租。那家人看起來真的拿不出來。", "scope": "player_head", "pulse": "yearly", "chance": 0.35, "cooldown_years": 1,
+    {"id": "reeve_collect", "title": "莊頭收租", "prompt": "當莊頭的 {name} 要去 {target} 家收欠租。那家人看起來真的拿不出來。",
+     "prompts": ["當莊頭的 {name} 要去 {target} 家收欠租。那家人看起來真的拿不出來。", "管家把欠租的名單交給 {name}，{target} 家排在頭一個。聽說他家冬天賣了最後一頭豬。", "{target} 在教堂門口攔住當莊頭的 {name}，說欠莊園的租今年還是湊不齊。"],
+     "scope": "player_head", "pulse": "yearly", "chance": 0.35, "cooldown_years": 2,
      "conditions": {"age": [14, 120], "reeve": true},
      "target": {"conditions": {"is_head": true, "owes_lord_ge": 5, "other_dynasty": true, "manor": false}},
      "options": [
@@ -69,7 +71,9 @@
         "ai": {"base": 3, "traits": {"greedy": 12, "cynical": 4, "pious": -6}}}
      ]},
 
-    {"id": "reeve_boonwork", "title": "派勞役", "prompt": "收割前，當莊頭的 {name} 要排各家去領主田裡幹活的日子。{target_house} 家跟 {name} 家有舊怨。", "scope": "player_head", "chance": 0.3, "cooldown_years": 1,
+    {"id": "reeve_boonwork", "title": "派勞役", "prompt": "收割前，當莊頭的 {name} 要排各家去領主田裡幹活的日子。{target_house} 家跟 {name} 家有舊怨。",
+     "prompts": ["收割前，當莊頭的 {name} 要排各家去領主田裡幹活的日子。{target_house} 家跟 {name} 家有舊怨。", "管家要 {name} 排出誰家去清莊園的水溝。那是最髒最累的活，{target_house} 家跟你家素有嫌隙。"],
+     "scope": "player_head", "chance": 0.3, "cooldown_years": 2,
      "conditions": {"age": [14, 120], "reeve": true, "month": [6, 7]},
      "target": {"pick": "feud", "min_stage": 1, "conditions": {"is_head": true}},
      "options": [

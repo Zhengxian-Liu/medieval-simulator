@@ -522,7 +522,8 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
         res.demandParcel = demandParcel;
         res.demandOffice = demandOffice;
         res.dealCost = dealCost;
-        if (lever.empty()) res.levers.push_back("meet");  // a press is the one more try: its condition is not pressed again
+        // A condition can always be met, after a press as much as at the first asking (the press is not pressed again).
+        if (lever != "meet") res.levers.push_back("meet");
     } else if (answer == 3) {
         res.text = name + "搖了搖頭：「" + why + "。」";
         asked_[{who, what, object}] = day_ + 90;

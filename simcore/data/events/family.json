@@ -103,7 +103,7 @@
      ]},
     {"id": "friend_help", "title": "朋友相助", "scope": "player_family", "chance": 0.04, "cooldown_years": 3, "cooldown_scope": "household",
      "conditions": {"age": [16, 70], "month": [7, 8]},
-     "target": {"pick": "friend", "conditions": {"age": [16, 70], "not_kin": true}},
+     "target": {"pick": "friend", "conditions": {"age": [16, 70], "not_kin": true, "not": {"occupation": ["lord", "lady", "priest"]}}},
      "options": [{"text": "好", "log": "{target} 來幫 {name} 搶收麥子，趕在下雨前收完了。", "effects": [{"food": 120}, {"deed": {"type": "helped_harvest", "doer": "target"}}]}]},
     {"id": "neighbour_death_npc", "title": "村裡的怪事", "scope": "anyone", "chance": 0.002, "npc_log": true, "cooldown_years": 30,
      "conditions": {"age": [30, 70], "trait": "cynical"},

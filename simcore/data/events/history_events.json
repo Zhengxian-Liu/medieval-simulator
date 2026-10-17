@@ -21,7 +21,7 @@
      "conditions": {"world_flag": "post_plague", "year": [1349, 1350], "plague_active": false, "age": [3, 90]},
      "options": [{"text": "好", "log": "", "effects": [{"add_trait": "plague_survivor"}]}]},
     {"id": "old_wages", "title": "勞工法令", "prompt": "瘟疫之後人手奇缺，鄰村有人出雙倍工錢。可是《勞工法令》規定只能拿老工錢。", "scope": "player_head", "chance": 0.12, "cooldown_years": 3,
-     "conditions": {"world_flag": "statute_labourers", "year": [1351, 1380], "occupation": ["peasant", "carpenter", "weaver", "shepherd"]},
+     "conditions": {"world_flag": "statute_labourers", "year": [1351, 1380], "occupation": ["peasant", "carpenter", "weaver", "shepherd"], "acres_lt": 15},
      "target": {"pick": "lord", "conditions": {}},
      "options": [
        {"text": "照舊工錢做", "log": "", "effects": [{"money": -8}, {"target_opinion": {"value": 5, "mod": "obedient", "years": 5}}], "ai": {"base": 10, "traits": {"craven": 6, "calm": 4}}},

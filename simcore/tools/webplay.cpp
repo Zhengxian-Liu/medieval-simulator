@@ -122,7 +122,7 @@ public:
                               .text("desc", er.format(in.ev->interaction.stringOr("desc", ""), p, head.id))
                               .b("open", in.open)
                               .text("why", in.why)
-                              .b("wanted", wanted)
+                              .b("wanted", wanted && in.open && w_.timeLeft() >= in.ev->interaction.numberOr("time", 1))
                               .n("time", in.ev->interaction.numberOr("time", 1))
                               .n("money", in.ev->interaction.numberOr("money", 0))
                               .done());

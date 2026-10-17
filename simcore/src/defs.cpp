@@ -33,6 +33,8 @@ EventDef parseEvent(const Json& e) {
     d.id = e["id"].asString();
     d.title = e.stringOr("title", d.id);
     d.prompt = e.stringOr("prompt", "");
+    d.prompts = readStrings(e["prompts"]);
+    d.quietLog = e.stringOr("quiet_log", "");
     d.ask = !e["ask"].isBool() || e["ask"].asBool();
     d.parentDecides = e["parent_decides"].isBool() && e["parent_decides"].asBool();
     d.pulse = e.stringOr("pulse", "monthly");

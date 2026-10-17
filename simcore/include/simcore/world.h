@@ -707,6 +707,7 @@ private:
     std::map<std::pair<Id, std::string>, int> cooldowns_;  // (person, event) -> day allowed again
     std::map<std::pair<Id, std::string>, int> lastLog_;    // (person, option text) -> the variant last told
     std::map<std::pair<Id, std::string>, int> chatterSaid_;  // (person, chatter id) -> day they last talked of it
+    std::map<std::pair<Id, std::string>, int> chatterHeard_;  // (listening house, line) -> day it last heard it said
     std::set<std::string> worldFlags_;
     std::vector<ActiveEffect> effects_;
     std::map<std::string, double> baseParams_;

@@ -21,7 +21,7 @@
     {"id": "grudge", "weight": 4, "when": {"concern": {"kind": "grievance", "min": 15}, "not": {"concern": {"kind": "grievance", "about": "target"}}}, "lines": [
       "{first}還在生{about:grievance}的氣，說起來就咬牙。",
       "{first}說，{about:grievance}那筆帳，遲早要算。"]},
-    {"id": "worry", "weight": 4, "when": {"concern": {"kind": "worry", "min": 15}}, "lines": [
+    {"id": "worry", "weight": 4, "when": {"concern": {"kind": "worry", "min": 15}, "age": [14, 120]}, "lines": [
       "{first}一直在算家裡的糧還能撐幾個月。",
       "{first}說，再這樣下去，今年冬天怕是難熬。"]},
     {"id": "shame", "weight": 4, "when": {"concern": {"kind": "shame", "min": 15}}, "lines": [
@@ -30,19 +30,19 @@
     {"id": "joy", "weight": 3, "not_in": ["talk_condole", "talk_comfort"], "when": {"concern": {"kind": "joy", "min": 15}}, "lines": [
       "{first}一直笑，說起{about:joy}就停不下來。",
       "{first}說這是好些年來最高興的一陣子。"]},
-    {"id": "lean", "weight": 3, "when": {"lean": true}, "lines": [
+    {"id": "lean", "weight": 3, "when": {"lean": true, "age": [14, 120]}, "lines": [
       "{first}說今年麥子收得少，村裡好幾家已經在摻豆子煮粥了。",
       "{first}問，要不要把那頭豬早點殺了，省下飼料。"]},
-    {"id": "debt", "weight": 2, "when": {"in_debt": true}, "lines": [
+    {"id": "debt", "weight": 2, "when": {"in_debt": true, "age": [16, 120]}, "lines": [
       "{first}問欠人家的錢，到底什麼時候還得清。",
       "{first}說債主家的人在路上碰見，連招呼都不打了。"]},
     {"id": "winter", "weight": 1, "when": {"winter": true}, "lines": [
       "{first}說柴堆又矮了一截，得趁雪停去林子裡撿些枯枝。",
       "兩人圍著火盆，{first}說起小時候那場大雪，村裡的井都凍住了。"]},
-    {"id": "harvest", "weight": 1, "not_in": ["talk_condole"], "when": {"month": [7, 8]}, "lines": [
+    {"id": "harvest", "weight": 1, "not_in": ["talk_condole"], "when": {"month": [7, 8], "age": [12, 120]}, "lines": [
       "{first}說今年北邊那塊地的麥穗看著還算飽滿。",
       "{first}說收割那幾天，腰都直不起來。"]},
-    {"id": "spring", "weight": 1, "not_in": ["talk_condole"], "when": {"month": [2, 4]}, "lines": [
+    {"id": "spring", "weight": 1, "not_in": ["talk_condole"], "when": {"month": [2, 4], "age": [12, 120]}, "lines": [
       "{first}說河邊的柳樹發芽了，該下豆子了。",
       "{first}說今年的羊羔生得多，是好兆頭。"]},
     {"id": "small_child", "weight": 3, "not_in": ["talk_market"], "when": {"age": [5, 11]}, "lines": [
@@ -55,17 +55,17 @@
     {"id": "old", "weight": 3, "when": {"age": [58, 120]}, "lines": [
       "{first}講起年輕時候村裡的事，那時候的領主還是老爺爺那一輩。",
       "{first}說膝蓋一到下雨天就疼，怕是沒幾年好活了。",
-      "{first}叮囑你，家裡的地契要收好，別讓人鑽了空子。"]},
+      "{first}叮囑你，家裡的地要看好，界石別讓人挪了。"]},
     {"id": "pious", "weight": 2, "when": {"trait": "pious"}, "lines": [
       "{first}說起神父上禮拜講的那段經文，講得很動人。",
       "{first}說想在聖母像前多點一根蠟燭，替家裡祈福。"]},
-    {"id": "greedy", "weight": 2, "when": {"trait": "greedy"}, "lines": [
+    {"id": "greedy", "weight": 2, "when": {"trait": "greedy", "age": [16, 120], "acres_ge": 8}, "lines": [
       "{first}算了一筆帳：要是把東邊那塊地租出去，一年能多收多少。",
       "{first}抱怨市集上的鹽又漲價了。"]},
-    {"id": "ambitious", "weight": 2, "when": {"trait": "ambitious"}, "lines": [
+    {"id": "ambitious", "weight": 2, "when": {"trait": "ambitious", "age": [14, 120], "standing_lt": 2}, "lines": [
       "{first}說，總不能一輩子給人當佃戶。",
       "{first}說聽說鎮上有人靠賣羊毛發了家。"]},
-    {"id": "gregarious", "weight": 2, "not_in": ["talk_condole", "talk_comfort", "talk_apologize"], "when": {"trait": "gregarious"}, "lines": [
+    {"id": "gregarious", "weight": 2, "not_in": ["talk_condole", "talk_comfort", "talk_apologize"], "when": {"trait": "gregarious", "age": [14, 120]}, "lines": [
       "{first}講了一串酒館裡聽來的笑話，你笑得差點嗆到。",
       "{first}把村裡誰家跟誰家不對盤，一五一十都說給你聽。"]},
     {"id": "lazy", "weight": 1, "not_in": ["talk_condole"], "when": {"trait": "lazy"}, "lines": [
@@ -76,7 +76,7 @@
       "{first}望著窗外發呆，說有時候也不知道活著圖什麼。"]},
     {"id": "wrathful", "weight": 1, "when": {"trait": "wrathful"}, "lines": [
       "{first}說起白天跟人吵的那一架，又來了火氣。"]},
-    {"id": "drunkard", "weight": 2, "not_in": ["talk_condole"], "when": {"trait": "drunkard"}, "lines": [
+    {"id": "drunkard", "weight": 2, "not_in": ["talk_condole"], "when": {"trait": "drunkard", "age": [14, 120]}, "lines": [
       "{first}身上一股麥酒味，說話也有點顛三倒四。"]},
     {"id": "veteran", "weight": 2, "when": {"trait": "veteran"}, "lines": [
       "{first}講起在法國打仗的事，說到一半就不說了。"]},

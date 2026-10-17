@@ -17,7 +17,10 @@
        {"text": "不買", "log": "", "effects": [], "ai": {"base": 6, "traits": {"content": 6, "craven": 2}}}
      ]},
 
-    {"id": "lord_aid", "title": "莊園要用錢", "prompt": "{target}要替女兒備嫁妝，又要替國王出人出錢，莊園一時湊不出這麼多現錢。管家挨家找殷實的佃戶「幫襯」，翻著帳本對你說：「你家這些年攢下的，老爺都知道。」",
+    {"id": "lord_aid", "title": "莊園要用錢", "prompt": "{target}又要替國王出人出錢，莊園一時湊不出這麼多現錢。管家挨家找殷實的佃戶「幫襯」，翻著帳本對你說：「你家這些年攢下的，老爺都知道。」",
+     "prompts": ["{target}又要替國王出人出錢，莊園一時湊不出這麼多現錢。管家挨家找殷實的佃戶「幫襯」，翻著帳本對你說：「你家這些年攢下的，老爺都知道。」",
+                 "莊園的穀倉漏了，屋頂要翻修，{target}手上的現錢不夠。管家上門來，說老爺記得哪幾家是靠得住的。",
+                 "{target}要去倫敦打一場官司，路上的花費和給律師的錢都還沒著落。管家對你說：「老爺說，這種時候才看得出誰是自己人。」"],
      "scope": "player_head", "pulse": "yearly", "chance": 0.3, "cooldown_years": 4,
      "conditions": {"is_head": true, "money_ge": 300, "not": {"occupation": ["lord", "lady", "priest"]}},
      "target": {"pick": "lord", "conditions": {}},

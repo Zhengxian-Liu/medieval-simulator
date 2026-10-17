@@ -7,7 +7,7 @@
   // Results go into opinions, memories and concerns, so they come back in later events.
   "events": [
     {"id": "talk_comfort", "title": "安慰", "scope": "interaction", "cooldown_months": 3,
-     "interaction": {"chatter": true, "who": "family", "time": 1, "desc": "陪{pron}坐一坐，聽{pron}說說心裡的苦"},
+     "interaction": {"chatter": true, "who": "family", "time": 1, "desc": "陪{pron}坐一坐，聽{pron}說說心裡的苦", "gone": "{first}心裡已經好些了，用不著安慰"},
      "conditions": {"age": [6, 120], "any": [{"concern": {"kind": "grief", "min": 10}}, {"concern": {"kind": "heartbreak", "min": 10}},
                                             {"concern": {"kind": "shame", "min": 10}}, {"concern": {"kind": "worry", "min": 10}}]},
      "options": [

@@ -54,8 +54,9 @@
      "conditions": {"age": [16, 65], "month": [3, 9]},
      "options": [
        {"text": "去鎮上賣東西", "log": "", "effects": [{"need": {"social": 15}}, {"random": {"percent": 70,
-          "effects": [{"money": 20}],
-          "else": [{"money": -12}, {"log": "{name} 在鎮上的市集被扒了錢袋。"}]}}], "ai": {"base": 10, "traits": {"gregarious": 6, "greedy": 4}}},
+          "effects": [{"money": 20}, {"log": "{name} 在鎮上的市集賣了些雞蛋和紗線，換回 20 便士。"}],
+          "else": [{"if": {"cond": {"money_ge": 40}, "then": [{"money": -12}, {"log": "{name} 在鎮上的市集被扒了錢袋，丟了 12 便士。"}],
+                           "else": [{"money": -3}, {"log": "{name} 在鎮上的市集被扒了錢袋，好在裡頭只有 3 便士。"}]}}]}}], "ai": {"base": 10, "traits": {"gregarious": 6, "greedy": 4}}},
        {"text": "留在村裡", "log": "", "effects": [], "ai": {"base": 6, "traits": {"shy": 8, "lazy": 5}}}
      ]},
     {"id": "labour_service", "title": "領主的勞役", "prompt": "收割季節到了，天邊壓著雨雲。照規矩要先替領主割三天麥子；等割完回來，自家的麥子怕是要被雨打壞一些。", "scope": "player_head", "chance": 0.25, "cooldown_years": 4, "cooldown_scope": "household",
@@ -68,7 +69,9 @@
         "ai": {"base": 6, "traits": {"diligent": 4, "greedy": 4, "craven": -4}}},
        {"text": "推託", "log": "{name} 推說家裡有病人，沒去替領主割麥子，被罰了 6 便士。", "effects": [{"money": -6}, {"target_opinion": {"value": -10, "mod": "shirker", "years": 5}}, {"reputation": 1}], "ai": {"base": 5, "traits": {"lazy": 8, "wrathful": 6, "brave": 4}}}
      ]},
-    {"id": "reeve_temptation", "title": "莊頭的帳本", "prompt": "領主的帳本在 {name} 手上。少記幾筆，沒人看得出來。", "scope": "player_family", "chance": 0.08, "cooldown_years": 2,
+    {"id": "reeve_temptation", "title": "莊頭的帳本", "prompt": "領主的帳本在 {name} 手上。少記幾筆，沒人看得出來。",
+     "prompts": ["領主的帳本在 {name} 手上。少記幾筆，沒人看得出來。", "賣羊毛的錢經 {name} 的手交給管家。少報一點，管家也不會去羊圈裡數。", "今年莊園的麥子是 {name} 帶人賣到集上的。說價錢跌了，誰也查不出來。"],
+     "scope": "player_family", "chance": 0.08, "cooldown_years": 3,
      "conditions": {"reeve": true},
      "target": {"pick": "lord", "conditions": {}},
      "options": [
