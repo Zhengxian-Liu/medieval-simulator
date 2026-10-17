@@ -4,15 +4,20 @@
 
 ## 一輪怎麼跑
 
-1. 從要測的版本建一份凍結的副本（別人改程式不影響試玩）：
-   `cp -R CMakeLists.txt data include scripts src tests tools <副本>/game/`，在副本裡 `cmake --build build --target webplay`。
-2. 開瀏覽器版的伺服器：`python3 tools/ui/server.py --port 8820 --no-browser -- --seed <N> --out <副本>/out`。
+1. 從要測的版本建一份凍結的副本（別人改程式不影響試玩）。路徑有空格時要加引號：
+   ```
+   mkdir -p "<副本>/game" && cp -R CMakeLists.txt data include scripts src tests tools "<副本>/game/"
+   cd "<副本>/game" && bash scripts/build.sh
+   ```
+2. 在副本裡開瀏覽器版的伺服器（server.py 用的是它旁邊的 build 和 data，所以一定要在副本裡跑）：
+   `cd "<副本>/game" && python3 tools/ui/server.py --port 8820 --no-browser -- --seed <N> --out "<副本>/out.md"`。
+   如果 8820 被占用，它會自己換到下一個埠，第一行會印出實際的網址，textplay 要用那個埠。
 3. 讓 Fable（`claude-fable-5-1`）當玩家，用 `tools/ui/textplay.py` 玩。這個文字介面顯示的就是網頁上看得到的東西，按鈕對應同樣的 JSON。
    - 只能像玩家一樣玩：不看原始碼、資料和設計文件。
    - 至少玩 30 年，最好撐過一次當家的人過世。
    - 用「讓 AI 過一年」時要寫下為什麼（這代表玩膩了）。
    - 邊玩邊記筆記。
-4. Fable 寫報告到 `/mnt/project-files/playtests/<日期>-fable-r<輪>.md`：八項各打 1–10 分並附遊戲裡的證據，給總分，排出最能提高好玩度的 5 件事，列出看到的錯誤。
+4. Fable 寫報告到 `/mnt/project-files/playtests/<日期>-fable-r<輪>.md`（資料夾不存在就先建）：八項各打 1–10 分並附遊戲裡的證據，給總分，排出最能提高好玩度的 5 件事，列出看到的錯誤。
 5. 照報告的前幾名**整體**重新設計（不是一條一條補），推上去以後再跑下一輪。每輪換一個種子，免得只對一個村子調。
 
 ## 八項評分

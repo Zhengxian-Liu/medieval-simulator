@@ -13,7 +13,8 @@ Actions (the page's buttons):
   {"do":"interact","who":12,"event":"talk_heart"}   spend season time on someone (see each person's actions)
   {"do":"ask","who":12,"ask":"sell_parcel","object":30,"subject":-1,"office":"","lever":""}   開口 (see asks)
   {"do":"plan","plan":"befriend","target":64,"subject":-1}   start a plan (see 計畫)   {"do":"cancel"}
-  {"do":"want","what":"parcel","object":30} / {"do":"want","what":"office:reeve"} / {"do":"want","what":"drop"}
+  {"do":"want","what":"parcel","object":30} / {"do":"want","what":"office:reeve"}
+  {"do":"want","what":"drop","object":<want id>}     give up a want (its id is shown as want=N under 村裡在爭什麼)
   {"do":"focus","who":12,"focus":"letters"}          年度重心 (free, during a season)
   {"do":"pass"}   end this season          {"do":"year"}   let the AI play a whole year
 """
@@ -28,23 +29,27 @@ args = sys.argv[1:]
 if args[:1] == ["--port"]:
     port = int(args[1])
     args = args[2:]
+BASE = f"http://127.0.0.1:{port}"
 CURSOR = os.path.join(os.environ.get("TMPDIR", "/tmp"), f".textplay_cursor_{port}")  # where the last view stopped
+OPEN = urllib.request.build_opener(urllib.request.ProxyHandler({})).open  # never through a system proxy
 
 
 def get(path):
-    with urllib.request.urlopen(BASE + path, timeout=40) as r:
+    with OPEN(BASE + path, timeout=40) as r:
         return json.loads(r.read().decode("utf-8"))
 
 
 def post(path, obj):
     req = urllib.request.Request(BASE + path, data=json.dumps(obj, ensure_ascii=False).encode("utf-8"), method="POST")
-    with urllib.request.urlopen(req, timeout=40) as r:
+    with OPEN(req, timeout=40) as r:
         return json.loads(r.read().decode("utf-8"))
 
 
-def cursor():
+def cursor(lines):
+    """How many chronicle lines were already shown, if the cursor belongs to this game (same first line)."""
     try:
-        return int(open(CURSOR).read())
+        n, first = open(CURSOR, encoding="utf-8").read().split("\n", 1)
+        return int(n) if lines and first == lines[0]["text"] else 0
     except (OSError, ValueError):
         return 0
 
@@ -82,20 +87,30 @@ def render(v, full=False):
     s, a = v.get("state"), v.get("ask")
     out = []
     lines = v.get("lines", [])
-    start = cursor()
+    start = cursor(lines)
     new = lines[start:] if start <= len(lines) else lines
     if new:
         out.append("―― 編年史（上次看之後） ――")
         for l in new:
             out.append(f"{l['year']} {l['text']}")
-    open(CURSOR, "w").write(str(v.get("line_count", len(lines))))
+    if lines:
+        open(CURSOR, "w", encoding="utf-8").write(f"{v.get('line_count', len(lines))}\n{lines[0]['text']}")
     if v.get("ended"):
         out.append("―― 遊戲結束 ―― " + json.dumps(v["ended"], ensure_ascii=False)[:2000])
-    if not s:
+    if not s or "house" not in s:  # the line has ended: the last state has only the date
         return "\n".join(out)
+    season = bool(a) and a.get("kind") == "season"
     d, h = s["date"], s["house"]
     out.append(f"\n=== {d['year']} 年 {d['season']} ｜ {h['surname']}家（{h['standing']}，住 {h['home']}）｜ 錢 {h['money']} 便士 ｜ 存糧 {h['food_days']} 天 ｜ "
-               f"地 {h['acres']} 畝（自有 {h['freehold']}）｜ 欠債 {h['debt']} ｜ 這一季還有 {s.get('time_left')} 段空閒")
+               f"地 {h['acres']} 畝（自有 {h['freehold']}）｜ 欠債 {h['debt']}" + ("｜ 今年缺糧" if h.get("lean") else "")
+               + (f" ｜ 這一季還有 {s.get('time_left')} 段空閒" if season else ""))
+    amb = s.get("ambition")
+    if amb:
+        out.append(f"志向：{amb['name']}（{amb.get('desc', '')}）" + " ".join(("✓" if x.get("done") else "○") + x["name"] for x in amb.get("steps", [])))
+    fine = (s.get("contest") or {}).get("fine")
+    if fine:
+        out.append(f"入地費 {fine['amount']} 便士，{fine['year']} 年 {fine['month']} 月前要交給領主{'（已寬限過）' if fine.get('extended') else ''}。"
+                   "交不出來要借、去求領主寬限，或讓出一塊地。")
     if s.get("summary"):
         out.append(s["summary"].rstrip())
     if s.get("last_ask"):
@@ -134,7 +149,10 @@ def render(v, full=False):
     out.append("―― 村民 ――")
     people = s.get("people", [])
     if not full:
-        people = sorted(people, key=lambda p: -(p.get("closeness", 0) + abs(p.get("feud", 0)) * 50))[:14]
+        # The closest, and anyone who can be asked for something or wants something of the family.
+        near = {p["id"] for p in sorted(people, key=lambda p: -(p.get("closeness", 0) + abs(p.get("feud", 0)) * 50))[:14]}
+        people = [p for p in people if p["id"] in near or p.get("feud") or any(x.get("open") for x in p.get("asks") or [])
+                  or any(x.get("wanted") for x in p.get("actions") or [])]
     for p in people:
         t = f"[{p['id']}] {p['name']}：{p['line']}；{p['familiarity']}"
         if p.get("feud"):
@@ -149,15 +167,17 @@ def render(v, full=False):
         if p.get("asks"):
             out.append("    開口：" + asks(p["asks"]))
     if not full:
-        out.append(f"（只列最熟的 14 人，共 {len(s.get('people', []))} 人；view --full 看全部）")
+        out.append(f"（列出最熟的 14 人和能開口的人，共 {len(s.get('people', []))} 人；view --full 看全部）")
     c = s.get("contest") or {}
     if c.get("items") or c.get("offices"):
         out.append("―― 村裡在爭什麼 ――")
         for it in c.get("items", []):
             ws = "、".join(sorted({w["house"] for w in it.get("wanters", [])}))
-            out.append(f"  parcel={it.get('parcel')} {it['thing']}（{it['holder']}）想要的：{ws or '沒人'}")
+            ids = (f"parcel={it['parcel']} " if it.get("parcel", -1) >= 0 else "") + (f"want={it['mine']}（你家想要） " if it.get("mine", -1) >= 0 else "")
+            out.append(f"  {ids}{it['thing']}（{it['holder']}）想要的：{ws or '沒人'}")
         for o in c.get("offices", []):
-            out.append(f"  {o['name']}：{o['holder']}，到 {o['until']} 年{'（你家的）' if o.get('mine') else ''}")
+            who = f"{o['holder']}，到 {o['until']} 年" if o.get("holder") else "空著"
+            out.append(f"  {o['name']}：{who}{'（你家的）' if o.get('mine') else ''}")
         for pst in c.get("past", [])[:4]:
             out.append(f"  {pst['year']} {pst['thing']}：{pst['outcome']}")
     heard = [x for x in s.get("heard", []) if x.get("recent")]
@@ -173,7 +193,7 @@ def render(v, full=False):
         for u in a.get("unavailable", []):
             out.append(f"  （不能選）{u}")
         out.append('回答：{"do":"choose","index":N}，或 {"do":"ai"}')
-    elif a and a.get("kind") == "season":
+    elif season:
         out.append('這一季：用 interact / ask / plan / focus / want 花時間，然後 {"do":"pass"} 結束這一季（或 {"do":"year"} 讓 AI 過一年）')
     elif a:
         out.append(json.dumps(a, ensure_ascii=False))
@@ -184,7 +204,7 @@ def render(v, full=False):
 
 def wait_ask(prev_seq):
     v = get(f"/api/view?seq={prev_seq}&line=0")
-    deadline = time.time() + 90
+    deadline = time.time() + 60
     while not v.get("ask") and not v.get("ended") and time.time() < deadline:
         v = get(f"/api/view?seq={v['seq']}&line=0")
     return v
@@ -199,6 +219,20 @@ if cmd == "view":
 elif cmd == "act":
     v0 = get("/api/view?seq=-1&line=0")
     obj = json.loads(args[1])
+    # The game ignores an action that does not fit what it asked, and the page would be left with no question;
+    # refuse it here and show the question again.
+    a, do = v0.get("ask"), obj.get("do")
+    bad = ""
+    if not a:
+        bad = "現在沒有在問你（遊戲還在跑或已結束），先 view。"
+    elif a.get("kind") == "choice" and not (do == "ai" or (do == "choose" and 0 <= int(obj.get("index", -1)) < len(a.get("options", [])))):
+        bad = "現在是在問一個問題：只能 choose（index 在選項範圍內）或 ai。"
+    elif a.get("kind") == "season" and do not in ("interact", "ask", "plan", "cancel", "want", "focus", "pass", "year", "quit"):
+        bad = "現在是一季的空閒：choose / ai 只能用在問題上。"
+    if bad:
+        print("不行：" + bad + "\n")
+        print(render(v0))
+        sys.exit(1)
     post("/api/act", obj)
     print(render(wait_ask(v0["seq"])))
 elif cmd == "look":
