@@ -88,7 +88,9 @@ std::vector<AskOption> World::asksFor(Id target) {
     // Anyone single of age on either side: a son or daughter, a younger brother, a niece taken in.
     for (Id x : th.members) {
         const Person& xp = people_[x];
-        if (!single(xp) || xp.occupation == "priest") continue;
+        if (!single(xp) || xp.occupation == "priest" || x == target) continue;
+        // Only the head of the house, or a parent, answers for whom one of theirs marries.
+        if (target != th.head && xp.father != target && xp.mother != target) continue;
         double xa = ageYears(xp);
         if (xa < 16) continue;
         for (Id y : ph.members) {
@@ -259,9 +261,11 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
     } else if (what == "match") {
         const Household& oh = households_[playerHousehold_];
         double theirs = th.acres + th.money / 30 + t.reputation, ours = oh.acres + oh.money / 30 + people_[head].reputation;
-        fs.push_back({-15 - std::max(0.0, theirs - ours) / 3, theirs > ours * 1.4 ? "我家的孩子不愁嫁娶" : ""});
+        std::string kw = kinWord(who, object);
+        if (kw.empty()) kw = people_[object].firstName;
+        fs.push_back({-15 - std::max(0.0, theirs - ours) / 3, theirs > ours * 1.4 ? "我家的" + kw + "不愁嫁娶" : ""});
         fs.push_back({opinion(who, subject) * 0.3, ""});
-        fs.push_back({opinion(object, subject) * 0.3, opinion(object, subject) >= 30 ? "孩子自己也願意" : ""});
+        fs.push_back({opinion(object, subject) * 0.3, opinion(object, subject) >= 30 ? kw + "自己也願意" : ""});
         for (const auto& wt : wants_)
             if (wt.open && wt.house == th.id && wt.kind == "match" && wt.subject == object) {
                 if (wt.object == subject) fs.push_back({40, "正合我意"});
@@ -398,6 +402,10 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
             break;
         }
     if (hardNo) why = hardWhy;
+    if (why.empty() && what == "match") {
+        std::string kw = kinWord(who, object);
+        why = (kw.empty() ? people_[object].firstName : kw) + "的親事我還想再看看";
+    }
     if (why.empty()) {
         static const std::map<std::string, std::string> plain{
             {"rent_vacant", "那塊地我還沒想好租給誰"}, {"vote", "我還沒想好要投誰"}, {"lend", "我家的錢另有用處"},

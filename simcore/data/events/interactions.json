@@ -223,7 +223,7 @@
      "options": [
       {"text": "一個字一個字跟著念",
        "log": ["{target_first}在灶邊用木炭教{first}寫字，{first}一筆一畫寫出了自己的名字。", "{target_first}教{first}念主禱文上的字，{first}念錯了就自己笑起來。", "{target_first}拿出那本破舊的日課經，教{first}認了十來個字。"],
-       "effects": [{"skill": {"learning": 1.5}}, {"mutual_opinion": {"value": 4, "mod": "taught", "years": 10}},
+       "effects": [{"skill": {"learning": 1.5}}, {"opinion": {"value": 4, "mod": "taught", "years": 10}}, {"on_target": [{"opinion": {"value": 2, "mod": "event", "years": 6}}]},
                    {"if": {"cond": {"skill_ge": {"learning": 6}}, "then": [{"add_trait": "literate"}, {"tell": "  {first}能自己把整段主禱文念出來了：家裡又多了一個識字的人。"}]}}],
        "ai": {"base": 10, "traits": {"clever": 6, "diligent": 4, "lazy": -4}}},
       {"text": "坐不住，心思早飛到外面去了",
@@ -238,7 +238,7 @@
      "options": [
       {"text": "學得很快",
        "log": ["{target_first}帶{first}下田，教{pron}怎麼讓犁溝走得直，{first}學得很快。", "{target_first}教{first}看雲識天氣，{first}說明天要下雨，結果真下了。", "{target_first}讓{first}跟著撒種，{first}的手勢越來越像樣了。"],
-       "effects": [{"skill": {"farming": 1.5}}, {"work_bonus": 0.01}, {"mutual_opinion": {"value": 3, "mod": "taught", "years": 8}}, {"need": {"rest": -10}}],
+       "effects": [{"skill": {"farming": 1.5}}, {"work_bonus": 0.01}, {"opinion": {"value": 3, "mod": "taught", "years": 8}}, {"on_target": [{"opinion": {"value": 2, "mod": "event", "years": 6}}]}, {"need": {"rest": -10}}],
        "ai": {"base": 10, "traits": {"diligent": 6, "strong": 3, "lazy": -5}}},
       {"text": "累得直喊腿痠",
        "log": "{target_first}帶{first}下田，{first}沒走兩趟就喊腿痠。",
@@ -252,7 +252,7 @@
      "options": [
       {"text": "看什麼都新鮮",
        "log": ["{target_first}帶{first}去鎮上的市集，{first}站在賣藝人前面看得捨不得走。", "{target_first}帶{first}去市集賣雞蛋，{first}跟人討價還價，居然多賣了一個銅板。", "{target_first}帶{first}去市集，{first}第一次見到賣香料的商人，問了一路的問題。"],
-       "effects": [{"skill": {"charm": 1}}, {"need": {"social": 25}}, {"stress": -6}, {"mutual_opinion": {"value": 6, "mod": "took_to_market", "years": 8}}],
+       "effects": [{"skill": {"charm": 1}}, {"need": {"social": 25}}, {"stress": -6}, {"opinion": {"value": 6, "mod": "took_to_market", "years": 8}}, {"on_target": [{"opinion": {"value": 3, "mod": "event", "years": 6}}]}],
        "ai": {"base": 10, "traits": {"gregarious": 6, "ambitious": 4, "shy": -3}}},
       {"text": "怕生，一直拉著你的衣角",
        "log": "{target_first}帶{first}去市集，{first}怕生，一路拉著{target_pron}的衣角不放。",
@@ -262,7 +262,7 @@
 
     {"id": "talk_swap_work", "title": "換工", "scope": "interaction", "cooldown_months": 6,
      "interaction": {"who": "outsider", "time": 1, "desc": "跟{pron}家說好換工：農忙時兩家互相幫忙（收成好一點，交情也深一點）"},
-     "conditions": {"is_head": true, "acres_ge": 3, "age": [16, 70], "feud_lt": 2, "not": {"occupation": ["lord", "priest"]}},
+     "conditions": {"is_head": true, "acres_ge": 3, "age": [16, 70], "feud_lt": 2, "winter": false, "not": {"occupation": ["lord", "priest"]}},
      "options": [
       {"text": "一口答應",
        "log": ["{target_first}跟{first}說好換工，兩家人一起把兩邊的麥子都收進了倉。", "{target_first}和{first}兩家換工，一起犁完了兩家的地，晚上在{first}家喝了一罐麥酒。"],
@@ -280,7 +280,7 @@
      "options": [
       {"text": "紅著眼收下",
        "log": ["{target_first}給{first}家送去 10 便士，{first}紅著眼收下了：「這份情，我記著。」", "{target_first}悄悄塞給{first} 10 便士，{first}握著錢說不出話來。"],
-       "effects": [{"money": 10}, {"ease_concern": {"kind": "worry", "by": 20}}, {"mutual_opinion": {"value": 10, "mod": "helped_kin", "years": 15}},
+       "effects": [{"money": 10}, {"ease_concern": {"kind": "worry", "by": 20}}, {"opinion": {"value": 10, "mod": "helped_kin", "years": 15}}, {"on_target": [{"opinion": {"value": 4, "mod": "event", "years": 8}}]},
                    {"on_target": [{"reputation": 1}]}],
        "ai": {"base": 10, "traits": {"kind": 4, "content": 3}}},
       {"text": "臉上掛不住，推了回去",

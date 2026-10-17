@@ -530,8 +530,28 @@ void World::helpFriend(Person& p) {
     std::string because = why.empty() ? "" : "（" + std::string(pron(p)) + "記著：" + why + " +" + std::to_string(int(whyV)) + "）";
     if (inPlayerHouse(mine.id)) {
         // One of the family wants to give away the family's grain or coin: the head has the say.
-        int r = askPlayer("人情", fullName(p.id) + " 想給 " + fullName(t) + " 家送去" + gift + "：他們家今年日子難過" + because + "。",
-                          {"答應", "不准"});
+        // The head may know what the friend once was to this one: then it is not only grain that is asked for.
+        Id head = actingHead();
+        bool flame = head != kNone && head != p.id && knownFlame(head, p.id) == t;
+        std::vector<std::string> opts = {"答應", "不准"};
+        std::string sit = fullName(p.id) + " 想給 " + fullName(t) + " 家送去" + gift + "：他們家今年日子難過" + because + "。";
+        if (flame) {
+            sit += "你心裡清楚，" + fullName(t) + " 是" + pron(p) + "當年的人。";
+            opts.push_back("不准，而且挑明了：「你以為我不知道？」");
+        }
+        int r = askPlayer("人情", sit, opts);
+        if (r == 2 && flame) {
+            log(1, "〔人情〕" + fullName(p.id) + " 想接濟 " + fullName(t) + " 家。" + fullName(head) + " 冷冷地說：「你以為我不知道你跟" +
+                       people_[t].firstName + "的事？」" + p.firstName + "的臉一下子白了。（選擇：挑明了）");
+            addOpinion(p.id, head, "betrayed", -15, 10);
+            addOpinion(head, p.id, "betrayed", -5, 10);
+            addStress(p.id, 15, "當年的事被挑明了");
+            addStress(head, -5, "");
+            if (p.lover == t) endLiaison(p.id);
+            for (const auto& b : beliefs_[head])
+                if (b.culprit == p.id && deeds_[b.deed].type == "affair" && deeds_[b.deed].with == t) addBelief(p.id, b.deed, p.id, 100, head);
+            return;
+        }
         if (r == 1) {
             log(1, "〔人情〕" + fullName(p.id) + " 想接濟 " + fullName(t) + " 家，家主不准。（選擇：不准）");
             addOpinion(p.id, actingHead(), "refused_kindness", -6, 3);

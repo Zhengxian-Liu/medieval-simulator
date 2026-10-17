@@ -316,6 +316,7 @@ Defs Defs::loadFromDir(const std::string& dir) {
         cd.when = c["when"];
         cd.lines = readStrings(c["lines"]);
         cd.weight = c.numberOr("weight", 1);
+        cd.notIn = readStrings(c["not_in"]);
         d.chatter.push_back(std::move(cd));
     }
 

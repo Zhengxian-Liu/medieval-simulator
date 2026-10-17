@@ -197,7 +197,7 @@ std::string World::tellerName(Id teller, Id news) const {
         const News& n = news_[news];
         std::string kin = n.subject != kNone ? kinWord(n.subject, teller) : "";
         if (!kin.empty() && kin != "親戚")
-            return (n.subjectFirst.empty() ? std::string("他") : n.subjectFirst) + "的" + kin + " " + people_[teller].firstName;
+            return n.subjectFirst + "的" + kin + " " + people_[teller].firstName;
         return "同名的" + fullName(teller);
     }
     Id head = playerHead();
@@ -278,15 +278,6 @@ Id World::addNews(const std::string& kind, Id subject, Id other, Id house, Id de
                 }
             }
         if (teller == subject || teller == other) teller = kNone;
-        // A teller who goes by the same name as the one it is about (a son named for his dead father) reads as the
-        // dead telling of their own death: name them by what they are to that one instead.
-        if (teller != kNone) {
-            const News& n = news_[idx];
-            std::string tn = fullName(teller);
-            if (tn == n.subjectName || tn == n.otherName ||
-                (subject != kNone && people_[teller].firstName == people_[subject].firstName && people_[teller].dynasty == people_[subject].dynasty))
-                namesakeTeller_.insert({idx, teller});
-        }
         learnNews(news_[idx], h, teller, link[h]);
     }
     // A wake or a wedding: the houses close to it turn out, and the people who come meet one another.
@@ -309,20 +300,31 @@ bool World::occasionByPolicy(const std::string& invite, Id subject, double link)
     if (head == kNone || playerHousehold_ == kNone) return false;
     Household& h = households_[playerHousehold_];
     bool funeral = invite == "funeral";
-    double cost = funeral ? 2 : 3;
     bool close = link >= 0.8;
-    std::string where = (people_[subject].dynasty != kNone ? dynasties_[people_[subject].dynasty].surname + "家" : std::string()) +
-                        (funeral ? "的喪事" : "的喜酒");
+    // Named for the one it is for, and the house they lived in (a wife's wake is her husband's house's).
+    Id sh = people_[subject].household;
+    Id dyn = sh != kNone ? households_[sh].dynasty : people_[subject].dynasty;
+    std::string where = fullName(subject) + (funeral ? "的喪事" : "的喜酒") + (dyn != kNone ? "（" + dynasties_[dyn].surname + "家）" : "");
+    // The same answer as when asked: "all" goes properly (coin and a free day), "close" the plain way and only
+    // to close houses, "none" stays home.
+    double cost = funeral ? 2 : 3;
+    bool full = occasionPolicy_ == "all" && h.money >= cost && timeLeft() > 0;
+    bool plain = !full && (occasionPolicy_ == "all" || (occasionPolicy_ == "close" && close));
     std::string line;
-    if ((occasionPolicy_ == "all" || (occasionPolicy_ == "close" && close)) && h.money >= cost) {
+    if (full) {
         h.money -= cost;
         book(h, funeral ? "守靈" : "喜酒賀禮", -cost);
+        spendTime(1);
         attendOccasion(head, subject, true, funeral ? 8 : 7, funeral ? "came_to_wake" : "wedding_gift");
         people_[head].needs[Social] = std::min(100.0, people_[head].needs[Social] + 10);
         line = "照這一季定的規矩，" + fullName(head) + "去了" + where + "（" + std::to_string(int(cost)) + " 便士）。";
+    } else if (plain) {
+        attendOccasion(head, subject, true, funeral ? 4 : 2, funeral ? "came_to_wake" : "came_to_wedding");
+        std::string why = occasionPolicy_ == "all" ? (h.money < cost ? "手頭沒錢，" : "這一季沒空了，") : "";
+        line = why + fullName(head) + (funeral ? "去教堂墓地送了一程：" : "空著手去湊了個熱鬧：") + where + "。";
     } else if (occasionPolicy_ == "close") {
-        attendOccasion(head, subject, false, funeral ? -6 : -3, funeral ? "missed_funeral" : "missed_wedding");
-        line = where + "不算太親近，照這一季的規矩沒有去。";
+        attendOccasion(head, subject, false, funeral ? -3 : -1, funeral ? "missed_funeral" : "missed_wedding");
+        line = where + "，兩家不算太親近，照這一季的規矩沒有去。";
     } else {
         attendOccasion(head, subject, false, funeral ? -6 : -3, funeral ? "missed_funeral" : "missed_wedding");
         line = "照這一季定的規矩，" + where + "沒有去。";
@@ -378,6 +380,16 @@ void World::attendOccasion(Id person, Id about, bool came, double value, const s
 
 void World::learnNews(News& n, Id household, Id teller, double link) {
     if (household == kNone || !n.heard.insert(household).second) return;
+    // A teller who goes by the same name as the one it is about (a son named for his dead father) reads as the
+    // dead telling of their own death: name them by what they are to that one instead.
+    if (teller != kNone) {
+        Id idx = static_cast<Id>(&n - news_.data());
+        const Person& t = people_[teller];
+        std::string tn = fullName(teller);
+        if (tn == n.subjectName || tn == n.otherName ||
+            (n.subject != kNone && t.firstName == people_[n.subject].firstName && t.dynasty == people_[n.subject].dynasty))
+            namesakeTeller_.insert({idx, teller});
+    }
     const NewsKindDef* k = defs_.newsKind(n.kind);
     if (!k) return;
     // Hearing of a deed is how the village comes to think well or ill of the one who did it.

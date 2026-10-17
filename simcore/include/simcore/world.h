@@ -151,6 +151,8 @@ struct Household {
     int debtYears = 0;     // rent days passed with the debt unpaid
     int noOxUntil = -1;    // the plough ox was sold or seized: poorer harvests until then
     double rentFactor = 1; // the lord raises the rent of households that do well
+    int hiredUntil = -1;   // the grown hands are hired on for the year by another house (bed and board, a wage)
+    Id hiredBy = kNone;
     int boonUntil = -1;    // working off a debt on the lord's demesne: fewer days on their own land
     int lodgerUntil = -1;  // a lodger pays for the corner by the hearth
     std::string trade;     // the craft this house lives by, even while no one here can work it
@@ -319,6 +321,7 @@ struct Deed {
     Id target = kNone;
     double scale = 1;
     Id cause = kNone;  // the deed this one answered, if any
+    Id with = kNone;   // the other party when it took two (an affair's lover)
 };
 
 // How one person remembers someone. Opinion is the sum of a person's memories.
@@ -869,9 +872,16 @@ private:
     // stress.cpp: grief, hardship and acting against one's nature, and the breaking points
     void addStress(Id id, double amount, const std::string& cause);
     void monthlyStress();
-    void confessSecrets(Id id, Id to);
+    std::vector<Id> confessSecrets(Id id, Id to);  // the secrets newly told
+    Id knownFlame(Id who, Id member) const;      // the lover `who` believes `member` had, if any
+    bool hasUntoldSecret(Id id, Id to) const;
+    std::string secretWords(Id deed) const;     // a secret as the one who did it would tell it
 
     // hooks.cpp: secrets as leverage, and the truth coming out at the end of a life
+    Id hireMaster(Id household) const;          // who would take this house's hands on for a year: the biggest farm, else the demesne
+    int hiredHands(const Household& h) const;
+    std::string rentVacantOnCredit(Household& h, double minAcres);  // "" when done, else why not
+    void secretSurfaces();                     // once a season: a secret the head keeps may come up
     Id hookDeed(Id holder, Id culprit) const;  // a secret holder believes culprit did, usable as leverage
     bool hasHook(Id holder) const;
     void deathbedConfession(Id dying);
@@ -910,7 +920,7 @@ private:
     void setupOffices();
     void chooseOfficers();       // Michaelmas: the ale-taster and the hayward
     // Elections (contest.cpp): who stands and how the heads of household vote. noise(max) is a random draw
-    // in [0, max) for a real vote and max / 2 for the forecast the family hears beforehand.
+    // in [0, max] for a real vote and max / 2 for the forecast the family hears beforehand.
     struct Tally {
         std::map<Id, int> votes;
         std::vector<Id> byWord;  // heads who promised the family's man their vote and kept it
@@ -920,7 +930,7 @@ private:
     std::vector<Id> officeCandidates(const std::string& id, Id old, const std::function<double(double)>& noise) const;
     Tally countVotes(const std::string& id, const std::vector<Id>& cands, Id old, const std::function<double(double)>& noise) const;
     std::string tallyText(const std::vector<Id>& cands, const Tally& t, bool forecast) const;
-    std::string voteWhy(const Tally& t) const;  // "（艾爾家、柯克家答應過你，說到做到；…家記著舊仇…）"
+    std::string voteWhy(const Tally& t, Id winner) const;  // "（艾爾家、柯克家答應過你，說到做到；…家記著舊仇…）"
     Id currentReeve() const;
     bool reeveDue() const;
     void electionNotice();       // the season of a vote, before it: who stands, how it looks, whether the family can

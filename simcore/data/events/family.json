@@ -112,7 +112,7 @@
      "scope": "player_head", "chance": 1, "once": true,
      "on": {"signal": "manual"},
      "options": [
-       {"text": "把藏了一輩子的事告訴 {target}", "log": "{name} 拉著 {target} 的手，把這輩子沒對人說過的事一件一件說了出來。",
+       {"text": "把藏了一輩子的事告訴 {target}", "conditions": {"has_secret": "target"}, "log": "{name} 拉著 {target} 的手，把這輩子沒對人說過的事一件一件說了出來：",
         "effects": [{"confess_secrets": "target"}, {"stress": -30}, {"target": [{"stress": 10}]}],
         "ai": {"base": 4, "traits": {"pious": 3, "gregarious": 2, "shy": -2}}},
        {"text": "請神父年年為自己做彌撒（40 便士）", "log": "{name} 把 40 便士交給神父，請他往後每年忌日為自己做一臺彌撒。",

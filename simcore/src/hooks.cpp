@@ -37,6 +37,41 @@ bool World::hasHook(Id holder) const {
     return false;
 }
 
+// What the head knows and has never said comes up when the people in it cross paths: a wife's old lover at the
+// church door, the man who fired the ricks greeting you at the mill. Now and then, once for each secret.
+void World::secretSurfaces() {
+    Id head = playerHead();
+    if (head == kNone || ageYears(people_[head]) < 16 || playerHousehold_ == kNone) return;
+    if (!rngKnow_.chance(0.12)) return;
+    const Household& home = households_[playerHousehold_];
+    std::vector<std::pair<Id, Id>> found;  // (deed, the other party)
+    for (const auto& b : beliefs_[head]) {
+        if (b.confidence < 60 || deedNotes_.count({b.deed, "surfaced"})) continue;
+        const Deed& d = deeds_[b.deed];
+        const DeedDef* def = defs_.deed(d.type);
+        if (!def || def->visibility != "secret" || day_ - d.day > 30 * kDaysPerYear || d.actor == head) continue;
+        const Person& a = people_[d.actor];
+        if (!a.alive() || b.culprit != d.actor) continue;
+        if (d.type == "affair") {
+            // One of the family with someone outside it.
+            if (a.household != home.id || d.with == kNone || d.with == head) continue;
+            const Person& o = people_[d.with];
+            if (!o.alive() || o.household == kNone || o.household == home.id) continue;
+            found.push_back({d.id, d.with});
+        } else {
+            // A wrong done to this house by someone outside it, never tried.
+            if (a.household == kNone || a.household == home.id || d.target == kNone || deedTried(d.id)) continue;
+            const Person& v = people_[d.target];
+            if (v.household != home.id && !(playerDynasty_ != kNone && v.dynasty == playerDynasty_)) continue;
+            found.push_back({d.id, d.actor});
+        }
+    }
+    if (found.empty()) return;
+    auto [deed, other] = found[rngKnow_.range(0, static_cast<int>(found.size()) - 1)];
+    deedNotes_.insert({deed, "surfaced"});
+    runEventById(deeds_[deed].type == "affair" ? "old_flame" : "old_wrong", head, other, deed);
+}
+
 // Before dying, someone who did a secret wrong may send for the one they wronged. Families who
 // spent years blaming the wrong house learn it here.
 void World::deathbedConfession(Id dying) {

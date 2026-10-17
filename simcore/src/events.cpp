@@ -202,6 +202,8 @@ void EventRunner::interact(const EventDef& ev, Person& p, Id head) {
     if (!eval(ev.conditions, p, head)) return;
     auto cd = w_.cooldowns_.find({p.id, ev.id});
     if (cd != w_.cooldowns_.end() && cd->second > w_.day_) return;
+    // Sheltering from the pestilence: nobody outside the house is seen.
+    if (w_.people_[head].flags.count("plague_shelter") && p.household != w_.people_[head].household) return;
     double money = ev.interaction.numberOr("money", 0);  // what it costs
     Household& hh = w_.households_[w_.people_[head].household];
     if (money > hh.money + 0.5) return;
@@ -219,13 +221,14 @@ void EventRunner::interact(const EventDef& ev, Person& p, Id head) {
     // Only when they took the visit well (the first answer of every interaction is the warm one).
     if (!line.empty() && ev.interaction["chatter"].isBool() && ev.interaction["chatter"].asBool() && &o == &ev.options.front() &&
         w_.opinion(p.id, head) > -40) {
-        std::vector<std::pair<double, std::string>> pool;  // weight, line
+        std::vector<double> pool;  // weight of each of ids
         std::vector<std::string> ids;
         for (const auto& c : w_.defs_.chatter) {
             auto said = w_.chatterSaid_.find({p.id, c.id});
             if (c.lines.empty() || (said != w_.chatterSaid_.end() && w_.day_ - said->second < 2 * kDaysPerYear)) continue;
+            if (std::find(c.notIn.begin(), c.notIn.end(), ev.id) != c.notIn.end()) continue;
             if (!eval(c.when, p, head)) continue;
-            pool.push_back({c.weight, ""});
+            pool.push_back(c.weight);
             ids.push_back(c.id);
         }
         // Word going round that this house has heard lately, not about itself or the family.
@@ -233,7 +236,8 @@ void EventRunner::interact(const EventDef& ev, Person& p, Id head) {
         for (auto it = w_.news_.rbegin(); it != w_.news_.rend() && w_.day_ - it->day < 120; ++it)
             if (it->heard.count(p.household) && it->house != p.household && !w_.inPlayerHouse(it->house) &&
                 it->subject != p.id && !(it->subject != kNone && w_.isPlayerFamily(w_.people_[it->subject])) &&
-                !(it->other != kNone && (it->other == p.id || w_.isPlayerFamily(w_.people_[it->other])))) {
+                !(it->other != kNone && (it->other == p.id || w_.isPlayerFamily(w_.people_[it->other]))) &&
+                !(it->subject != kNone && w_.closeKin(p.id, it->subject)) && !(it->other != kNone && w_.closeKin(p.id, it->other))) {
                 auto said = w_.chatterSaid_.find({p.id, "news:" + std::to_string(it->id)});
                 if (said == w_.chatterSaid_.end()) {
                     gossip = &*it;
@@ -241,15 +245,15 @@ void EventRunner::interact(const EventDef& ev, Person& p, Id head) {
                 }
             }
         if (gossip) {
-            pool.push_back({3, ""});
+            pool.push_back(3);
             ids.push_back("news:" + std::to_string(gossip->id));
         }
         double total = 0;
-        for (const auto& [wt, _] : pool) total += wt;
+        for (double wt : pool) total += wt;
         if (total > 0) {
             double r = w_.rngEvents_.uniform() * total;
             size_t k = 0;
-            while (k + 1 < pool.size() && r >= pool[k].first) r -= pool[k++].first;
+            while (k + 1 < pool.size() && r >= pool[k]) r -= pool[k++];
             w_.chatterSaid_[{p.id, ids[k]}] = w_.day_;
             std::string extra;
             if (ids[k].rfind("news:", 0) == 0) {
@@ -262,6 +266,7 @@ void EventRunner::interact(const EventDef& ev, Person& p, Id head) {
                         tmp.log = c.lines[0];
                         tmp.logs = c.lines;
                         extra = format(pickLog(tmp, p.id), p, head);
+                        break;
                     }
             }
             if (!extra.empty()) line += extra;
@@ -567,7 +572,7 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
         // Standing as a family weighs it in a match: land, savings, name (the same yardstick as an ask for a match).
         if (target == kNone || !h || w.people_[target].household == kNone) return false;
         const Household& th = w.households_[w.people_[target].household];
-        double ours = h->acres + h->money / 30 + p.reputation, theirs = th.acres + th.money / 30 + w.people_[target].reputation;
+        double ours = h->acres + h->money / 30 + (h->head != kNone ? w.people_[h->head].reputation : 0), theirs = th.acres + th.money / 30 + (th.head != kNone ? w.people_[th.head].reputation : 0);
         return (ours < theirs * 0.8) == v.asBool();
     }
     if (k == "same_household") return target != kNone && (p.household == w.people_[target].household) == v.asBool();
@@ -627,6 +632,13 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     if (k == "deed_noted") return deed_ != kNone && w.deedNotes_.count({deed_, v.asString()}) > 0;
     if (k == "heir_apparent") return (h && h->head != kNone && h->head != p.id && w.heirOf(*h, h->head) == p.id) == v.asBool();
     if (k == "has_lover") return (p.lover != kNone) == v.asBool();
+    if (k == "hired") return (h && h->hiredUntil > w.day_) == v.asBool();
+    if (k == "hire_master") return (h && w.hireMaster(h->id) != kNone) == v.asBool();
+    if (k == "has_secret") {
+        // Something this person did in secret that `to` (the target, or nobody: anyone) is not yet sure of.
+        Id to = v.asString() == "target" ? target : kNone;
+        return w.hasUntoldSecret(p.id, to);
+    }
     if (k == "is_lover") {
         bool lovers = target != kNone && p.lover == target;
         if (target != kNone)
@@ -1062,6 +1074,7 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                     continue;
                 }
                 double owed = amount - h->money;
+                w.book(*h, "酒錢", -h->money);
                 h->money = 0;
                 Id alewife = kNone;
                 for (const auto& o : w.people_)
@@ -1198,8 +1211,11 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 if (lender == kNone) continue;
                 Household& lh = w.households_[w.people_[lender].household];
                 lh.money -= h->debt;
-                if (h->creditor != kNone && w.people_[h->creditor].household != kNone)
+                w.book(lh, "借錢給人", -h->debt);
+                if (h->creditor != kNone && w.people_[h->creditor].household != kNone) {
                     w.households_[w.people_[h->creditor].household].money += h->debt;
+                    w.book(w.households_[w.people_[h->creditor].household], "收回欠債", h->debt);
+                }
                 h->creditor = lender;
                 h->debtYears = 0;
                 w.recordDeed("lent_money", lender, p.id, 1, cause_);
@@ -1256,6 +1272,35 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                     if (o.plan == plan && o.target == tgt && (subj == kNone || o.subject == subj)) ok = true;
                 if (ok) w.startPlan(p.id, plan, tgt, subj);
                 else if (w.isPlayerFamily(p)) w.log(1, "  可是眼下這件事辦不成。");
+            } else if (k == "hire_on") {
+                // The grown of the house hire on with the biggest farm (or the manor) for a year: board and a wage.
+                if (!h) continue;
+                Id master = w.hireMaster(h->id);
+                if (master == kNone) continue;
+                h->hiredUntil = w.day_ + static_cast<int>(v.numberOr("months", 12)) * kDaysPerYear / 12;
+                h->hiredBy = master;
+                int n = w.hiredHands(*h);
+                if (w.inPlayerHouse(h->id)) {
+                    const Household& mh = w.households_[master];
+                    std::string where = master == (w.lord_ != kNone ? w.people_[w.lord_].household : kNone) ? "莊園的自營地上" : w.fullName(mh.head) + " 家";
+                    w.log(1, "  家裡 " + std::to_string(n) + " 個能幹活的人去" + where + "當長工，管吃，一個月每人 4 便士，做到明年這時候。");
+                }
+            } else if (k == "rent_vacant_credit") {
+                if (!h) continue;
+                std::string no = w.rentVacantOnCredit(*h, v.numberOr("min", 3));
+                if (!no.empty() && w.inPlayerHouse(h->id)) w.log(1, "  " + no);
+            } else if (k == "on_deed_actor") {
+                // Effects on whoever did the deed this event is about, with this person as their target.
+                if (deed_ != kNone) {
+                    Id a = w.deeds_[deed_].actor;
+                    if (a != kNone && a != p.id && w.people_[a].alive()) apply(v, w.people_[a], p.id);
+                }
+            } else if (k == "end_affair") {
+                // The affair this event is about stops, if it is still going on.
+                if (deed_ != kNone) {
+                    const Deed& d = w.deeds_[deed_];
+                    if (d.actor != kNone && d.with != kNone && w.people_[d.actor].lover == d.with) w.endLiaison(d.actor);
+                }
             } else if (k == "on_target") {
                 // Effects on the other party, who then has this person as their target.
                 if (target != kNone && w.people_[target].alive()) apply(v, w.people_[target], p.id);
@@ -1265,7 +1310,15 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 // "priest" keeps the seal of confession; "spouse" may not.
                 std::string to = v.asString();
                 Id who = to == "priest" ? w.priest_ : to == "spouse" ? p.spouse : target;
-                if (who != kNone && who != p.id) w.confessSecrets(p.id, who);
+                if (who == kNone || who == p.id) continue;
+                std::vector<Id> told = w.confessSecrets(p.id, who);
+                // What was said, when the family is there to hear it (a priest's ear stays shut).
+                if (to != "priest" && (w.isPlayerFamily(p) || w.isPlayerFamily(w.people_[who]))) {
+                    if (told.empty()) w.log(1, "  說來說去，也沒有什麼見不得人的事。");
+                    for (size_t i = 0; i < told.size() && i < 3; ++i)
+                        w.log(1, "  「" + w.secretWords(told[i]) + "。」");
+                    if (told.size() > 3) w.log(1, "  還有幾件，" + w.people_[who].firstName + "聽不下去了。");
+                }
             } else if (k == "household_opinion") {
                 // Everyone at home thinks differently of this person now.
                 if (!h) continue;
@@ -1294,6 +1347,7 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 if (v.asString() == "apprentice") {  // the master's fee, as when he is asked or takes a boy on himself
                     w.households_[from].money -= 24;
                     w.households_[master].money += 24;
+                    w.book(w.households_[master], "收徒的拜師錢", 24);
                     w.book(w.households_[from], "拜師錢", -24);
                 }
             } else if (k == "take_place") {
@@ -1407,7 +1461,7 @@ std::string EventRunner::format(const std::string& tmpl, const Person& p, Id tar
                 // {about:grief}: who this person's grief (or other concern) is about.
                 const Concern* c = w_.concernOf(p, key.substr(6));
                 Id a = c ? c->about : kNone;
-                val = a == kNone ? "" : w_.isPlayerFamily(w_.people_[a]) ? w_.shortName(a) : w_.fullName(a);
+                val = a == kNone ? "" : a == target && target == w_.playerHead() ? "你" : w_.isPlayerFamily(w_.people_[a]) ? w_.shortName(a) : w_.fullName(a);
             } else if (key.rfind("target_about:", 0) == 0) {
                 const Concern* c = target != kNone ? w_.concernOf(w_.people_[target], key.substr(13)) : nullptr;
                 Id a = c ? c->about : kNone;
@@ -1415,7 +1469,10 @@ std::string EventRunner::format(const std::string& tmpl, const Person& p, Id tar
             } else if (key == "kin") val = target != kNone ? w_.kinWord(target, p.id) : "";
             else if (key == "target_kin") val = target != kNone ? w_.kinWord(p.id, target) : "";
             else if (key == "stress_cause") val = p.stressCause.empty() ? "說不出的心事" : p.stressCause;
-            else if (key == "deed_year") val = deed_ != kNone ? std::to_string(w_.cfg_.startYear + w_.deeds_[deed_].day / kDaysPerYear) : "";
+            else if (key == "deed_actor" || key == "deed_victim") {
+                Id a = deed_ == kNone ? kNone : key == "deed_actor" ? w_.deeds_[deed_].actor : w_.deeds_[deed_].target;
+                val = a == kNone ? "" : w_.isPlayerFamily(w_.people_[a]) ? w_.shortName(a) : w_.fullName(a);
+            } else if (key == "deed_year") val = deed_ != kNone ? std::to_string(w_.cfg_.startYear + w_.deeds_[deed_].day / kDaysPerYear) : "";
             else val = "{" + key + "}";
             out += val;
             i = end + 1;

@@ -256,7 +256,10 @@ int main(int argc, char** argv) {
         const Person& p = w.person(h);
         int to = c + 1 < chapters.size() ? chapters[c + 1].first : w.today() + 1;
         std::string nick = nickname(w, h, chapters[c].first, to, reeveTerms[c]);
-        md << gen++ << ". " << (nick.empty() ? "" : "「" + nick + "」") << w.fullName(h) << "（" << lifespan(w, p) << "）";
+        // One who held the house for a child is not counted among the heads.
+        if (chapterWard[c] != kNone) md << "   （代管）";
+        else md << gen++ << ". ";
+        md << (nick.empty() ? "" : "「" + nick + "」") << w.fullName(h) << "（" << lifespan(w, p) << "）";
         std::string traits;
         for (const auto& t : p.traits) traits += (traits.empty() ? "" : "、") + defs.traits.at(t).name;
         if (!traits.empty()) md << "：" << traits;

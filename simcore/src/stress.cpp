@@ -55,8 +55,9 @@ void World::monthlyStress() {
 }
 
 // Unburdening: the listener learns every secret deed this person did and is still hiding.
-void World::confessSecrets(Id id, Id to) {
-    if (to == kNone || !people_[to].alive()) return;
+std::vector<Id> World::confessSecrets(Id id, Id to) {
+    std::vector<Id> told;
+    if (to == kNone || !people_[to].alive()) return told;
     for (const auto& d : deeds_) {
         if (d.actor != id) continue;
         const DeedDef* def = defs_.deed(d.type);
@@ -64,7 +65,42 @@ void World::confessSecrets(Id id, Id to) {
         const Belief* b = beliefAbout(to, d.id);
         if (b && b->culprit == id && b->confidence >= 90) continue;
         addBelief(to, d.id, id, 95, id);
+        told.push_back(d.id);
     }
+    return told;
+}
+
+bool World::hasUntoldSecret(Id id, Id to) const {
+    for (const auto& d : deeds_) {
+        if (d.actor != id) continue;
+        const DeedDef* def = defs_.deed(d.type);
+        if (!def || def->visibility != "secret") continue;
+        const Belief* b = to != kNone ? beliefAbout(to, d.id) : nullptr;
+        if (!(b && b->culprit == id && b->confidence >= 90)) return true;
+    }
+    return false;
+}
+
+// "1317 年背著羅伯特和尼可拉斯·史密斯好過" / "1322 年的「放火」，苦主是威廉·格林"
+std::string World::secretWords(Id deed) const {
+    const Deed& d = deeds_[deed];
+    std::string year = std::to_string(cfg_.startYear + d.day / kDaysPerYear) + " 年";
+    if (d.type == "affair" && d.with != kNone)
+        return year + (d.target != kNone ? "背著" + people_[d.target].firstName : std::string()) + "和 " + fullName(d.with) + " 好過";
+    std::string out = describeDeed(deed);
+    if (d.target != kNone && d.target != d.actor) out += "，苦主是 " + fullName(d.target);
+    return out;
+}
+
+// The lover `who` is sure `member` had: an affair `who` believes in, with the other party known.
+Id World::knownFlame(Id who, Id member) const {
+    if (who == kNone || member == kNone) return kNone;
+    for (const auto& b : beliefs_[who]) {
+        if (b.culprit != member || b.confidence < 60) continue;
+        const Deed& d = deeds_[b.deed];
+        if (d.type == "affair" && d.actor == member && d.with != kNone) return d.with;
+    }
+    return kNone;
 }
 
 }  // namespace sim

@@ -400,6 +400,7 @@ void World::takeLover(Id a, Id b) {
         p.lover = y;
         p.loverSince = day_;
         p.loverDeed = p.spouse != kNone && people_[p.spouse].alive() ? recordDeed("affair", x, p.spouse) : kNone;
+        if (p.loverDeed != kNone) deeds_[p.loverDeed].with = y;
     }
 }
 
@@ -445,7 +446,9 @@ void World::yearlyLiaisons() {
                 Person& p = people_[x];
                 p.reputation -= 15;
                 p.flags.insert("adulterer");
-                households_[p.household].money = std::max(0.0, households_[p.household].money - 20);
+                Household& ph = households_[p.household];
+                book(ph, "教會法庭罰款", -std::min(20.0, std::max(0.0, ph.money)));
+                ph.money = std::max(0.0, ph.money - 20);
                 if (p.loverDeed != kNone && p.spouse != kNone && people_[p.spouse].alive())
                     addBelief(p.spouse, p.loverDeed, x, 100, kNone);
             }

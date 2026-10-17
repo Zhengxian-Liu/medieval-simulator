@@ -430,7 +430,7 @@ void World::accuse(Id accuser, Id accused, Id deedId) {
     }
     if (convicted) {
         recordDeed(guilty ? "convicted" : "wrongly_convicted", accuser, accused, 1, deedId);
-        if (ah) ah->money = std::max(0.0, ah->money - 20);
+        if (ah) book(*ah, "莊園法庭罰款", -std::min(20.0, std::max(0.0, ah->money))), ah->money = std::max(0.0, ah->money - 20);
         people_[accused].reputation -= 10;
         // The verdict is public: the whole village now believes the accused did it.
         for (Id v : livingInVillage())
@@ -445,7 +445,7 @@ void World::accuse(Id accuser, Id accused, Id deedId) {
                          (jury.empty() ? "" : jury + "，") + "不夠定罪，查無實據。");
     } else {
         recordDeed("false_accusation", accuser, accused, 1, deedId);
-        if (uh) uh->money = std::max(0.0, uh->money - 6);
+        if (uh) book(*uh, "誣告罰款", -std::min(6.0, std::max(0.0, uh->money))), uh->money = std::max(0.0, uh->money - 6);
         people_[accuser].reputation -= 5;
         for (auto& b : beliefs_[accuser])
             if (b.deed == deedId) b.confidence = std::min(b.confidence, 30.0);

@@ -43,8 +43,8 @@
          {"text": "加一頭小豬", "log": "對方嫌嫁妝太少，{name} 答應再加一頭小豬。", "effects": [{"food": -60}, {"progress": 20}], "ai": {"base": 8}},
          {"text": "堅持原價", "log": "對方嫌嫁妝太少，{name} 一步也不讓。", "effects": [{"progress": -15}], "ai": {"base": 6, "traits": {"greedy": 10, "ambitious": 4}}}]},
        {"id": "child_objects", "prompt": "{subject} 哭著說不想和 {target} 家結親。", "chance": 0.12, "options": [
-         {"text": "婚姻大事由父母做主", "log": "{subject} 哭著說不想嫁娶 {target}，{name} 說婚姻大事輪不到孩子作主。", "effects": [{"deed": {"type": "forced_match", "to": "subject"}}, {"progress": 5}], "ai": {"base": 12, "traits": {"cruel": 6, "kind": -6}}},
-         {"text": "由孩子去", "log": "{subject} 不願意，{name} 心軟作罷了。", "effects": [{"abort_plan": true}], "ai": {"base": 5, "traits": {"kind": 10}}}]},
+         {"text": "婚姻大事由家裡做主", "log": "{subject} 哭著說不想嫁娶 {target}，{name} 說婚姻大事輪不到{subject}自己作主。", "effects": [{"deed": {"type": "forced_match", "to": "subject"}}, {"progress": 5}], "ai": {"base": 12, "traits": {"cruel": 6, "kind": -6}}},
+         {"text": "由{subject}自己拿主意", "log": "{subject} 不願意，{name} 心軟作罷了。", "effects": [{"abort_plan": true}], "ai": {"base": 5, "traits": {"kind": 10}}}]},
        {"id": "lent_delay", "chance": 0.5, "conditions": {"month": [1, 2]}, "options": [
          {"text": "等過了復活節", "log": "四旬期不能辦婚禮，兩家說好等過了復活節再談。", "effects": [{"progress": -5}]}]}
      ]},

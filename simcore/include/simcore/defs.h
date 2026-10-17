@@ -194,6 +194,7 @@ struct ChatterDef {
     Json when;                       // conditions on the person, the head as target
     std::vector<std::string> lines;  // variants; {first}, {about:<concern>}, {target_first}…
     double weight = 1;
+    std::vector<std::string> notIn;  // interactions it would contradict (no fishing story at the market)
 };
 
 // How a kind of news travels the village (data/news.json, design/news.md): how readily it is told (heat), how long

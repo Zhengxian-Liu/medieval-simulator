@@ -227,6 +227,21 @@ void World::monthlyEconomy() {
             if (od && od->farms) hands += p.sex == Sex::Male ? 1.0 : 0.5;
         }
         double spare = std::max(0.0, hands - h.acres / 12);
+        if (h.hiredUntil > day_) {
+            // Hired on for the year: the grown eat at the master's table and are paid at Michaelmas, a little each month here.
+            int n = hiredHands(h);
+            h.food += n * 40;
+            h.money += n * 4 * wage;
+            book(h, "長工工錢", n * 4 * wage);
+            if (h.hiredBy != kNone && !households_[h.hiredBy].extinct)
+                households_[h.hiredBy].food = std::max(0.0, households_[h.hiredBy].food - n * 30);
+            spare = 0;
+        } else if (h.hiredUntil >= 0) {
+            h.hiredUntil = -1;
+            if (inPlayerHouse(h.id) && h.head != kNone)
+                log(1, "長工做滿了一年，" + fullName(h.head) + " 從" + (h.hiredBy != kNone && households_[h.hiredBy].head != kNone ? " " + fullName(households_[h.hiredBy].head) + " 家" : "莊園") + "回來了。");
+            h.hiredBy = kNone;
+        }
         h.money += spare * 7 * wage;
         book(h, "打短工", spare * 7 * wage);
         h.money -= h.members.size() * 0.5;  // clothes, salt, tools
@@ -240,9 +255,71 @@ void World::monthlyEconomy() {
         }
         if (h.money < 0) h.money = 0;
         ensureFood(h);
+        // Other houses near the end of their grain do what the player's family is asked about: the grown hire on
+        // with a bigger farm for the year, and failing that the parish and the neighbours keep the children alive.
+        double daily = consumption(h);
+        if (!inPlayerHouse(h.id) && h.head != kNone && h.food < daily * 20) {
+            Id master = h.acres < 12 && h.hiredUntil <= day_ ? hireMaster(h.id) : kNone;
+            if (master != kNone && hiredHands(h) > 0) {
+                h.hiredUntil = day_ + kDaysPerYear;
+                h.hiredBy = master;
+                log(2, fullName(h.head) + " 家沒了口糧，" + (households_[master].head != kNone && master != (lord_ != kNone ? people_[lord_].household : kNone)
+                                                             ? "去 " + fullName(households_[master].head) + " 家" : "去莊園") + "當長工。");
+            } else if (h.food < daily * 8) {
+                h.food += daily * 20;
+            }
+        }
         h.money = std::max(0.0, h.money);  // float rounding after spending everything
     }
     monthlyDebts();
+}
+
+int World::hiredHands(const Household& h) const {
+    int n = 0;
+    for (Id m : h.members) {
+        const Person& p = people_[m];
+        if (ageYears(p) >= 14 && p.health >= 30 && p.home == kNone) ++n;
+    }
+    return n;
+}
+
+Id World::hireMaster(Id household) const {
+    Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
+    Id best = kNone;
+    for (const auto& o : households_) {
+        if (o.extinct || o.id == household || o.id == lordHouse || o.head == kNone || o.acres < 25 || o.hiredUntil > day_) continue;
+        if (people_[o.head].occupation == "priest") continue;
+        if (best == kNone || o.acres > households_[best].acres) best = o.id;
+    }
+    return best != kNone ? best : lordHouse;
+}
+
+// A vacant parcel taken from the lord with the entry fine on the manor's books, for a house with no coin to pay it.
+std::string World::rentVacantOnCredit(Household& h, double minAcres) {
+    if (lord_ == kNone || !people_[lord_].alive()) return "莊園眼下沒人做主";
+    double owed = (h.debt > 0.5 && h.creditor == lord_ ? h.debt : 0.0) + (h.heldCreditor == lord_ ? h.heldDebt : 0.0);
+    if (owed > 40) return "管家翻了翻帳本：「你家欠莊園的 " + std::to_string(int(owed)) + " 便士還沒還呢。」";
+    if (h.head != kNone && opinion(lord_, h.head) < -25) return "管家說，老爺不想把地租給你家。";
+    Id pick = kNone;
+    for (const auto& pc : parcels_) {
+        if (pc.gone || pc.holder != kNone || pc.acres < minAcres) continue;
+        if (pick == kNone || pc.acres < parcels_[pick].acres) pick = pc.id;  // the smallest that will feed them
+    }
+    if (pick == kNone) return "村裡眼下沒有空著的地";
+    double rate = worldFlags_.count("post_plague") ? 1.5 : 3;
+    double fine = parcels_[pick].acres * rate;
+    double paid = std::min(fine, std::max(0.0, h.money));
+    std::string name = parcelName(parcels_[pick]);
+    moveParcel(pick, h.id, "向領主租來");
+    Id lordHouse = people_[lord_].household;
+    h.money -= paid;
+    book(h, "入地費", -paid);
+    if (lordHouse != kNone) households_[lordHouse].money += paid;
+    if (fine - paid > 0.5) addDebt(h, fine - paid, lord_);
+    if (inPlayerHouse(h.id))
+        log(1, "  " + name + "租給了你家，入地費 " + std::to_string(int(fine)) + " 便士" +
+                   (fine - paid > 0.5 ? "，交不出的 " + std::to_string(int(fine - paid)) + " 便士記在莊園的帳上。" : "，當場交清。"));
+    return "";
 }
 
 }  // namespace sim

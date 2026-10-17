@@ -168,6 +168,7 @@ void World::rollSeason() {
     seasonNotes_.clear();
     seasonWants();
     electionNotice();
+    secretSurfaces();
     if (lastSeasonNotes_.size() > 40) lastSeasonNotes_.erase(lastSeasonNotes_.begin(), lastSeasonNotes_.end() - 40);
     ++counters_["season"];
     bool concern = false, wish = false;

@@ -104,7 +104,7 @@ void World::electReeve() {
     if (playerRuns && cands.size() == 1 && winner == head) {
         log(winner == old ? 2 : 1, "【選莊頭】沒有人出來爭，" + fullName(head) + (winner == old ? " 又當了三年莊頭。" : " 當上了莊頭，這一任三年。"));
     } else if (playerRuns) {
-        log(1, "【選莊頭】" + tallyText(cands, tally, false) + "。" + voteWhy(tally) + how +
+        log(1, "【選莊頭】" + tallyText(cands, tally, false) + "。" + voteWhy(tally, winner) + how +
                    (winner == head ? fullName(head) + (old == head ? " 連任莊頭，再做三年。" : " 當上了莊頭，這一任三年。") : fullName(winner) + " 當選。"));
         if (winner != head) addStress(head, 6, "落選的難堪");
     } else if (winner != old) {

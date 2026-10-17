@@ -111,6 +111,13 @@ void World::monthlyHealth() {
             kill(p.id, "黑死病");
             continue;
         }
+        // Wasted to nothing with nothing to eat: hunger kills outright, the small and the old first.
+        if (p.needs[Hunger] < 25 && p.health <= 5 && rngLife_.chance(age < 5 || age >= 60 ? 0.2 : 0.1)) {
+            if (line) --dynastyAlive;
+            kill(p.id, "飢餓");
+            if (gameOver_) return;
+            continue;
+        }
         if (rngLife_.chance(monthly)) {
             std::string cause;
             if (age < 1) cause = "夭折";
@@ -375,13 +382,27 @@ Id World::heirOf(const Household& h, Id dead) const {
                 (heir == kNone || people_[m].birthDay < people_[heir].birthDay))
                 heir = m;
     if (heir == kNone) heir = eldest(children, Sex::Female);
-    if (heir == kNone && d.father != kNone) heir = eldest(people_[d.father].children, Sex::Male);
+    // One who married in holds the house's land for its line: past their own children, it goes back to the
+    // blood of the one they married (a widow's late husband's brother or sister at home before her own kin).
+    auto bornTo = [&](const Person& x) { return x.father != kNone ? people_[x.father].dynasty : x.mother != kNone ? people_[x.mother].dynasty : x.dynasty; };
+    Id line = dead;
+    if (d.spouse != kNone && h.dynasty != kNone && bornTo(d) != h.dynasty && bornTo(people_[d.spouse]) == h.dynasty) line = d.spouse;
+    const Person& lp = people_[line];
+    if (heir == kNone && lp.father != kNone) heir = eldest(people_[lp.father].children, Sex::Male);
+    if (heir == kNone && line != dead)
+        for (Id m : h.members) {
+            const Person& q = people_[m];
+            if (!inHouse(m) || q.household != h.id || ageYears(q) < 16 || !closeKin(m, line)) continue;
+            if (heir == kNone || (q.sex == Sex::Male) > (people_[heir].sex == Sex::Male) ||
+                ((q.sex == Sex::Male) == (people_[heir].sex == Sex::Male) && q.birthDay < people_[heir].birthDay))
+                heir = m;
+        }
     // Of the blood but keeping a house of their own here: the dead's own kin first (a brother's son), men first,
     // then the eldest.
     Id lordHouseId = lord_ != kNone ? people_[lord_].household : kNone;
-    if (heir == kNone && h.id != lordHouseId) {  // the manor stays in the lord's own family
+    if (heir == kNone) {
         auto nearer = [&](const Person& a, const Person& b) {
-            auto nephew = [&](const Person& x) { return d.father != kNone && x.father != kNone && people_[x.father].father == d.father; };
+            auto nephew = [&](const Person& x) { return lp.father != kNone && x.father != kNone && people_[x.father].father == lp.father; };
             if (nephew(a) != nephew(b)) return nephew(a);
             if ((a.sex == Sex::Male) != (b.sex == Sex::Male)) return a.sex == Sex::Male;
             return a.birthDay < b.birthDay;
@@ -389,7 +410,8 @@ Id World::heirOf(const Household& h, Id dead) const {
         Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
         for (const auto& q : people_)
             // Blood, not name: a wife takes her husband's name but is no kin of his brother's.
-            if (q.alive() && q.id != dead && closeKin(q.id, dead) && q.household != kNone && q.household != h.id &&
+            if (q.alive() && q.id != dead && closeKin(q.id, line) && q.household != kNone && q.household != h.id &&
+                (h.id != lordHouseId || q.dynasty == h.dynasty) &&  // the manor stays in the lord's own family
                 q.household != lordHouse && households_[q.household].house != "manor" &&  // the manor is not given up for a cottage
                 households_[q.household].head == q.id && households_[q.household].ward == kNone &&  // not one holding for a child
                 !households_[q.household].extinct && ageYears(q) >= 16 &&
@@ -424,7 +446,7 @@ World::Estate World::onHeadDied(Household& h, Id dead) {
     if (heir == kNone) {
         h.extinct = true;
         h.head = kNone;
-        h.ward = kNone;
+        h.ward = h.wardLine = kNone;
         // Servants living here go back to their own families.
         for (Id m : std::vector<Id>(h.members))
             if (people_[m].home != kNone) {
@@ -657,13 +679,27 @@ void World::mergeHousehold(Household& from, Household& to, const std::string& ho
         if (!p.alive()) continue;
         if (p.home == from.id) p.home = to.id;
         if (p.flags.erase("apprentice_at_" + std::to_string(from.id))) p.flags.insert("apprentice_at_" + std::to_string(to.id));
+        // Serving in what is now their own house: they are simply at home.
+        if (p.home == to.id && p.household == to.id) {
+            p.home = kNone;
+            p.serviceEnd = -1;
+            p.flags.erase("in_service");
+            if (p.station == "servant") p.station.clear();
+        }
+    }
+    // A debt one of the two houses owed the other is now owed to itself: gone.
+    auto own = [&](Id creditor) { return creditor != kNone && people_[creditor].household == to.id; };
+    if (own(to.heldCreditor)) to.heldDebt = 0, to.heldCreditor = kNone;
+    if (own(to.creditor)) {
+        to.debt = to.heldDebt, to.creditor = to.heldCreditor;
+        to.heldDebt = 0, to.heldCreditor = kNone;
     }
     from.members.clear();
     from.items.clear();
     from.money = from.food = from.firewood = from.debt = from.heldDebt = 0;
     from.creditor = from.heldCreditor = kNone;
     from.head = kNone;
-    from.ward = kNone;
+    from.ward = from.wardLine = kNone;
     from.extinct = true;
     rehomeAway(from.id, to.id);
 }
@@ -749,24 +785,29 @@ void World::monthlyWards() {
             Id lost = h.ward;
             h.ward = kNone;
             Id next = h.wardLine != kNone ? heirOf(h, h.wardLine) : kNone;
-            if (next == kNone || next == h.head || people_[next].household != h.id) {
+            const Person& np = people_[next != kNone ? next : 0];
+            bool ours = next != kNone && (np.household == h.id || np.home == h.id || (isAway(np) && np.awayFrom == h.id));
+            if (next == kNone || next == h.head || !ours) {
                 h.wardLine = kNone;
                 continue;
             }
-            if (ageYears(people_[next]) < 16) {
+            if (inPlayerHouse(h.id) && playerDynasty_ != kNone && !dynasties_[playerDynasty_].heads.empty())
+                dynasties_[playerDynasty_].heldFor[dynasties_[playerDynasty_].heads.size() - 1] = next;
+            if (ageYears(np) < 16 || np.home == h.id) {
                 h.ward = next;
                 if (inPlayerHouse(h.id))
                     log(1, "【繼承】家業本來是 " + people_[lost].firstName + " 的，如今改歸 " + fullName(next) + "（" +
                                std::to_string(int(ageYears(people_[next]))) + " 歲），仍由 " + fullName(h.head) + " 代為持家。");
                 continue;
             }
+            if (isAway(np)) setStation(next, "home", 0, "回家接下家裡的地");
             handOver(h, next, "接下" + people_[lost].firstName + "沒能接的家業");
             continue;
         }
         Person& w = people_[h.ward];
         // A servant takes the house over when the term is up; one away at school or in town, when back.
         if (ageYears(w) < 16 || w.household != h.id || w.home != kNone) continue;
-        handOver(h, w.id, ageYears(w) < 17 ? "滿 16 歲，當了家" : "回到家裡，當了家");
+        handOver(h, w.id, ageYears(w) < 17 ? "成年了，當了家" : "回到家裡，當了家");
     }
 }
 
@@ -864,7 +905,20 @@ void World::marry(Id man, Id woman) {
             if (x == woman || x == oh.ward || !q.alive() || q.home != kNone || ageYears(q) < 16) continue;
             if (holdsOn == kNone || q.birthDay < people_[holdsOn].birthDay) holdsOn = x;
         }
-        if (holdsOn == kNone && people_[oh.ward].household == oldHouse) holdsOn = oh.ward;
+        // Nobody grown to leave it with: the child is called home from service or from away to keep the house.
+        Id ward = oh.ward;
+        if (holdsOn == kNone && people_[ward].alive() && people_[ward].household != oldHouse) {
+            Person& c = people_[ward];
+            if (c.home == oldHouse) {
+                c.home = kNone;
+                c.serviceEnd = -1;
+                c.flags.erase("in_service");
+                moveTo(ward, oldHouse);
+            } else if (isAway(c) && c.awayFrom == oldHouse) {
+                setStation(ward, "home", 0, "母親改嫁，回村守家");
+            }
+        }
+        if (holdsOn == kNone && people_[ward].household == oldHouse) holdsOn = ward;
         if (holdsOn != kNone) heiress = false;
     }
     // A family with no son keeps one daughter at home; her husband marries in to carry the land.
@@ -894,7 +948,7 @@ void World::marry(Id man, Id woman) {
             if (family) log(imp, fullName(man) + " 娶了 " + fullName(woman) + "，帶著家當搬進她家，兩家合為一戶。");
             return;
         }
-        if (family) log(imp, fullName(man) + " 娶了寡婦 " + fullName(woman) + "，兩家合為一戶。");
+        if (family) log(imp, fullName(man) + " 娶了" + (wardBride ? "" : "寡婦 ") + fullName(woman) + "，兩家合為一戶。");
         w.dynasty = m.dynasty;
         return;
     }
@@ -920,6 +974,8 @@ void World::marry(Id man, Id woman) {
         if (regentBride && holdsOn != kNone) {
             if (holdsOn == from.ward) from.ward = kNone, from.wardLine = kNone;
             from.head = holdsOn;
+            settleAsHead(holdsOn);
+            noteLife(holdsOn, from.ward != kNone ? "替 " + people_[from.ward].firstName + " 持家" : "當了家");
             if (inPlayerHouse(m.household) || inPlayerHouse(from.id))
                 log(1, "  " + fullName(woman) + " 改嫁出去，" + (from.ward != kNone ? fullName(holdsOn) + " 接著替 " + fullName(from.ward) + " 持家。"
                                                                                   : fullName(holdsOn) + " 自己當家。"));
