@@ -231,10 +231,12 @@ void World::monthlyEconomy() {
         book(h, "打短工", spare * 7 * wage);
         h.money -= h.members.size() * 0.5;  // clothes, salt, tools
         book(h, "衣服、鹽、農具", -(h.members.size() * 0.5));
-        // Better-off households spend on cloth, feasts, servants and gifts.
+        // Better-off households spend on cloth, feasts and gifts: a share of what is put by, but a household that
+        // saves hard can still save (at most 12 pence a month, enough for a feast day and a new coat).
         if (h.money > 150) {
-            book(h, "排場、人情往來", -(h.money - 150) * 0.08);
-            h.money -= (h.money - 150) * 0.08;
+            double spend = std::min((h.money - 150) * 0.05, 12.0);
+            book(h, "家用排場（衣料、宴客、送禮）", -spend);
+            h.money -= spend;
         }
         if (h.money < 0) h.money = 0;
         ensureFood(h);

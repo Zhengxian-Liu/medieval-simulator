@@ -62,6 +62,10 @@ void World::monthlyHealth() {
     double mortMult = param("mortality_mult", 1);
     bool gentle = cfg_.harshness == Harshness::Gentle;
     int plagueDeaths = 0;
+    // Hiding in the woods lasts as long as the pestilence: when it has passed, the family comes back.
+    if (plague <= 0)
+        for (auto& p : people_)
+            if (p.flags.erase("plague_shelter") && p.id == playerHead()) log(1, "瘟疫過去了，" + fullName(p.id) + " 帶著全家從林子裡的小屋回到村裡。");
 
     // People in households the player could continue with: the player's own and its branches.
     auto inLine = [&](const Person& p) {
@@ -909,7 +913,9 @@ void World::marry(Id man, Id woman) {
         Household& from = households_[oldHouse];
         double dowry = std::min(from.money * 0.2, 120.0);
         from.money -= dowry;
+        book(from, "嫁妝", -dowry);
         households_[m.household].money += dowry;
+        book(households_[m.household], "媳婦帶來的嫁妝", dowry);
         from.members.erase(std::remove(from.members.begin(), from.members.end(), woman), from.members.end());
         if (regentBride && holdsOn != kNone) {
             if (holdsOn == from.ward) from.ward = kNone, from.wardLine = kNone;
@@ -1105,6 +1111,7 @@ void World::yearlyMarriages() {
         Household& from = households_[w.household];
         double dowry = std::min(from.money * 0.15, 80.0);
         from.money -= dowry;
+        book(from, "嫁妝", -dowry);
         from.members.erase(std::remove(from.members.begin(), from.members.end(), w.id), from.members.end());
         if (isPlayerFamily(w)) log(inPlayerHouse(w.household) ? 1 : 2, fullName(w.id) + " 嫁到了外村。");
         w.station.clear();

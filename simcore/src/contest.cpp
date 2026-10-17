@@ -289,7 +289,7 @@ void World::chooseOfficers() {
         const std::string& name = cur->name;
         setOffice(id, winner, "選上的");
         Household& wh = households_[people_[winner].household];
-        if (id == "aletaster") wh.money += 8;  // a share of the fines he presents
+        if (id == "aletaster") wh.money += 8, book(wh, "品酒官的罰款分成", 8);  // a share of the fines he presents
         else wh.food += consumption(wh) * 30;  // a sheaf from every house at harvest
         if (winner != old) people_[winner].reputation += 2;
         if (familyIn && cands.size() > 1) {
@@ -388,7 +388,9 @@ void World::fillPlaces() {
         if (!takePlace(pl.master, pl.kind, who)) continue;
         if (pl.kind == "apprentice") {  // the fee, once the place is taken
             households_[house].money -= 24;
+            book(households_[house], "學徒拜師費", -24);
             households_[pl.master].money += 24;
+            book(households_[pl.master], "收學徒的拜師費", 24);
         }
         if (known) log(2, fullName(mh) + " 收了 " + fullName(who) + " 到家裡" + what + "。");
     }
@@ -767,6 +769,7 @@ void World::allotVacant() {
         std::string name = parcelName(pc);
         moveParcel(id, pick, "向領主租來");
         households_[pick].money -= fine;
+        book(households_[pick], "入地費", -fine);
         if (lordHouse != kNone) households_[lordHouse].money += fine;
         if (family) log(1, "  管家把" + name + "租給了你家，入地費 " + pence(fine) + "。");
     }
@@ -848,7 +851,7 @@ void World::resolveFine(EntryFine& f) {
         h.money -= f.amount;
         households_[lordHouse].money += f.amount;
         book(h, "入地費", -f.amount);
-        if (family) log(1, "交了 " + pence(f.amount) + "入地費給領主，地正式是" + shortName(h.head) + "的了。");
+        if (family) log(1, "交了 " + pence(f.amount) + "入地費給領主，地正式是" + shortName(f.heir != kNone && people_[f.heir].alive() ? f.heir : h.head) + "的了。");
         return;
     }
     if (family) {
@@ -864,10 +867,13 @@ void World::resolveFine(EntryFine& f) {
     Id lender = findLender(h);
     if (lender != kNone && households_[people_[lender].household].money >= short_ + 40 && opinion(lender, h.head) >= 25) {
         households_[people_[lender].household].money -= short_;
+        book(households_[people_[lender].household], "借出", -short_);
         h.money += short_;
+        book(h, "借錢", short_);
         addDebt(h, short_, lender);
         oweFavour(h.head, lender, 15, "借錢交入地費");
         h.money -= f.amount;
+        book(h, "入地費", -f.amount);
         households_[lordHouse].money += f.amount;
         return;
     }
@@ -880,6 +886,7 @@ void World::resolveFine(EntryFine& f) {
     forfeitForFine(h, std::clamp(short_ / f.amount, 0.0, 1.0));
     double paid = h.money;
     h.money = 0;
+    book(h, "入地費", -paid);
     households_[lordHouse].money += paid;
 }
 
@@ -924,7 +931,9 @@ void World::fineChoice(Household& h, const std::string& how) {
         Id lender = fineLender(h, short_);
         if (lender != kNone) {
             households_[people_[lender].household].money -= short_;
+            book(households_[people_[lender].household], "借出", -short_);
             h.money += short_;
+            book(h, "借錢", short_);
             addDebt(h, short_, lender);
             oweFavour(h.head, lender, 15, "借錢交入地費");
             h.money -= f.amount;
@@ -978,6 +987,7 @@ void World::forfeitForFine(Household& h, double share) {
         if (best != kNone) {
             double fine = parcels_[id].acres * rate;
             households_[best].money -= fine;
+            book(households_[best], "入地費", -fine);
             if (lordHouse != kNone) households_[lordHouse].money += fine;
             moveParcel(id, best, "交不出入地費被收回，轉租來的");
             to.push_back(dynasties_[households_[best].dynasty].surname);

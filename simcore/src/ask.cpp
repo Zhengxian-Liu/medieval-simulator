@@ -34,7 +34,9 @@ std::vector<AskOption> World::asksFor(Id target) {
     const Household& ph = households_[playerHousehold_];
     Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
     bool isHead = th.head == target;
+    bool hiding = hp.flags.count("plague_shelter") > 0;
     auto push = [&](AskOption o) {
+        if (o.open && hiding) o.open = false, o.why = "全家躲在林子裡避瘟疫，不和外人來往";
         auto cd = asked_.find({target, o.ask, o.object});
         if (o.open && cd != asked_.end() && cd->second > day_) o.open = false, o.why = "這一季剛問過";
         if (o.open && timeLeft() < 1) o.open = false, o.why = "這一季沒空了";
@@ -141,13 +143,30 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
     if (again) {
         // Pressing the answer just given: in the same season, with a lever offered, and another free day
         // (taken below, once the lever is known to work).
+        // Never silent: a press that cannot be made says why (an answer from last season, a lever no longer there).
         if (lastAsk_.who != who || lastAsk_.ask != what || lastAsk_.object != object || lastAsk_.subject != subject ||
             lastAsk_.season != year() * 4 + month() / 3 ||
-            std::find(lastAsk_.levers.begin(), lastAsk_.levers.end(), lever) == lastAsk_.levers.end())
+            std::find(lastAsk_.levers.begin(), lastAsk_.levers.end(), lever) == lastAsk_.levers.end()) {
+            log(1, "〔開口〕" + shortName(who) + "那個答覆已經是上一季的事了，要談得重新開口。");
             return;
-        if (!opt) return;
+        }
+        if (!opt) {
+            log(1, "〔開口〕這件事現在跟" + shortName(who) + "談不了了。");
+            return;
+        }
     } else {
-        if (!opt || !opt->open || !spendTime(1)) return;
+        if (!opt) {
+            log(1, "〔開口〕這件事現在跟" + shortName(who) + "談不了了。");
+            return;
+        }
+        if (!opt->open) {
+            log(1, "〔開口〕沒去找" + shortName(who) + "：" + opt->why + "。");
+            return;
+        }
+        if (!spendTime(1)) {
+            log(1, "〔開口〕這一季沒有空閒了，等下一季再去找" + shortName(who) + "。");
+            return;
+        }
     }
     AskOption o = *opt;
     Household& ph = households_[playerHousehold_];
@@ -259,7 +278,7 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
         if (!r.empty()) fs.push_back({-15, "我已經答應收" + r + "家的孩子了"});
         big = 10;
     } else if (what == "speak") {
-        fs.push_back({-20, "領主那裡不好開口"});
+        fs.push_back({-12, "領主那裡不好開口"});  // a word with the lord costs little: a friend, or a gift, carries it
         big = 15;
     } else if (what == "stand_aside") {
         const Want& wt = wants_[object];
@@ -306,7 +325,14 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
     if (again) {
         // Every way a press can fail is checked before it takes the day.
         bool ok = leverOpen(lever) && ph.money + 0.01 >= pressCost && (lever != "meet" || canMeet());
-        if (!ok || !spendTime(1)) return;
+        if (!ok) {
+            log(1, "〔開口〕" + std::string(ph.money + 0.01 < pressCost ? "錢不夠，" : "") + "這個說法現在用不上了。");
+            return;
+        }
+        if (!spendTime(1)) {
+            log(1, "〔開口〕這一季沒有空閒了，等下一季再去找" + shortName(who) + "。");
+            return;
+        }
     }
     if (lever == "gift") {
         double g = giftSum;

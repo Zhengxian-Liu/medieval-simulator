@@ -2,11 +2,12 @@
   // 找人 (design/season-loop.md): what the head can go and do with someone, at the cost of a free day of the
   // season. Each is an event about the person sought out ({name}/{first}), who answers by their nature, mood
   // and feeling for the head ({target}/{target_first}); the options are their possible answers, never the
-  // player's. "interaction": who it is for (family | household | outsider | anyone), time, money (pence).
+  // player's. "interaction": who it is for (family | household | outsider | anyone), time, money (pence);
+  // "chatter": true when, taken well, the visit is a talk (a line from data/chatter.json about what is on their mind).
   // Results go into opinions, memories and concerns, so they come back in later events.
   "events": [
     {"id": "talk_comfort", "title": "安慰", "scope": "interaction", "cooldown_months": 3,
-     "interaction": {"who": "family", "time": 1, "desc": "陪{pron}坐一坐，聽{pron}說說心裡的苦"},
+     "interaction": {"chatter": true, "who": "family", "time": 1, "desc": "陪{pron}坐一坐，聽{pron}說說心裡的苦"},
      "conditions": {"age": [6, 120], "any": [{"concern": {"kind": "grief", "min": 10}}, {"concern": {"kind": "heartbreak", "min": 10}},
                                             {"concern": {"kind": "shame", "min": 10}}, {"concern": {"kind": "worry", "min": 10}}]},
      "options": [
@@ -22,7 +23,7 @@
      ]},
 
     {"id": "talk_heart", "title": "談心", "scope": "interaction", "cooldown_months": 4,
-     "interaction": {"who": "family", "time": 1, "desc": "找{pron}好好說說話"},
+     "interaction": {"chatter": true, "who": "family", "time": 1, "desc": "找{pron}好好說說話"},
      "conditions": {"age": [12, 120]},
      "options": [
       {"text": "把心裡話都說了",
@@ -36,7 +37,7 @@
      ]},
 
     {"id": "talk_praise", "title": "誇獎", "scope": "interaction", "cooldown_months": 6,
-     "interaction": {"who": "household", "time": 1, "desc": "當著全家人的面誇{pron}"},
+     "interaction": {"chatter": true, "who": "household", "time": 1, "desc": "當著全家人的面誇{pron}"},
      "conditions": {"age": [5, 30], "child_of_target": true},
      "options": [
       {"text": "高興得臉都紅了",
@@ -69,7 +70,7 @@
      ]},
 
     {"id": "talk_fields", "title": "多下田", "scope": "interaction", "cooldown_months": 3,
-     "interaction": {"who": "household", "time": 1, "desc": "跟{pron}說這一季要多下田，家裡缺人手"},
+     "interaction": {"chatter": true, "who": "household", "time": 1, "desc": "跟{pron}說這一季要多下田，家裡缺人手"},
      "conditions": {"age": [12, 70], "health_ge": 40},
      "options": [
       {"text": "二話不說就去了",
@@ -88,7 +89,7 @@
      ]},
 
     {"id": "talk_church", "title": "一起上教堂", "scope": "interaction", "cooldown_months": 3,
-     "interaction": {"who": "family", "time": 1, "desc": "帶{pron}一起去望彌撒、點根蠟燭"},
+     "interaction": {"chatter": true, "who": "family", "time": 1, "desc": "帶{pron}一起去望彌撒、點根蠟燭"},
      "conditions": {"age": [6, 120]},
      "options": [
       {"text": "安安靜靜地跟著禱告",
@@ -103,7 +104,7 @@
      ]},
 
     {"id": "talk_ale", "title": "請喝酒", "scope": "interaction", "cooldown_months": 3,
-     "interaction": {"who": "outsider", "time": 1, "money": 2, "desc": "請{pron}去酒館喝幾杯（2 便士）"},
+     "interaction": {"chatter": true, "who": "outsider", "time": 1, "money": 2, "desc": "請{pron}去酒館喝幾杯（2 便士）"},
      "conditions": {"age": [16, 120], "not": {"occupation": ["lord", "priest"]}},
      "options": [
       {"text": "爽快地坐下來喝",
@@ -117,7 +118,7 @@
      ]},
 
     {"id": "talk_gift", "title": "送禮", "scope": "interaction", "cooldown_months": 6,
-     "interaction": {"who": "outsider", "time": 1, "money": 6, "desc": "帶一籃蛋和一塊燻肉上門（6 便士）"},
+     "interaction": {"chatter": true, "who": "outsider", "time": 1, "money": 6, "desc": "帶一籃蛋和一塊燻肉上門（6 便士）"},
      "conditions": {"age": [16, 120]},
      "options": [
       {"text": "笑著收下",
@@ -159,7 +160,7 @@
      ]},
 
     {"id": "talk_condole", "title": "弔唁", "scope": "interaction", "cooldown_months": 12,
-     "interaction": {"who": "outsider", "time": 1, "desc": "去{pron}家坐坐，說幾句安慰的話"},
+     "interaction": {"chatter": true, "who": "outsider", "time": 1, "desc": "去{pron}家坐坐，說幾句安慰的話"},
      "conditions": {"concern": {"kind": "grief", "min": 20}},
      "options": [
       {"text": "握著你的手說不出話",
@@ -214,6 +215,97 @@
        "log": "{target_first}帶著閹雞去求見{first}，等了半天，管家出來收了雞，說老爺沒空。",
        "effects": [{"on_target": [{"food": -5}, {"stress": 3}]}, {"opinion": {"value": 3, "mod": "gift", "years": 3}}],
        "ai": {"base": 10, "traits": {"greedy":  6, "cruel":  6}}}
+     ]},
+
+    {"id": "talk_teach_letters", "title": "教認字", "scope": "interaction", "cooldown_months": 3,
+     "interaction": {"who": "household", "time": 1, "desc": "晚上在灶邊用木炭在石板上教{pron}認字（學會了就是識字的人）"},
+     "conditions": {"age": [6, 16], "no_trait": "literate", "target": {"trait": "literate"}, "not": {"trait": "dull"}},
+     "options": [
+      {"text": "一個字一個字跟著念",
+       "log": ["{target_first}在灶邊用木炭教{first}寫字，{first}一筆一畫寫出了自己的名字。", "{target_first}教{first}念主禱文上的字，{first}念錯了就自己笑起來。", "{target_first}拿出那本破舊的日課經，教{first}認了十來個字。"],
+       "effects": [{"skill": {"learning": 1.5}}, {"mutual_opinion": {"value": 4, "mod": "taught", "years": 10}},
+                   {"if": {"cond": {"skill_ge": {"learning": 6}}, "then": [{"add_trait": "literate"}, {"tell": "  {first}能自己把整段主禱文念出來了：家裡又多了一個識字的人。"}]}}],
+       "ai": {"base": 10, "traits": {"clever": 6, "diligent": 4, "lazy": -4}}},
+      {"text": "坐不住，心思早飛到外面去了",
+       "log": "{target_first}想教{first}認字，{first}坐不到一刻鐘就往門外看。",
+       "effects": [{"skill": {"learning": 0.4}}],
+       "ai": {"base": 4, "traits": {"lazy": 6, "gregarious": 3, "brave": 2}}}
+     ]},
+
+    {"id": "talk_teach_fields", "title": "帶去田裡教", "scope": "interaction", "cooldown_months": 3,
+     "interaction": {"who": "household", "time": 1, "desc": "帶{pron}下田，教{pron}犁溝、播種、看天色"},
+     "conditions": {"age": [8, 16], "skill_lt": {"farming": 12}},
+     "options": [
+      {"text": "學得很快",
+       "log": ["{target_first}帶{first}下田，教{pron}怎麼讓犁溝走得直，{first}學得很快。", "{target_first}教{first}看雲識天氣，{first}說明天要下雨，結果真下了。", "{target_first}讓{first}跟著撒種，{first}的手勢越來越像樣了。"],
+       "effects": [{"skill": {"farming": 1.5}}, {"work_bonus": 0.01}, {"mutual_opinion": {"value": 3, "mod": "taught", "years": 8}}, {"need": {"rest": -10}}],
+       "ai": {"base": 10, "traits": {"diligent": 6, "strong": 3, "lazy": -5}}},
+      {"text": "累得直喊腿痠",
+       "log": "{target_first}帶{first}下田，{first}沒走兩趟就喊腿痠。",
+       "effects": [{"skill": {"farming": 0.5}}],
+       "ai": {"base": 4, "traits": {"lazy": 8, "frail": 5}}}
+     ]},
+
+    {"id": "talk_market", "title": "帶去市集", "scope": "interaction", "cooldown_months": 6,
+     "interaction": {"chatter": true, "who": "household", "time": 1, "money": 2, "desc": "帶{pron}去鎮上的市集見見世面（2 便士）"},
+     "conditions": {"age": [7, 17], "married": false},
+     "options": [
+      {"text": "看什麼都新鮮",
+       "log": ["{target_first}帶{first}去鎮上的市集，{first}站在賣藝人前面看得捨不得走。", "{target_first}帶{first}去市集賣雞蛋，{first}跟人討價還價，居然多賣了一個銅板。", "{target_first}帶{first}去市集，{first}第一次見到賣香料的商人，問了一路的問題。"],
+       "effects": [{"skill": {"charm": 1}}, {"need": {"social": 25}}, {"stress": -6}, {"mutual_opinion": {"value": 6, "mod": "took_to_market", "years": 8}}],
+       "ai": {"base": 10, "traits": {"gregarious": 6, "ambitious": 4, "shy": -3}}},
+      {"text": "怕生，一直拉著你的衣角",
+       "log": "{target_first}帶{first}去市集，{first}怕生，一路拉著{target_pron}的衣角不放。",
+       "effects": [{"skill": {"charm": 0.4}}, {"mutual_opinion": {"value": 3, "mod": "took_to_market", "years": 6}}],
+       "ai": {"base": 4, "traits": {"shy": 10, "craven": 4}}}
+     ]},
+
+    {"id": "talk_swap_work", "title": "換工", "scope": "interaction", "cooldown_months": 6,
+     "interaction": {"who": "outsider", "time": 1, "desc": "跟{pron}家說好換工：農忙時兩家互相幫忙（收成好一點，交情也深一點）"},
+     "conditions": {"is_head": true, "acres_ge": 3, "age": [16, 70], "feud_lt": 2, "not": {"occupation": ["lord", "priest"]}},
+     "options": [
+      {"text": "一口答應",
+       "log": ["{target_first}跟{first}說好換工，兩家人一起把兩邊的麥子都收進了倉。", "{target_first}和{first}兩家換工，一起犁完了兩家的地，晚上在{first}家喝了一罐麥酒。"],
+       "effects": [{"work_bonus": 0.02}, {"on_target": [{"work_bonus": 0.03}, {"need": {"rest": -10}}]}, {"mutual_opinion": {"value": 6, "mod": "swapped_work", "years": 6}}],
+       "ai": {"base": 10, "traits": {"diligent": 5, "kind": 4, "gregarious": 3}, "if": [{"cond": {"opinion_of_target_ge": 10}, "add": 8}, {"cond": {"opinion_of_target_lt": -10}, "add": -8}]}},
+      {"text": "說自家的活都忙不完",
+       "log": "{target_first}想跟{first}換工，{first}說自家的活都忙不完。",
+       "effects": [],
+       "ai": {"base": 5, "traits": {"greedy": 5, "lazy": 5, "cynical": 4}, "if": [{"cond": {"opinion_of_target_lt": 0}, "add": 8}]}}
+     ]},
+
+    {"id": "talk_help_kin", "title": "接濟窮親戚", "scope": "interaction", "cooldown_months": 6,
+     "interaction": {"chatter": true, "who": "family", "time": 1, "money": 10, "desc": "給日子過不下去的{pron}家送 10 便士（親戚會記得，可能也會覺得丟臉）"},
+     "conditions": {"is_head": true, "same_household": false, "any": [{"money_lt": 15}, {"lean": true}, {"in_debt": true}]},
+     "options": [
+      {"text": "紅著眼收下",
+       "log": ["{target_first}給{first}家送去 10 便士，{first}紅著眼收下了：「這份情，我記著。」", "{target_first}悄悄塞給{first} 10 便士，{first}握著錢說不出話來。"],
+       "effects": [{"money": 10}, {"ease_concern": {"kind": "worry", "by": 20}}, {"mutual_opinion": {"value": 10, "mod": "helped_kin", "years": 15}},
+                   {"on_target": [{"reputation": 1}]}],
+       "ai": {"base": 10, "traits": {"kind": 4, "content": 3}}},
+      {"text": "臉上掛不住，推了回去",
+       "log": "{target_first}要給{first}家送錢，{first}臉上掛不住，硬是推了回去：「我們還沒到那一步。」",
+       "effects": [{"on_target": [{"money": 10}]}, {"opinion": {"value": 3, "mod": "helped_kin", "years": 8}}, {"stress": 3}],
+       "ai": {"base": 3, "traits": {"ambitious": 6, "wrathful": 4, "brave": 3}}}
+     ]},
+
+    {"id": "talk_sue_debtor", "title": "上莊園法庭討債", "scope": "interaction", "cooldown_months": 12,
+     "interaction": {"who": "outsider", "time": 1, "money": 2, "desc": "到莊園法庭告{pron}欠錢不還（2 便士訴訟費；兩家從此結下梁子）"},
+     "conditions": {"is_head": true, "owes_target": true},
+     "options": [
+      {"text": "陪審團判他照數還錢",
+       "log": "{target_first}在莊園法庭上告{first}欠錢不還，十二個陪審的鄰居判{first}家照數還錢。",
+       "conditions": {"money_ge": 5},
+       "effects": [{"repay_target": 1}, {"deed": {"type": "court_case", "doer": "target"}}, {"stress": 6}],
+       "ai": {"base": 10, "if": [{"cond": {"reputation_lt": 0}, "add": 6}, {"cond": {"money_ge": 60}, "add": 6}]}},
+      {"text": "當庭哭窮，法庭判他分期還一半",
+       "log": "{target_first}在莊園法庭上告{first}欠錢不還，{first}當庭哭窮，法庭判{pron}先還一半。",
+       "effects": [{"repay_target": 0.5}, {"deed": {"type": "court_case", "doer": "target"}}, {"stress": 4}],
+       "ai": {"base": 8, "if": [{"cond": {"money_lt": 20}, "add": 12}]}},
+      {"text": "鄰居們偏袒他，案子被駁回",
+       "log": "{target_first}在莊園法庭上告{first}欠錢不還，陪審的鄰居大多跟{first}家交好，案子被駁回了。",
+       "effects": [{"deed": {"type": "court_case", "doer": "target"}}, {"on_target": [{"stress": 6}, {"reputation": -1}]}],
+       "ai": {"base": 3, "if": [{"cond": {"reputation_ge": 10}, "add": 8}, {"cond": {"opinion_of_target_lt": -20}, "add": 4}]}}
      ]}
   ]
 }

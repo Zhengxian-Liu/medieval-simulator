@@ -421,7 +421,7 @@ public:
             const Heard& x = hd[i];
             heard.push_back(Obj()
                                 .n("year", w.config().startYear + x.day / kDaysPerYear)
-                                .text("teller", x.teller != kNone ? w.tellerName(x.teller) : "")
+                                .text("teller", x.teller != kNone ? w.tellerName(x.teller, x.news) : "")
                                 .text("text", x.text)
                                 .b("whisper", x.news == kNone)
                                 .b("recent", w.today() - x.day <= 3 * kDaysPerMonth)

@@ -601,6 +601,7 @@ public:
         double money = 0, food = 0, acres = 0;
         Id head = kNone;
         std::map<std::string, double> ledger;
+        int day = 0;
     };
     FamilySnapshot snapshot() const;
     std::string seasonChanges(const FamilySnapshot& before) const;
@@ -622,7 +623,8 @@ public:
     const std::vector<Heard>& heard() const { return heard_; }
     std::string newsText(const News& n) const;
     std::string villageTalk() const;  // what the family heard last season, for the glance
-    std::string tellerName(Id teller) const;  // "兒子威廉" for the family's own, the full name for others
+    std::string tellerName(Id teller, Id news = kNone) const;  // "兒子威廉" for the family's own, the full name for others
+    std::set<std::pair<Id, Id>> namesakeTeller_;  // (news, teller) where the teller shares the name of the one it is about
     // contest.cpp: the contested ledger
     const std::vector<Office>& offices() const { return offices_; }
     const Office* office(const std::string& id) const;
@@ -686,6 +688,8 @@ private:
     std::set<std::pair<Id, Id>> feudCounted_;  // (deed, dynasty) already added to a feud  // (deed, culprit) stories already in the chronicle
     uint64_t scheduleSeq_ = 0;
     std::map<std::pair<Id, std::string>, int> cooldowns_;  // (person, event) -> day allowed again
+    std::map<std::pair<Id, std::string>, int> lastLog_;    // (person, option text) -> the variant last told
+    std::map<std::pair<Id, std::string>, int> chatterSaid_;  // (person, chatter id) -> day they last talked of it
     std::set<std::string> worldFlags_;
     std::vector<ActiveEffect> effects_;
     std::map<std::string, double> baseParams_;
@@ -854,6 +858,11 @@ private:
     void learnNews(News& n, Id household, Id teller, double link);
     void whisper(Id holder, Id deed, Id culprit, Id source);
     void attendOccasion(Id person, Id about, bool came, double opinionValue, const std::string& mod);
+    // 紅白事: the head answers the season's first invitation once, for the season (all / close / none); the
+    // rest that season follow that answer without asking again.
+    int occasionSeason_ = -1;
+    std::string occasionPolicy_;
+    bool occasionByPolicy(const std::string& invite, Id subject, double link);
     std::vector<double> houseLinks(Id hh) const;  // link of every household to this one
     std::string formatNews(const std::string& tmpl, const News& n) const;
 

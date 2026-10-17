@@ -316,8 +316,9 @@ std::vector<World::Interaction> World::interactionsWith(Id target) {
         in.ev = &ev;
         int cost = static_cast<int>(ev.interaction.numberOr("time", 1));
         auto cd = cooldowns_.find({target, ev.id});
-        double money = -ev.interaction.numberOr("money", 0);
-        if (cd != cooldowns_.end() && cd->second > day_) in.why = "最近才" + ev.title + "過";
+        double money = ev.interaction.numberOr("money", 0);  // what it costs
+        if (!home && people_[head].flags.count("plague_shelter")) in.why = "全家躲在林子裡避瘟疫，不和外人來往";
+        else if (cd != cooldowns_.end() && cd->second > day_) in.why = "最近才" + ev.title + "過";
         else if (left < cost) in.why = "這一季沒有空了";
         else if (money > households_[playerHousehold_].money + 0.5) in.why = "錢不夠";
         else in.open = true;
@@ -370,6 +371,7 @@ std::string World::familyGlance() const {
 
 World::FamilySnapshot World::snapshot() const {
     FamilySnapshot s;
+    s.day = day_;
     s.head = playerHead();
     if (s.head == kNone) return s;
     const Household& h = households_[playerHousehold_];
@@ -449,7 +451,10 @@ std::string World::seasonChanges(const FamilySnapshot& before) const {
     }
     if (food - before.food >= 45 || (food < 60 && before.food >= 60)) o += "  存糧 " + std::to_string(int(before.food)) + " → " + std::to_string(int(food)) + " 天。\n";
     if (std::abs(h.acres - before.acres) >= 0.5) o += "  田地 " + std::to_string(int(before.acres)) + " → " + std::to_string(int(h.acres)) + " 畝。\n";
-    return o.empty() ? "" : "這一季的變化：\n" + o;
+    // Over a year let pass at once, say so: the totals are for all of it.
+    int seasons = static_cast<int>(std::lround((day_ - before.day) / (kDaysPerYear / 4.0)));
+    std::string span = seasons <= 1 ? "這一季" : "這 " + std::to_string(seasons) + " 季";
+    return o.empty() ? "" : span + "的變化：\n" + o;
 }
 
 }  // namespace sim

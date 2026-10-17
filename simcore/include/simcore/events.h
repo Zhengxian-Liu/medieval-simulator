@@ -38,7 +38,9 @@ private:
     Id deed_ = kNone;   // the deed a signal-driven event is about
     bool eligible(const EventDef& ev, const Person& p, Id playerHead) const;
     void fire(const EventDef& ev, Person& p, Id target);
-    const std::string& pickLog(const OptionDef& o);
+    const std::string& pickLog(const OptionDef& o, Id who);  // a variant this person was not told last time
+    bool asked_ = false;   // the last chooseOption was the player's to make (the 「選擇」 is theirs)
+    std::string bookAs_;   // what money the effects move is booked under: the event's title, or the plan's name
     void natureStress(const EventDef& ev, const OptionDef& chosen, Person& p, Id target);
     Id serviceChild(const Household& h) const;
     std::pair<Id, Id> peaceMatch(const Person& p, Id target) const;

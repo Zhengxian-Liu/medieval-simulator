@@ -70,6 +70,10 @@ void EventRunner::fireScheduled(const EventDef& ev, Person& p, Id target, Id dee
     deed_ = deed;
     cause_ = deed;
     if (!eval(ev.conditions, p, target)) return;
+    // A second wake or wedding the same season: the head's answer to the first stands (World::occasionByPolicy).
+    if ((sig == "news:funeral" || sig == "news:wedding") && target != kNone &&
+        w_.occasionByPolicy(sig.substr(5), target, w_.houseLink(p.household, w_.people_[target].household)))
+        return;
     fire(ev, p, target);
 }
 
@@ -107,9 +111,15 @@ Id EventRunner::serviceChild(const Household& h) const {
     return best;
 }
 
-const std::string& EventRunner::pickLog(const OptionDef& o) {
+const std::string& EventRunner::pickLog(const OptionDef& o, Id who) {
     if (o.logs.size() < 2) return o.log;
-    return o.logs[w_.rngEvents_.range(0, static_cast<int>(o.logs.size()) - 1)];
+    int n = static_cast<int>(o.logs.size());
+    int k = w_.rngEvents_.range(0, n - 1);
+    auto key = std::make_pair(who, o.text + "|" + o.logs[0]);
+    auto last = w_.lastLog_.find(key);
+    if (last != w_.lastLog_.end() && last->second == k) k = (k + 1) % n;  // not the same words twice running
+    w_.lastLog_[key] = k;
+    return o.logs[k];
 }
 
 // Choosing against one's nature weighs on a person; choosing true to it eases them a little.
@@ -139,6 +149,7 @@ void EventRunner::natureStress(const EventDef& ev, const OptionDef& chosen, Pers
 }
 
 void EventRunner::fire(const EventDef& ev, Person& p, Id target) {
+    bookAs_ = ev.title;
     const OptionDef& o = ev.options[chooseOption(ev, p, target)];
     natureStress(ev, o, p, target);
     if (ev.once) p.flags.insert("ev_" + ev.id);
@@ -154,10 +165,10 @@ void EventRunner::fire(const EventDef& ev, Person& p, Id target) {
     bool family = w_.isPlayerFamily(p) || (target != kNone && w_.isPlayerFamily(w_.people_[target]));
     ++w_.counters_["event:" + ev.id];
     if (family) ++w_.counters_["event_family:" + ev.id];
-    std::string line = o.log.empty() ? "" : format(pickLog(o), p, target);
+    std::string line = o.log.empty() ? "" : format(pickLog(o, p.id), p, target);
     if (!line.empty()) {
         if (family) {
-            std::string choice = ev.options.size() > 1 && w_.isPlayerFamily(p) ? "（選擇：" + optionText(o, p, target) + "）" : "";
+            std::string choice = ev.options.size() > 1 && asked_ ? "（選擇：" + optionText(o, p, target) + "）" : "";
             w_.log(home ? 1 : 2, "〔" + ev.title + "〕" + line + choice);
         } else if (ev.npcLog) {
             w_.log(2, line);
@@ -171,11 +182,12 @@ void EventRunner::fire(const EventDef& ev, Person& p, Id target) {
 }
 
 void EventRunner::runEvent(const EventDef& ev, Person& p, Id target, int importance) {
+    bookAs_ = ev.title;
     const OptionDef& o = ev.options[chooseOption(ev, p, target)];
     natureStress(ev, o, p, target);
-    std::string line = o.log.empty() ? "" : format(pickLog(o), p, target);
+    std::string line = o.log.empty() ? "" : format(pickLog(o, p.id), p, target);
     if (!line.empty() && importance > 0) {
-        bool chose = ev.options.size() > 1 && p.household == w_.playerHousehold_;
+        bool chose = ev.options.size() > 1 && asked_;  // only what the player was asked is the player's choice
         w_.log(importance, "  " + line + (chose ? "（選擇：" + optionText(o, p, target) + "）" : ""));
     }
     if (!w_.pendingReason_.empty()) {
@@ -190,18 +202,71 @@ void EventRunner::interact(const EventDef& ev, Person& p, Id head) {
     if (!eval(ev.conditions, p, head)) return;
     auto cd = w_.cooldowns_.find({p.id, ev.id});
     if (cd != w_.cooldowns_.end() && cd->second > w_.day_) return;
-    double money = -ev.interaction.numberOr("money", 0);
+    double money = ev.interaction.numberOr("money", 0);  // what it costs
     Household& hh = w_.households_[w_.people_[head].household];
     if (money > hh.money + 0.5) return;
     if (!w_.spendTime(static_cast<int>(ev.interaction.numberOr("time", 1)))) return;
     hh.money = std::max(0.0, hh.money - money);
     w_.book(hh, ev.title, -money);
+    bookAs_ = ev.title;
     // How they take it is up to them: their nature, their mood, what they feel for the head.
     const OptionDef& o = ev.options[chooseOption(ev, p, head)];
     natureStress(ev, o, p, head);
     if (ev.cooldownMonths > 0) w_.cooldowns_[{p.id, ev.id}] = w_.day_ + ev.cooldownMonths * kDaysPerMonth;
     ++w_.counters_["interaction:" + ev.id];
-    std::string line = o.log.empty() ? "" : format(pickLog(o), p, head);
+    std::string line = o.log.empty() ? "" : format(pickLog(o, p.id), p, head);
+    // What they talked about: their griefs and hopes, the season, their temper, the talk of the village.
+    // Only when they took the visit well (the first answer of every interaction is the warm one).
+    if (!line.empty() && ev.interaction["chatter"].isBool() && ev.interaction["chatter"].asBool() && &o == &ev.options.front() &&
+        w_.opinion(p.id, head) > -40) {
+        std::vector<std::pair<double, std::string>> pool;  // weight, line
+        std::vector<std::string> ids;
+        for (const auto& c : w_.defs_.chatter) {
+            auto said = w_.chatterSaid_.find({p.id, c.id});
+            if (c.lines.empty() || (said != w_.chatterSaid_.end() && w_.day_ - said->second < 2 * kDaysPerYear)) continue;
+            if (!eval(c.when, p, head)) continue;
+            pool.push_back({c.weight, ""});
+            ids.push_back(c.id);
+        }
+        // Word going round that this house has heard lately, not about itself or the family.
+        const News* gossip = nullptr;
+        for (auto it = w_.news_.rbegin(); it != w_.news_.rend() && w_.day_ - it->day < 120; ++it)
+            if (it->heard.count(p.household) && it->house != p.household && !w_.inPlayerHouse(it->house) &&
+                it->subject != p.id && !(it->subject != kNone && w_.isPlayerFamily(w_.people_[it->subject])) &&
+                !(it->other != kNone && (it->other == p.id || w_.isPlayerFamily(w_.people_[it->other])))) {
+                auto said = w_.chatterSaid_.find({p.id, "news:" + std::to_string(it->id)});
+                if (said == w_.chatterSaid_.end()) {
+                    gossip = &*it;
+                    break;
+                }
+            }
+        if (gossip) {
+            pool.push_back({3, ""});
+            ids.push_back("news:" + std::to_string(gossip->id));
+        }
+        double total = 0;
+        for (const auto& [wt, _] : pool) total += wt;
+        if (total > 0) {
+            double r = w_.rngEvents_.uniform() * total;
+            size_t k = 0;
+            while (k + 1 < pool.size() && r >= pool[k].first) r -= pool[k++].first;
+            w_.chatterSaid_[{p.id, ids[k]}] = w_.day_;
+            std::string extra;
+            if (ids[k].rfind("news:", 0) == 0) {
+                extra = format("{first}說，村裡在傳：", p, head) + w_.newsText(*gossip) + "。";
+            } else {
+                for (const auto& c : w_.defs_.chatter)
+                    if (c.id == ids[k]) {
+                        OptionDef tmp;
+                        tmp.text = "chatter:" + c.id;
+                        tmp.log = c.lines[0];
+                        tmp.logs = c.lines;
+                        extra = format(pickLog(tmp, p.id), p, head);
+                    }
+            }
+            if (!extra.empty()) line += extra;
+        }
+    }
     if (!line.empty()) w_.log(1, "〔" + ev.title + "〕" + line);
     if (!w_.pendingReason_.empty()) {
         if (!line.empty()) w_.log(1, "  （" + w_.pendingReason_ + "）");
@@ -344,6 +409,7 @@ int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
     // Someone the head goes to see answers for themselves, child or not.
     bool asks = ev.scope != "interaction" && (p.id == acting || (p.household == w_.playerHousehold_ && w_.ageYears(p) < 14) ||
                 (ev.parentDecides && child && p.spouse == kNone));
+    asked_ = ev.ask && asks;
     if (w_.chooser_ && ev.ask && asks) {
         std::vector<int> open;
         World::ChoicePrompt prompt;
@@ -580,6 +646,10 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     // In an event about a deed: p really did it.
     if (k == "deed_actor") return (deed_ != kNone && w.deeds_[deed_].actor == p.id) == v.asBool();
     if (k == "in_debt") return (h && h->debt > 0.5) == v.asBool();
+    if (k == "owes_target") {  // this house owes the target (a loan, an old debt) money
+        bool owes = h && target != kNone && ((h->debt > 0.5 && h->creditor == target) || (h->heldDebt > 0.5 && h->heldCreditor == target));
+        return owes == v.asBool();
+    }
     if (k == "debt_ge") return h && h->debt >= v.asNumber();
     if (k == "has_lender") return h && (w.findLender(*h) != kNone) == v.asBool();
     if (k == "feud_truce") {
@@ -701,7 +771,12 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 if (h) {
                     double before = h->money;
                     h->money = std::max(0.0, h->money + v.asNumber());
-                    w.book(*h, "各種事情", h->money - before);
+                    std::string as = bookAs_;
+                    if (as.empty() && plan_) {
+                        const PlanDef* pd = w.defs_.plan(plan_->plan);
+                        if (pd) as = pd->name;
+                    }
+                    w.book(*h, as.empty() ? "各種事情" : as, h->money - before);
                 }
             } else if (k == "food") {
                 if (h) h->food = std::max(0.0, h->food + v.asNumber());
@@ -875,7 +950,9 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                     std::string name = w.parcelName(w.parcels_[wanted]);
                     w.moveParcel(wanted, h->id, "買來");
                     th.money += price;
+                    w.book(th, "賣地", price);
                     h->money -= price;
+                    w.book(*h, "買地", -price);
                     if (h->id == w.playerHousehold_ || th.id == w.playerHousehold_)
                         w.log(1, "  " + name + "換了 " + std::to_string(static_cast<long>(price)) + " 便士。");
                     continue;
@@ -886,7 +963,9 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 acres = w.moveLand(th.id, h->id, acres, LandPick::CustomaryFirst, "買來");
                 price *= acres / v["acres"].asNumber();
                 th.money += price;
+                w.book(th, "賣地", price);
                 h->money -= price;
+                w.book(*h, "買地", -price);
             } else if (k == "deed") {
                 // {"type": "arson", "doer": "self"|"target", "scale": 1}; the other party is the victim.
                 // "to": "subject" makes the plan's subject the other party; "to": "none" for no one;
@@ -954,7 +1033,9 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 Household& th = w.households_[w.people_[target].household];
                 double amount = std::min(v.asNumber(), std::max(0.0, th.money * 0.4));
                 th.money -= amount;
+                w.book(th, "封口費", -amount);
                 h->money += amount;
+                w.book(*h, "封口費", amount);
                 if (h->id == w.playerHousehold_ || th.id == w.playerHousehold_)
                     w.log(1, "  " + w.fullName(target) + " 付了 " + std::to_string(int(amount)) + " 便士封口費。");
             } else if (k == "owe_target") {
@@ -977,6 +1058,7 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 double amount = v.asNumber();
                 if (h->money >= amount) {
                     h->money -= amount;
+                    w.book(*h, "酒錢", -amount);
                     continue;
                 }
                 double owed = amount - h->money;
@@ -1001,7 +1083,9 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 double amount = std::round(v.numberOr("base", 15) * sev * (h->money > 500 ? 1.6 : 1));
                 amount = std::min(amount, h->money);
                 h->money -= amount;
+                w.book(*h, "賠錢了事", -amount);
                 w.households_[w.people_[target].household].money += amount;
+                w.book(w.households_[w.people_[target].household], "人家賠的錢", amount);
                 if (h->id == w.playerHousehold_)
                     w.log(1, "  一共塞了 " + std::to_string(int(amount)) + " 便士。");
             } else if (k == "signal") {
@@ -1033,13 +1117,31 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 if (target == kNone || deed_ == kNone) continue;
                 for (auto& b : w.beliefs_[target])
                     if (b.deed == deed_ && b.culprit == p.id) b.confidence = std::min(b.confidence, v.numberOr("to", 20));
+            } else if (k == "repay_target") {
+                // Ordered to pay back what this house owes the target: that share of it, as far as the purse goes.
+                if (!h || target == kNone || w.people_[target].household == kNone) continue;
+                Household& th = w.households_[w.people_[target].household];
+                bool first = h->debt > 0.5 && h->creditor == target;
+                double& owed = first ? h->debt : h->heldDebt;
+                double amount = std::min(std::round(owed * v.asNumber()), h->money);
+                if (amount < 1) continue;
+                h->money -= amount;
+                owed -= amount;
+                th.money += amount;
+                w.book(*h, "法庭判還的債", -amount);
+                w.book(th, "法庭討回的債", amount);
+                if (owed <= 0.5) {
+                    if (first) w.clearDebt(*h);
+                    else h->heldDebt = 0, h->heldCreditor = kNone;
+                }
+                if (w.inPlayerHouse(th.id) || w.inPlayerHouse(h->id)) w.log(1, "  當庭還了 " + std::to_string(int(amount)) + " 便士" + (owed > 0.5 ? "，還欠 " + std::to_string(int(owed)) + " 便士。" : "，債清了。"));
             } else if (k == "pay_debt") {
                 if (h) h->debt = std::max(0.0, h->debt - v.asNumber());
             } else if (k == "sell_ox") {
                 if (!h) continue;
                 h->noOxUntil = w.day_ + 40 * kDaysPerYear;  // until they can buy another
                 if (h->debt > 0) h->debt = std::max(0.0, h->debt - 40);
-                else h->money += 40;
+                else h->money += 40, w.book(*h, "賣耕牛", 40);
             } else if (k == "service_for_debt") {
                 // A child goes to work for the creditor; the first years' wages pay the debt.
                 if (!h) continue;
@@ -1204,6 +1306,10 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 // The plan's subject goes to serve in the target's household for some years.
                 if (plan_ && plan_->subject != kNone && target != kNone)
                     w.sendToService(plan_->subject, target, static_cast<int>(v.numberOr("years", 5)));
+            } else if (k == "occasion_policy") {
+                // The head's answer holds for the rest of the season's wakes and weddings.
+                w.occasionSeason_ = w.year() * 4 + w.month() / 3;
+                w.occasionPolicy_ = v.asString();
             } else if (k == "occasion") {
                 // {"came": true, "value": 6, "mod": "came_to_wake"}: at (or missing) the wake or wedding of the target's house.
                 w.attendOccasion(p.id, target, !v["came"].isBool() || v["came"].asBool(), v.numberOr("value", 0), v.stringOr("mod", "event"));

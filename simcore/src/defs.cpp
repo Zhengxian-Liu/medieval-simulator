@@ -309,6 +309,16 @@ Defs Defs::loadFromDir(const std::string& dir) {
         d.wants.push_back(std::move(wd));
     }
 
+    Json chatterRoot = Json::parseFile(dir + "/chatter.json");
+    for (const auto& c : chatterRoot["chatter"].asArray()) {
+        ChatterDef cd;
+        cd.id = c["id"].asString();
+        cd.when = c["when"];
+        cd.lines = readStrings(c["lines"]);
+        cd.weight = c.numberOr("weight", 1);
+        d.chatter.push_back(std::move(cd));
+    }
+
     Json newsRoot = Json::parseFile(dir + "/news.json");
     for (const auto& n : newsRoot["kinds"].asArray()) {
         NewsKindDef nd;

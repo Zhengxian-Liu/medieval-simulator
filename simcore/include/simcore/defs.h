@@ -187,6 +187,15 @@ struct WantDef {
     bool oneAtATime = false; // only one member of the house holds it at a time
 };
 
+// What someone talks about when the head sits down with them (data/chatter.json): drawn from their state, so a
+// talk with a grieving widow, a boy in love and a greedy neighbour do not read alike.
+struct ChatterDef {
+    std::string id;
+    Json when;                       // conditions on the person, the head as target
+    std::vector<std::string> lines;  // variants; {first}, {about:<concern>}, {target_first}…
+    double weight = 1;
+};
+
 // How a kind of news travels the village (data/news.json, design/news.md): how readily it is told (heat), how long
 // it stays worth telling, who knows it at once, and what hearing it does.
 struct NewsKindDef {
@@ -222,6 +231,7 @@ struct Defs {
     std::map<std::string, ItemDef> items;
     std::map<std::string, ConcernDef> concerns;
     std::vector<WantDef> wants;
+    std::vector<ChatterDef> chatter;
     std::map<std::string, NewsKindDef> news;
     std::map<std::string, std::string> whispers;  // secret deed type -> how a whisper of it is told
     std::vector<std::string> maleNames;

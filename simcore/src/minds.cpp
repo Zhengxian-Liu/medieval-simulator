@@ -545,7 +545,9 @@ void World::helpFriend(Person& p) {
         th.food += food;
     } else {
         mine.money -= coin;
+        book(mine, "接濟朋友", -coin);
         th.money += coin;
+        book(th, "朋友接濟", coin);
     }
     helpedUntil_[th.id] = day_ + kDaysPerYear;
     ++counters_["help_given"];

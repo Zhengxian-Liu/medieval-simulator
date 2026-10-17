@@ -29,6 +29,7 @@ void World::chargeMerchet(Id woman, bool outsideManor) {
     double fee = (outsideManor ? 24 : 12) * param("rent_mult", 1);
     double paid = std::min(h.money, fee);
     h.money -= paid;
+    book(h, "婚姻稅", -paid);
     households_[people_[lord_].household].money += paid;
     if (h.head != kNone) addOpinion(h.head, lord_, "merchet", -3, 4);
     if (inPlayerHouse(h.id) && paid >= 1)
@@ -45,9 +46,11 @@ void World::chargeHeriot(Household& h, Id dead, double acres, double money) {
     double beast = std::clamp(money * 0.15 + acres * 2, 20.0, 160.0);
     double heriot = std::min(h.money, beast);
     h.money -= heriot;
+    book(h, "死後稅", -heriot);
     households_[people_[lord_].household].money += heriot;
     double mortuary = std::min(h.money, beast * 0.5);
     h.money -= mortuary;
+    book(h, "給神父的喪葬捐", -mortuary);
     if (priest_ != kNone && people_[priest_].household != kNone) households_[people_[priest_].household].money += mortuary;
     if (h.head != kNone) {
         addOpinion(h.head, lord_, "heriot", -5, 5);
@@ -122,6 +125,7 @@ void World::yearlyService() {
         }
         double wage = 6 * param("wage_mult", 1);
         home.money += wage;
+        book(home, "孩子幫傭的工錢", wage);
         if (ageYears(p) >= 21 || day_ >= p.serviceEnd || p.spouse != kNone) {
             bool family = inPlayerHouse(p.home);
             Id h = p.home;

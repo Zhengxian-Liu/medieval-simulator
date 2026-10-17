@@ -2,25 +2,26 @@
   // Occasions the family is asked to (design/news.md): when news of a death or a wedding reaches the family from a
   // house it is close to, that house asks them over. {target} is the dead (or the groom), {target_home} their
   // family. Going, or staying away, is remembered by that house; at a wake or a wedding the family also meets the
-  // other houses that came.
+  // other houses that came. The head answers once a season: the answer (all / only the close / none) holds for the
+  // season's other wakes and weddings, which then follow it without asking (World::occasionByPolicy).
   "events": [
     {"id": "funeral_invite", "title": "喪事", "scope": "player_family", "chance": 1,
      "on": {"signal": "news:funeral", "after_months": [0, 0]},
      "conditions": {"age": [14, 120]},
      "prompt": "{target_home}家的{target_first}走了。那邊來人傳話：今晚守靈，明天下葬，請你們過去。",
      "options": [
-      {"text": "帶上麵包和一罐麥酒去守靈，陪他們坐一夜（2 便士，佔一段空閒）",
+      {"text": "帶上麵包和一罐麥酒去守靈，陪他們坐一夜（2 便士，佔一段空閒）；這一季別家的紅白事也都去",
        "conditions": {"money_ge": 2},
        "log": "{name}帶著麵包和一罐麥酒去{target_home}家守靈，陪他們坐到天亮。",
-       "effects": [{"money": -2}, {"spend_time": 1}, {"occasion": {"came": true, "value": 8, "mod": "came_to_wake"}}, {"need": {"social": 15, "spirit": 10}}],
+       "effects": [{"money": -2}, {"spend_time": 1}, {"occasion": {"came": true, "value": 8, "mod": "came_to_wake"}}, {"need": {"social": 15, "spirit": 10}}, {"occasion_policy": "all"}],
        "ai": {"base": 8, "traits": {"kind": 6, "pious": 4, "generous": 4, "greedy": -5, "shy": -3}, "if": [{"cond": {"news_link_ge": 0.6}, "add": 8}]}},
-      {"text": "下葬那天去教堂墓地送一程",
+      {"text": "下葬那天去教堂墓地送一程；這一季別家的紅白事只去親近的",
        "log": "{target}下葬那天，{name}站在教堂墓地的人群裡送了一程。",
-       "effects": [{"occasion": {"came": true, "value": 4, "mod": "came_to_wake"}}, {"need": {"spirit": 8}}],
+       "effects": [{"occasion": {"came": true, "value": 4, "mod": "came_to_wake"}}, {"need": {"spirit": 8}}, {"occasion_policy": "close"}],
        "ai": {"base": 8, "traits": {"pious": 3}}},
-      {"text": "地裡的活走不開，不去了",
+      {"text": "地裡的活走不開，不去了；這一季的紅白事都不去",
        "log": "{target}下葬那天，{name}沒有去。",
-       "effects": [{"occasion": {"came": false, "value": -6, "mod": "missed_funeral"}}, {"work_bonus": 0.01}],
+       "effects": [{"occasion": {"came": false, "value": -6, "mod": "missed_funeral"}}, {"work_bonus": 0.01}, {"occasion_policy": "none"}],
        "ai": {"base": 3, "traits": {"greedy": 4, "shy": 4, "diligent": 3, "cruel": 3}, "if": [{"cond": {"news_link_ge": 0.6}, "add": -3}]}}
      ]},
 
@@ -29,18 +30,18 @@
      "conditions": {"age": [14, 120]},
      "prompt": "{target_home}家的{target_first}要成親了，請你們去喝喜酒。",
      "options": [
-      {"text": "帶一份賀禮去喝喜酒（3 便士，佔一段空閒）",
+      {"text": "帶一份賀禮去喝喜酒（3 便士，佔一段空閒）；這一季別家的紅白事也都去",
        "conditions": {"money_ge": 3},
        "log": "{name}帶著賀禮去喝{target}的喜酒，跳舞跳到半夜。",
-       "effects": [{"money": -3}, {"spend_time": 1}, {"occasion": {"came": true, "value": 7, "mod": "wedding_gift"}}, {"need": {"social": 25}}],
+       "effects": [{"money": -3}, {"spend_time": 1}, {"occasion": {"came": true, "value": 7, "mod": "wedding_gift"}}, {"need": {"social": 25}}, {"occasion_policy": "all"}],
        "ai": {"base": 8, "traits": {"generous": 6, "gregarious": 5, "greedy": -5, "shy": -4}, "if": [{"cond": {"news_link_ge": 0.6}, "add": 6}]}},
-      {"text": "空著手去湊個熱鬧",
+      {"text": "空著手去湊個熱鬧；這一季別家的紅白事只去親近的",
        "log": "{name}空著手去{target}的喜酒上湊了個熱鬧。",
-       "effects": [{"occasion": {"came": true, "value": 2, "mod": "came_to_wedding"}}, {"need": {"social": 15}}],
+       "effects": [{"occasion": {"came": true, "value": 2, "mod": "came_to_wedding"}}, {"need": {"social": 15}}, {"occasion_policy": "close"}],
        "ai": {"base": 6, "traits": {"greedy": 4, "gregarious": 3}}},
-      {"text": "不去了",
+      {"text": "不去了；這一季的紅白事都不去",
        "log": "{target}成親那天，{name}沒有去。",
-       "effects": [{"occasion": {"came": false, "value": -3, "mod": "missed_wedding"}}],
+       "effects": [{"occasion": {"came": false, "value": -3, "mod": "missed_wedding"}}, {"occasion_policy": "none"}],
        "ai": {"base": 3, "traits": {"shy": 6, "cynical": 3}, "if": [{"cond": {"news_link_ge": 0.6}, "add": -2}]}}
      ]}
   ]

@@ -296,9 +296,13 @@ void World::monthlyPlans() {
             EventRunner ev(*this, &copy);
             for (const auto& beat : pd->beats) {
                 if (std::find(copy.beatsSeen.begin(), copy.beatsSeen.end(), beat.id) != copy.beatsSeen.end()) continue;
+                // Tried again (a second go at buying the freehold): the same scene does not play out word for word.
+                auto again = cooldowns_.find({actor.id, "beat:" + pd->id + ":" + beat.id});
+                if (again != cooldowns_.end() && again->second > day_) continue;
                 if (!ev.eval(beat.conditions, actor, plan.target)) continue;
                 if (!rngPlans_.chance(beat.chance)) continue;
                 copy.beatsSeen.push_back(beat.id);
+                cooldowns_[{actor.id, "beat:" + pd->id + ":" + beat.id}] = day_ + 6 * kDaysPerYear;
                 int importance = actorHome || (victimHome && pd->notifyTarget && !pd->secret) ? 1 : 0;
                 ev.runEvent(beat, actor, plan.target, importance);
                 break;

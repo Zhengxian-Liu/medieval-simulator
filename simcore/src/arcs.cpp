@@ -206,8 +206,11 @@ void World::monthlyDebts() {
         double pay = std::min(h.debt, spare * 0.4);
         h.debt -= pay;
         h.money -= pay;
-        if (h.creditor != kNone && people_[h.creditor].household != kNone)
+        book(h, "還債", -pay);
+        if (h.creditor != kNone && people_[h.creditor].household != kNone) {
             households_[people_[h.creditor].household].money += pay;
+            book(households_[people_[h.creditor].household], "收回借款", pay);
+        }
         if (h.debt <= 0.5) {
             h.debt = 0;
             h.debtYears = 0;
@@ -224,7 +227,7 @@ void World::yearlyDebts() {
     // In famine and plague years the manor court does not press anyone.
     bool hardTimes = param("harvest_mult", 1) < 0.8 || param("plague_monthly", 0) > 0;
     for (auto& h : households_)
-        if (!h.extinct && h.lodgerUntil > day_) h.money += 14;
+        if (!h.extinct && h.lodgerUntil > day_) h.money += 14, book(h, "房客的租錢", 14);
     for (auto& h : households_) {
         promoteHeldDebt(h);
         if (h.extinct || h.members.empty() || h.debt <= 0.5 || h.head == kNone) continue;
@@ -285,7 +288,9 @@ void World::yearlyDebts() {
                               opts);
             if (r >= 0 && opts[r].rfind("咬牙", 0) == 0) {
                 h.money -= h.debt;
+                book(h, "還債", -h.debt);
                 households_[people_[h.creditor].household].money += h.debt;
+                book(households_[people_[h.creditor].household], "收回借款", h.debt);
                 log(1, "【欠債】" + fullName(h.head) + " 在莊園法庭上把欠 " + fullName(h.creditor) + " 的 " + std::to_string(int(h.debt)) +
                            " 便士一次還清了。");
                 clearDebt(h);

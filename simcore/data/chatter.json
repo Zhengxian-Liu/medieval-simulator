@@ -1,0 +1,91 @@
+{
+  // What someone talks about when the head goes to see them (談心, 請喝酒, 送禮…): one line drawn from their state,
+  // appended to how they took the visit. The first matching entries are weighed by `weight`; one the person said in
+  // the last two years is skipped, and a variant is not repeated twice running. {first}: the person; {target_first}:
+  // the head; {about:<concern>}: whom that concern of theirs is about; {pron}: 他/她 for the person.
+  "chatter": [
+    {"id": "grief", "weight": 5, "when": {"concern": {"kind": "grief", "min": 15}}, "lines": [
+      "說著說著，{first}又提起{about:grief}，眼眶一下就紅了。",
+      "{first}說，夜裡還常夢見{about:grief}站在門口叫{pron}。",
+      "{first}問你，{about:grief}走前那幾天有沒有說過什麼。"]},
+    {"id": "heartbreak", "weight": 4, "when": {"concern": {"kind": "heartbreak", "min": 15}}, "lines": [
+      "{first}說不想再聽人提{about:heartbreak}的名字。",
+      "{first}低著頭說，{about:heartbreak}那家看不起人，也好，省得以後受氣。"]},
+    {"id": "longing", "weight": 5, "when": {"concern": {"kind": "longing", "min": 15}}, "lines": [
+      "{first}裝作不經意地問起{about:longing}家最近怎麼樣。",
+      "{first}說禮拜天在教堂又看見{about:longing}了，說完自己先紅了臉。",
+      "{first}繞了半天才說到正題：{about:longing}的事，你什麼時候去替{pron}開口？"]},
+    {"id": "grudge_head", "weight": 6, "when": {"concern": {"kind": "grievance", "about": "target", "min": 12}}, "lines": [
+      "臨走前{first}丟下一句：「那件事，我可還沒忘。」",
+      "{first}話不多，眼睛一直沒看你。"]},
+    {"id": "grudge", "weight": 4, "when": {"concern": {"kind": "grievance", "min": 15}, "not": {"concern": {"kind": "grievance", "about": "target"}}}, "lines": [
+      "{first}還在生{about:grievance}的氣，說起來就咬牙。",
+      "{first}說，{about:grievance}那筆帳，遲早要算。"]},
+    {"id": "worry", "weight": 4, "when": {"concern": {"kind": "worry", "min": 15}}, "lines": [
+      "{first}一直在算家裡的糧還能撐幾個月。",
+      "{first}說，再這樣下去，今年冬天怕是難熬。"]},
+    {"id": "shame", "weight": 4, "when": {"concern": {"kind": "shame", "min": 15}}, "lines": [
+      "{first}說這陣子去井邊打水，都覺得背後有人指指點點。",
+      "{first}說禮拜天不想去教堂，怕撞見人。"]},
+    {"id": "joy", "weight": 3, "when": {"concern": {"kind": "joy", "min": 15}}, "lines": [
+      "{first}一直笑，說起{about:joy}就停不下來。",
+      "{first}說這是好些年來最高興的一陣子。"]},
+    {"id": "lean", "weight": 3, "when": {"lean": true}, "lines": [
+      "{first}說今年麥子收得少，村裡好幾家已經在掺豆子煮粥了。",
+      "{first}問，要不要把那頭豬早點殺了，省下飼料。"]},
+    {"id": "debt", "weight": 2, "when": {"in_debt": true}, "lines": [
+      "{first}問欠人家的錢，到底什麼時候還得清。",
+      "{first}說債主家的人在路上碰見，連招呼都不打了。"]},
+    {"id": "winter", "weight": 1, "when": {"winter": true}, "lines": [
+      "{first}說柴堆又矮了一截，得趁雪停去林子裡撿些枯枝。",
+      "兩人圍著火盆，{first}說起小時候那場大雪，村裡的井都凍住了。"]},
+    {"id": "harvest", "weight": 1, "when": {"month": [7, 8]}, "lines": [
+      "{first}說今年北邊那塊地的麥穗看著還算飽滿。",
+      "{first}說收割那幾天，腰都直不起來。"]},
+    {"id": "spring", "weight": 1, "when": {"month": [2, 4]}, "lines": [
+      "{first}說河邊的柳樹發芽了，該下豆子了。",
+      "{first}說今年的羊羔生得多，是好兆頭。"]},
+    {"id": "small_child", "weight": 3, "when": {"age": [5, 11]}, "lines": [
+      "{first}拉著你講今天在溪邊抓到一條魚，比手掌還長。",
+      "{first}問你，天上的星星是不是死去的人點的蠟燭。",
+      "{first}給你看{pron}用柳條編的小籃子。"]},
+    {"id": "youth", "weight": 2, "when": {"age": [12, 17], "married": false}, "lines": [
+      "{first}說村裡的小伙子要去鎮上的市集，{pron}也想跟著去看看。",
+      "{first}問你，像{pron}這樣的，將來能做什麼。"]},
+    {"id": "old", "weight": 3, "when": {"age": [58, 120]}, "lines": [
+      "{first}講起年輕時候村裡的事，那時候的領主還是老爺爺那一輩。",
+      "{first}說膝蓋一到下雨天就疼，怕是沒幾年好活了。",
+      "{first}叮囑你，家裡的地契要收好，別讓人鑽了空子。"]},
+    {"id": "pious", "weight": 2, "when": {"trait": "pious"}, "lines": [
+      "{first}說起神父上禮拜講的那段經文，講得很動人。",
+      "{first}說想在聖母像前多點一根蠟燭，替家裡祈福。"]},
+    {"id": "greedy", "weight": 2, "when": {"trait": "greedy"}, "lines": [
+      "{first}算了一筆帳：要是把東邊那塊地租出去，一年能多收多少。",
+      "{first}抱怨市集上的鹽又漲價了。"]},
+    {"id": "ambitious", "weight": 2, "when": {"trait": "ambitious"}, "lines": [
+      "{first}說，總不能一輩子給人當佃戶。",
+      "{first}說聽說鎮上有人靠賣羊毛發了家。"]},
+    {"id": "gregarious", "weight": 2, "when": {"trait": "gregarious"}, "lines": [
+      "{first}講了一串酒館裡聽來的笑話，你笑得差點嗆到。",
+      "{first}把村裡誰家跟誰家不對盤，一五一十都說給你聽。"]},
+    {"id": "lazy", "weight": 1, "when": {"trait": "lazy"}, "lines": [
+      "{first}打了個大哈欠，說這幾天實在太累了。"]},
+    {"id": "diligent", "weight": 1, "when": {"trait": "diligent"}, "lines": [
+      "{first}說話時手也沒停，一邊在補那條破了的麻袋。"]},
+    {"id": "melancholy", "weight": 2, "when": {"trait": "melancholy"}, "lines": [
+      "{first}望著窗外發呆，說有時候也不知道活著圖什麼。"]},
+    {"id": "wrathful", "weight": 1, "when": {"trait": "wrathful"}, "lines": [
+      "{first}說起白天跟人吵的那一架，又來了火氣。"]},
+    {"id": "drunkard", "weight": 2, "when": {"trait": "drunkard"}, "lines": [
+      "{first}身上一股麥酒味，說話也有點顛三倒四。"]},
+    {"id": "veteran", "weight": 2, "when": {"trait": "veteran"}, "lines": [
+      "{first}講起在法國打仗的事，說到一半就不說了。"]},
+    {"id": "frail", "weight": 2, "when": {"health_lt": 40}, "lines": [
+      "{first}咳了好一陣，說這身子一年不如一年。"]},
+    {"id": "warm", "weight": 1, "when": {"opinion_of_target_ge": 45}, "lines": [
+      "{first}說，有你在，心裡踏實。",
+      "{first}臨走前拍了拍你的肩膀。"]},
+    {"id": "cool", "weight": 1, "when": {"opinion_of_target_lt": -15}, "lines": [
+      "{first}的話客客氣氣的，聽得出隔著一層。"]}
+  ]
+}

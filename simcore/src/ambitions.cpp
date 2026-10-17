@@ -199,10 +199,10 @@ void World::checkStandings() {
             if (!oh.alive() || standing(o.id) < 0) continue;
             if (standing(o.id) < now && (hasTrait(oh, "greedy") || hasTrait(oh, "ambitious") || opinion(oh.id, head.id) < -10)) {
                 addOpinion(oh.id, head.id, "envy", -8, 8);
-                if (ne++ < 3) envious += (envious.empty() ? "" : "、") + oh.firstName;
+                if (ne++ < 3) envious += (envious.empty() ? "" : "、") + fullName(oh.id);
             } else if (opinion(oh.id, head.id) > -10) {
                 addOpinion(oh.id, head.id, "respect", 4, 8);
-                if (nr++ < 3) respectful += (respectful.empty() ? "" : "、") + oh.firstName;
+                if (nr++ < 3) respectful += (respectful.empty() ? "" : "、") + fullName(oh.id);
             }
         }
         if (!envious.empty()) log(1, "  " + envious + (ne > 3 ? " 等人" : "") + "眼紅了（好感 -8）。");
