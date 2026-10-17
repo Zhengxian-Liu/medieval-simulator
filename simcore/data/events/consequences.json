@@ -40,7 +40,7 @@
         "effects": [{"deed": {"type": "public_insult"}}],
         "ai": {"base": 6, "traits": {"wrathful": 8, "cruel": 8, "vengeful": 10, "kind": -6}}},
        {"text": "趕緊另說一門親", "log": "被 {target} 家拒婚的事傳開了，{name} 為了爭一口氣，趕緊託人另說親事。",
-        "effects": [{"need": {"social": -10}}],
+        "effects": [{"need": {"social": -10}}, {"rematch": true}],
         "ai": {"base": 8, "traits": {"ambitious": 6}}},
        {"text": "算了", "log": "", "effects": [], "ai": {"base": 8, "traits": {"calm": 8, "forgiving": 10}}}
      ]},

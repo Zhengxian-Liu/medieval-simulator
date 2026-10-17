@@ -1230,6 +1230,13 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 if (target == kNone || deed_ == kNone) continue;
                 for (auto& b : w.beliefs_[target])
                     if (b.deed == deed_ && b.culprit == p.id) b.confidence = std::min(b.confidence, v.numberOr("to", 20));
+            } else if (k == "rematch") {
+                // Straight to another matchmaker for the one just turned down: no waiting out the usual time.
+                auto it = w.lastMatchSubject_.find(p.id);
+                if (it == w.lastMatchSubject_.end() || !w.people_[it->second].alive()) continue;
+                w.cooldowns_.erase({it->second, "plan:arrange_match"});
+                if (w.inPlayerHouse(p.household))
+                    w.log(1, "  （" + w.people_[it->second].firstName + " 的親事不用再等了，計畫裡的「說親」可以另找人家。）");
             } else if (k == "feed_from_target") {
                 // The target's house sends p's v days of bread from its own store.
                 if (!h || target == kNone || w.people_[target].household == kNone) continue;

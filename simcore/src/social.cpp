@@ -76,6 +76,18 @@ void World::electReeve() {
     Id winner = kNone;
     for (Id c : cands)
         if (winner == kNone || votes[c] > votes[winner]) winner = c;
+    // Even votes: the sitting reeve keeps it, else the one the lord likes better.
+    std::string tie;
+    int tied = 0;
+    for (Id c : cands)
+        if (votes[c] == votes[winner]) ++tied;
+    if (tied > 1) {
+        Id pick = kNone;
+        for (Id c : cands)
+            if (votes[c] == votes[winner] && (pick == kNone || c == old || (pick != old && lord_ != kNone && opinion(lord_, c) > opinion(lord_, pick)))) pick = c;
+        winner = pick;
+        tie = pick == old ? "幾家同票，照老規矩由現任的連任。" : "幾家同票，由老爺從中點了一個。";
+    }
     // The lord's word is final, but the village remembers a reeve it did not choose.
     std::string how;
     bool imposed = false;
@@ -109,7 +121,7 @@ void World::electReeve() {
     if (playerRuns && cands.size() == 1 && winner == head) {
         log(winner == old ? 2 : 1, "【選莊頭】沒有人出來爭，" + fullName(head) + (winner == old ? " 又當了三年莊頭。" : " 當上了莊頭，這一任三年。"));
     } else if (playerRuns) {
-        log(1, "【選莊頭】" + tallyText(cands, tally, false) + "。" + voteWhy(tally, winner) + how +
+        log(1, "【選莊頭】" + tallyText(cands, tally, false) + "。" + tie + voteWhy(tally, winner) + how +
                    (winner == head ? fullName(head) + (old == head ? " 連任莊頭，再做三年。" : " 當上了莊頭，這一任三年。") : fullName(winner) + " 當選。"));
         if (winner != head) addStress(head, 6, "落選的難堪");
     } else if (winner != old) {

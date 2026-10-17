@@ -476,7 +476,8 @@ public:
                     if (label.empty()) label = "就這麼辦";
                     targets.push_back(Obj().n("target", op.target).n("subject", op.subject).text("label", label).done());
                 }
-                plans.push_back(Obj().text("id", pd.id).text("name", pd.name).text("desc", pd.desc).text("needs", pd.needs)
+                std::string why = picks.empty() ? w_.planBlock(acting, pd) : w.timeLeft() > 0 ? "" : "這一季沒有空閒了";
+                plans.push_back(Obj().text("id", pd.id).text("name", pd.name).text("desc", pd.desc).text("needs", pd.needs).text("why", why)
                                     .b("open", !picks.empty() && w.timeLeft() > 0).b("ambition", forAmb).raw("targets", arr(targets)).done());
             }
             o.raw("plans", arr(plans));

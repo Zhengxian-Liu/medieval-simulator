@@ -121,6 +121,46 @@ void World::processCommands() {
     }
 }
 
+// Why a plan cannot be started now, in the player's words ("" when it can, or when nothing better is known).
+std::string World::planBlock(Id actorId, const PlanDef& pd) {
+    if (actorId == kNone) return "";
+    auto seasonsTo = [&](int until) { return std::to_string(std::max(1, static_cast<int>(std::ceil((until - day_) / (kDaysPerYear / 4.0))))); };
+    auto cd = cooldowns_.find({actorId, "plan:" + pd.id});
+    if (cd != cooldowns_.end() && cd->second > day_) return "上回才辦過，還要 " + seasonsTo(cd->second) + " 季才能再辦";
+    for (const auto& p : plans_)
+        if (p.actor == actorId && p.plan == pd.id) return "正在辦";
+    if (!planRoom(actorId)) return "手上已經有兩件事在辦";
+    Person& actor = people_[actorId];
+    EventRunner ev(*this);
+    if (!ev.eval(pd.actor, actor, kNone)) return pd.needs.empty() ? "眼下不合條件" : "要：" + pd.needs;
+    if (!pd.subject.isNull()) {
+        std::vector<Id> pool = actor.children;
+        if (pd.subject.stringOr("pick", "any_child") == "kin_at_home")
+            for (Id m : households_[actor.household].members)
+                if (m != actorId && m != actor.spouse && people_[m].home == kNone && std::find(pool.begin(), pool.end(), m) == pool.end())
+                    pool.push_back(m);
+        Id waiting = kNone;
+        int until = 0;
+        bool any = false;
+        for (Id c : pool) {
+            const Person& cp = people_[c];
+            if (!cp.alive() || cp.household == kNone || !ev.eval(pd.subject["conditions"], cp, actorId)) continue;
+            any = true;
+            auto scd = cooldowns_.find({c, "plan:" + pd.id});
+            if (scd != cooldowns_.end() && scd->second > day_) {
+                if (waiting == kNone) waiting = c, until = scd->second;
+            } else {
+                waiting = kNone;
+                break;
+            }
+        }
+        if (!any) return "家裡沒有合適的人";
+        if (waiting != kNone) return people_[waiting].firstName + " 上回的事才落空，還要 " + seasonsTo(until) + " 季才好再辦";
+    }
+    if (pd.id == "arrange_match" || pd.id == "court") return "村裡眼下沒有年紀相當、身分相配、還沒成親的人";
+    return "眼下找不到合適的對象";
+}
+
 std::vector<PlanOption> World::availablePlans(Id actorId) {
     std::vector<PlanOption> out;
     if (actorId == kNone) return out;
@@ -225,7 +265,10 @@ void World::endPlan(size_t index, const std::string& requested) {
     plans_.erase(plans_.begin() + static_cast<long>(index));
     ++counters_["plan:" + plan.plan + ":" + outcome];
     const PlanDef* pd = defs_.plan(plan.plan);
-    if (pd->retryYears > 0) cooldowns_[{plan.actor, "plan:" + plan.plan}] = day_ + pd->retryYears * kDaysPerYear;
+    // After a failure the plan waits its full time; one that came off can be taken up again within the year.
+    if (pd->retryYears > 0)
+        cooldowns_[{plan.actor, "plan:" + plan.plan}] = day_ + (outcome == "success" ? std::min(pd->retryYears, 1) : pd->retryYears) * kDaysPerYear;
+    if (plan.plan == "arrange_match" && outcome == "fail" && plan.subject != kNone) lastMatchSubject_[plan.actor] = plan.subject;
     // A child who has just been through a match (or refused one) is not offered round again at once.
     if (plan.subject != kNone) cooldowns_[{plan.subject, "plan:" + plan.plan}] = day_ + 2 * kDaysPerYear;
     Person& actor = people_[plan.actor];

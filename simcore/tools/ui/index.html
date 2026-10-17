@@ -557,7 +557,7 @@ function renderPlans(s) {
     return `<div class="card">
       <div class="top"><span class="name">${p.ambition ? "★ " : ""}${esc(p.name)}</span>${p.open ? `<button ${open ? "" : "disabled"} onclick="openPlan=openPlan==='${p.id}'?null:'${p.id}';renderTabs()">${expanded ? "收起" : "選對象"}</button>` : '<span class="muted">現在不行</span>'}</div>
       <div class="sub">${esc(p.desc)}</div>
-      ${!p.open && p.needs ? `<div class="muted" style="font-size:12px">要：${esc(p.needs)}</div>` : ""}
+      ${!p.open && (p.why || p.needs) ? `<div class="muted" style="font-size:12px">${esc(p.why || "要：" + p.needs)}</div>` : ""}
       ${expanded ? `<div class="actions" style="flex-direction:column;align-items:stretch">${p.targets.map((t) => `<button style="text-align:left" onclick="openPlan=null;act({do:'plan',plan:'${p.id}',target:${t.target},subject:${t.subject}})">${esc(t.label)}</button>`).join("")}</div>` : ""}
     </div>`;
   }).join("");

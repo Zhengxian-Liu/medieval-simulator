@@ -207,8 +207,18 @@ void World::seasonWants() {
             continue;
         }
         if (const WantDef* w = defs_.want(p.want)) {
+            // A match nobody could make yet (no one suitable, or the last one just fell through) is not the head's neglect.
+            bool matchBlocked = false;
+            if (std::find(w->answeredBy.begin(), w->answeredBy.end(), "plan:arrange_match") != w->answeredBy.end()) {
+                matchBlocked = true;
+                for (const auto& op : availablePlans(head))
+                    if (op.plan == "arrange_match" && op.subject == m) matchBlocked = false;
+            }
             if (!er.eval(w->when, p, head)) {
                 p.want.clear();  // it passed of itself
+            } else if (matchBlocked) {
+                p.wantSince = std::min(season, p.wantSince + 1);  // the clock waits
+                continue;
             } else if (season - p.wantSince >= w->patience) {
                 // Waited and was not heard: it is let go, and remembered.
                 if (!w->neglectNote.empty()) lastSeasonNotes_.push_back(er.format(w->neglectNote, p, head));

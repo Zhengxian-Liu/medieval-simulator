@@ -663,7 +663,8 @@ public:
     std::vector<PlanOption> availablePlans(Id actor);
     const ActivePlan* activePlan(Id actor) const;          // the first plan under way, if any
     std::vector<const ActivePlan*> plansOf(Id actor) const;
-    bool planRoom(Id actor) const;  // the one keeping the player's house can have two plans going, anyone else one
+    bool planRoom(Id actor) const;
+    std::string planBlock(Id actor, const PlanDef& pd);  // why it cannot start now ("上回才辦過，還要 2 季…")  // the one keeping the player's house can have two plans going, anyone else one
     const std::vector<Command>& commandLog() const { return commandLog_; }
     Id playerHead() const { return playerHousehold_ == kNone ? kNone : households_[playerHousehold_].head; }
     // Who decides for the family: the head, or while the head is a child, whoever keeps the house
@@ -813,7 +814,8 @@ private:
     double dowryCap(const Household& h) const;  // what a house of its standing is expected to give with a daughter  // the king's fifteenth on what the house has: coin, spare grain, beasts
     void yearlyTax();
     void askToFeed(Household& h);           // kin or a close friend near the end of their bread: the player is asked
-    std::map<Id, int> feedAskedUntil_;      // household -> no asking again before this day
+    std::map<Id, int> feedAskedUntil_;
+    std::map<Id, Id> lastMatchSubject_;     // head -> the one whose match last fell through (for "另說一門親")      // household -> no asking again before this day
     void gatherFirewood();
     void payRent();
     double consumption(const Household& h) const;
