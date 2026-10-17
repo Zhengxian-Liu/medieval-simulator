@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "simcore/events.h"
 #include "simcore/world.h"
 
 namespace sim {
@@ -605,6 +606,24 @@ World::Estate World::onHeadDied(Household& h, Id dead) {
         people_[m].want.clear();
         people_[m].wantSince = -1;
     }
+    // What the old head had in hand passes to the heir when they can carry it on; otherwise the family hears it ended.
+    {
+        EventRunner check(*this);
+        for (auto& pl : plans_) {
+            if (pl.actor != dead) continue;
+            const PlanDef* pd = defs_.plan(pl.plan);
+            std::string name = pd ? pd->name : pl.plan;
+            bool carry = pd && hp.alive() && pl.target != heir && pl.subject != heir && check.eval(pd->actor, hp, pl.target) &&
+                         std::none_of(plans_.begin(), plans_.end(), [&](const ActivePlan& o) { return o.actor == heir && o.plan == pl.plan; }) &&
+                         std::count_if(plans_.begin(), plans_.end(), [&](const ActivePlan& o) { return o.actor == heir; }) < 2;
+            if (carry) {
+                pl.actor = heir;
+                log(1, "【計畫】" + fullName(dead) + " 沒辦完的「" + name + "」，由 " + fullName(heir) + " 接著辦。");
+            } else {
+                log(1, "【計畫】" + fullName(dead) + " 沒辦完的「" + name + "」，就此擱下了。");
+            }
+        }
+    }
     dynasties_[playerDynasty_].heads.push_back(heir);
     dynasties_[playerDynasty_].headSince.push_back(day_);
     if (h.ward != kNone) dynasties_[playerDynasty_].heldFor[dynasties_[playerDynasty_].heads.size() - 1] = h.ward;
@@ -1000,7 +1019,7 @@ void World::marry(Id man, Id woman) {
     // Dowry: money, and sometimes a chest or an heirloom from her family.
     if (oldHouse != kNone) {
         Household& from = households_[oldHouse];
-        double dowry = std::min(from.money * 0.2, 120.0);
+        double dowry = std::min(from.money * 0.2, dowryCap(from));
         from.money -= dowry;
         book(from, "嫁妝", -dowry);
         households_[m.household].money += dowry;
@@ -1223,7 +1242,7 @@ void World::yearlyMarriages() {
             continue;
         chargeMerchet(w.id, true);
         Household& from = households_[w.household];
-        double dowry = std::min(from.money * 0.15, 80.0);
+        double dowry = std::min(from.money * 0.15, dowryCap(from) * 0.7);
         from.money -= dowry;
         book(from, "嫁妝", -dowry);
         from.members.erase(std::remove(from.members.begin(), from.members.end(), w.id), from.members.end());

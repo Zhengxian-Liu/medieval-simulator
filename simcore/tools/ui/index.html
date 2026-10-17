@@ -542,12 +542,14 @@ function renderContest(s) {
 
 function renderPlans(s) {
   let html = "";
-  if (s.plan) {
-    html += `<div class="card"><b>正在進行：${esc(s.plan.name)}</b>${s.plan.target ? "（對象 " + esc(s.plan.target) + "）" : ""}<div class="needs" style="grid-template-columns:1fr"><div class="need">進度 ${s.plan.progress}/100<div class="bar"><i style="width:${Math.max(0, Math.min(100, s.plan.progress))}%"></i></div></div></div>
-      <button ${seasonOpen() ? "" : "disabled"} onclick="if(confirm('放棄這個計畫？'))act({do:'cancel'})">放棄</button></div>`;
+  const going = s.plans_going || [];
+  for (const g of going) {
+    html += `<div class="card"><b>正在進行：${esc(g.name)}</b>${g.target ? "（對象 " + esc(g.target) + "）" : ""}<div class="needs" style="grid-template-columns:1fr"><div class="need">進度 ${g.progress}/100<div class="bar"><i style="width:${Math.max(0, Math.min(100, g.progress))}%"></i></div></div></div>
+      <button ${seasonOpen() ? "" : "disabled"} onclick="if(confirm('放棄這個計畫？'))act({do:'cancel',plan:'${esc(g.id)}'})">放棄</button></div>`;
   }
+  if (going.length === 1) html += '<p class="muted">還可以再定一件事（家主一次最多兩件）。</p>';
   const plans = s.plans || [];
-  if (!s.plan && !plans.length) html += '<p class="muted">這時候不能定計畫。</p>';
+  if (!going.length && !plans.length) html += '<p class="muted">這時候不能定計畫。</p>';
   const sorted = [...plans].sort((a, b) => (b.ambition - a.ambition) || (b.open - a.open));
   html += sorted.map((p) => {
     const open = p.open && seasonOpen();

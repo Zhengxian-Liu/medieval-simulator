@@ -10,7 +10,7 @@
 // In:   {"do":"pass"} {"do":"year"} {"do":"quit"} {"do":"interact","who":12,"event":"talk_comfort"}
 //       {"do":"ask","who":12,"ask":"sell_parcel","object":30,"subject":-1,"office":"","lever":""}
 //       {"do":"want","what":"parcel"|"office:reeve"|"drop","object":30}
-//       {"do":"plan","plan":"arrange_match","target":3,"subject":5} {"do":"cancel"}
+//       {"do":"plan","plan":"arrange_match","target":3,"subject":5} {"do":"cancel","plan":"befriend"}
 //       {"do":"choose","index":0} {"do":"ai"} {"do":"inspect","who":12} {"do":"report"}
 //       {"do":"focus","who":12,"focus":"letters"}   (年度重心; free, any time in the season)
 #include <algorithm>
@@ -437,12 +437,16 @@ public:
 
         // Plans: the one under way, or those that can be started and with whom.
         Id acting = w.actingHead();
-        if (const ActivePlan* ap = acting != kNone ? w.activePlan(acting) : nullptr) {
-            const PlanDef* pd = w.defs().plan(ap->plan);
-            o.raw("plan", Obj().text("name", pd ? pd->name : ap->plan).text("target", ap->target != kNone ? w.fullName(ap->target) : "")
-                              .n("progress", std::floor(ap->progress)).done());
+        {
+            std::vector<std::string> going;
+            for (const ActivePlan* ap : w.plansOf(acting)) {
+                const PlanDef* pd = w.defs().plan(ap->plan);
+                going.push_back(Obj().text("id", ap->plan).text("name", pd ? pd->name : ap->plan)
+                                    .text("target", ap->target != kNone ? w.fullName(ap->target) : "").n("progress", std::floor(ap->progress)).done());
+            }
+            o.raw("plans_going", arr(going));
         }
-        if (withActions && acting != kNone && !w.activePlan(acting)) {
+        if (withActions && acting != kNone && w.planRoom(acting)) {
             std::vector<PlanOption> opts = w_.availablePlans(acting);
             const AmbitionDef* amb = w.defs().ambition(hp.ambition);
             std::vector<std::string> plans;
@@ -632,7 +636,7 @@ int main(int argc, char** argv) {
                     w.issue({w.today(), "start_plan", w.actingHead(), m["plan"], toInt(m, "target"), toInt(m, "subject")});
                     w.runCommands();
                 } else if (what == "cancel") {
-                    w.issue({w.today(), "cancel_plan", w.actingHead(), "", kNone, kNone});
+                    w.issue({w.today(), "cancel_plan", w.actingHead(), m["plan"], kNone, kNone});
                     w.runCommands();
                 } else if (what == "year") {
                     skipUntil = w.today() + kDaysPerYear;

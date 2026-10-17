@@ -541,6 +541,13 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     if (k == "year") return inRange(w.year(), v);
     if (k == "money_ge") return h && h->money >= v.asNumber();
     if (k == "money_lt") return h && h->money < v.asNumber();
+    // Days of bread left in p's house; and whether the target's house could spare v days of it for p's (keeping four months).
+    if (k == "food_days_lt") return h && h->food < w.consumption(*h) * v.asNumber();
+    if (k == "target_spares_food") {
+        if (!h || target == kNone || w.people_[target].household == kNone) return false;
+        const Household& th = w.households_[w.people_[target].household];
+        return (th.food - w.consumption(th) * 120 >= w.consumption(*h) * v.asNumber());
+    }
     if (k == "food_days_lt") return h && h->food < w.consumption(*h) * v.asNumber();
     if (k == "acres_ge") return h && h->acres >= v.asNumber();
     if (k == "acres_lt") return h && h->acres < v.asNumber();
@@ -1009,6 +1016,12 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 Person& sub = w.people_[plan_->subject];
                 Json one = Json::parse("[{\"marry_target\": true}]");
                 apply(one, sub, target);
+            } else if (k == "pay_tax") {
+                // The king's fifteenth, or the share of it the house owns up to: {"pay_tax": 0.5}
+                if (!h) continue;
+                double pay = std::min(std::round(w.taxDue(*h) * v.asNumber()), std::max(0.0, h->money));
+                h->money -= pay;
+                w.book(*h, "國王的稅", -pay);
             } else if (k == "take_acres") {
                 // Buy land from the target's household: the parcel this house was after, if it is theirs
                 // ("wanted": false for a set lot, as when the seller names it).
@@ -1217,6 +1230,18 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 if (target == kNone || deed_ == kNone) continue;
                 for (auto& b : w.beliefs_[target])
                     if (b.deed == deed_ && b.culprit == p.id) b.confidence = std::min(b.confidence, v.numberOr("to", 20));
+            } else if (k == "feed_from_target") {
+                // The target's house sends p's v days of bread from its own store.
+                if (!h || target == kNone || w.people_[target].household == kNone) continue;
+                Household& th = w.households_[w.people_[target].household];
+                double amount = std::min(w.consumption(*h) * v.asNumber(), std::max(0.0, th.food - w.consumption(th) * 120));
+                th.food -= amount;
+                h->food += amount;
+            } else if (k == "forgive_target_debt") {
+                // What p's house owes the target is written off.
+                if (!h || target == kNone) continue;
+                if (h->debt > 0.5 && h->creditor == target) w.clearDebt(*h);
+                else if (h->heldDebt > 0.5 && h->heldCreditor == target) h->heldDebt = 0, h->heldCreditor = kNone;
             } else if (k == "repay_target") {
                 // Ordered to pay back what this house owes the target: that share of it, as far as the purse goes.
                 if (!h || target == kNone || w.people_[target].household == kNone) continue;
@@ -1275,13 +1300,13 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
             } else if (k == "borrow_grain") {
                 // A neighbour who thinks well of the family lends grain against the next harvest.
                 if (!h) continue;
-                Id lender = w.findLender(*h);
+                double owed = 0;
+                Id lender = w.seekLender(*h, v.numberOr("debt", 30), "借糧度荒", owed);
                 if (lender == kNone) {
                     if (h->id == w.playerHousehold_) w.log(1, "  可是村裡沒有一家肯借，" + p.firstName + " 空著手回家。");
                     continue;
                 }
                 h->food += w.consumption(*h) * v.numberOr("days", 90);
-                double owed = v.numberOr("debt", 30);
                 if (h->debt <= 0.5 || h->creditor == lender) {
                     w.addDebt(*h, owed, lender);
                     w.households_[w.people_[lender].household].money -= owed * 0.6;
@@ -1306,15 +1331,21 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
             } else if (k == "borrow") {
                 // A better-off neighbour pays the steward; now the debt is to them.
                 if (!h || h->debt <= 0.5) continue;
-                Id lender = w.findLender(*h);
+                double owed = 0;
+                Id lender = w.seekLender(*h, h->debt, "還莊園的欠租", owed);
                 if (lender == kNone) continue;
                 Household& lh = w.households_[w.people_[lender].household];
                 lh.money -= h->debt;
-                w.book(lh, "借錢給人", -h->debt);
+                w.book(lh, owed > 0 ? "借錢給人" : "接濟別人", -h->debt);
                 if (h->creditor != kNone && w.people_[h->creditor].household != kNone) {
                     w.households_[w.people_[h->creditor].household].money += h->debt;
                     w.book(w.households_[w.people_[h->creditor].household], "收回欠債", h->debt);
                 }
+                if (owed <= 0) {
+                    w.clearDebt(*h);
+                    continue;
+                }
+                h->debt = owed;
                 h->creditor = lender;
                 h->debtYears = 0;
                 w.recordDeed("lent_money", lender, p.id, 1, cause_);
@@ -1588,7 +1619,8 @@ std::string EventRunner::format(const std::string& tmpl, const Person& p, Id tar
             } else if (key == "hook") {
                 Id d = target != kNone ? w_.hookDeed(p.id, target) : kNone;
                 val = d != kNone ? w_.describeDeed(d) : "那件事";
-            } else if (key == "debt") val = p.household != kNone ? std::to_string(int(w_.households_[p.household].debt)) : "0";
+            } else if (key == "tax") val = p.household != kNone ? std::to_string(static_cast<long>(w_.taxDue(w_.households_[p.household]))) : "0";
+            else if (key == "debt") val = p.household != kNone ? std::to_string(int(w_.households_[p.household].debt)) : "0";
             else if (key == "feud_cause") {
                 const Feud* f = target != kNone ? w_.feudBetween(p.dynasty, w_.people_[target].dynasty) : nullptr;
                 val = f ? w_.describeDeed(f->cause) : "";

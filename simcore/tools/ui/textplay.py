@@ -12,7 +12,7 @@ Actions (the page's buttons):
   {"do":"ai"}                                       let the AI answer the current question
   {"do":"interact","who":12,"event":"talk_heart"}   spend season time on someone (see each person's actions)
   {"do":"ask","who":12,"ask":"sell_parcel","object":30,"subject":-1,"office":"","lever":""}   開口 (see asks)
-  {"do":"plan","plan":"befriend","target":64,"subject":-1}   start a plan (see 計畫)   {"do":"cancel"}
+  {"do":"plan","plan":"befriend","target":64,"subject":-1}   start a plan (see 計畫)   {"do":"cancel","plan":"<id>"}
   {"do":"want","what":"parcel","object":30} / {"do":"want","what":"office:reeve"}
   {"do":"want","what":"drop","object":<want id>}     give up a want (its id is shown as want=N under 村裡在爭什麼)
   {"do":"focus","who":12,"focus":"letters"}          年度重心 (free, during a season)
@@ -151,8 +151,9 @@ def render(v, full=False):
             out.append(f"  {p.get('kin', '')} {p['name']}（{p.get('age', '?')} 歲）：{p.get('station', '')}")
             if p.get("road"):
                 out.append("    人生路：" + "；".join(f"{r['year']} {r['text']}" for r in p["road"]))
-    if s.get("plan"):
-        out.append("―― 進行中的計畫 ―― " + json.dumps(s["plan"], ensure_ascii=False)[:500])
+    for g in s.get("plans_going") or []:
+        out.append("―― 進行中的計畫 ―― %s%s 進度 %s/100（放棄：{\"do\":\"cancel\",\"plan\":\"%s\"}）" % (
+            g.get("name", ""), "（對象 " + g["target"] + "）" if g.get("target") else "", g.get("progress", 0), g.get("id", "")))
     ops = [p for p in s.get("plans", []) if p.get("open")]
     if ops:
         out.append("―― 能開始的計畫 ――")

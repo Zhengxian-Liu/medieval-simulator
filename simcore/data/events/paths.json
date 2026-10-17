@@ -90,7 +90,7 @@
         "effects": [{"set_flag": "grown_decided"}, {"take_any_place": "service"}], "ai": {"base": 4}}
      ]},
 
-    {"id": "widow_suitor", "title": "有地的寡婦", "prompt": "{target} 守了寡，一個人撐著家裡的地。村裡人說，誰娶了她，誰就有地種。", "scope": "anyone", "pulse": "yearly", "chance": 0.25, "cooldown_years": 3,
+    {"id": "widow_suitor", "parent_decides": true, "title": "有地的寡婦", "prompt": "{target} 守了寡，一個人撐著家裡的地。村裡人說，誰娶了她，誰就有地種。", "scope": "anyone", "pulse": "yearly", "chance": 0.25, "cooldown_years": 3,
      "conditions": {"sex": "male", "age": [18, 35], "married": false, "is_head": false, "station": ["home", "labourer", "veteran"]},
      "target": {"pick": "random_villager", "conditions": {"sex": "female", "widowed": true, "is_head": true, "acres_ge": 4, "age": [22, 48], "married": false, "not_kin": true, "same_class": true, "player_family": false}},
      "options": [
@@ -130,7 +130,7 @@
         "ai": {"base": 2, "traits": {"ambitious": 6, "content": -6}, "if": [{"cond": {"heir_apparent": true}, "add": -12}, {"cond": {"year": [1349, 1400]}, "add": 3}]}}
      ]},
 
-    {"id": "veteran_back", "title": "老兵", "prompt": "{name} 打完仗回來了，身上有點積蓄，也見過了世面。", "scope": "anyone", "pulse": "yearly", "chance": 0.8,
+    {"id": "veteran_back", "parent_decides": true, "title": "老兵", "prompt": "{name} 打完仗回來了，身上有點積蓄，也見過了世面。", "scope": "anyone", "pulse": "yearly", "chance": 0.8,
      "conditions": {"station": "veteran", "is_head": false},
      "options": [
        {"text": "安心回田裡", "log": "", "effects": [{"station": {"id": "home", "note": "回田裡"}}], "ai": {"base": 10, "traits": {"content": 6}}},
@@ -177,7 +177,7 @@
         "ai": {"base": 6, "traits": {"content": 6}}}
      ]},
 
-    {"id": "clerk_road", "title": "書記的路", "prompt": "{name} 當書記有幾年了。往後是一輩子替人寫字，還是往上走？", "scope": "anyone", "pulse": "yearly", "chance": 0.4,
+    {"id": "clerk_road", "parent_decides": true, "title": "書記的路", "prompt": "{name} 當書記有幾年了。往後是一輩子替人寫字，還是往上走？", "scope": "anyone", "pulse": "yearly", "chance": 0.4,
      "conditions": {"station": "clerk", "station_years_ge": 2, "age": [18, 40], "no_flag": "clerk_decided", "is_head": false},
      "options": [
        {"text": "求神父舉薦，受神職（{odds}）", "conditions": {"married": false}, "log": "",

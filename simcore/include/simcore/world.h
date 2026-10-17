@@ -661,7 +661,9 @@ public:
     // --- player interface
     void issue(const Command& c);
     std::vector<PlanOption> availablePlans(Id actor);
-    const ActivePlan* activePlan(Id actor) const;
+    const ActivePlan* activePlan(Id actor) const;          // the first plan under way, if any
+    std::vector<const ActivePlan*> plansOf(Id actor) const;
+    bool planRoom(Id actor) const;  // the one keeping the player's house can have two plans going, anyone else one
     const std::vector<Command>& commandLog() const { return commandLog_; }
     Id playerHead() const { return playerHousehold_ == kNone ? kNone : households_[playerHousehold_].head; }
     // Who decides for the family: the head, or while the head is a child, whoever keeps the house
@@ -807,6 +809,11 @@ private:
     // economy.cpp
     void monthlyEconomy();
     void harvest();
+    double taxDue(const Household& h) const;
+    double dowryCap(const Household& h) const;  // what a house of its standing is expected to give with a daughter  // the king's fifteenth on what the house has: coin, spare grain, beasts
+    void yearlyTax();
+    void askToFeed(Household& h);           // kin or a close friend near the end of their bread: the player is asked
+    std::map<Id, int> feedAskedUntil_;      // household -> no asking again before this day
     void gatherFirewood();
     void payRent();
     double consumption(const Household& h) const;
@@ -970,6 +977,9 @@ private:
     void allotVacant();          // the steward lets vacant parcels to those after them
     void fillPlaces();           // masters take on whom they like from those asking
     void oweFavour(Id debtor, Id creditor, double weight, const std::string& why);
+    // Who lends `amount` to h, richest willing neighbour first; when that is the player's house, the player is asked.
+    // owed: what h will owe (more with interest, 0 when the player gives it outright).
+    Id seekLender(Household& h, double amount, const std::string& why, double& owed);
     void callInFavour(Id debtor, Id creditor);
     void chargeEntryFine(Household& h, Id heir, Id dead, double customary);
     void monthlyFines();

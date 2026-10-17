@@ -305,7 +305,7 @@ std::vector<World::Interaction> World::interactionsWith(Id target) {
     Person& tp = people_[target];
     if (!tp.alive() || tp.household == kNone) return out;
     bool home = inPlayerHouse(tp.household);
-    bool kin = home || isPlayerFamily(tp) || closeKin(head, target);
+    bool kin = home || isPlayerFamily(tp) || closeKin(head, target) || !kinTie(head, target).empty();
     EventRunner er(*this);
     int left = timeLeft();
     for (const auto& ev : defs_.events) {

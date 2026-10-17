@@ -289,6 +289,44 @@
        "ai": {"base": 3, "traits": {"ambitious": 6, "wrathful": 4, "brave": 3}}}
      ]},
 
+    {"id": "talk_give_grain", "title": "送糧", "scope": "interaction", "cooldown_months": 3,
+     "interaction": {"who": "anyone", "time": 1, "money": 0, "desc": "從自家糧倉給{pron}家送去夠吃兩個月的糧（自家留足四個月）"},
+     "conditions": {"food_days_lt": 45, "target_spares_food": 60, "manor": false},
+     "options": [
+      {"text": "收下",
+       "log": ["{target_first}讓人背了兩袋麥子送到{first}家。{first}接過袋子，半天說不出話。", "{target_first}趁天黑把兩袋燕麥送到{first}家門口，{first}家的孩子當晚就喝上了粥。"],
+       "effects": [{"feed_from_target": 60}, {"ease_concern": {"kind": "worry", "by": 25}}, {"opinion": {"value": 14, "mod": "fed_us", "years": 20}}, {"deed": {"type": "kindness", "doer": "target"}}],
+       "ai": {"base": 12}},
+      {"text": "臉上掛不住，只收了一半",
+       "log": "{target_first}送糧來，{first}臉上掛不住，只肯收一袋：「剩下的我們自己想辦法。」",
+       "effects": [{"feed_from_target": 30}, {"opinion": {"value": 6, "mod": "fed_us", "years": 12}}, {"stress": 3}],
+       "ai": {"base": 2, "traits": {"ambitious": 6, "wrathful": 4}}}
+     ]},
+
+    {"id": "talk_lend_money", "title": "借錢給他家", "scope": "interaction", "cooldown_months": 12,
+     "interaction": {"who": "anyone", "time": 1, "money": 40, "desc": "借{pron}家 40 便士度過難關，說好秋收後還"},
+     "conditions": {"is_head": true, "money_lt": 30, "manor": false, "not": {"occupation": ["lord", "lady", "priest"]}},
+     "options": [
+      {"text": "借下",
+       "log": "{target_first}借了 40 便士給{first}，說好秋收後還。{first}連聲道謝。",
+       "effects": [{"money": 40}, {"owe_target": 40}, {"opinion": {"value": 8, "mod": "lent_us", "years": 12}}],
+       "ai": {"base": 10}},
+      {"text": "不想欠人，推了",
+       "log": "{target_first}要借錢給{first}，{first}搖頭：「欠了債，夜裡睡不著。」",
+       "effects": [{"on_target": [{"money": 40}]}, {"opinion": {"value": 3, "mod": "lent_us", "years": 6}}],
+       "ai": {"base": 3, "traits": {"craven": 4, "content": 4}}}
+     ]},
+
+    {"id": "talk_forgive_debt", "title": "免了他家的債", "scope": "interaction", "cooldown_months": 12,
+     "interaction": {"who": "anyone", "time": 1, "money": 0, "desc": "把{pron}家欠你家的債一筆勾銷（會記一輩子）"},
+     "conditions": {"owes_target": true, "manor": false},
+     "options": [
+      {"text": "千恩萬謝",
+       "log": "{target_first}當著{first}的面把欠條撕了。{first}愣了半天，才說出一句：「這份情，我們家記著。」",
+       "effects": [{"forgive_target_debt": true}, {"ease_concern": {"kind": "worry", "by": 30}}, {"opinion": {"value": 20, "mod": "forgave_debt", "years": 25}}, {"deed": {"type": "kindness", "doer": "target"}}],
+       "ai": {"base": 12}}
+     ]},
+
     {"id": "talk_sue_debtor", "title": "上莊園法庭討債", "scope": "interaction", "cooldown_months": 12,
      "interaction": {"who": "outsider", "time": 1, "money": 2, "desc": "到莊園法庭告{pron}欠錢不還（2 便士訴訟費；兩家從此結下梁子）"},
      "conditions": {"is_head": true, "owes_target": true, "manor": false},

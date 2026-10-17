@@ -39,6 +39,19 @@ const ActivePlan* World::activePlan(Id actor) const {
     return nullptr;
 }
 
+std::vector<const ActivePlan*> World::plansOf(Id actor) const {
+    std::vector<const ActivePlan*> out;
+    for (const auto& p : plans_)
+        if (p.actor == actor) out.push_back(&p);
+    return out;
+}
+
+bool World::planRoom(Id actor) const {
+    if (actor == kNone) return false;
+    size_t slots = actor == actingHead() ? 2 : 1;
+    return plansOf(actor).size() < slots;
+}
+
 void World::processCommands() {
     for (size_t i = 0; i < pending_.size();) {
         if (pending_[i].day > day_) {
@@ -59,8 +72,8 @@ void World::processCommands() {
                 log(1, "〔計畫〕" + name + "沒辦成：這一季沒有空閒了。");
                 continue;
             }
-            if (ours && activePlan(c.actor)) {
-                log(1, "〔計畫〕" + name + "沒辦成：手上已經有一件事在辦。");
+            if (ours && !planRoom(c.actor)) {
+                log(1, "〔計畫〕" + name + "沒辦成：手上已經有兩件事在辦。");
                 continue;
             }
             if (startPlan(c.actor, c.plan, c.target, c.subject)) {
@@ -98,8 +111,9 @@ void World::processCommands() {
             // plan = the focus id, target = whose (design/life-paths.md 年度重心). Free: it is how they spend the year.
             setFocus(c.target, c.plan);
         } else if (c.type == "cancel_plan") {
+            // c.plan names which one when two are going; empty: the first.
             for (size_t k = 0; k < plans_.size(); ++k)
-                if (plans_[k].actor == c.actor) {
+                if (plans_[k].actor == c.actor && (c.plan.empty() || plans_[k].plan == c.plan)) {
                     endPlan(k, "cancel");
                     break;
                 }
@@ -111,9 +125,10 @@ std::vector<PlanOption> World::availablePlans(Id actorId) {
     std::vector<PlanOption> out;
     if (actorId == kNone) return out;
     Person& actor = people_[actorId];
-    if (!actor.alive() || actor.household == kNone || activePlan(actorId)) return out;
+    if (!actor.alive() || actor.household == kNone || !planRoom(actorId)) return out;
     EventRunner ev(*this);
     for (const auto& pd : defs_.plans) {
+        if (std::any_of(plans_.begin(), plans_.end(), [&](const ActivePlan& p) { return p.actor == actorId && p.plan == pd.id; })) continue;
         auto cd = cooldowns_.find({actorId, "plan:" + pd.id});
         if (cd != cooldowns_.end() && cd->second > day_) continue;
         if (!ev.eval(pd.actor, actor, kNone)) continue;
@@ -152,6 +167,10 @@ std::vector<PlanOption> World::availablePlans(Id actorId) {
             auto ok = [&](Id t) {
                 if (t == kNone || t == actorId || t == sub) return false;
                 const Person& tp = people_[t];
+                if ((pd.id == "arrange_match" || pd.id == "court") && inPlayerHouse(tp.household)) {
+                    auto q = matchQuietUntil_.find(t);
+                    if (q != matchQuietUntil_.end() && q->second > day_) return false;
+                }
                 return tp.alive() && tp.household != kNone && ev.eval(cond, tp, other);
             };
             if (pick == "lord") {
@@ -177,7 +196,9 @@ std::vector<PlanOption> World::availablePlans(Id actorId) {
 
 bool World::startPlan(Id actorId, const std::string& planId, Id target, Id subject) {
     const PlanDef* pd = defs_.plan(planId);
-    if (!pd || actorId == kNone || activePlan(actorId)) return false;
+    if (!pd || actorId == kNone || !planRoom(actorId)) return false;
+    for (const auto& p : plans_)
+        if (p.actor == actorId && p.plan == planId) return false;
     Person& actor = people_[actorId];
     if (!actor.alive() || actor.household == kNone) return false;
     EventRunner check(*this);
@@ -228,19 +249,24 @@ void World::endPlan(size_t index, const std::string& requested) {
         if (actorHome) log(1, "「" + pd->name + "」落空了：" + fullName(wed) + " 已經另結了親。");
         return;
     }
-    // Someone courting the player's head, or an unmarried child of the house: the family answers.
-    if (plan.plan == "court" && !actorHome && victimHome && (outcome == "success" || outcome == "fail")) {
+    // Someone courting the player's head, or matching their own child with one of the player's house: the family answers.
+    bool matching = plan.plan == "court" || plan.plan == "arrange_match";
+    if (matching && !actorHome && victimHome && (outcome == "success" || outcome == "fail")) {
         Id acting = actingHead();
         const Person& t = people_[plan.target];
-        bool ours = plan.target == acting || t.father == acting || t.mother == acting ||
-                    (acting != kNone && (t.father == people_[acting].spouse || t.mother == people_[acting].spouse));
+        bool ours = plan.target == acting || t.father == acting || t.mother == acting || inPlayerHouse(t.household);
         auto quiet = matchQuietUntil_.find(plan.target);
         if (ours && acting != kNone && quiet != matchQuietUntil_.end() && quiet->second > day_) return;  // the family said no lately
         if (ours && acting != kNone) {
+            Id suitor = plan.plan == "arrange_match" && plan.subject != kNone ? plan.subject : plan.actor;
+            const Person& su = people_[suitor];
             const Household& ah = households_[actor.household];
-            std::string sit = fullName(plan.actor) + "（" + std::to_string(int(ageYears(actor))) + " 歲，家裡 " +
-                              std::to_string(int(ah.acres)) + " 畝地；你對他們 " + std::to_string(int(opinion(acting, plan.actor))) +
-                              "）託人來向 " + fullName(plan.target) + " 求親。";
+            std::string sit = fullName(suitor) + "（" + std::to_string(int(ageYears(su))) + " 歲，家裡 " +
+                              std::to_string(int(ah.acres)) + " 畝地；你對他們 " + std::to_string(int(opinion(acting, suitor))) + "）" +
+                              (plan.plan == "arrange_match" ? "家託媒人來" : "託人來") + "向 " + (plan.target == acting ? std::string("你") : fullName(plan.target)) + " 求親。";
+            const Household& th = households_[t.household];
+            if (t.sex == Sex::Female && plan.target != th.head)
+                sit += "（照你家的身分，嫁妝約 " + std::to_string(int(std::min(th.money * 0.2, dowryCap(th)))) + " 便士。）";
             int r = askPlayer("求親", sit, {"答應", "回絕"});
             if (r == 1) {
                 log(1, "〔求親〕" + sit + "（選擇：回絕）");

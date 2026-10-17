@@ -1,10 +1,15 @@
 // Harvest, rent, wages and buying food. Money is in pence.
 #include <algorithm>
+#include <cmath>
 #include <set>
 
 #include "simcore/world.h"
 
 namespace sim {
+
+namespace {
+constexpr double kFarmGate = 0.6;  // what the corn dealer pays at the farm, of the market price he sells at
+}
 
 double World::consumption(const Household& h) const {
     double c = 0;
@@ -78,15 +83,15 @@ void World::harvest() {
         if (h.food > reserve) {
             double sold = (h.food - reserve) * 0.6;
             h.food -= sold;
-            h.money += sold * param("grain_price", 0.5) * 0.75;  // the corn dealer takes his cut
-            book(h, "賣餘糧", sold * param("grain_price", 0.5) * 0.75);
+            h.money += sold * param("grain_price", 0.5) * kFarmGate;  // the corn dealer takes his cut and the carting
+            book(h, "賣餘糧", sold * param("grain_price", 0.5) * kFarmGate);
         }
         // The harvest is news when it falls short, when the year is unusual, and once a decade as a ledger.
         h.lastYield = yield / std::max(0.01, consumption(h));
+        bool lean = h.food < consumption(h) * kDaysPerYear;  // what is in the barn now, not this crop alone
+        bool news = lean != h.lean;  // a house that is always short does not hear it as news each year
+        h.lean = lean;
         if (inPlayerHouse(h.id)) {
-            bool lean = h.food < consumption(h) * kDaysPerYear;  // what is in the barn now, not this crop alone
-            bool news = lean != h.lean;  // a house that is always short does not hear it as news each year
-            h.lean = lean;
             double mult = param("harvest_mult", 1);
             if (news || mult < 0.85 || mult > 1.15 || (year() - cfg_.startYear) % 10 == 0)
                 log(1, std::string(lean ? "秋收不夠一家吃到明年：" : news ? "秋收總算夠一家吃了：" : "秋收：") + "收了約 " + std::to_string(int(yield / 360)) +
@@ -133,7 +138,7 @@ void World::payRent() {
         // reach the spring: rent first, hunger later.
         double daily = consumption(h);
         if (h.money < rent - 1 && h.food > daily * 300) {
-            double price = param("grain_price", 0.5) * 0.75;
+            double price = param("grain_price", 0.5) * kFarmGate;
             double sell = std::min(h.food - daily * 300, (rent - h.money) / price);
             h.food -= sell;
             h.money += sell * price;
@@ -273,8 +278,11 @@ void World::monthlyEconomy() {
         book(h, "衣服、鹽、農具", -(h.members.size() * 0.5));
         // Better-off households spend on cloth, feasts and gifts: a share of what is put by, but a household that
         // saves hard can still save (at most 12 pence a month, enough for a feast day and a new coat).
+        // A house is expected to live as its standing does: a yeoman keeps a servant, dresses his wife, feeds his guests.
         if (h.money > 150) {
-            double spend = std::min((h.money - 150) * 0.05, 12.0);
+            int rung = standing(h.id);
+            double cap = rung >= 3 ? 40.0 : rung == 2 ? 22.0 : 12.0;
+            double spend = std::min((h.money - 150) * 0.05, cap);
             book(h, "家用排場（衣料、宴客、送禮）", -spend);
             h.money -= spend;
         }
@@ -283,6 +291,7 @@ void World::monthlyEconomy() {
         // Other houses near the end of their grain do what the player's family is asked about: the grown hire on
         // with a bigger farm for the year, and failing that the parish and the neighbours keep the children alive.
         double daily = consumption(h);
+        if (!inPlayerHouse(h.id) && h.head != kNone && h.food < daily * 20) askToFeed(h);
         if (!inPlayerHouse(h.id) && h.head != kNone && h.food < daily * 20) {
             Id master = h.acres < 12 && h.hiredUntil <= day_ ? hireMaster(h.id) : kNone;
             if (master != kNone) {
@@ -385,6 +394,104 @@ std::string World::rentVacantOnCredit(Household& h, double minAcres) {
         log(1, "  " + name + "租給了你家，入地費 " + std::to_string(int(fine)) + " 便士" +
                    (fine - paid > 0.5 ? "，交不出的 " + std::to_string(int(fine - paid)) + " 便士記在莊園的帳上。" : "，當場交清。"));
     return "";
+}
+
+// A cottager's girl brings a cow's worth; a yeoman's daughter a few pounds, or the match is beneath them.
+double World::dowryCap(const Household& h) const {
+    int rung = standing(h.id);
+    return rung >= 3 ? 480.0 : rung == 2 ? 240.0 : 100.0;
+}
+
+void World::askToFeed(Household& h) {
+    Id ours = actingHead();
+    if (ours == kNone || h.head == kNone) return;
+    if (auto it = feedAskedUntil_.find(h.id); it != feedAskedUntil_.end() && it->second > day_) return;
+    // Whose house it is to the family: the nearest of kin in it, or a friend of the head's.
+    Id kin = kNone;
+    for (Id m : h.members)
+        if (closeKin(ours, m) || !kinTie(ours, m).empty()) {
+            if (kin == kNone || ageYears(people_[m]) > ageYears(people_[kin])) kin = m;
+        }
+    if (kin == kNone && opinion(ours, h.head) < 40) return;
+    Household& ph = households_[playerHousehold_];
+    double daily = consumption(h);
+    double spare = ph.food - consumption(ph) * 120;
+    double price = param("grain_price", 0.5);
+    double coin = std::round(daily * 60 * price);
+    std::vector<std::string> opts;
+    std::vector<int> what;
+    if (spare >= daily * 90) opts.push_back("從自家糧倉送去夠吃三個月的糧"), what.push_back(0);
+    if (ph.money >= coin + 20) opts.push_back("送 " + std::to_string(int(coin)) + " 便士讓他們買糧"), what.push_back(1);
+    if (h.debt > 0.5 && inPlayerHouse(people_[h.creditor].household)) opts.push_back("免了他們欠你家的債"), what.push_back(2);
+    if (opts.empty()) return;
+    opts.push_back("自家也不寬裕，先不管");
+    what.push_back(3);
+    feedAskedUntil_[h.id] = day_ + kDaysPerYear / 4;
+    int children = 0;
+    for (Id m : h.members)
+        if (ageYears(people_[m]) < 12) ++children;
+    std::string who = kin != kNone ? fullName(kin) + "（" + kinWord(ours, kin) + "）住的 " + fullName(h.head) + " 家" : "好朋友 " + fullName(h.head) + " 家";
+    std::string sit = who + "只剩不到二十天的糧了" + (children ? "，" + std::to_string(children) + " 個孩子已經餓瘦了" : "") + "。";
+    int r = askPlayer("親人挨餓", sit, opts);
+    if (r < 0) r = static_cast<int>(opts.size()) - 1;  // no one to ask: the family does not give the house's bread away unasked
+    int w = what[r];
+    if (w == 3) {
+        log(1, "〔親人挨餓〕" + sit + "家裡沒有伸手。");
+        if (kin != kNone) addOpinion(kin, ours, "left_us_hungry", -10, 10);
+        return;
+    }
+    if (w == 0) {
+        double amount = daily * 90;
+        ph.food -= amount;
+        h.food += amount;
+        log(1, "〔親人挨餓〕" + fullName(ours) + " 讓人背了幾袋麥子送到 " + fullName(h.head) + " 家，夠他們吃到下一季。");
+    } else if (w == 1) {
+        ph.money -= coin;
+        book(ph, "接濟別人", -coin);
+        h.money += coin;
+        log(1, "〔親人挨餓〕" + fullName(ours) + " 送了 " + std::to_string(int(coin)) + " 便士到 " + fullName(h.head) + " 家買糧。");
+    } else {
+        log(1, "〔親人挨餓〕" + fullName(ours) + " 把 " + fullName(h.head) + " 家欠的債一筆勾銷，讓他們先顧著吃。");
+        clearDebt(h);
+    }
+    ensureFood(h);
+    recordDeed("kindness", ours, h.head);
+    oweFavour(h.head, ours, 20, "挨餓時的接濟");
+    if (kin != kNone && kin != h.head) addOpinion(kin, ours, "fed_us", 15, 20);
+}
+
+double World::taxDue(const Household& h) const {
+    if (h.extinct || h.members.empty() || h.head == kNone) return 0;
+    double grain = std::max(0.0, h.food - consumption(h) * kDaysPerYear) * param("grain_price", 0.5) * kFarmGate;
+    double goods = h.money + grain + h.acres * 6;  // the beasts and gear, roughly, by the size of the holding
+    if (goods < 120) return 0;                     // under ten shillings of goods: the poor were not taxed
+    return std::round(goods / 15);
+}
+
+// The lay subsidy: a fifteenth of movable goods, granted by Parliament now and then, and most years once the war
+// with France is on. Two of the better men of the village assess their neighbours.
+void World::yearlyTax() {
+    bool war = worldFlags_.count("war") > 0;
+    if (!rngEcon_.chance(war ? 0.7 : year() >= 1332 ? 0.3 : 0.0)) return;
+    Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
+    Id assessor = kNone;
+    for (const auto& o : households_)
+        if (!o.extinct && o.head != kNone && o.id != lordHouse && !inPlayerHouse(o.id) && people_[o.head].occupation != "priest" &&
+            (assessor == kNone || o.acres > households_[people_[assessor].household].acres))
+            assessor = o.head;
+    log(2, std::string("國會准了國王一筆稅：鄉下人家照家當交十五分之一") + (war ? "，說是打法蘭西要用。" : "。"));
+    for (auto& h : households_) {
+        if (h.extinct || h.members.empty() || h.head == kNone || h.id == lordHouse || people_[h.head].occupation == "priest") continue;
+        double tax = taxDue(h);
+        if (tax <= 0) continue;
+        if (inPlayerHouse(h.id) && actingHead() != kNone) {
+            runEventById("lay_subsidy", actingHead(), assessor);
+            continue;
+        }
+        double pay = std::min(tax, h.money);
+        h.money -= pay;
+        book(h, "國王的稅", -pay);
+    }
 }
 
 }  // namespace sim

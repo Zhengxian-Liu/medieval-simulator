@@ -8,6 +8,7 @@
 // Debt: unpaid rent becomes arrears; each rent day it stays unpaid the steward comes harder:
 // a warning with choices, then distraint (the plough ox, an heirloom), then the land itself.
 #include <algorithm>
+#include <set>
 #include <cmath>
 
 #include "simcore/events.h"
@@ -206,6 +207,49 @@ void World::promoteHeldDebt(Household& h) {
     h.heldCreditor = kNone;
 }
 
+Id World::seekLender(Household& h, double amount, const std::string& why, double& owed) {
+    owed = amount;
+    std::set<Id> asked;
+    Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
+    for (int tries = 0; tries < 8; ++tries) {
+        Id best = kNone;
+        double bestMoney = 0;
+        for (const auto& o : households_) {
+            if (o.extinct || o.members.empty() || o.id == h.id || o.id == lordHouse || o.head == kNone || asked.count(o.id)) continue;
+            if (people_[o.head].occupation == "priest") continue;
+            if (o.money < amount + 60 || o.debt > 0) continue;
+            if (h.head != kNone && opinion(o.head, h.head) < 5) continue;
+            if (o.money > bestMoney) bestMoney = o.money, best = o.head;
+        }
+        if (best == kNone) return kNone;
+        Id lh = people_[best].household;
+        if (!inPlayerHouse(lh) || inPlayerHouse(h.id) || actingHead() == kNone || h.head == kNone) return best;
+        // The player's purse: the player says.
+        Id ours = actingHead();
+        std::string sit = fullName(h.head) + " 家來借 " + std::to_string(int(amount)) + " 便士（" + why + "）。他們家存糧約 " +
+                          std::to_string(int(h.food / std::max(0.5, consumption(h)))) + " 天，手上 " + std::to_string(int(h.money)) +
+                          " 便士；你對他們 " + std::to_string(int(opinion(ours, h.head))) + "。";
+        int r = askPlayer("來借錢", sit, {"借給他們", "借，但秋後要多還兩成", "白送給他們", "不借"});
+        if (r < 0) r = opinion(ours, h.head) >= 30 ? 0 : 3;  // no one to ask: a friend is not turned away
+        if (r == 3) {
+            asked.insert(lh);
+            addOpinion(h.head, ours, "refused_loan", -6, 5);
+            log(1, "〔來借錢〕" + fullName(h.head) + " 家來借錢，" + fullName(ours) + " 沒有借。");
+            continue;
+        }
+        if (r == 1) owed = std::round(amount * 1.2);
+        if (r == 2) {
+            owed = 0;
+            recordDeed("kindness", ours, h.head);
+            oweFavour(h.head, ours, 20, "白送的錢");
+        }
+        log(1, "〔來借錢〕" + fullName(ours) + (r == 2 ? " 白送了 " : " 借了 ") + std::to_string(int(amount)) + " 便士給 " + fullName(h.head) + " 家" +
+                   (r == 1 ? "，說好秋後還 " + std::to_string(int(owed)) + " 便士。" : "。"));
+        return best;
+    }
+    return kNone;
+}
+
 Id World::findLender(const Household& h) const {
     Id best = kNone;
     double bestMoney = 0;
@@ -280,6 +324,29 @@ void World::yearlyDebts() {
             continue;
         }
         bool home = inPlayerHouse(h.id);
+        // Owed to the player's house: whether to press, wait or let it go is the player's to say.
+        if (!lordIsCreditor && !home && inPlayerHouse(people_[h.creditor].household) && actingHead() != kNone) {
+            Id ours = actingHead();
+            bool court = h.debtYears >= 2;
+            std::string sit = fullName(h.head) + " 家欠你家 " + std::to_string(int(h.debt)) + " 便士，說好的日子" + (court ? "早就過了，拖了兩年。" : "已經過了。") +
+                              "他們家存糧約 " + std::to_string(int(h.food / std::max(0.5, consumption(h)))) + " 天，手上 " + std::to_string(int(h.money)) +
+                              " 便士；你對他們 " + std::to_string(int(opinion(ours, h.head))) + "。";
+            std::vector<std::string> opts = {court ? "告上莊園法庭" : "上門去討", "再寬限一年", "免了這筆債"};
+            int r = askPlayer("欠你家的債", sit, opts);
+            if (r == 1) {
+                h.debtYears = court ? 1 : 0;
+                addOpinion(h.head, ours, "gave_time", 8, 5);
+                log(1, "〔欠你家的債〕" + fullName(ours) + " 讓 " + fullName(h.head) + " 家再緩一年。");
+                continue;
+            }
+            if (r == 2) {
+                log(1, "〔欠你家的債〕" + fullName(ours) + " 把 " + fullName(h.head) + " 家欠的 " + std::to_string(int(h.debt)) + " 便士一筆勾銷了。");
+                recordDeed("kindness", ours, h.head);
+                oweFavour(h.head, ours, 20, "免了欠債");
+                clearDebt(h);
+                continue;
+            }
+        }
         if (h.debtYears == 1) {
             runEventById(lordIsCreditor ? "debt_steward" : "debt_neighbour", h.head, lordIsCreditor ? lord_ : h.creditor);
             continue;

@@ -115,6 +115,7 @@ void World::stepDay() {
         }
         if (month() == 7) electReeve();
         if (month() == 8) harvest();
+        if (month() == 10) yearlyTax();
         if (month() == 9) {
             chooseOfficers();
             fillPlaces();

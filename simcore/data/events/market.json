@@ -33,5 +33,24 @@
         "effects": [{"target_opinion": {"value": -8, "mod": "held_back", "years": 8}}],
         "ai": {"base": 6, "traits": {"greedy": 8, "content": 4, "ambitious": -4}}}
      ]}
+    ,
+    {"id": "lay_subsidy", "title": "國王的稅", "prompt": "國會准了國王一筆稅，照家當交十五分之一。村裡推了 {target} 和另一個殷實人家挨家估稅，翻過你家的錢箱、糧倉和牲口棚，算下來該交 {tax} 便士。",
+     "scope": "anyone", "chance": 1, "on": {"signal": "manual"},
+     "conditions": {"is_head": true},
+     "options": [
+       {"text": "照實交 {tax} 便士", "log": "{name} 照實交了國王的稅。",
+        "effects": [{"pay_tax": 1.0}],
+        "ai": {"base": 8, "traits": {"pious": 6, "craven": 4, "kind": 2, "greedy": -6}}},
+       {"text": "把錢罐埋進灶下，只報一半",
+        "log": "{name} 連夜把錢罐埋進灶下，只報了一半的家當。",
+        "effects": [{"pay_tax": 0.5}, {"random": {"percent": 25,
+            "effects": [{"log": "  估稅的拿鐵鍬在灶下挖出了錢罐。補足了稅，莊園法庭又罰了一半。"}, {"pay_tax": 1.0}, {"reputation": -3}, {"stress": 8}],
+            "else": [{"log": "  估稅的在屋裡轉了一圈，沒看出什麼。"}]}}],
+        "ai": {"base": 4, "traits": {"greedy": 10, "brave": 4, "pious": -6, "craven": -6}}},
+       {"text": "塞給 {target_first} 10 便士，請他少算三成",
+        "log": "{name} 把 10 便士塞進 {target} 的袖子裡，估出來的家當少了三成。",
+        "effects": [{"pay_tax": 0.7}, {"money": -10}, {"target": [{"money": 10}]}, {"deed": {"type": "bribed_assessor"}}],
+        "ai": {"base": 4, "traits": {"greedy": 6, "cynical": 6, "pious": -6}}}
+     ]}
   ]
 }

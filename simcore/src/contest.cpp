@@ -873,13 +873,14 @@ void World::resolveFine(EntryFine& f) {
     }
     // A neighbour may lend the rest; or the lord may give more time; or the land he cannot pay for goes.
     double short_ = f.amount - h.money;
-    Id lender = findLender(h);
-    if (lender != kNone && households_[people_[lender].household].money >= short_ + 40 && opinion(lender, h.head) >= 25) {
+    double owed = 0;
+    Id lender = findLender(h) != kNone && opinion(findLender(h), h.head) >= 25 ? seekLender(h, short_, "交入地費", owed) : kNone;
+    if (lender != kNone) {
         households_[people_[lender].household].money -= short_;
-        book(households_[people_[lender].household], "借出", -short_);
+        book(households_[people_[lender].household], owed > 0 ? "借出" : "接濟別人", -short_);
         h.money += short_;
         book(h, "借錢", short_);
-        addDebt(h, short_, lender);
+        if (owed > 0) addDebt(h, owed, lender);
         oweFavour(h.head, lender, 15, "借錢交入地費");
         h.money -= f.amount;
         book(h, "入地費", -f.amount);
