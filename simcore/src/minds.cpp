@@ -539,7 +539,7 @@ void World::helpFriend(Person& p) {
         if (asked != cooldowns_.end() && asked->second > day_) return;
         cooldowns_[{p.id, "help_ask"}] = day_ + 2 * kDaysPerYear;
         std::string sit = fullName(p.id) + " 想給 " + fullName(t) + " 家送去" + gift + "：" +
-                          (giveFood ? "他們家今年日子難過" : "不為什麼，就是想表一表心意") + because + "。";
+                          (giveFood ? "他們家今年日子難過" : th.lean ? "他們家手頭緊" : because.empty() ? "不為什麼，就是想表一表心意" : "想表一表心意") + because + "。";
         if (flame) {
             sit += "你心裡清楚，" + fullName(t) + " 是" + pron(p) + "當年的人。";
             opts.push_back("不准，而且挑明了：「你以為我不知道？」");

@@ -536,7 +536,7 @@ function renderContest(s) {
   }).join("")}</div>` : '<p class="muted">還沒聽說村裡有誰在爭什麼。</p>';
   html += `<h3>村裡的差事</h3>` + c.offices.map((o) => `<div class="item" style="display:flex;justify-content:space-between;gap:6px;padding:4px 0">
       <span><b>${esc(o.name)}</b>　${o.mine ? '<span class="pos">你家的人</span> ' : ""}${o.holder ? esc(o.holder) : '<span class="muted">空著</span>'}</span>
-      ${o.wanted ? `<span><span class="muted">你家想當（${esc(o.runner || "")}出來選）</span> <button onclick="act({do:'want',what:'drop',object:${o.want}})">放下</button></span>`
+      ${o.wanted ? `<span><span class="muted">你家想當（${esc(o.runner || "")}出來選）</span> <button ${can ? "" : "disabled"} onclick="act({do:'want',what:'drop',object:${o.want}})">放下</button></span>`
         : o.can && !o.mine ? ((o.men || []).length > 1
             ? `<span>${o.men.map((m) => `<button ${can ? "" : "disabled"} onclick="act({do:'want',what:'office:${o.id}',object:${m.id}})">讓${esc(m.name)}選</button>`).join(" ")}</span>`
             : `<button ${can ? "" : "disabled"} onclick="act({do:'want',what:'office:${o.id}',object:-1})">想當</button>`)

@@ -159,7 +159,7 @@ def render(v, full=False):
     for g in s.get("plans_going") or []:
         out.append("―― 進行中的計畫 ―― %s%s 進度 %s/100（放棄：{\"do\":\"cancel\",\"plan\":\"%s\"}）" % (
             g.get("name", ""), "（對象 " + g["target"] + "）" if g.get("target") else "", g.get("progress", 0), g.get("id", "")))
-    shut = [p for p in s.get("plans", []) if not p.get("open") and p.get("why") and (p.get("ambition") or not p["why"].startswith("要："))]
+    shut = [p for p in s.get("plans", []) if not p.get("open") and p.get("why") and p["why"] != "正在辦" and (p.get("ambition") or not p["why"].startswith("要："))]
     if shut:
         out.append("―― 現在開不了的計畫 ―― " + "；".join(f"{'★' if p.get('ambition') else ''}「{p['name']}」{p['why']}" for p in shut))
     ops = [p for p in s.get("plans", []) if p.get("open")]

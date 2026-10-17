@@ -88,16 +88,17 @@ void World::setFree(Id id) {
     }
 }
 
-void World::sendToService(Id servant, Id master, int years) {
+bool World::sendToService(Id servant, Id master, int years) {
     Person& s = people_[servant];
-    if (!s.alive() || s.household == kNone || master == kNone || people_[master].household == kNone) return;
-    if (households_[s.household].head == servant || s.home != kNone) return;  // a head cannot leave to serve
-    if (gentry(servant) && !gentry(master)) return;  // the lord's children are not sent to scrub a tenant's floor
+    if (!s.alive() || s.household == kNone || master == kNone || people_[master].household == kNone) return false;
+    if (households_[s.household].head == servant || s.home != kNone) return false;  // a head cannot leave to serve
+    if (gentry(servant) && !gentry(master)) return false;  // the lord's children are not sent to scrub a tenant's floor
     s.home = s.household;
     s.serviceEnd = day_ + years * kDaysPerYear;
     moveTo(servant, people_[master].household);
     s.flags.insert("in_service");
     setStation(servant, "servant", 0, "到" + fullName(master) + "家幫傭");
+    return true;
 }
 
 void World::recallServants(Id household) {

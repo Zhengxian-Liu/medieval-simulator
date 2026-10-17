@@ -394,7 +394,7 @@
     {"id": "settle_son", "name": "給小兒子分家置產", "requires": "家主，存錢 60 便士以上，地 25 畝以上，家裡有成了親、不是長子的兒子",
      "desc": "替成了親的小兒子置一份家業：村裡有空地就向領主租來，沒有就從自家的地分出去，再給他 40 便士起家。家裡少幾畝地和幾張嘴，村裡多一戶你家的血脈。",
      "actor": {"is_head": true, "money_ge": 60, "acres_ge": 25, "younger_son_wed": true},
-     "subject": {"pick": "any_child", "conditions": {"sex": "male", "married": true, "heir_apparent": false, "age": [18, 45], "in_service": false}},
+     "subject": {"pick": "any_child", "conditions": {"sex": "male", "married": true, "heir_apparent": false, "age": [18, 45], "in_service": false, "same_household": true, "is_head": false}},
      "max_months": 3, "retry_years": 1,
      "progress": {"base": 40},
      "start_log": "{name} 跟家裡人商量，要給 {subject} 分家置產。",

@@ -322,7 +322,6 @@ int main() {
         std::string before = w.person(kids[0]).focus;
         w.issue({w.today(), "focus", w.playerHead(), "craft", kids[0], kNone});  // an adult's focus, for a child
         w.runCommands();
-        if (w.person(kids[0]).focus != before) std::printf("focus before %s after %s age %.1f\n", before.c_str(), w.person(kids[0]).focus.c_str(), w.ageYears(w.person(kids[0])));
         CHECK(w.person(kids[0]).focus == before && before != "craft", "a child took an adult's focus");
         std::printf("focus: %d children in %zu villages, charm %.1f vs %.1f, farming %.1f vs %.1f after 3 years\n", both, bases.size(), play.first, field.first,
                     play.second, field.second);

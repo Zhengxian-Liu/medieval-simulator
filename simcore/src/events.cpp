@@ -115,7 +115,7 @@ Id EventRunner::serviceChild(const Household& h) const {
     for (Id m : h.members) {
         const Person& c = w_.people_[m];
         double age = w_.ageYears(c);
-        if (m == h.head || age < 10 || age > 18 || c.home != kNone) continue;
+        if (m == h.head || age < 10 || age > 18 || c.home != kNone || w_.gentry(m)) continue;
         if (c.spouse != kNone && w_.people_[c.spouse].alive()) continue;
         if (best == kNone || c.birthDay < w_.people_[best].birthDay) best = m;
     }
@@ -307,11 +307,16 @@ void EventRunner::interact(const EventDef& ev, Person& p, Id head) {
     }
     if (!line.empty()) w_.log(1, "〔" + ev.title + "〕" + line);
     // A cold answer says why, so the next visit can be better chosen.
-    if (!line.empty() && pick != 0 && w_.pendingReason_.empty() && ev.options.size() > 1) {
+    // Only when the warm answer was there to give, and not for visits that are cold by nature (a summons to court).
+    if (!line.empty() && pick != 0 && w_.pendingReason_.empty() && ev.options.size() > 1 && optionOpen(ev.options.front(), p, head) &&
+        !(ev.interaction["no_reason"].isBool() && ev.interaction["no_reason"].asBool())) {
         double op = w_.opinion(p.id, head);
-        w_.pendingReason_ = op < 0 ? p.firstName + " 對你家沒什麼好感（好感 " + std::to_string(std::lround(op)) + "）"
+        bool close = w_.closeness(p.id, head) >= 50 || op >= 30;
+        w_.pendingReason_ = op <= -20 ? p.firstName + " 對你家有成見，好感 " + std::to_string(std::lround(op))
+                            : op < 0  ? p.firstName + " 對你家沒什麼好感，好感 " + std::to_string(std::lround(op))
                             : w_.mood(p) < 35 ? p.firstName + " 這陣子心裡不痛快"
-                                              : "看 " + p.firstName + " 的脾氣，這回就是不領情；交情再深一點會好些";
+                            : close ? "看 " + p.firstName + " 的脾氣，這回就是不領情，下回也許就好了"
+                                    : "看 " + p.firstName + " 的脾氣，這回就是不領情；交情再深一點會好些";
     }
     if (!w_.pendingReason_.empty()) {
         if (!line.empty()) w_.log(1, "  （" + w_.pendingReason_ + "）");
@@ -585,7 +590,6 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
         const Household& th = w.households_[w.people_[target].household];
         return (th.food - w.consumption(th) * 120 >= w.consumption(*h) * v.asNumber());
     }
-    if (k == "food_days_lt") return h && h->food < w.consumption(*h) * v.asNumber();
     if (k == "acres_ge") return h && h->acres >= v.asNumber();
     if (k == "acres_lt") return h && h->acres < v.asNumber();
     if (k == "house") return h && h->house == v.asString();
@@ -715,7 +719,7 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     if (k == "would_sell") return h && !w.sellReason(*h).empty() == v.asBool();  // a house that would let a few acres go
     if (k == "money_covers_debt") return h && h->debt > 0.5 && (h->money + 0.5 >= h->debt) == v.asBool();
     if (k == "owes_lord_ge") return h && w.owedLord(*h) >= v.asNumber();
-    if (k == "demesne_free") return (w.leasedOut() < 0.5) == v.asBool();
+    if (k == "demesne_free") return (w.leasedOut() < 0.5) == v.asBool();  // nobody holds the lord's fields on lease
     if (k == "mill_free") return std::none_of(w.households_.begin(), w.households_.end(), [&](const Household& o) { return !o.extinct && o.millUntil > w.day_; }) == v.asBool();
     if (k == "younger_son_wed") {
         // A married son under the roof who is not the heir: one the family could set up on his own.
@@ -727,7 +731,7 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
                               m != h->head && w.heirOf(*h, h->head) != m && q.home == kNone);
             }
         return any == v.asBool();
-    }  // nobody holds the lord's fields on lease
+    }
     if (k == "has_secret") {
         // Something this person did in secret that `to` (the target, or nobody: anyone) is not yet sure of.
         Id to = v.asString() == "target" ? target : kNone;
@@ -1328,8 +1332,8 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
             } else if (k == "forgive_target_debt") {
                 // What p's house owes the target is written off.
                 if (!h || target == kNone) continue;
+                if (h->heldDebt > 0.5 && h->heldCreditor == target) h->heldDebt = 0, h->heldCreditor = kNone;
                 if (h->debt > 0.5 && h->creditor == target) w.clearDebt(*h);
-                else if (h->heldDebt > 0.5 && h->heldCreditor == target) h->heldDebt = 0, h->heldCreditor = kNone;
             } else if (k == "repay_target") {
                 // Ordered to pay back what this house owes the target: that share of it, as far as the purse goes.
                 if (!h || target == kNone || w.people_[target].household == kNone) continue;
@@ -1374,7 +1378,7 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 Id master = h->creditor != kNone && w.people_[h->creditor].alive() ? h->creditor : w.lord_;
                 if (child == kNone || master == kNone || w.people_[master].household == kNone) continue;
                 int years = static_cast<int>(v.numberOr("years", 3));
-                w.sendToService(child, w.households_[w.people_[master].household].head, years);
+                if (!w.sendToService(child, w.households_[w.people_[master].household].head, years)) continue;
                 // The child's years are the settlement: what is left is small enough to forgive, or the
                 // creditor waits for it from the start again.
                 h->debt = std::max(0.0, h->debt - v.numberOr("value", 30));
@@ -1416,7 +1420,7 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                         w.people_[o.head].occupation != "priest" && w.people_[o.head].occupation != "lord")
                         best = o.money, master = o.head;
                 if (child == kNone || master == kNone) continue;
-                w.sendToService(child, master, static_cast<int>(v.numberOr("years", 3)));
+                if (!w.sendToService(child, master, static_cast<int>(v.numberOr("years", 3)))) continue;
                 h->food += w.consumption(*h) * 20;
                 if (h->id == w.playerHousehold_) w.log(1, "  " + w.fullName(child) + " 去了 " + w.fullName(master) + " 家幫傭，管吃管住。");
             } else if (k == "borrow") {
@@ -1512,7 +1516,10 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 // own, on land rented from the lord if any lies empty, the rest out of the family's (it keeps 15).
                 if (!plan_ || plan_->subject == kNone || hid == kNone) continue;
                 Person& sub = w.people_[plan_->subject];
-                if (sub.household != hid || w.households_[hid].head == sub.id) continue;
+                if (sub.household != hid || w.households_[hid].head == sub.id) {
+                    if (w.inPlayerHouse(hid)) w.log(1, "  " + sub.firstName + " 已經不在家裡住了，分家的事作罷。");
+                    continue;
+                }
                 double want = v.numberOr("acres", 8);
                 double vac = std::min(w.vacantAcres(), want);
                 double own = std::clamp(want - vac, 0.0, std::max(0.0, w.households_[hid].acres - 15));
@@ -1526,9 +1533,12 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 w.book(w.households_[hid], "給" + sub.firstName + "分家的錢", -gift);
                 if (vac >= 1) w.moveLand(kNone, nh, vac, LandPick::CustomaryFirst, "分家時向領主租來");
                 if (own >= 1) w.moveLand(hid, nh, own, LandPick::CustomaryFirst, "分給" + sub.firstName + "成家");
-                std::vector<Id> going{sub.id, sub.spouse};
+                std::vector<Id> going{sub.id};
+                bool wife = sub.spouse != kNone && w.people_[sub.spouse].alive() && w.people_[sub.spouse].household == hid;
+                if (wife) going.push_back(sub.spouse);
+                int kids = 0;
                 for (Id c : sub.children)
-                    if (w.people_[c].alive() && w.people_[c].household == hid && w.people_[c].home == kNone) going.push_back(c);
+                    if (w.people_[c].alive() && w.people_[c].household == hid && w.people_[c].home == kNone) going.push_back(c), ++kids;
                 Household& old = w.households_[hid];
                 Household& fresh = w.households_[nh];
                 for (Id who : going) {
@@ -1545,7 +1555,7 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 fresh.firewood = 20;
                 w.noteLife(sub.id, "分家自立門戶");
                 if (w.inPlayerHouse(hid))
-                    w.log(1, "  " + w.fullName(sub.id) + " 帶著妻兒搬出去，自立門戶：" + std::to_string(int(fresh.acres)) + " 畝地、" +
+                    w.log(1, "  " + w.fullName(sub.id) + (wife && kids ? " 帶著妻兒" : wife ? " 帶著妻子" : kids ? " 帶著孩子" : " 一個人") + "搬出去，自立門戶：" + std::to_string(int(fresh.acres)) + " 畝地、" +
                                  std::to_string(int(gift)) + " 便士。往後他家是另一戶，可還是你家的血脈。");
             } else if (k == "lease_demesne") {
                 // Take the lord's own fields on a lease of so many years.

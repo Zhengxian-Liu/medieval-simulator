@@ -855,7 +855,7 @@ private:
     void rehomeAway(Id from, Id to);
     Id leaving_ = kNone;              // the head walking out right now (setStation): not one of the house's people away
     void settleAsHead(Id who);        // someone takes up a house: a youth's station (labourer, veteran, apprentice) ends  // the house the people away belong to is gone: re-point them
-    void sendToService(Id servant, Id master, int years);
+    bool sendToService(Id servant, Id master, int years);
     void setFree(Id person);
 
     // knowledge.cpp: beliefs, rumours, investigation, accusation

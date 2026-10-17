@@ -36,8 +36,9 @@ void World::setStation(Id who, const std::string& station, int years, const std:
     if (!sd) throw std::runtime_error("unknown station " + station);
     bool wasAway = isAway(p);
     if (sd->away && !wasAway && p.household == kNone) return;  // nowhere to leave from
-    // The manor's lord and lady do not go off to a master in town or to the wars as a common man would.
-    if (sd->away && !wasAway && (p.id == lord_ || p.occupation == "lord" || p.occupation == "lady")) return;
+    // The manor's lord and his lady do not walk off to a master in town or to the wars: the manor would be left
+    // with no one in it. Their children may go.
+    if (sd->away && !wasAway && lord_ != kNone && (p.id == lord_ || people_[lord_].spouse == p.id)) return;
     std::string id = station;
     std::string why = note;
     // Coming back to a village with no house of theirs left in it: they stay where they are.
