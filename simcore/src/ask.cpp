@@ -438,11 +438,14 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
             oweFavour(head, who, 8, "答應了親事");
         } else if (what == "apprentice") {
             double pay = 24 + (lever == "meet" ? demandMoney : 0);
-            ph.money -= pay;
-            th.money += pay;
-            book(ph, "拜師錢", -pay);
-            takePlace(object, "apprentice", subject);
-            res.text += shortName(subject) + "跟著" + name + "學手藝去了。";
+            if (takePlace(object, "apprentice", subject)) {  // the fee, once the place is taken
+                ph.money -= pay;
+                th.money += pay;
+                book(ph, "拜師錢", -pay);
+                res.text += shortName(subject) + "跟著" + name + "學手藝去了。";
+            } else {
+                res.text += "可是" + shortName(subject) + "眼下去不了。";
+            }
             oweFavour(head, who, 8, "收你兒子當學徒");
         } else if (what == "speak") {
             if (EntryFine* f = fineOf(playerHousehold_)) {

@@ -55,6 +55,8 @@ void World::harvest() {
         if (h.boonUntil > day_) yield *= 0.85;                        // days owed on the demesne, not on their own strips
         yield *= 1 + h.workBonus;  // the head's spare days, spent in the fields
         h.workBonus = 0;
+        yield *= 1 + std::clamp(h.focusYield, -0.15, 0.15);  // where the household's days went this year (年度重心, side roads)
+        h.focusYield = 0;
         // Tithe: a tenth of the crop goes to the parish church.
         double tithe = h.house == "manor" || (h.head != kNone && people_[h.head].occupation == "priest") ? 0 : yield * 0.1;
         yield -= tithe;
@@ -182,7 +184,8 @@ void World::monthlyEconomy() {
         if (!od || od->monthlyIncome <= 0) continue;
         double skill = p.skills[skillFromKey(od->skill)];
         double income = od->monthlyIncome * (0.5 + skill / 20) * wage * std::max(0.2, 1 + traitMod(p, "income"));
-        if (const FocusDef* f = focusOf(p)) income *= 1 + f->income;
+        if (const FocusDef* f = focusOf(p))  // against the default, so craftsmen left alone earn what they did
+            if (const FocusDef* def = focusDefault(p)) income *= 1 + f->income - def->income;
         households_[p.household].money += income;
         book(households_[p.household], "手藝收入", income);
     }

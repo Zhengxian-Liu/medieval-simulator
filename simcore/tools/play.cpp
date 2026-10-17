@@ -113,8 +113,8 @@ void inspectMenu(World& w) {
 void focusMenu(World& w) {
     std::vector<Id> who;
     if (w.playerHousehold() == kNone) return;
-    for (Id m : w.household(w.playerHousehold()).members)
-        if (w.focusOf(w.person(m)) && w.focusChoices(m).size() > 1) who.push_back(m);
+    for (const auto& p : w.people())  // the family's own, at home or serving in another house
+        if (w.steersFocus(p.id) && w.focusOf(p) && w.focusChoices(p.id).size() > 1) who.push_back(p.id);
     if (who.empty()) {
         std::cout << "家裡眼下沒有人能換重心。\n";
         return;

@@ -399,7 +399,9 @@ void World::yearlyWants() {
             if (!o.alive() || !s.alive() || married(o) || married(s) || o.household == kNone) stale = true;
         } else if (wt.kind == "place") {
             const Person& s = people_[wt.subject];
-            if (!s.alive() || s.flags.count("trade_decided") || ageYears(s) > (wt.office == "apprentice" ? 15 : 17) || s.home != kNone) stale = true;
+            if (!s.alive() || s.flags.count("trade_decided") || ageYears(s) > (wt.office == "apprentice" ? 15 : 17) || s.home != kNone ||
+                !s.station.empty() || s.household == kNone || households_[s.household].head == s.id)
+                stale = true;  // placed, grown, gone, on another road, or keeping a house now
         } else if (wt.kind == "office") {
             const Office* o = office(wt.office);
             if (o && o->holder != kNone && people_[o->holder].household == wt.house) stale = true;

@@ -292,7 +292,7 @@ int main() {
             for (Id k : kids) charm += w.person(k).skills[Charm], farming += w.person(k).skills[Farming];
             return std::make_pair(charm, farming);
         };
-        auto play = grow("play"), field = grow("field");
+        auto play = grow("play"), field = grow("farmhand");
         CHECK(play.first > field.first + 0.5 && field.second > play.second + 0.5, "years playing and years in the fields grew the same child");
         World w = base;
         w.issue({w.today(), "focus", w.playerHead(), "craft", kids[0], kNone});  // an adult's focus, for a child

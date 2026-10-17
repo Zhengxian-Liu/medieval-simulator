@@ -163,6 +163,7 @@ struct Household {
     int timeSeason = -1;   // year * 4 + season the budget belongs to
     int timeLeft = 0;
     double workBonus = 0;  // seasons spent bent over the work: a slightly better harvest
+    double focusYield = 0; // this year's 年度重心 and side roads against the defaults (more hands in the field, a pack to the fair)
 };
 
 // A quarrel between two families that grows by stages (Crusader Kings-style story arc).
@@ -639,6 +640,8 @@ public:
     // 年度重心 (data/focus.json): the foci open to someone now, the one they follow, and the family choosing one.
     std::vector<const FocusDef*> focusChoices(Id who) const;
     const FocusDef* focusOf(const Person& p) const;
+    const FocusDef* focusDefault(const Person& p) const;  // what a family like theirs would do
+    bool steersFocus(Id who) const;  // the family decides where this person's days go: its own, at home or in service
     void setFocus(Id who, const std::string& id);
 
     // --- player interface

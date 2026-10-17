@@ -1,9 +1,9 @@
 {
-  "_doc": "年度重心 (design/life-paths.md): where each person puts their days, year in, year out. Set once and kept until changed; nobody has to set it. Each month it adds a little: skills (per month), how well they get to know people (known_peers: villagers of about their age; known_village: anyone), the household's harvest (work), craft income (income), standing (reputation), weight off the mind (stress), needs, and how the parents feel about them (opinion_parents). The gates later read the skills: a road nobody trained for is not on the menu, or its odds are low. Nothing says what was lost. stage: child = 5-13, adult = 14 and up. conditions: as in events, on the person.",
-  "defaults": {"child_male": "field", "child_female": "home", "adult": "field", "adult_craft": "craft"},
+  "_doc": "年度重心 (design/life-paths.md): where each person puts their days, year in, year out. Set once and kept until changed; nobody has to set it. Each month it adds a little: skills (per month), how well they get to know people (known_peers: villagers of about their age; known_village: anyone), the household's harvest (work) and craft income (income), both counted against what the person would do by default so a village left to its defaults reaps and earns what it did before, standing (reputation), weight off the mind (stress), needs, and how the parents feel about them (opinion_parents). The gates later read the skills: a road nobody trained for is not on the menu, or its odds are low. Nothing says what was lost. stage: child = 5-13, adult = 14 and up. conditions: as in events, on the person.",
+  "defaults": {"child_male": "farmhand", "child_female": "home", "adult": "field", "adult_craft": "craft"},
   "foci": [
-    {"id": "field",   "stage": "child", "name": "下田幫忙", "desc": "跟著大人下田，學種地，家裡多一雙手",
-     "skills": {"farming": 0.06}, "work": 0.0008},
+    {"id": "farmhand", "stage": "child", "name": "下田幫忙", "desc": "跟著大人下田，學種地，家裡多一雙手",
+     "skills": {"farming": 0.06}, "work": 0.001},
     {"id": "home",    "stage": "child", "name": "在家幫忙", "desc": "帶弟妹、做家務、餵雞，爹娘看在眼裡",
      "skills": {"farming": 0.02, "craft": 0.02}, "opinion_parents": 0.25, "work": 0.0004},
     {"id": "errand",  "stage": "child", "name": "去作坊跑腿", "desc": "在村裡的師傅那裡打雜，看會了一點手藝",

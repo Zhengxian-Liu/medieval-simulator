@@ -34,7 +34,7 @@ private:
         if (hh == kNone) return;
         for (Id m : w.household(hh).members) {
             std::vector<const FocusDef*> fs = w.focusChoices(m);
-            if (fs.size() < 2 || !rng_.chance(0.4)) continue;
+            if (!w.steersFocus(m) || fs.size() < 2 || !rng_.chance(0.4)) continue;
             w.issue({w.today(), "focus", head, fs[static_cast<size_t>(rng_.range(0, static_cast<int>(fs.size()) - 1))]->id, m, kNone});
         }
     }

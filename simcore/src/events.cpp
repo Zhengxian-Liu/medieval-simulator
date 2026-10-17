@@ -801,6 +801,10 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 if (!h) continue;
                 w.setStation(p.id, "town_apprentice", 7, "進城拜師");
                 return;
+            } else if (k == "yield") {
+                // A side road takes days from the household's own fields this year (or adds hands to them).
+                Id yh = p.household != kNone ? p.household : w.isAway(p) ? p.awayFrom : kNone;
+                if (yh != kNone) w.households_[yh].focusYield = std::clamp(w.households_[yh].focusYield + v.asNumber(), -0.15, 0.15);
             } else if (k == "focus") {
                 p.focus = v.asString();  // a choice at a gate sets where the days go (跟神父認字 -> letters)
             } else if (k == "station") {

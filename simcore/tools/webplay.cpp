@@ -213,7 +213,7 @@ public:
             if (const FocusDef* fd = w.focusOf(p)) {
                 f.text("focus", fd->id).text("focus_name", fd->name);
                 std::vector<std::string> foci;
-                if (withActions)
+                if (withActions && w.steersFocus(m))
                     for (const FocusDef* o : w.focusChoices(m)) foci.push_back(Obj().text("id", o->id).text("name", o->name).text("desc", o->desc).done());
                 f.raw("foci", arr(foci));
             }
