@@ -160,7 +160,8 @@ void World::addDebt(Household& h, double amount, Id creditor) {
     if (creditor == kNone) creditor = lord_;
     if (h.debt <= 0.5) {
         h.creditor = creditor;
-        h.debtYears = 0;
+        // A neighbour's loan made after the winter is due at the Michaelmas after next ("明年米迦勒節"), not in weeks.
+        h.debtYears = creditor != lord_ && month() >= 2 ? -1 : 0;
     } else if (creditor != h.creditor) {
         // Owed to someone else: it waits its turn rather than being added to the wrong account.
         if (h.heldDebt <= 0.5 || h.heldCreditor == creditor) {
@@ -243,8 +244,9 @@ Id World::seekLender(Household& h, double amount, const std::string& why, double
             recordDeed("kindness", ours, h.head);
             oweFavour(h.head, ours, 20, "白送的錢");
         }
-        log(1, "〔來借錢〕" + fullName(ours) + (r == 2 ? " 白送了 " : " 借了 ") + std::to_string(int(amount)) + " 便士給 " + fullName(h.head) + " 家" +
-                   (r == 1 ? "，說好秋後還 " + std::to_string(int(owed)) + " 便士。" : "。"));
+        bool grain = why == "借糧度荒";
+        log(1, "〔來借錢〕" + fullName(ours) + (r == 2 ? " 白送了 " : " 借了 ") + (grain ? "值 " : "") + std::to_string(int(amount)) + " 便士" +
+                   (grain ? "的糧" : "") + "給 " + fullName(h.head) + " 家" + (r == 1 ? "，說好秋後還 " + std::to_string(int(owed)) + " 便士。" : "。"));
         return best;
     }
     return kNone;
@@ -316,7 +318,7 @@ void World::yearlyDebts() {
         if (h.extinct || h.members.empty() || h.debt <= 0.5 || h.head == kNone) continue;
         if (lord_ != kNone && people_[lord_].household == h.id) continue;  // the manor pays on its own terms (monthlyDebts)
         if (hardTimes || h.debt < 20) continue;  // small arrears just stay on the books
-        ++h.debtYears;
+        if (++h.debtYears <= 0) continue;  // not due yet
         bool lordIsCreditor = h.creditor == lord_ || h.creditor == kNone ||
                               people_[h.creditor].household == kNone || !people_[h.creditor].alive();
         if (!lordIsCreditor && people_[h.creditor].household == h.id) {  // owed to their own house now

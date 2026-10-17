@@ -99,6 +99,7 @@ void World::chooseAmbition(Person& head, const std::string& why) {
         int r = askPlayer("立志", sit, opts);
         if (r == static_cast<int>(offer.size())) {
             log(1, "〔立志〕" + fullName(head.id) + " 想再看看，明年再說。");
+            ambitionAskAfter_ = day_ + kDaysPerYear;
             return;
         }
         if (r >= 0 && r < static_cast<int>(offer.size())) {
@@ -188,7 +189,7 @@ void World::monthlyAmbition() {
     Person& head = people_[h.head];
     if (!head.alive() || ageYears(head) < 16) return;
     if (head.ambition.empty()) {
-        if (month() == 0) chooseAmbition(head);
+        if (day_ >= ambitionAskAfter_) chooseAmbition(head);
         return;
     }
     checkMilestones(head, false);

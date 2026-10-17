@@ -39,7 +39,7 @@
     ,
     {"id": "lay_subsidy", "title": "國王的稅", "prompt": "國會准了國王一筆稅，照家當交十五分之一。村裡推了 {target} 和另一個殷實人家挨家估稅，翻過你家的錢箱、糧倉和牲口棚，算下來該交 {tax} 便士。",
      "scope": "anyone", "chance": 1, "on": {"signal": "manual"},
-     "conditions": {"is_head": true},
+     "conditions": {},
      "options": [
        {"text": "照實交 {tax} 便士", "log": "{name} 照實交了國王的稅。",
         "effects": [{"pay_tax": 1.0}],

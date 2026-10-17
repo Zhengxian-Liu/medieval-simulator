@@ -824,6 +824,7 @@ private:
     void yearlyTax();
     void askToFeed(Household& h);           // kin or a close friend near the end of their bread: the player is asked
     std::map<Id, int> feedAskedUntil_;
+    int ambitionAskAfter_ = 0;  // the player's head put off choosing an ambition: not asked again before this day
     std::map<Id, Id> lastMatchSubject_;     // head -> the one whose match last fell through (for "另說一門親")      // household -> no asking again before this day
     void gatherFirewood();
     void payRent();

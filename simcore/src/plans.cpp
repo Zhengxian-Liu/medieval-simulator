@@ -73,7 +73,7 @@ void World::processCommands() {
                 continue;
             }
             if (ours && !planRoom(c.actor)) {
-                log(1, "〔計畫〕" + name + "沒辦成：手上已經有兩件事在辦。");
+                log(1, "〔計畫〕" + name + "沒辦成：" + (c.actor == actingHead() ? "手上已經有兩件事在辦。" : "手上已經有一件事在辦。"));
                 continue;
             }
             if (startPlan(c.actor, c.plan, c.target, c.subject)) {
@@ -97,6 +97,7 @@ void World::processCommands() {
             if (f.size() == 4) ask(c.target, f[0], c.subject, f[3].empty() ? kNone : static_cast<Id>(std::stol(f[3])), f[1], f[2]);
         } else if (c.type == "want") {
             // The family lets it be known it wants a parcel (plan "parcel") or a post (plan "office:<id>"), or drops it.
+            if (c.plan == "parcel" && (c.subject < 0 || c.subject >= static_cast<Id>(parcels_.size()) || parcels_[c.subject].gone)) continue;
             if (c.plan == "parcel") addWant(playerHousehold_, "parcel", c.subject, kNone, "", "盯上了");
             else if (c.plan.rfind("office:", 0) == 0) {
                 const Office* of = office(c.plan.substr(7));
@@ -133,7 +134,7 @@ std::string World::planBlock(Id actorId, const PlanDef& pd) {
     if (cd != cooldowns_.end() && cd->second > day_) return "上回才辦過，還要 " + seasonsTo(cd->second) + " 季才能再辦";
     for (const auto& p : plans_)
         if (p.actor == actorId && p.plan == pd.id) return "正在辦";
-    if (!planRoom(actorId)) return "手上已經有兩件事在辦";
+    if (!planRoom(actorId)) return actorId == actingHead() ? "手上已經有兩件事在辦" : "手上已經有一件事在辦";
     Person& actor = people_[actorId];
     EventRunner ev(*this);
     if (!ev.eval(pd.actor, actor, kNone)) return pd.needs.empty() ? "眼下不合條件" : "要：" + pd.needs;
@@ -445,9 +446,9 @@ void World::monthlyPlans() {
                 ev.runEvent(beat, actor, plan.target, importance);
                 break;
             }
-            // Effects may have added people; re-find the plan by actor.
+            // Effects may have added people; re-find the plan by actor and plan (a head may have two going).
             for (auto& p : plans_)
-                if (p.actor == copy.actor) {
+                if (p.actor == copy.actor && p.plan == copy.plan) {
                     p.progress = copy.progress;
                     p.beatsSeen = copy.beatsSeen;
                     p.priceAdd = copy.priceAdd;

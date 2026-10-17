@@ -129,9 +129,15 @@ void World::payRent() {
         }
         if (h.millUntil > day_) {
             // The mill: every house grinds there and leaves a sixteenth of its corn; the farm of it goes to the lord.
-            int grinders = 0;
-            for (const auto& o : households_) grinders += !o.extinct && !o.members.empty() && o.id != lordHouse;
-            double take = std::round(grinders * 3.5 * (0.7 + 0.6 * rngEcon_.uniform()));
+            // The toll comes out of every grinding house (a poor one leaves what it has).
+            double f = 0.7 + 0.6 * rngEcon_.uniform(), take = 0;
+            for (auto& o : households_) {
+                if (o.extinct || o.members.empty() || o.id == lordHouse || o.id == h.id) continue;
+                double toll = std::min(std::round(3.5 * f), std::max(0.0, o.money));
+                o.money -= toll;
+                if (toll > 0) book(o, "磨坊的磨麥錢", -toll);
+                take += toll;
+            }
             h.money += take;
             book(h, "磨坊收的磨麥錢", take);
             rent += 45 * rentMult;
@@ -426,6 +432,9 @@ void World::askToFeed(Household& h) {
     Id ours = actingHead();
     if (ours == kNone || h.head == kNone) return;
     if (auto it = feedAskedUntil_.find(h.id); it != feedAskedUntil_.end() && it->second > day_) return;
+    // One such card a month at most, whoever is hungry (kAnyHouse holds when the last one was).
+    constexpr Id kAnyHouse = -2;
+    if (auto it = feedAskedUntil_.find(kAnyHouse); it != feedAskedUntil_.end() && it->second > day_) return;
     // Whose house it is to the family: the nearest of kin in it, or a friend of the head's.
     Id kin = kNone;
     for (Id m : h.members)
@@ -442,22 +451,25 @@ void World::askToFeed(Household& h) {
     std::vector<int> what;
     if (spare >= daily * 90) opts.push_back("從自家糧倉送去夠吃三個月的糧"), what.push_back(0);
     if (ph.money >= coin + 20) opts.push_back("送 " + std::to_string(int(coin)) + " 便士讓他們買糧"), what.push_back(1);
-    if (h.debt > 0.5 && inPlayerHouse(people_[h.creditor].household)) opts.push_back("免了他們欠你家的債"), what.push_back(2);
+    if (h.debt > 0.5 && h.creditor != kNone && inPlayerHouse(people_[h.creditor].household)) opts.push_back("免了他們欠你家的債"), what.push_back(2);
     if (opts.empty()) return;
     opts.push_back("自家也不寬裕，先不管");
     what.push_back(3);
     feedAskedUntil_[h.id] = day_ + kDaysPerYear / 4;
+    feedAskedUntil_[kAnyHouse] = day_ + kDaysPerMonth;
     int children = 0;
     for (Id m : h.members)
         if (ageYears(people_[m]) < 12) ++children;
     std::string who = kin != kNone ? fullName(kin) + "（" + kinWord(ours, kin) + "）住的 " + fullName(h.head) + " 家" : "好朋友 " + fullName(h.head) + " 家";
     std::string sit = who + "只剩不到二十天的糧了" + (children ? "，" + std::to_string(children) + " 個孩子已經餓瘦了" : "") + "。";
     int r = askPlayer("親友挨餓", sit, opts);
-    if (r < 0) r = static_cast<int>(opts.size()) - 1;  // no one to ask: the family does not give the house's bread away unasked
+    // No one to ask: a well-off family feeds its own kin; otherwise it keeps the house's bread.
+    if (r < 0) r = kin != kNone && (what.front() == 0 || ph.money >= 300) ? 0 : static_cast<int>(opts.size()) - 1;
     int w = what[r];
     if (w == 3) {
         log(1, "〔親友挨餓〕" + sit + "家裡沒有伸手。");
         if (kin != kNone) addOpinion(kin, ours, "left_us_hungry", -10, 10);
+        feedAskedUntil_[h.id] = day_ + kDaysPerYear;  // asked and refused: not asked again for a year
         return;
     }
     if (w == 0) {

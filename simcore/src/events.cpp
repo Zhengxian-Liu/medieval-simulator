@@ -1395,13 +1395,16 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                     continue;
                 }
                 h->food += w.consumption(*h) * v.numberOr("days", 90);
-                if (h->debt <= 0.5 || h->creditor == lender) {
-                    w.addDebt(*h, owed, lender);
-                    w.households_[w.people_[lender].household].money -= owed * 0.6;
-                }
-                w.recordDeed("lent_money", lender, p.id, 1, cause_);
+                // The grain is the lender's whatever is asked back for it (given outright, it still came out of his store).
+                Household& lh = w.households_[w.people_[lender].household];
+                double cost = std::round(v.numberOr("debt", 30) * 0.6);
+                lh.money -= cost;
+                w.book(lh, owed > 0 ? "借糧給人" : "接濟別人", -cost);
+                if (owed > 0 && (h->debt <= 0.5 || h->creditor == lender)) w.addDebt(*h, owed, lender);
+                if (owed > 0) w.recordDeed("lent_money", lender, p.id, 1, cause_);  // a gift is recorded where it was given
                 if (h->id == w.playerHousehold_)
-                    w.log(1, "  " + w.fullName(lender) + " 借了一袋燕麥和豆子，說好秋收後還 " + std::to_string(int(owed)) + " 便士。");
+                    w.log(1, "  " + w.fullName(lender) + (owed > 0 ? " 借了一袋燕麥和豆子，說好秋收後還 " + std::to_string(int(owed)) + " 便士。"
+                                                                     : " 送來一袋燕麥和豆子，說不用還。"));
             } else if (k == "service_for_food") {
                 // One mouth fewer: a child goes to serve a better-off house for bed and board.
                 if (!h) continue;

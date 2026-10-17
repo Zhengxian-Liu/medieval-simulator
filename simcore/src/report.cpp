@@ -166,7 +166,7 @@ std::string World::familyReport() const {
       << int(h.food / std::max(1.0, consumption(h))) << " 天。";
     if (h.debt > 0.5)
         o << "欠" << (h.creditor == lord_ || h.creditor == kNone ? std::string("莊園 ") : " " + fullName(h.creditor) + " ")
-          << int(h.debt) << " 便士" << (h.debtYears > 0 ? "（拖了 " + std::to_string(h.debtYears) + " 年）" : "（今年秋收後到期）") << "。";
+          << int(h.debt) << " 便士" << (h.debtYears > 0 ? "（拖了 " + std::to_string(h.debtYears) + " 年）" : h.debtYears < 0 ? "（明年秋收後到期）" : "（今年秋收後到期）") << "。";
     if (h.heldDebt > 0.5)
         o << "另外還欠" << (h.heldCreditor == lord_ ? std::string("莊園 ") : " " + fullName(h.heldCreditor) + " ") << int(h.heldDebt)
           << " 便士，等前一筆了結再算。";

@@ -88,7 +88,7 @@ void World::electReeve() {
         for (Id c : cands)
             if (votes[c] == votes[winner] && (pick == kNone || c == old || (pick != old && lord_ != kNone && opinion(lord_, c) > opinion(lord_, pick)))) pick = c;
         winner = pick;
-        tie = pick == old ? "幾家同票，照老規矩由現任的連任。" : "幾家同票，由老爺從中點了一個。";
+        tie = pick == old ? "幾家同票，照老規矩由現任的連任。" : (lord_ != kNone ? "幾家同票，由老爺從中點了一個。" : "幾家同票，抽籤定了一個。");
     }
     // The lord's word is final, but the village remembers a reeve it did not choose.
     std::string how;

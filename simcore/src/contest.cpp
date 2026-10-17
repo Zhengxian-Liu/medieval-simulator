@@ -110,7 +110,7 @@ Id World::currentReeve() const {
 }
 
 Id World::familyOfficeMan(const std::string& id, Id preferred) const {
-    auto ok = [&](Id m) { return m != kNone && people_[m].alive() && inPlayerHouse(people_[m].household) && officeBar(m, id).empty(); };
+    auto ok = [&](Id m) { return m >= 0 && m < static_cast<Id>(people_.size()) && people_[m].alive() && inPlayerHouse(people_[m].household) && officeBar(m, id).empty(); };
     if (ok(preferred)) return preferred;
     Id head = playerHead();
     if (ok(head)) return head;
@@ -324,7 +324,7 @@ void World::chooseOfficers() {
                     (pick == kNone || c == old || (pick != old && lord_ != kNone && opinion(lord_, c) > opinion(lord_, pick))))
                     pick = c;
             winner = pick;
-            tie = pick == old ? "幾個人同票，照老規矩由原來的接著當。" : "幾個人同票，由老爺從中點了一個。";
+            tie = pick == old ? "幾個人同票，照老規矩由原來的接著當。" : lord_ != kNone ? "幾個人同票，由老爺從中點了一個。" : "幾個人同票，抽籤定了一個。";
         }
         for (auto it = promises_.begin(); it != promises_.end();) it = it->first.second == id ? promises_.erase(it) : std::next(it);
         bool familyIn = false;
@@ -341,7 +341,8 @@ void World::chooseOfficers() {
             log(1, "【選" + name + "】" + tallyText(cands, t, false) + "。" + tie + voteWhy(t, winner) + fullName(winner) + " 當選，做到明年米迦勒節。");
         } else if (familyIn && t.mine != kNone) {
             log(1, "【選" + name + "】沒有別人出來爭，" + fullName(winner) + " 當選，做到明年米迦勒節。");
-        } else if (familyIn) {
+        } else if (std::any_of(wants_.begin(), wants_.end(), [&](const Want& wt) {
+                       return wt.open && wt.kind == "office" && wt.office == id && inPlayerHouse(wt.house); })) {
             std::string bar = familyOfficeBar(id);
             log(1, "【選" + name + "】你家這回沒能出來選" + (bar.empty() ? "" : "：" + bar) + "。" + fullName(winner) + " 當選。");
         } else if (winner != old) {
