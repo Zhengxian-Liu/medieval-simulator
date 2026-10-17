@@ -99,10 +99,14 @@ void World::processCommands() {
             // The family lets it be known it wants a parcel (plan "parcel") or a post (plan "office:<id>"), or drops it.
             if (c.plan == "parcel") addWant(playerHousehold_, "parcel", c.subject, kNone, "", "盯上了");
             else if (c.plan.rfind("office:", 0) == 0) {
-                std::string bar = officeBar(playerHead(), c.plan.substr(7));
                 const Office* of = office(c.plan.substr(7));
                 if (!of) continue;
-                if (bar.empty()) addWant(playerHousehold_, "office", kNone, playerHead(), of->id, "想當");
+                Id man = familyOfficeMan(of->id, c.subject);
+                std::string bar = familyOfficeBar(of->id);
+                if (man != kNone) {
+                    if (Want* wt = wantOf(playerHousehold_, "office", kNone, of->id)) wt->subject = man;
+                    else addWant(playerHousehold_, "office", kNone, man, of->id, "想當");
+                }
                 else log(1, "【差事】你家爭不了" + of->name + "：" + bar + "。");
             }
             else if (c.plan == "drop" && c.subject >= 0 && c.subject < static_cast<Id>(wants_.size()) && inPlayerHouse(wants_[c.subject].house))

@@ -127,6 +127,26 @@ void World::payRent() {
             h.leaseUntil = -1;
             h.leaseAcres = 0;
         }
+        if (h.millUntil > day_) {
+            // The mill: every house grinds there and leaves a sixteenth of its corn; the farm of it goes to the lord.
+            int grinders = 0;
+            for (const auto& o : households_) grinders += !o.extinct && !o.members.empty() && o.id != lordHouse;
+            double take = std::round(grinders * 3.5 * (0.7 + 0.6 * rngEcon_.uniform()));
+            h.money += take;
+            book(h, "磨坊收的磨麥錢", take);
+            rent += 45 * rentMult;
+            // Nobody loves the miller: a house or two grumbles that the toll is taken heavy.
+            if (h.head != kNone)
+                for (int k = 0; k < 2; ++k) {
+                    const Household& o = households_[rngEcon_.range(0, static_cast<int>(households_.size()) - 1)];
+                    if (!o.extinct && o.head != kNone && o.id != h.id && o.id != lordHouse) addOpinion(o.head, h.head, "mill_toll", -4, 3);
+                }
+            if (inPlayerHouse(h.id)) log(2, "磨坊這一年收了 " + std::to_string(int(take)) + " 便士的磨麥錢，交給莊園 45 便士。");
+        } else if (h.millUntil >= 0) {
+            if (inPlayerHouse(h.id)) log(1, "包下磨坊的期滿了，磨坊還給了莊園。");
+            for (Id m : h.members) people_[m].flags.erase("mill_farmer");
+            h.millUntil = -1;
+        }
         if (h.head != kNone && people_[h.head].flags.count("lord_favour")) rent *= 0.7;
         if (h.head != kNone && people_[h.head].flags.count("reeve")) rent *= 0.6;  // the reeve's service is his rent
         if (h.head != kNone && people_[h.head].flags.count("steward_man")) rent *= 0.8;  // the steward's man, likewise

@@ -111,7 +111,11 @@ def render(v, full=False):
         out.append(f"（你在替 {r['ward']} 持家，還有約 {r['years_left']} 年。可以 act '{{\"do\":\"regency\"}}' 交給管家，直到{r['ward']}成年，路上有大事還是會問你。）")
     amb = s.get("ambition")
     if amb:
-        out.append(f"志向：{amb['name']}（{amb.get('desc', '')}）" + " ".join(("✓" if x.get("done") else "○") + x["name"] for x in amb.get("steps", [])))
+        mark = lambda x: "✓" if x.get("done") else "△" if x.get("slipped") else "◎" if x.get("final") else "○"
+        out.append(f"志向：{amb['name']}（{amb.get('desc', '')}）還剩 {amb.get('years_left', '?')} 年　" + " → ".join(mark(x) + x["name"] for x in amb.get("steps", []))
+                   + ("　（△ 做到過，現在又不夠了；◎ 最後一步）" if any(x.get("slipped") for x in amb.get("steps", [])) else "　（◎ 最後一步）"))
+        if amb.get("hint"):
+            out.append(f"  怎麼推進：{amb['hint']}" + (f"（★ 計畫：{'、'.join(amb['plans'])}）" if amb.get("plans") else ""))
     fine = (s.get("contest") or {}).get("fine")
     if fine:
         out.append(f"入地費 {fine['amount']} 便士，{fine['year']} 年 {fine['month']} 月前要交給領主{'（已寬限過）' if fine.get('extended') else ''}。"
@@ -197,9 +201,13 @@ def render(v, full=False):
             if o.get("mine"):
                 tail = "（你家的）"
             elif o.get("wanted"):
-                tail = "（你家想當）"
+                tail = f"（你家想當，出來選的是{o.get('runner', '')}；不想了：act {{\"do\":\"want\",\"what\":\"drop\",\"object\":{o.get('want', -1)}}}）"
             elif o.get("can"):
-                tail = f"（可以爭：act {{\"do\":\"want\",\"what\":\"office:{o['id']}\",\"object\":-1}}）"
+                men = o.get("men", [])
+                if len(men) > 1:
+                    tail = "（可以爭，讓誰出來選：" + "；".join(f"{m['name']} act {{\"do\":\"want\",\"what\":\"office:{o['id']}\",\"object\":{m['id']}}}" for m in men) + "）"
+                else:
+                    tail = f"（可以爭：act {{\"do\":\"want\",\"what\":\"office:{o['id']}\",\"object\":-1}}）"
             else:
                 tail = f"（爭不了：{o.get('why', '')}）"
             out.append(f"  {o['name']}：{who}{tail}")

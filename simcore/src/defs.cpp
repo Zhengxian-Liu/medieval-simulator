@@ -203,6 +203,9 @@ Defs Defs::loadFromDir(const std::string& dir) {
         if (a["plans"].isArray())
             for (const auto& pl : a["plans"].asArray()) ad.plans.push_back(pl.asString());
         ad.next = readStrings(a["next"]);
+        ad.final = a.stringOr("final", ad.name);
+        ad.hint = a.stringOr("hint", "");
+        ad.keep = a["keep"];
         d.ambitions.push_back(ad);
     }
 

@@ -136,6 +136,9 @@ struct AmbitionDef {
     std::vector<Milestone> milestones;  // steps on the way, reached in order; the goal is the last step
     std::vector<std::string> plans;     // plans that move it forward: listed first and wanted more
     std::vector<std::string> next;      // the harder goals it opens up once done: offered first afterwards
+    std::string final;                  // the last step in words (the goal itself)
+    std::string hint;                   // how the player moves it on
+    Json keep;                          // conditions it can still be done under; false: 【志向受挫】 (null: always)
 };
 
 struct DeedDef {

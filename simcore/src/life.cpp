@@ -701,6 +701,7 @@ void World::mergeHousehold(Household& from, Household& to, const std::string& ho
     to.noOxUntil = std::max(to.noOxUntil, from.noOxUntil);
     to.rentFactor = std::max(to.rentFactor, from.rentFactor);
     if (from.leaseUntil > to.leaseUntil) to.leaseAcres = from.leaseAcres, to.leaseUntil = from.leaseUntil;
+    to.millUntil = std::max(to.millUntil, from.millUntil);
     for (const auto& [k, v] : from.ledger) to.ledger[k] += v;
     // The village's view of the old house is now of this one: its wants, the fine it owes, its servants away.
     for (auto& wt : wants_)

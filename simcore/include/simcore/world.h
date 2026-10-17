@@ -155,6 +155,7 @@ struct Household {
     double rentFactor = 1; // the lord raises the rent of households that do well
     double leaseAcres = 0; // the lord's demesne farmed on a lease (包租), with its own rent, until leaseUntil
     int leaseUntil = -1;
+    int millUntil = -1;    // the lord's mill farmed (包下磨坊): the multure is the house's, the farm paid at Michaelmas
     int hiredUntil = -1;   // the grown hands are hired on for the year by another house (bed and board, a wage)
     Id hiredBy = kNone;
     int boonUntil = -1;    // working off a debt on the lord's demesne: fewer days on their own land
@@ -470,6 +471,7 @@ public:
     const Defs& defs() const { return defs_; }
     const Config& config() const { return cfg_; }
     const std::vector<Person>& people() const { return people_; }
+    std::vector<int> milestoneState(Id head) const;  // per step: 1 holds now, 2 was reached but no longer holds, 0 not yet
     const std::vector<Household>& households() const { return households_; }
     const std::vector<Dynasty>& dynasties() const { return dynasties_; }
     const std::vector<Item>& items() const { return items_; }
@@ -641,6 +643,10 @@ public:
     bool placeOpen(Id master, const std::string& kind) const;
     bool officeEligible(Id who, const std::string& id) const { return officeBar(who, id).empty(); }
     std::string officeBar(Id who, const std::string& id) const;  // why they cannot stand for it: "" when they can
+    // The family's man who would stand for a post: the preferred one if he can, else the head, else any man of the
+    // house who can (kNone: none). familyOfficeBar: why none of them can ("" when one can).
+    Id familyOfficeMan(const std::string& id, Id preferred) const;
+    std::string familyOfficeBar(const std::string& id) const;
     const std::vector<Want>& wants() const { return wants_; }
     std::string wantThing(const Want& wt) const;   // "北田坡上那 3 畝", "莊頭的位子", "替威廉娶艾瑪"
     bool familyKnows(const Want& wt) const;        // the family's own, or the talk of it reached them
@@ -958,6 +964,7 @@ private:
         std::vector<Id> byWord;  // heads who promised the family's man their vote and kept it
         std::vector<Id> grudge;  // heads an old feud with the family turned against him
         std::vector<Id> broke;   // heads who promised him their vote and gave it to someone else
+        Id mine = kNone;         // the family's man among the candidates (the head, or the son put up for it)
     };
     double officeMerit(const Person& p, const std::string& id) const;
     std::vector<Id> officeCandidates(const std::string& id, Id old, const std::function<double(double)>& noise) const;
@@ -1008,8 +1015,10 @@ private:
     void runScheduled();
 
     // ambitions.cpp
-    void chooseAmbition(Person& head);
+    void chooseAmbition(Person& head, const std::string& why = "");  // why: what just happened, for the question
     void yearlyAmbitions();
+    void monthlyAmbition();
+    void reviewAmbition(Household& h, bool yearTurn);
     void checkMilestones(Person& head, bool quiet);
     void checkStandings();
     void yearlyTown();

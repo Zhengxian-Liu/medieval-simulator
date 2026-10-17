@@ -191,10 +191,18 @@ public:
         }
         o.n("head", head);
         if (const AmbitionDef* a = w.defs().ambition(hp.ambition)) {
+            // Each step as it stands now (a sum saved and then spent is no longer "done"), then the goal itself.
             std::vector<std::string> steps;
+            std::vector<int> st = w.milestoneState(head);
             for (size_t i = 0; i < a->milestones.size(); ++i)
-                steps.push_back(Obj().text("name", a->milestones[i].name).b("done", i < 32 && (hp.ambitionDone & (1u << i))).done());
-            o.raw("ambition", Obj().text("name", a->name).text("desc", a->desc).raw("steps", arr(steps)).done());
+                steps.push_back(Obj().text("name", a->milestones[i].name).b("done", st[i] == 1).b("slipped", st[i] == 2).done());
+            steps.push_back(Obj().text("name", a->final).b("done", false).b("final", true).done());
+            int left = a->maxYears - (w.today() - hp.ambitionSince) / kDaysPerYear;
+            std::vector<std::string> helps;
+            for (const auto& pid : a->plans)
+                if (const PlanDef* pd = w.defs().plan(pid)) helps.push_back(str(pd->name));
+            o.raw("ambition", Obj().text("name", a->name).text("desc", a->desc).raw("steps", arr(steps)).text("hint", a->hint)
+                                   .raw("plans", arr(helps)).n("years_left", std::max(0, left)).done());
         }
 
         // The family at home.
@@ -403,7 +411,17 @@ public:
             for (const auto& of : w.offices())
                 offs.push_back(Obj().text("id", of.id).text("name", of.name).text("holder", of.holder != kNone ? w.fullName(of.holder) : "")
                                    .b("mine", of.holder != kNone && w.people()[of.holder].household == hh).n("until", of.until)
-                                   .b("can", w.officeEligible(head, of.id)).text("why", w.officeBar(head, of.id)).b("wanted", w.wants().end() != std::find_if(w.wants().begin(), w.wants().end(), [&](const Want& x) {
+                                   .b("can", w.familyOfficeMan(of.id, head) != kNone).text("why", w.familyOfficeBar(of.id))
+                                   .n("want", [&] { for (const auto& x : w.wants()) if (x.open && x.house == hh && x.kind == "office" && x.office == of.id) return x.id; return kNone; }())
+                                   .text("runner", [&] { for (const auto& x : w.wants()) if (x.open && x.house == hh && x.kind == "office" && x.office == of.id && x.subject != kNone) return w.shortName(x.subject); return std::string(); }())
+                                   .raw("men", [&] {
+                                       // Every man of the house who could stand for it (the head first).
+                                       std::vector<std::string> v;
+                                       if (hh != kNone)
+                                           for (Id m : w.households()[hh].members)
+                                               if (w.officeBar(m, of.id).empty()) v.push_back(Obj().n("id", m).text("name", w.shortName(m)).b("head", m == head).done());
+                                       return arr(v); }())
+                                   .b("wanted", w.wants().end() != std::find_if(w.wants().begin(), w.wants().end(), [&](const Want& x) {
                                        return x.open && x.house == hh && x.kind == "office" && x.office == of.id; })).done());
             Obj c;
             c.raw("items", arr(items)).raw("past", arr(past)).raw("offices", arr(offs));

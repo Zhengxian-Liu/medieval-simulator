@@ -349,6 +349,73 @@
      "success_log": "鎮上一個織布師傅收下了 {subject}，拜師錢 50 便士。",
      "success": [{"money": -50}, {"if": {"cond": {"free": false}, "then": [{"money": -15}, {"log": "  {subject} 是農奴的兒子，離開莊園還得付領主 15 便士。"}], "else": []}}, {"subject": [{"to_town": true}]}],
      "fail_log": "鎮上的師傅都嫌鄉下孩子手笨，不肯收。", "fail": [],
-     "ai": {"base": 1, "traits": {"ambitious": 5}}}
+     "ai": {"base": 1, "traits": {"ambitious": 5}}},
+
+    {"id": "lend_out", "name": "放債收利", "requires": "家主，存錢 150 便士以上，村裡有日子緊、還沒欠債的人家",
+     "desc": "借 60 便士給手頭緊的人家，說好明年米迦勒節還 75 便士。錢會生錢，可是教會說放債吃利是罪，借錢的人家也未必記你的好。",
+     "actor": {"is_head": true, "money_ge": 150, "age": [25, 70], "not": {"occupation": ["lord", "priest", "lady"]}},
+     "target": {"pick": "villager", "conditions": {"is_head": true, "lean": true, "in_debt": false, "not": {"occupation": ["lord", "priest", "lady"]}}},
+     "max_months": 4, "retry_years": 1,
+     "progress": {"base": 22, "opinion": 2, "traits": {"greedy": 3}},
+     "start_log": "{name} 托人帶話給 {target}：要是手頭緊，可以先借你們 60 便士。",
+     "success_log": "{target} 家收下了 60 便士，答應明年米迦勒節還 75 便士。",
+     "success": [{"money": -60}, {"target": [{"money": 60}, {"owe_target": 75}, {"opinion": {"value": -2, "mod": "usury", "years": 4}}]}, {"reputation": -1},
+                 {"if": {"cond": {"trait": "pious"}, "then": [{"stress": 6}, {"log": "  {name} 心裡不踏實：神父講過，放債吃利是罪。"}], "else": []}}],
+     "fail_log": "{target} 說寧可勒緊褲帶，也不欠你家的利錢。", "fail": [],
+     "ai": {"base": 0.6, "traits": {"greedy": 5, "pious": -3, "kind": -2}},
+     "beats": [
+       {"id": "usury_priest", "prompt": "神父在講道時說起放債吃利的人，眼睛往你這邊看。", "chance": 0.3, "options": [
+         {"text": "給教堂捐 10 便士", "conditions": {"money_ge": 10}, "log": "{name} 給教堂捐了 10 便士。", "effects": [{"money": -10}, {"reputation": 1}], "ai": {"base": 6, "traits": {"pious": 6}}},
+         {"text": "不理他", "log": "{name} 裝作沒聽見。", "effects": [{"reputation": -1}], "ai": {"base": 6, "traits": {"cynical": 6}}}]}
+     ]},
+
+    {"id": "lease_mill", "name": "包下磨坊", "requires": "家主，存錢 250 便士以上，磨坊沒有別人包着", "notify_target": true,
+     "desc": "向領主包下村裡的水磨坊，一包五年：押金 120 便士，每年米迦勒節交 45 便士。全村的麥都得到領主的磨坊磨，每磨一斗留下十六分之一，一年大約收 60 到 110 便士。只是村裡人向來嫌磨坊抽得重。",
+     "actor": {"is_head": true, "money_ge": 250, "age": [25, 65], "mill_free": true, "no_flag": "mill_farmer", "not": {"occupation": ["lord", "priest", "lady"]}},
+     "target": {"pick": "lord", "conditions": {}},
+     "max_months": 10, "retry_years": 2,
+     "progress": {"base": 7, "skill": {"learning": 0.5}, "opinion": 4, "reputation": 0.4, "traits": {"diligent": 2, "ambitious": 2}},
+     "start_log": "{name} 托管家向 {target} 遞話，想把村裡的磨坊包下來。",
+     "success_log": "{target} 答應了：往後五年，村裡的磨坊歸 {name} 家管。",
+     "success": [{"lease_mill": {"years": 5, "fine": 120}}, {"set_flag": "mill_farmer"}, {"prestige": 4}],
+     "fail_log": "{target} 說磨坊還是照舊交給原來的磨坊主。", "fail": [{"need": {"spirit": -6}}],
+     "ai": {"base": 0.8, "traits": {"ambitious": 5, "greedy": 4}},
+     "beats": [
+       {"id": "mill_wheel", "prompt": "管家說，磨坊的水輪爛了一半，包下來就得自己修。", "chance": 0.35, "options": [
+         {"text": "答應自己出錢修（30 便士）", "conditions": {"money_ge": 280}, "log": "{name} 說水輪由他家出錢修。", "effects": [{"money": -30}, {"progress": 30}], "ai": {"base": 8, "traits": {"diligent": 6}}},
+         {"text": "要莊園先修好", "log": "{name} 說水輪該莊園修。", "effects": [{"random": {"percent": 50,
+             "effects": [{"log": "  管家嘆口氣，說會請木匠來。"}],
+             "else": [{"log": "  管家臉色不好看：「那你就別包了。」"}, {"progress": -25}]}}], "ai": {"base": 6, "traits": {"greedy": 6}}}]}
+     ]},
+
+    {"id": "settle_son", "name": "給小兒子分家置產", "requires": "家主，存錢 60 便士以上，地 25 畝以上，家裡有成了親、不是長子的兒子",
+     "desc": "替成了親的小兒子置一份家業：村裡有空地就向領主租來，沒有就從自家的地分出去，再給他 40 便士起家。家裡少幾畝地和幾張嘴，村裡多一戶你家的血脈。",
+     "actor": {"is_head": true, "money_ge": 60, "acres_ge": 25, "younger_son_wed": true},
+     "subject": {"pick": "any_child", "conditions": {"sex": "male", "married": true, "heir_apparent": false, "age": [18, 45], "in_service": false}},
+     "max_months": 3, "retry_years": 1,
+     "progress": {"base": 40},
+     "start_log": "{name} 跟家裡人商量，要給 {subject} 分家置產。",
+     "success_log": "{name} 給 {subject} 分了家。",
+     "success": [{"settle_subject": {"acres": 8, "money": 40}}, {"prestige": 2}],
+     "fail_log": "分家的事一時談不攏。", "fail": [],
+     "ai": {"base": 0.5, "traits": {"kind": 3, "greedy": -3}}},
+
+    {"id": "town_match", "name": "跟鎮上人家結親", "requires": "家主，存錢 200 便士以上，家裡有 16 到 24 歲未嫁的女兒",
+     "desc": "托人到鎮上說親，把女兒嫁進鎮上的手藝人或買賣人家。嫁妝要 150 便士，鎮上人家看不起鄉下人，不好說；說成了，家裡在鎮上有了親家，消息和門路都多一些。",
+     "actor": {"is_head": true, "money_ge": 200, "not": {"occupation": ["lord", "priest", "lady"]}},
+     "subject": {"pick": "any_child", "conditions": {"sex": "female", "age": [16, 24], "married": false, "in_service": false, "not": {"occupation": ["nun"]}}},
+     "max_months": 10, "retry_years": 2,
+     "progress": {"base": 8, "skill": {"charm": 0.5}, "reputation": 0.4, "prestige": 0.1},
+     "start_log": "{name} 托趕集的熟人到鎮上，替 {subject} 打聽人家。",
+     "success_log": "鎮上一個布商答應娶 {subject}，嫁妝 150 便士。往後家裡在鎮上有了親家。",
+     "success": [{"money": -150}, {"subject": [{"station": {"id": "town_wife", "note": "嫁到了鎮上的布商家"}}]}, {"prestige": 4}],
+     "fail_log": "鎮上的人家嫌是鄉下姑娘，親沒說成。", "fail": [],
+     "ai": {"base": 0.5, "traits": {"ambitious": 5}},
+     "beats": [
+       {"id": "town_dowry", "prompt": "媒人回話：布商家嫌嫁妝少，要再添 50 便士。", "chance": 0.4, "options": [
+         {"text": "再添 50 便士", "conditions": {"money_ge": 250}, "log": "{name} 咬牙答應再添 50 便士。", "effects": [{"money": -50}, {"progress": 35}], "ai": {"base": 6, "traits": {"ambitious": 6, "greedy": -4}}},
+         {"text": "不添", "log": "{name} 說嫁妝就是這麼多。", "effects": [{"progress": -35}], "ai": {"base": 6, "traits": {"greedy": 6}}}]}
+     ]}
+
   ]
 }

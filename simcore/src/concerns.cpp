@@ -189,8 +189,12 @@ void World::seasonWants() {
     // said at once, not left to end as "taken by another house".
     for (auto& wt : wants_)
         if (wt.open && wt.kind == "office" && wt.house == playerHousehold_) {
-            std::string bar = officeBar(head, wt.office);
-            if (bar.empty()) continue;
+            Id man = familyOfficeMan(wt.office, wt.subject);
+            if (man != kNone) {
+                wt.subject = man;
+                continue;
+            }
+            std::string bar = familyOfficeBar(wt.office);
             dropWant(wt, "當不了");
             log(1, "【差事】你家只好放下" + wantThing(wt) + "：" + bar + "。");
         }

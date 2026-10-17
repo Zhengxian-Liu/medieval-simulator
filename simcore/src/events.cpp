@@ -639,6 +639,16 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
             if (w.people_[c].alive() && w.people_[c].household != kNone && eval(v, w.people_[c], p.id)) return true;
         return false;
     }
+    if (k == "any_descendant") {
+        // A living child or grandchild, under the roof or away (in service, at the monastery, in town).
+        for (Id c : p.children) {
+            const Person& cp = w.people_[c];
+            if (cp.alive() && eval(v, cp, p.id)) return true;
+            for (Id g : cp.children)
+                if (w.people_[g].alive() && eval(v, w.people_[g], p.id)) return true;
+        }
+        return false;
+    }
     if (k == "ambition") return p.ambition == v.asString();
     if (k == "reeve") return (p.flags.count("reeve") > 0) == v.asBool();
     if (k == "opposite_sex") return target != kNone && (w.people_[target].sex != p.sex) == v.asBool();
@@ -662,7 +672,19 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     if (k == "would_sell") return h && !w.sellReason(*h).empty() == v.asBool();  // a house that would let a few acres go
     if (k == "money_covers_debt") return h && h->debt > 0.5 && (h->money + 0.5 >= h->debt) == v.asBool();
     if (k == "owes_lord_ge") return h && w.owedLord(*h) >= v.asNumber();
-    if (k == "demesne_free") return (w.leasedOut() < 0.5) == v.asBool();  // nobody holds the lord's fields on lease
+    if (k == "demesne_free") return (w.leasedOut() < 0.5) == v.asBool();
+    if (k == "mill_free") return std::none_of(w.households_.begin(), w.households_.end(), [&](const Household& o) { return !o.extinct && o.millUntil > w.day_; }) == v.asBool();
+    if (k == "younger_son_wed") {
+        // A married son under the roof who is not the heir: one the family could set up on his own.
+        bool any = false;
+        if (h)
+            for (Id m : h->members) {
+                const Person& q = w.people_[m];
+                any = any || (q.alive() && q.father == p.id && q.sex == Sex::Male && q.spouse != kNone && w.people_[q.spouse].alive() &&
+                              m != h->head && w.heirOf(*h, h->head) != m && q.home == kNone);
+            }
+        return any == v.asBool();
+    }  // nobody holds the lord's fields on lease
     if (k == "has_secret") {
         // Something this person did in secret that `to` (the target, or nobody: anyone) is not yet sure of.
         Id to = v.asString() == "target" ? target : kNone;
@@ -1414,6 +1436,55 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                     if (o.plan == plan && o.target == tgt && (subj == kNone || o.subject == subj)) ok = true;
                 if (ok) w.startPlan(p.id, plan, tgt, subj);
                 else if (w.isPlayerFamily(p)) w.log(1, "  可是眼下這件事辦不成。");
+            } else if (k == "lease_mill") {
+                // {"lease_mill": {"years": 5, "fine": 120}}: the mill's farm for so many years, the fine to the manor.
+                if (!h) continue;
+                double fine = std::min(v.numberOr("fine", 0), std::max(0.0, h->money));
+                h->money -= fine;
+                w.book(*h, "包磨坊的押金", -fine);
+                Id lordHouse = w.lord_ != kNone ? w.people_[w.lord_].household : kNone;
+                if (lordHouse != kNone) w.households_[lordHouse].money += fine, w.book(w.households_[lordHouse], "收包磨坊的押金", fine);
+                h->millUntil = w.day_ + static_cast<int>(v.numberOr("years", 5)) * kDaysPerYear;
+            } else if (k == "settle_subject") {
+                // {"settle_subject": {"acres": 8, "money": 40}}: the married son of the plan set up in a house of his
+                // own, on land rented from the lord if any lies empty, the rest out of the family's (it keeps 15).
+                if (!plan_ || plan_->subject == kNone || hid == kNone) continue;
+                Person& sub = w.people_[plan_->subject];
+                if (sub.household != hid || w.households_[hid].head == sub.id) continue;
+                double want = v.numberOr("acres", 8);
+                double vac = std::min(w.vacantAcres(), want);
+                double own = std::clamp(want - vac, 0.0, std::max(0.0, w.households_[hid].acres - 15));
+                if (vac + own < 2) {
+                    if (w.inPlayerHouse(hid)) w.log(1, "  可是村裡沒有空地，自家的地也分不出來了，" + sub.firstName + " 只好還住在家裡。");
+                    continue;
+                }
+                double gift = std::min(v.numberOr("money", 40), std::max(0.0, w.households_[hid].money));
+                Id nh = w.addHousehold(sub.dynasty, 0, gift);  // households_ may move: by index from here on
+                w.households_[hid].money -= gift;
+                w.book(w.households_[hid], "給" + sub.firstName + "分家的錢", -gift);
+                if (vac >= 1) w.moveLand(kNone, nh, vac, LandPick::CustomaryFirst, "分家時向領主租來");
+                if (own >= 1) w.moveLand(hid, nh, own, LandPick::CustomaryFirst, "分給" + sub.firstName + "成家");
+                std::vector<Id> going{sub.id, sub.spouse};
+                for (Id c : sub.children)
+                    if (w.people_[c].alive() && w.people_[c].household == hid && w.people_[c].home == kNone) going.push_back(c);
+                Household& old = w.households_[hid];
+                Household& fresh = w.households_[nh];
+                for (Id who : going) {
+                    if (who == kNone || w.people_[who].household != hid) continue;
+                    old.members.erase(std::remove(old.members.begin(), old.members.end(), who), old.members.end());
+                    w.people_[who].household = nh;
+                    fresh.members.push_back(who);
+                }
+                fresh.head = sub.id;
+                w.settleAsHead(sub.id);
+                double food = std::min(old.food * 0.3, w.consumption(fresh) * 120);
+                fresh.food = food;
+                old.food -= food;
+                fresh.firewood = 20;
+                w.noteLife(sub.id, "分家自立門戶");
+                if (w.inPlayerHouse(hid))
+                    w.log(1, "  " + w.fullName(sub.id) + " 帶著妻兒搬出去，自立門戶：" + std::to_string(int(fresh.acres)) + " 畝地、" +
+                                 std::to_string(int(gift)) + " 便士。往後他家是另一戶，可還是你家的血脈。");
             } else if (k == "lease_demesne") {
                 // Take the lord's own fields on a lease of so many years.
                 // One lease at a time; the deposit goes to the manor, as much of it as the house still has.

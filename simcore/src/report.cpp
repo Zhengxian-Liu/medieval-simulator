@@ -30,7 +30,7 @@ const std::map<std::string, std::string>& modNames() {
         {"comforted", "陪過我熬過難關"}, {"taught", "手把手教過我"}, {"took_to_market", "帶我去過市集"},
         {"swapped_work", "農忙時換過工"}, {"helped_kin", "日子難過時接濟過"}, {"praised", "誇過我"}, {"scolded", "管教過我"}, {"prayed_together", "一起上過教堂"},
         {"slighted", "給過我臉色"}, {"helped_me", "借糧給我"}, {"helped_them", "幫過他們"}, {"refused_help", "不肯幫忙"},
-        {"condolence", "來弔唁過"}, {"took_our_want", "搶了我們看中的"}, {"took_our_land", "趁機拿走我家的地"},
+        {"condolence", "來弔唁過"}, {"took_our_want", "搶了我們看中的"}, {"mill_toll", "嫌他家磨坊抽得重"}, {"usury", "放債吃利"}, {"settled_son", "替小兒子置了產"}, {"took_our_land", "趁機拿走我家的地"},
         {"asked_too_much", "開口要得太過分"}, {"no_mercy", "不肯寬限"}, {"spoken_for", "有人替他說過話"}, {"granted_ask", "答應過我的請求"},
         {"refused_ask", "回絕過我的請求"}, {"pressed_with_secret", "拿把柄壓過我"}, {"haggled", "跟我討價還價過"}, {"helped_us", "替我家墊過租"}, {"lied_to_me", "瞞過我的帳"}, {"stood_aside", "讓過我一步"}, {"hard_words", "說過狠話"}, {"forbade_match", "不准我的親事"}, {"put_off", "推託過我的事"},
         {"cold_shoulder", "給過我冷臉"}, {"heeded", "把我的事放在心上"}, {"neglected", "冷落過我"},
@@ -228,8 +228,8 @@ std::string World::familyReport() const {
             int nx = nextMilestone(hp);
             if (nx >= 0)
                 o << "（已做到 " << hp.ambitionStep << "/" << total << " 步；還差：" << a->milestones[nx].name << "）";
-            else if (!a->milestones.empty())
-                o << "（最後一步）";
+            else
+                o << "（最後一步：" << a->final << "）";
             int left = a->maxYears - (day_ - hp.ambitionSince) / kDaysPerYear;
             if (left <= 5) o << "還剩 " << std::max(0, left) << " 年。";
             std::string plans;

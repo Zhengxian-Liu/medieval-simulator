@@ -53,15 +53,15 @@ bool World::kinInTown(Id dyn) const {
     return false;
 }
 
-void World::chooseAmbition(Person& head) {
+void World::chooseAmbition(Person& head, const std::string& why) {
     EventRunner ev(*this);
     std::vector<const AmbitionDef*> pool;
     std::vector<double> weights;
     const std::string regret = head.dynasty != kNone ? dynasties_[head.dynasty].regret : "";
     for (const auto& a : defs_.ambitions) {
         if (!ev.eval(a.offer, head, kNone)) continue;
-        // Skip goals that are already met.
-        if (ev.eval(a.goal, head, kNone)) continue;
+        // Skip goals that are already met, or that could not be kept to.
+        if (ev.eval(a.goal, head, kNone) || (!a.keep.isNull() && !ev.eval(a.keep, head, kNone))) continue;
         pool.push_back(&a);
         double w = ev.weight(a.aiWeight, head);
         if (a.id == regret) w = w * 2 + 10;  // a parent's unfinished wish weighs on the child
@@ -93,9 +93,14 @@ void World::chooseAmbition(Person& head) {
             if (a->id == regret) o += "【上一代沒做完的心願】";
             opts.push_back(o);
         }
-        std::string sit = fullName(head.id) + "（" + std::to_string(int(ageYears(head))) + " 歲）當了家，家族現在是" +
-                          standingName(standing(head.household)) + "。這一輩子，想做成哪件事？";
-        int r = offer.size() > 1 ? askPlayer("立志", sit, opts) : -1;
+        opts.push_back("先不立志，明年再說");
+        std::string sit = fullName(head.id) + "（" + std::to_string(int(ageYears(head))) + " 歲）" +
+                          (why.empty() ? "當了家" : why) + "，家族現在是" + standingName(standing(head.household)) + "。這一輩子，想做成哪件事？";
+        int r = askPlayer("立志", sit, opts);
+        if (r == static_cast<int>(offer.size())) {
+            log(1, "〔立志〕" + fullName(head.id) + " 想再看看，明年再說。");
+            return;
+        }
         if (r >= 0 && r < static_cast<int>(offer.size())) {
             pick = offer[r];
         } else {
@@ -114,7 +119,9 @@ void World::chooseAmbition(Person& head) {
     head.ambitionDone = 0;
     if (player) {
         log(1, "【志向】" + fullName(head.id) + " 立志「" + pick->name + "」：" + pick->desc);
-        if (!pick->milestones.empty()) log(1, "  第一步：" + pick->milestones[0].name + "。");
+        std::string steps;
+        for (const auto& m : pick->milestones) steps += m.name + " → ";
+        log(1, "  路怎麼走：" + steps + pick->final + "。" + (pick->hint.empty() ? "" : "（" + pick->hint + "）"));
     }
     checkMilestones(head, true);
 }
@@ -135,7 +142,7 @@ void World::checkMilestones(Person& head, bool quiet) {
         addStress(head.id, -5, "");
         if (player) {
             int nx = nextMilestone(head);
-            std::string next = nx >= 0 ? "下一步：" + a->milestones[nx].name + "。" : "只差最後一步了。";
+            std::string next = nx >= 0 ? "下一步：" + a->milestones[nx].name + "。" : "只差最後一步：" + a->final + "。" + (a->hint.empty() ? "" : "（" + a->hint + "）");
             log(1, "【里程碑】「" + a->name + "」：" + m.name + "（" + std::to_string(head.ambitionStep) + "/" +
                        std::to_string(a->milestones.size() + 1) + "）。" + next);
         }
@@ -150,19 +157,56 @@ int World::nextMilestone(const Person& head) const {
     return -1;
 }
 
+std::vector<int> World::milestoneState(Id headId) const {
+    std::vector<int> out;
+    if (headId == kNone) return out;
+    const Person& head = people_[headId];
+    const AmbitionDef* a = defs_.ambition(head.ambition);
+    if (!a) return out;
+    EventRunner ev(const_cast<World&>(*this));  // conditions only read the world
+    for (size_t i = 0; i < a->milestones.size(); ++i) {
+        bool now = ev.eval(a->milestones[i].goal, head, kNone);
+        bool was = i < 32 && (head.ambitionDone & (1u << i));
+        out.push_back(now ? 1 : was ? 2 : 0);
+    }
+    return out;
+}
+
 void World::yearlyAmbitions() {
-    EventRunner ev(*this);
     for (auto& h : households_) {
-        if (h.extinct || h.head == kNone || h.members.empty()) continue;
+        if (h.extinct || h.head == kNone || h.members.empty() || inPlayerHouse(h.id)) continue;
+        reviewAmbition(h, true);
+    }
+}
+
+// The player's head is looked at every month: a goal reached counts that month, a road that has closed is said
+// at once (with a new choice), and a head who put off choosing is asked again at the turn of the year.
+void World::monthlyAmbition() {
+    if (playerHousehold_ == kNone) return;
+    Household& h = households_[playerHousehold_];
+    if (h.extinct || h.head == kNone) return;
+    Person& head = people_[h.head];
+    if (!head.alive() || ageYears(head) < 16) return;
+    if (head.ambition.empty()) {
+        if (month() == 0) chooseAmbition(head);
+        return;
+    }
+    checkMilestones(head, false);
+    reviewAmbition(h, month() == 0);
+}
+
+void World::reviewAmbition(Household& h, bool yearTurn) {
+    EventRunner ev(*this);
+    {
         Person& head = people_[h.head];
-        if (!head.alive() || ageYears(head) < 16) continue;
+        if (!head.alive() || ageYears(head) < 16) return;
         bool player = inPlayerHouse(h.id);
         if (head.ambition.empty()) {
             chooseAmbition(head);
-            continue;
+            return;
         }
         const AmbitionDef* a = defs_.ambition(head.ambition);
-        if (!a) continue;
+        if (!a) return;
         if (!player) checkMilestones(head, true);
         Dynasty* dyn = head.dynasty != kNone ? &dynasties_[head.dynasty] : nullptr;
         if (ev.eval(a->goal, head, kNone)) {
@@ -184,13 +228,19 @@ void World::yearlyAmbitions() {
                 if (player) log(1, "【家族傳統】" + dyn->surname + " 家從此以「" + td.name + "」聞名：" + td.desc);
             }
             head.ambition.clear();
-            chooseAmbition(head);
-        } else if ((day_ - head.ambitionSince) / kDaysPerYear >= a->maxYears) {
+            chooseAmbition(head, "做成了一樁心願");
+        } else if (!a->keep.isNull() && !ev.eval(a->keep, head, kNone)) {
+            // The road has closed under them (the last son gone, the lord's fields let to another): no point waiting out the years.
+            ++counters_[std::string(player ? "ambition_family:" : "ambition:") + a->id + ":thwarted"];
+            if (player) log(1, "【志向受挫】「" + a->name + "」做不成了：" + a->final + "這條路，眼下已經走不通。");
+            head.ambition.clear();
+            chooseAmbition(head, "的心願落了空");
+        } else if (yearTurn && (day_ - head.ambitionSince) / kDaysPerYear >= a->maxYears) {
             ++counters_[std::string(player ? "ambition_family:" : "ambition:") + a->id + ":dropped"];
             if (player) log(1, fullName(h.head) + " 放下了「" + a->name + "」的志向。這成了家裡一樁沒了的心願。");
             if (dyn) dyn->regret = a->id;
             head.ambition.clear();
-            chooseAmbition(head);
+            chooseAmbition(head, "放下了一樁做不成的心願");
         }
     }
 }

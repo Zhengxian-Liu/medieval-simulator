@@ -141,7 +141,7 @@ void World::stepDay() {
         npcStartPlans();
         actOnIntentions();
         checkStandings();
-        if (playerHead() != kNone) checkMilestones(people_[playerHead()], false);
+        monthlyAmbition();
         events.pulse("monthly");
     }
     if (month() == 8 && dayOfMonth() == 29) {
