@@ -292,7 +292,7 @@
          {"text": "不必", "log": "", "effects": [], "ai": {"base": 6, "traits": {"pious": 4}}}]}
      ]},
 
-    {"id": "lease_demesne", "name": "包租自營地", "requires": "家主，存錢 400 便士以上，自己有 25 畝以上的地", "notify_target": true,
+    {"id": "lease_demesne", "name": "包租自營地", "requires": "家主，存錢 400 便士以上（押金 200，其餘留著周轉），自己有 25 畝以上的地", "notify_target": true,
      "desc": "向領主把莊園自己經營的 30 畝包租下來，一租七年：押金 200 便士，往後每年多交 120 便士租錢。收成全歸你家，人手不夠就得雇人。",
      "actor": {"is_head": true, "money_ge": 400, "acres_ge": 25, "age": [22, 65], "no_flag": "demesne_farmer", "demesne_free": true, "not": {"occupation": ["lord", "priest"]}},
      "target": {"pick": "lord", "conditions": {}},
@@ -313,6 +313,37 @@
        {"id": "demesne_steward", "prompt": "包租的事要經過管家的嘴。", "chance": 0.2, "options": [
          {"text": "送管家一頭小豬", "log": "{name} 給管家送去一頭小豬。", "effects": [{"food": -60}, {"progress": 15}], "ai": {"base": 10}},
          {"text": "不必", "log": "", "effects": [], "ai": {"base": 6, "traits": {"pious": 4, "greedy": 4}}}]}
+     ]},
+
+    // 「和德·阿什科姆家結親」 (design/fun-r5.md D): only a small landholder the lord thinks well of may ask (World::mayWed).
+    // A well-off house may be after the same match (ambitions.cpp rivalForMatch).
+    {"id": "gentry_match", "name": "向領主家說親", "requires": "小地主的家主，老爺好感 30 以上，存錢 400 便士以上，家裡有沒成親的兒女，領主家有沒成親的人", "notify_target": true,
+     "desc": "托管家向德·阿什科姆家說親，把兒女嫁娶進領主家。聘禮和嫁妝要 300 便士；說不成，全村都會笑你家不自量力（家族聲望 -5）。",
+     "actor": {"is_head": true, "player_family": true, "standing_ge": 3, "lord_opinion_ge": 30, "money_ge": 400},
+     "subject": {"pick": "any_child", "conditions": {"age": [16, 32], "married": false, "in_service": false, "not": {"occupation": ["priest", "monk", "nun"]}}},
+     "target": {"pick": "villager", "conditions": {"gentry": true, "opposite_sex": true, "married": false, "not_kin": true, "age": [16, 40], "not": {"occupation": ["lord", "lady", "priest"]}}},
+     "max_months": 12, "retry_years": 2,
+     "progress": {"base": 6, "skill": {"charm": 0.5}, "opinion": 3, "reputation": 0.4},
+     "start_log": "{name} 托管家去莊園遞話，想讓 {subject} 和 {target} 成親。",
+     "success_log": "老爺點了頭：{subject} 要和 {target} 成親了。",
+     "success": [{"marry_subject_target": true},
+                 {"if": {"cond": {"gentry_kin": true},
+                         "then": [{"money": -300}, {"prestige": 20}, {"reputation": 3}, {"log": "  聘禮和嫁妝花了 300 便士。從此你家和莊園是親家了（家族聲望 +20）。"}],
+                         "else": [{"log": "  可是到了要下聘的時候，老爺又改了主意。"}, {"prestige": -5}]}}],
+     "fail_log": "德·阿什科姆家回絕了：老爺說，佃戶的兒女再體面，也還是佃戶。", "fail": [{"prestige": -5}, {"reputation": -2}, {"need": {"spirit": -10}}],
+     "ai": {"base": 1, "traits": {"ambitious": 6}, "if": [{"cond": {"ambition": "gentry_match"}, "add": 40}]},
+     "beats": [
+       {"id": "gentry_rival", "prompt": "管家說，村裡另一戶殷實人家也託人來說這門親，老爺還在掂量。", "chance": 0.4, "options": [
+         {"text": "聘禮再添 100 便士", "conditions": {"money_ge": 500}, "log": "{name} 聽說別家也在說這門親，聘禮又添了 100 便士。", "effects": [{"money": -100}, {"target": [{"money": 100}]}, {"progress": 30}], "ai": {"base": 8, "traits": {"ambitious": 8, "greedy": -6}}},
+         {"text": "塞給管家 10 便士，請他在老爺面前說話（一半一半）", "conditions": {"money_ge": 10}, "log": "{name} 塞給管家 10 便士。", "effects": [{"money": -10}, {"random": {"percent": 50,
+             "effects": [{"log": "  管家收了錢：「老爺那邊，我替你家說。」"}, {"progress": 25}],
+             "else": [{"log": "  管家收了錢，轉頭也收了別家的。"}, {"progress": -15}]}}], "ai": {"base": 8, "traits": {"gregarious": 4}}},
+         {"text": "不跟人搶了", "log": "{name} 不想跟人搶這門親，事情就這麼算了。", "effects": [{"abort_plan": true}], "ai": {"base": 3, "traits": {"content": 6}}}]},
+       {"id": "gentry_pride", "prompt": "{target} 的家裡人當著管家的面說：「佃戶家的孩子，也配？」", "chance": 0.2, "options": [
+         {"text": "忍下來，請神父出面作保", "log": "{name} 把話吞了回去，請神父替你家說幾句好話。", "effects": [{"progress": 15}, {"stress": 5}], "ai": {"base": 8, "traits": {"calm": 6, "pious": 4}}},
+         {"text": "頂回去：「我家的地比好些騎士還多。」", "log": "{name} 當場頂了回去。", "effects": [{"random": {"percent": 40,
+             "effects": [{"log": "  老爺聽了反倒笑了：「這人有骨氣。」"}, {"progress": 20}],
+             "else": [{"log": "  老爺的臉沉了下來。"}, {"progress": -25}, {"lord_opinion": {"value": -5, "mod": "talked_back", "years": 5}}]}}], "ai": {"base": 6, "traits": {"brave": 8, "wrathful": 6}}}]}
      ]},
 
     {"id": "school_child", "name": "送孩子讀書", "requires": "家主，存錢 20 便士以上，家裡有 7 到 14 歲還沒讀書的孩子",

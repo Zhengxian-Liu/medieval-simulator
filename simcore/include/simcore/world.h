@@ -99,6 +99,8 @@ struct Person {
     int ambitionStep = 0;       // milestones of the ambition reached so far
     std::string lastAmbition;   // the last one completed: its harder sequels are offered first
     uint32_t ambitionDone = 0;  // which of them (bit i: milestone i), in whatever order they came
+    // What the house had when the ambition was taken up: money and land goals are counted from it ("再存 200").
+    struct { double money = 0, acres = 0, freehold = 0; } ambitionBase;
     Intention intent;
     std::string lastReason;     // why they chose what they last chose, when a model decided for them
     bool free = true;           // false = villein (unfree), bound to the manor
@@ -238,6 +240,18 @@ enum class LandPick { CustomaryOnly, CustomaryFirst, FreeFirst };
 
 // The contested ledger (design/contested.md): what only so many can have, what each house is after,
 // and who owes whom.
+// One condition for standing for a post, as the office row and the ambition card show it: 「欠債 62／上限 20」.
+struct OfficeGate {
+    std::string label;   // 「欠債不到 20 便士」
+    bool ok = false;
+    std::string detail;  // how it stands for this man: 「欠債 62／上限 20」, 「還要 3 年滿 25」
+};
+// A large loan to the manor (「莊園欠我家的錢」): due in full on a Michaelmas, or the steward pledges land or the mill.
+struct ManorBond {
+    Id house = kNone;    // the household owed
+    double lent = 0, owed = 0;
+    int due = -1;        // year it falls due (after the Michaelmas rents)
+};
 // A village post: the reeve (elected every three years), the ale-taster and the hayward (every Michaelmas).
 struct Office {
     std::string id, name;
@@ -476,6 +490,21 @@ public:
     const Config& config() const { return cfg_; }
     const std::vector<Person>& people() const { return people_; }
     std::vector<int> milestoneState(Id head) const;  // per step: 1 holds now, 2 was reached but no longer holds, 0 not yet
+    // An ambition's words for this head: {gain}/{target} from a goal counted from what the house had when it was
+    // taken up, {chantry} its price for the house, {top} the house with most land after this one.
+    std::string ambitionText(const Person& head, const std::string& text, const Json& goal) const;
+    std::string milestoneName(const Person& head, size_t i) const;
+    std::string ambitionFinal(const Person& head) const;
+    std::string ambitionDesc(const Person& head) const;
+    int ambitionDeadline(const Person& head) const;  // the last year it can be done in
+    std::string rivalLine(const Person& head) const;  // who stands in the way of the late-game ambitions ("" for others)
+    // How much more of money, acres or freehold a goal asks for: v is a number, or {"min": n, "pct": p} (p% of what
+    // the house had, at least n).
+    double ambitionGain(const Person& p, const std::string& what, const Json& v) const;
+    double chantryPrice(Id house) const;  // a chantry fitting the house's standing
+    double acresLead(Id house) const;     // acres beyond the biggest other house in the village (negative: behind)
+    Id biggestOther(Id house) const;      // that house
+    const ManorBond& manorBond() const { return manorBond_; }
     const std::vector<Household>& households() const { return households_; }
     const std::vector<Dynasty>& dynasties() const { return dynasties_; }
     const std::vector<Item>& items() const { return items_; }
@@ -646,6 +675,10 @@ public:
     bool isPlayerFamily(const Person& p) const;
     bool closeKin(Id a, Id b) const;
     bool gentry(Id id) const;  // the lord's family: they do not marry tenants
+    // Whether a and b may marry: the same class, or a small landholder's child the lord thinks well of
+    // (「和德·阿什科姆家結親」).
+    bool mayWed(Id a, Id b) const;
+    bool gentrySingle() const;  // an unmarried young person of the lord's family lives in the village
     int swornFriends(Id id) const;  // living people this person has sworn friendship with
     int livingCount() const;
     // The web of acquaintance (design/news.md): how close two people are, 0–100 (kin, then 熟識), and two
@@ -671,6 +704,11 @@ public:
     bool placeOpen(Id master, const std::string& kind) const;
     bool officeEligible(Id who, const std::string& id) const { return officeBar(who, id).empty(); }
     std::string officeBar(Id who, const std::string& id) const;  // why they cannot stand for it: "" when they can
+    // Every condition of the post for this man, met or not (officeBar is the first one not met).
+    std::vector<OfficeGate> officeGates(Id who, const std::string& id) const;
+    static std::string gatesText(const std::vector<OfficeGate>& gates);  // 「✓ 一家之主 ✗ 欠債 62／上限 20」
+    int familyOffices(Id dynasty) const;  // posts held now by living people of that blood
+    int reeveTerms(Id dynasty) const;     // terms running the reeve of that blood has served on end (0: none)
     // The family's man who would stand for a post: the preferred one if he can, else the head, else any man of the
     // house who can (kNone: none). familyOfficeBar: why none of them can ("" when one can).
     Id familyOfficeMan(const std::string& id, Id preferred) const;
@@ -713,6 +751,7 @@ public:
 
 private:
     friend class EventRunner;
+    friend struct WorldTest;  // tests/tests.cpp: sets up the cases a run rarely reaches (a rich head, a manor short of coin)
 
     const Defs& defs_;
     Config cfg_;
@@ -891,6 +930,8 @@ private:
     int daysToHarvest() const;
     std::map<Id, int> feedAskedUntil_;
     int ambitionAskAfter_ = 0;  // the player's head put off choosing an ambition: not asked again before this day
+    ManorBond manorBond_;       // the family's loan to the manor, if any
+    std::map<std::string, int> lateAsked_;  // late-game asks (a rival's bid, the steward's loan): not again before this day
     std::map<Id, Id> lastMatchSubject_;     // head -> the one whose match last fell through (for "另說一門親")      // household -> no asking again before this day
     void gatherFirewood();
     void payRent();
@@ -1098,6 +1139,13 @@ private:
     void checkMilestones(Person& head, bool quiet);
     void checkStandings();
     void yearlyTown();
+    // The late game (design/fun-r5.md D): the rivals and the steward around the family's ambition.
+    void lateGameMonth(Person& head);
+    void rivalForLand(Person& head);
+    void rivalForMatch(Person& head);
+    void rivalForOffice(Person& head);
+    void stewardLoan(Person& head);
+    void manorBondDue(Person& head);
 
     // minds.cpp: rings, yearly intentions, and acting on them
     void computeRings();

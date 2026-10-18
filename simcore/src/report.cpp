@@ -241,15 +241,15 @@ std::string World::familyReport() const {
         Id acting = actingHead();
         const Person& ap = people_[acting];
         if (const AmbitionDef* a = defs_.ambition(hp.ambition)) {
-            o << "這一代的志向：「" << a->name << "」，" << a->desc;
+            o << "這一代的志向：「" << a->name << "」，" << ambitionDesc(hp);
             int total = static_cast<int>(a->milestones.size()) + 1;
             int nx = nextMilestone(hp);
             if (nx >= 0)
-                o << "（已做到 " << hp.ambitionStep << "/" << total << " 步；還差：" << a->milestones[nx].name << "）";
+                o << "（已做到 " << hp.ambitionStep << "/" << total << " 步；還差：" << milestoneName(hp, nx) << "）";
             else
-                o << "（最後一步：" << a->final << "）";
+                o << "（最後一步：" << ambitionFinal(hp) << "）";
             int left = a->maxYears - (day_ - hp.ambitionSince) / kDaysPerYear;
-            if (left <= 5) o << "還剩 " << std::max(0, left) << " 年。";
+            if (left <= 5) o << "限到 " << ambitionDeadline(hp) << " 年底，還剩 " << std::max(0, left) << " 年。";
             std::string plans;
             for (const auto& pl : a->plans)
                 if (const PlanDef* pd = defs_.plan(pl)) plans += (plans.empty() ? "" : "、") + pd->name;
@@ -468,7 +468,7 @@ std::string World::personReport(Id id) const {
 
     bool known = aimsKnown(p);
     if (const AmbitionDef* a = defs_.ambition(p.ambition)) {
-        if (known) o << pr << "這輩子想要：「" << a->name << "」，" << a->desc << "\n";
+        if (known) o << pr << "這輩子想要：「" << a->name << "」，" << ambitionDesc(p) << "\n";
         else o << pr << "這輩子想要什麼，你看不透。\n";
     }
     if (id != head && p.intent.kind != "none" && !p.intent.why.empty()) {

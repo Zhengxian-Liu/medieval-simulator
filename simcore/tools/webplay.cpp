@@ -228,14 +228,24 @@ public:
             std::vector<std::string> steps;
             std::vector<int> st = w.milestoneState(head);
             for (size_t i = 0; i < a->milestones.size(); ++i)
-                steps.push_back(Obj().text("name", a->milestones[i].name).b("done", st[i] == 1).b("slipped", st[i] == 2).done());
-            steps.push_back(Obj().text("name", a->final).b("done", false).b("final", true).done());
+                steps.push_back(Obj().text("name", w.milestoneName(hp, i)).b("done", st[i] == 1).b("slipped", st[i] == 2)
+                                    .b("gate", a->milestones[i].gate).done());
+            steps.push_back(Obj().text("name", w.ambitionFinal(hp)).b("done", false).b("final", true).done());
             int left = a->maxYears - (w.today() - hp.ambitionSince) / kDaysPerYear;
             std::vector<std::string> helps;
             for (const auto& pid : a->plans)
                 if (const PlanDef* pd = w.defs().plan(pid)) helps.push_back(str(pd->name));
-            o.raw("ambition", Obj().text("name", a->name).text("desc", a->desc).raw("steps", arr(steps)).text("hint", a->hint)
-                                   .raw("plans", arr(helps)).n("years_left", std::max(0, left)).done());
+            // The post it is about, each of its conditions ✓ or ✗; who stands in the way; the loan to the manor.
+            std::string gates;
+            if (const Office* of = w.office(a->office)) gates = of->name + "的條件：" + World::gatesText(w.officeGates(head, a->office));
+            std::string note;
+            const ManorBond& bond = w.manorBond();
+            if (bond.house == w.playerHousehold())
+                note = "莊園欠你家 " + std::to_string(long(bond.owed)) + " 便士（借出 " + std::to_string(long(bond.lent)) + "），" +
+                       std::to_string(bond.due) + " 年米迦勒節到期。";
+            o.raw("ambition", Obj().text("name", a->name).text("desc", w.ambitionDesc(hp)).raw("steps", arr(steps)).text("hint", a->hint)
+                                   .raw("plans", arr(helps)).n("years_left", std::max(0, left)).n("deadline", w.ambitionDeadline(hp))
+                                   .text("gates", gates).text("rival", w.rivalLine(hp)).text("note", note).done());
         }
 
         // The family at home.
@@ -445,6 +455,13 @@ public:
                 offs.push_back(Obj().text("id", of.id).text("name", of.name).text("holder", of.holder != kNone ? w.fullName(of.holder) : "")
                                    .b("mine", of.holder != kNone && w.people()[of.holder].household == hh).n("until", of.until)
                                    .b("can", w.familyOfficeMan(of.id, head) != kNone).text("why", w.familyOfficeBar(of.id))
+                                   .raw("gates", [&] {
+                                       // Every condition for the man who would stand (else the head), met or not.
+                                       Id man = w.familyOfficeMan(of.id, head);
+                                       std::vector<std::string> v;
+                                       for (const auto& g : w.officeGates(man != kNone ? man : head, of.id))
+                                           v.push_back(Obj().text("label", g.label).b("ok", g.ok).text("detail", g.detail).done());
+                                       return arr(v); }())
                                    .n("want", [&] { for (const auto& x : w.wants()) if (x.open && x.house == hh && x.kind == "office" && x.office == of.id) return x.id; return kNone; }())
                                    .text("runner", [&] { for (const auto& x : w.wants()) if (x.open && x.house == hh && x.kind == "office" && x.office == of.id && x.subject != kNone) return w.shortName(x.subject); return std::string(); }())
                                    .raw("men", [&] {

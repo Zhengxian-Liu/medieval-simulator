@@ -8,6 +8,7 @@
 #include <string>
 
 #include "simcore/autoplayer.h"
+#include "simcore/events.h"
 #include "simcore/world.h"
 
 using namespace sim;
@@ -116,6 +117,38 @@ static void checkInvariants(const World& w, const char* label) {
         }
     (void)label;
 }
+
+namespace sim {
+// The cases a run rarely reaches, set up by hand: a head with money to spare, a family at the top of the ladder,
+// a manor short of coin.
+struct WorldTest {
+    static Person& person(World& w, Id id) { return w.people_[id]; }
+    static Household& house(World& w, Id id) { return w.households_[id]; }
+    static void choose(World& w, Id head) {
+        w.people_[head].ambition.clear();
+        w.chooseAmbition(w.people_[head]);
+    }
+    static void setAmbition(World& w, Id head, const std::string& id) {
+        Person& p = w.people_[head];
+        const Household& h = w.households_[p.household];
+        p.ambition = id;
+        p.ambitionSince = w.day_;
+        p.ambitionStep = 0;
+        p.ambitionDone = 0;
+        p.ambitionBase.money = h.money, p.ambitionBase.acres = h.acres, p.ambitionBase.freehold = h.freehold;
+    }
+    // A small landholder: free, 45 acres, 22 of them freehold, from the lord's own; and the lord thinks well of them.
+    static void makeFranklin(World& w, Id hid) {
+        Household& h = w.households_[hid];
+        for (Id m : h.members) w.people_[m].free = true;
+        Id lordHouse = w.people_[w.lord_].household;
+        if (h.acres < 45) w.moveLand(lordHouse, hid, 45 - h.acres, LandPick::CustomaryFirst, "test");
+        if (h.freehold < 22) w.makeFree(h, 22 - h.freehold);
+        w.addOpinion(w.lord_, h.head, "test", 60, 30);
+    }
+    static void rivalForLand(World& w) { w.rivalForLand(w.people_[w.playerHead()]); }
+};
+}  // namespace sim
 
 static double villageAcres(const World& w) {
     double a = 0;
@@ -564,6 +597,101 @@ int main() {
     }
     std::printf("gentle mode: family survived 60 years in %d / %d runs\n", gentleSurvived, runs);
     CHECK(gentleSurvived * 10 >= runs * 9, "gentle mode should keep most families alive");
+
+    // Ambitions follow the family's fortunes (design/fun-r5.md D). Every head made rich and asked again: none takes
+    // up a goal with half its road already behind it, and a money goal is not met the day it is chosen. Every post's
+    // conditions are listed, and what bars a man is the first one he does not meet.
+    {
+        Config c;
+        c.seed = 11;
+        World w(defs, c);
+        w.runYears(15);
+        int chosen = 0, halfDone = 0, metAtOnce = 0;
+        std::map<std::string, int> picks;
+        for (const auto& hc : w.households()) {
+            if (hc.extinct || hc.head == kNone || hc.members.empty() || w.ageYears(w.person(hc.head)) < 16) continue;
+            Id head = hc.head;
+            WorldTest::house(w, hc.id).money = 3000;
+            WorldTest::choose(w, head);
+            const Person& p = w.person(head);
+            const AmbitionDef* a = w.defs().ambition(p.ambition);
+            if (!a) continue;
+            ++chosen;
+            ++picks[a->id];
+            EventRunner ev(w);
+            int steps = 1, done = 0;
+            for (const auto& m : a->milestones)
+                if (!m.gate) ++steps, done += ev.eval(m.goal, p, kNone);
+            halfDone += done > 0 && done * 2 >= steps && steps > 2;
+            metAtOnce += ev.eval(a->goal, p, kNone) || (a->id == "save_money" && ev.eval(a->milestones[0].goal, p, kNone));
+            if (a->id == "chantry") CHECK(w.standing(hc.id) == 3, "a chantry goal offered to a house that can already pay for it");
+        }
+        std::string top;
+        for (const auto& [id, n] : picks) top += " " + id + ":" + std::to_string(n);
+        std::printf("ambitions: %d rich heads chose:%s\n", chosen, top.c_str());
+        CHECK(chosen >= 10, "too few heads chose an ambition");
+        CHECK(halfDone == 0, "an ambition taken up with half its road already behind it");
+        CHECK(metAtOnce == 0, "a goal met the day it was chosen");
+        int people = 0;
+        for (const auto& q : w.people())
+            for (const char* of : {"reeve", "aletaster", "hayward"}) {
+                if (!q.alive()) continue;
+                ++people;
+                std::vector<OfficeGate> gs = w.officeGates(q.id, of);
+                std::string first;
+                for (const auto& g : gs)
+                    if (!g.ok && first.empty()) first = g.detail;
+                CHECK(!gs.empty() && first == w.officeBar(q.id, of), "officeBar is not the first unmet condition");
+            }
+        CHECK(people > 100, "no one to check the posts on");
+    }
+    // The late game: a small landholder lends the manor a large sum; when the manor cannot pay at term, land or the
+    // mill passes to the family (the rules answer for the player). A rival bids for the family's land, and the
+    // lord's family may marry into the house.
+    {
+        Config c;
+        c.seed = 7;
+        World w(defs, c);
+        w.runYears(3);
+        Id hid = w.playerHousehold();
+        WorldTest::makeFranklin(w, hid);
+        CHECK(w.standing(hid) == 3, "the family is not a small landholder after the setup");
+        Id gent = kNone;
+        for (const auto& q : w.people())
+            if (q.alive() && q.household != kNone && w.gentry(q.id) && q.occupation != "lord") gent = q.id;
+        Id kid = kNone;
+        for (Id m : w.household(hid).members)
+            if (m != w.playerHead() && w.person(m).dynasty == w.playerDynasty()) kid = m;
+        if (gent != kNone && kid != kNone) CHECK(w.mayWed(kid, gent), "a small landholder the lord favours may not ask for his family's hand");
+        WorldTest::house(w, hid).money = 3000;
+        WorldTest::setAmbition(w, w.playerHead(), "manor_creditor");
+        auto n = [&](const std::string& k) { return w.counters().count(k) ? w.counters().at(k) : 0; };
+        for (int d = 0; d < 12 * kDaysPerYear && !w.gameOver() && n("manor_loan:land") + n("manor_loan:mill") == 0; ++d) {
+            w.stepDay();
+            if (w.person(w.playerHead()).ambition != "manor_creditor" && w.manorBond().house == kNone) {
+                WorldTest::house(w, w.playerHousehold()).money += 1000;
+                WorldTest::setAmbition(w, w.playerHead(), "manor_creditor");  // repaid: lend again
+            }
+        }
+        std::printf("late game: lent %d, land %d, mill %d, repaid %d\n", n("manor_loan:lent"), n("manor_loan:land"), n("manor_loan:mill"), n("manor_loan:repaid"));
+        CHECK(n("manor_loan:lent") >= 1, "the steward never came to borrow");
+        CHECK(n("manor_loan:land") + n("manor_loan:mill") >= 1, "the manor never pledged land or the mill");
+        CHECK(n("manor_loan:lent") <= n("manor_loan:land") + n("manor_loan:mill") + n("manor_loan:repaid") + 1, "a loan to the manor never came due");
+        checkInvariants(w, "manor loan");
+        // 「村裡第一大戶」: a rival house bids for one of the family's parcels; refused (the rules), it goes after it.
+        hid = w.playerHousehold();
+        WorldTest::setAmbition(w, w.playerHead(), "first_house");
+        if (Id big = w.biggestOther(hid); big != kNone) WorldTest::house(w, big).money += 2000;
+        size_t before = w.chronicle().size();
+        WorldTest::rivalForLand(w);
+        bool bid = false, pressed = false;
+        for (size_t i = before; i < w.chronicle().size(); ++i) bid = bid || w.chronicle()[i].text.find("〔搶地〕") != std::string::npos;
+        for (const auto& wt : w.wants())
+            pressed = pressed || (wt.open && wt.kind == "parcel" && wt.house != hid && w.parcels()[wt.object].holder == hid);
+        CHECK(bid, "no rival came for the family's land");
+        CHECK(pressed, "a rival refused his bid did not go after the land");
+        checkInvariants(w, "first house");
+    }
 
     if (failures == 0) std::printf("all tests passed\n");
     return failures == 0 ? 0 : 1;

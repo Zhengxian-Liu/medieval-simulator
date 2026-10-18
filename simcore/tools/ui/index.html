@@ -212,10 +212,12 @@ function renderTop() {
   const h = s.house;
   let amb = "";
   if (s.ambition) {
-    const mark = (x) => x.done ? "✓" : x.slipped ? "△" : x.final ? "◎" : "○";
-    const steps = s.ambition.steps.map((x) => `<span class="${x.done ? "done" : ""}" title="${x.slipped ? "做到過，現在又不夠了" : x.final ? "最後一步" : ""}">${mark(x)} ${esc(x.name)}</span>`).join(" → ");
-    const tip = `${s.ambition.desc}\n怎麼推進：${s.ambition.hint || ""}${(s.ambition.plans || []).length ? "（★ 計畫：" + s.ambition.plans.join("、") + "）" : ""}\n還剩 ${s.ambition.years_left} 年`;
-    amb = `<span class="stat" title="${esc(tip)}">志向 <b>${esc(s.ambition.name)}</b> <span class="steps">${steps}</span> <span class="muted" style="font-size:12px">${esc(s.ambition.hint || "")}</span></span>`;
+    const mark = (x) => x.done ? "✓" : x.slipped ? "△" : x.final ? "◎" : x.gate ? "✗" : "○";
+    const steps = s.ambition.steps.map((x) => `<span class="${x.done ? "done" : ""}" title="${x.slipped ? "做到過，現在又不夠了" : x.final ? "最後一步" : x.gate ? "這條路的條件" : ""}">${mark(x)} ${esc(x.name)}</span>`).join(" → ");
+    const left = s.ambition.deadline ? `限到 ${s.ambition.deadline} 年底（還剩 ${s.ambition.years_left} 年；過了期限沒做成，就成了留給下一代的心願）` : `還剩 ${s.ambition.years_left} 年`;
+    const extra = ["gates", "rival", "note"].map((k) => s.ambition[k]).filter((x) => x);
+    const tip = `${s.ambition.desc}\n怎麼推進：${s.ambition.hint || ""}${(s.ambition.plans || []).length ? "（★ 計畫：" + s.ambition.plans.join("、") + "）" : ""}\n${left}${extra.length ? "\n" + extra.join("\n") : ""}`;
+    amb = `<span class="stat" title="${esc(tip)}">志向 <b>${esc(s.ambition.name)}</b> <span class="steps">${steps}</span> <span class="muted" style="font-size:12px">${esc(s.ambition.hint || "")}　限到 ${s.ambition.deadline || "?"} 年底</span>${extra.map((x) => `<br><span class="muted" style="font-size:12px">${esc(x)}</span>`).join("")}</span>`;
   }
   $("top").innerHTML = `<h1>${esc(h.surname)}家</h1>
     <span class="stat"><b>${s.date.year}</b> 年 ${esc(s.date.season)}</span>
@@ -555,7 +557,8 @@ function renderContest(s) {
         : o.can ? `<span>${o.mine ? '<span class="muted" style="font-size:12px">到期自動出來連任；</span>' : ""}${(o.men || []).length > 1
             ? o.men.map((m) => `<button ${can ? "" : "disabled"} onclick="act({do:'want',what:'office:${o.id}',object:${m.id}})">讓${esc(m.name)}選</button>`).join(" ")
             : `<button ${can ? "" : "disabled"} onclick="act({do:'want',what:'office:${o.id}',object:-1})">${o.mine ? "想連任，去拉票" : "想當"}</button>`}</span>`
-        : !o.mine && o.why ? `<span class="muted" style="font-size:12px">爭不了：${esc(o.why)}</span>` : ""}</div>`).join("");
+        : !o.mine && o.why ? `<span class="muted" style="font-size:12px">爭不了：${esc(o.why)}</span>` : ""}</div>
+      ${!o.mine && (o.gates || []).length ? `<div class="muted" style="font-size:12px;padding:0 0 4px">條件：${o.gates.map((g) => g.ok ? `<span class="pos" title="${esc(g.detail)}">✓ ${esc(g.label)}</span>` : `<span class="neg">✗ ${esc(g.detail)}</span>`).join("　")}</div>` : ""}`).join("");
   if (c.past.length) html += `<h3>你家最近的結果</h3>` + c.past.map((p) => `<div style="font-size:13px">${p.year} 年　${esc(p.thing)}：<b>${esc(p.outcome)}</b></div>`).join("");
   html += `<p class="legend">只列你家聽說的。去「村民」那一欄找人開口：買地、租地、請他投票、借錢、說親、收學徒。</p>`;
   $("tab-body").innerHTML = html;

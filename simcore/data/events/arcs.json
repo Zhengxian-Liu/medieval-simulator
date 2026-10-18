@@ -73,7 +73,7 @@
         "log": "欠了三年的 {debt} 便士，{name} 把整份地交還給莊園，只留下屋後的菜園。從此一家人靠給人打零工過日子。",
         "effects": [{"surrender_holding": true}, {"prestige": -2}, {"reputation": -2}, {"stress": 25}],
         "ai": {"base": 2, "traits": {"content": 6, "lazy": 4, "ambitious": -10}}},
-       {"text": "去求領主開恩",
+       {"text": "去求領主開恩（免了的話，從此 10 年選不上莊頭）",
         "log": "欠了三年的 {debt} 便士，{name} 跪在 {target} 面前，求他免了這筆債。",
         "effects": [{"if": {"cond": {"flag": "lord_favour"},
                             "then": [{"deed": {"type": "forgiven_by_lord", "doer": "target"}}, {"clear_debt": true}, {"lords_debtor": 10}, {"reputation": -3},
