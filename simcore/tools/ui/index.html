@@ -67,6 +67,11 @@ button.link { background: none; border: none; color: var(--accent); padding: 0 2
 .ask .opts button { text-align: left; padding: 8px 11px; }
 .ask .closed { color: var(--muted); font-size: 12px; margin-top: 6px; }
 .running { color: var(--muted); font-style: italic; }
+.agenda { margin: 0 0 10px; }
+.agenda .lab { font-weight: 600; margin-bottom: 4px; }
+.agenda .item { display: flex; gap: 8px; align-items: baseline; padding: 4px 0; border-bottom: 1px dashed var(--line); }
+.agenda .item button { flex: none; border-color: var(--accent); }
+.agenda .desc { font-size: 13px; color: var(--muted); }
 .turnbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .summary { white-space: pre-wrap; font-size: 13px; }
 .feed { max-height: 560px; overflow: auto; }
@@ -240,7 +245,8 @@ function renderTurn() {
   } else if (a && a.kind === "season") {
     $("turn").className = "panel ask";
     html = `<h2>${s.date.year} 年 ${esc(s.date.season)} <small>還有 ${s.time_left} 段空閒</small></h2>
-      <p class="muted" style="margin:0 0 8px">找家人或村民（左邊、右邊的按鈕）各用一段空閒，定計畫也用一段；沒用完的拿去下田，收成會好一點。</p>
+      ${agendaBlock(s)}
+      <p class="muted" style="margin:0 0 8px">也可以找家人或村民（左邊、右邊的按鈕），各用一段空閒，定計畫也用一段；沒用完的拿去下田，收成會好一點。</p>
       <div class="turnbar">
         <button class="primary" onclick="act({do:'pass'})">過這一季</button>
         <button onclick="act({do:'year'})">一口氣過一年</button>
@@ -256,6 +262,15 @@ function renderTurn() {
   const sum = s && s.summary ? s.summary.trim() : "";
   $("summary-panel").style.display = sum ? "" : "none";
   $("summary").textContent = sum;
+}
+
+// 這一季的事: the season's few purposeful things, each a button that spends one free day.
+function agendaBlock(s) {
+  const items = s.agenda || [];
+  if (!items.length) return "";
+  return `<div class="agenda"><div class="lab">這一季的事</div>${items.map((it) =>
+    `<div class="item"><button ${it.open ? "" : "disabled"} title="${esc(it.open ? "用一段空閒" : it.why)}" onclick='act(${JSON.stringify({ do: "agenda", id: it.id }).replace(/'/g, "&#39;")})'>${esc(it.title)}</button>
+      <span class="desc">${esc(it.desc)}${it.open ? "" : `（${esc(it.why)}）`}</span></div>`).join("")}</div>`;
 }
 
 function needBars(needs) {

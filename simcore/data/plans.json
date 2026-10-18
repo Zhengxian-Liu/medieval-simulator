@@ -135,7 +135,7 @@
      "target": {"pick": "villager", "conditions": {"age": [14, 80], "not_kin": true, "kin_tie": false, "not": {"remembers": {"holder": "target", "about": "other", "type": "sworn_friend"}}}},
      "max_months": 12, "retry_years": 1,
      "progress": {"base": 6, "skill": {"charm": 1.0}, "opinion": 6, "traits": {"gregarious": 4, "shy": -3, "kind": 2}},
-     "start_log": "",
+     "start_log": "{name} 想跟 {target} 交個朋友，往後有空就找{target_pron}說說話、搭把手。",
      "success_log": "{name} 和 {target} 成了交心的朋友。",
      "success": [{"deed": {"type": "sworn_friend"}}],
      "fail_log": "", "fail": [],

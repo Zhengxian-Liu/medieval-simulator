@@ -10,7 +10,9 @@
 Actions (the page's buttons):
   {"do":"choose","index":0}                         answer a question (options are numbered from 0)
   {"do":"ai"}                                       let the AI answer the current question
-  {"do":"interact","who":12,"event":"talk_heart"}   spend season time on someone (see each person's actions)
+  {"do":"agenda","id":"sell_grain"}                one of 這一季的事 (the season's list at the top of the view)
+  {"do":"interact","who":12,"event":"talk_heart"}   spend season time on someone (see each person's actions;
+                                                    keep_company = 陪伴, the visit they need most)
   {"do":"ask","who":12,"ask":"sell_parcel","object":30,"subject":-1,"office":"","lever":""}   開口 (see asks)
   {"do":"plan","plan":"befriend","target":64,"subject":-1}   start a plan (see 計畫)   {"do":"cancel","plan":"<id>"}
   {"do":"want","what":"parcel","object":30} / {"do":"want","what":"office:reeve"}
@@ -131,6 +133,15 @@ def render(v, full=False):
             press = {"do": "ask", "who": la["who"], "ask": la["ask"], "object": la["object"], "subject": la["subject"],
                      "office": la.get("office", ""), "lever": lv}
             out.append(f"  再爭取一次：{names.get(lv, lv)} → act '{json.dumps(press, ensure_ascii=False)}'")
+    if season and s.get("agenda"):
+        out.append("―― 這一季的事 ――（各用一段空閒）")
+        for it in s["agenda"]:
+            line = f"  ・{it['title']}：{it.get('desc', '')}"
+            if it.get("open", True):
+                line += "  → act '" + json.dumps({"do": "agenda", "id": it["id"]}, ensure_ascii=False) + "'"
+            else:
+                line += f"［不行：{it.get('why', '')}］"
+            out.append(line)
     out.append("―― 家人 ――")
     for p in s["family"]:
         t = f"[{p['id']}] {p['full']}（{p['kin']}，{p['age']} 歲）心情 {p['mood']}{('：' + p['mood_cause']) if p.get('mood_cause') else ''}，健康 {p['health']}"
@@ -159,7 +170,7 @@ def render(v, full=False):
     for g in s.get("plans_going") or []:
         out.append("―― 進行中的計畫 ―― %s%s 進度 %s/100（放棄：{\"do\":\"cancel\",\"plan\":\"%s\"}）" % (
             g.get("name", ""), "（對象 " + g["target"] + "）" if g.get("target") else "", g.get("progress", 0), g.get("id", "")))
-    shut = [p for p in s.get("plans", []) if not p.get("open") and p.get("why") and p["why"] != "正在辦" and (p.get("ambition") or not p["why"].startswith("要："))]
+    shut = [p for p in s.get("plans", []) if not p.get("open") and p.get("why") and p["why"] != "正在辦"]
     if shut:
         out.append("―― 現在開不了的計畫 ―― " + "；".join(f"{'★' if p.get('ambition') else ''}「{p['name']}」{p['why']}" for p in shut))
     ops = [p for p in s.get("plans", []) if p.get("open")]
@@ -228,7 +239,7 @@ def render(v, full=False):
             out.append(f"  （不能選）{u}")
         out.append('回答：{"do":"choose","index":N}，或 {"do":"ai"}')
     elif season:
-        out.append('這一季：用 interact / ask / plan / focus / want 花時間，然後 {"do":"pass"} 結束這一季（或 {"do":"year"} 讓 AI 過一年）')
+        out.append('這一季：先看上面「這一季的事」（agenda），也可以用 interact / ask / plan / focus / want 花時間，然後 {"do":"pass"} 結束這一季（或 {"do":"year"} 讓 AI 過一年）')
     elif a:
         out.append(json.dumps(a, ensure_ascii=False))
     else:
@@ -261,7 +272,7 @@ elif cmd == "act":
         bad = "現在沒有在問你（遊戲還在跑或已結束），先 view。"
     elif a.get("kind") == "choice" and not (do == "ai" or (do == "choose" and 0 <= int(obj.get("index", -1)) < len(a.get("options", [])))):
         bad = "現在是在問一個問題：只能 choose（index 在選項範圍內）或 ai。"
-    elif a.get("kind") == "season" and do not in ("interact", "ask", "plan", "cancel", "want", "focus", "pass", "year", "regency", "quit"):
+    elif a.get("kind") == "season" and do not in ("agenda", "interact", "ask", "plan", "cancel", "want", "focus", "pass", "year", "regency", "quit"):
         bad = "現在是一季的空閒：choose / ai 只能用在問題上。"
     if bad:
         print("不行：" + bad + "\n")

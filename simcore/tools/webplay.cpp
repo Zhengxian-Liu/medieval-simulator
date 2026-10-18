@@ -13,6 +13,8 @@
 //       {"do":"plan","plan":"arrange_match","target":3,"subject":5} {"do":"cancel","plan":"befriend"}
 //       {"do":"choose","index":0} {"do":"ai"} {"do":"inspect","who":12} {"do":"report"}
 //       {"do":"focus","who":12,"focus":"letters"}   (年度重心; free, any time in the season)
+//       {"do":"agenda","id":"sell_grain"}            (這一季的事: one of the state's "agenda" items)
+//       {"do":"interact","who":12,"event":"keep_company"}   (陪家人: the company visit this person needs most)
 #include <algorithm>
 #include <cmath>
 #include <fstream>
@@ -114,7 +116,30 @@ public:
         EventRunner er(w_);
         const Person& p = w_.people()[who];
         const WantDef* want = w_.defs().want(p.want);
+        // 談心, 一起上教堂, 誇獎 and 帶去市集 are one button, 陪伴: the engine picks the one this person needs (design/fun-r5.md C).
+        static const std::set<std::string> company{"talk_heart", "talk_church", "talk_praise", "talk_market"};
+        bool companyShown = false;
+        std::string pick = w_.companyEvent(who);
         for (const auto& in : ins) {
+            if (company.count(in.ev->id)) {
+                if (companyShown) continue;
+                companyShown = true;
+                const World::Interaction* use = &in;
+                for (const auto& x : ins)
+                    if (x.ev->id == pick) use = &x;
+                bool wanted = want && !pick.empty() && std::find(want->answeredBy.begin(), want->answeredBy.end(), pick) != want->answeredBy.end();
+                out.push_back(Obj()
+                                  .text("event", "keep_company")
+                                  .text("title", pick.empty() ? std::string("陪伴") : "陪伴：" + use->ev->title)
+                                  .text("desc", er.format(use->ev->interaction.stringOr("desc", ""), p, head.id))
+                                  .b("open", !pick.empty() && use->open)
+                                  .text("why", pick.empty() ? (use->why.empty() ? "最近才陪過" : use->why) : "")
+                                  .b("wanted", wanted && use->open)
+                                  .n("time", use->ev->interaction.numberOr("time", 1))
+                                  .n("money", use->ev->interaction.numberOr("money", 0))
+                                  .done());
+                continue;
+            }
             bool wanted = want && std::find(want->answeredBy.begin(), want->answeredBy.end(), in.ev->id) != want->answeredBy.end();
             out.push_back(Obj()
                               .text("event", in.ev->id)
@@ -185,6 +210,13 @@ public:
                            .b("lean", h.lean)
                            .done());
         o.n("time_left", w.timeLeft());
+        // 這一季的事: the few things worth a free day now, each a button ({"do":"agenda","id":...}).
+        if (withActions) {
+            std::vector<std::string> items;
+            for (const auto& a : w_.seasonAgenda())
+                items.push_back(Obj().text("id", a.id).text("title", a.title).text("desc", a.desc).b("open", a.open).text("why", a.why).done());
+            o.raw("agenda", arr(items));
+        }
         // Holding the house for a child: the head may hand the years to the steward and answer only what is asked.
         if (const Household& ph = w.households()[w.playerHousehold()]; ph.ward != kNone && w.people()[ph.ward].alive()) {
             double left = 16 - w.ageYears(w.people()[ph.ward]);
@@ -465,7 +497,8 @@ public:
             }
             o.raw("plans_going", arr(going));
         }
-        if (withActions && acting != kNone && w.planRoom(acting)) {
+        // Listed even with both plans going, each saying why it cannot start (give one up to start another).
+        if (withActions && acting != kNone) {
             std::vector<PlanOption> opts = w_.availablePlans(acting);
             const AmbitionDef* amb = w.defs().ambition(hp.ambition);
             std::vector<std::string> plans;
@@ -500,7 +533,7 @@ public:
                     targets.push_back(Obj().n("target", op.target).n("subject", op.subject).text("label", label).done());
                 }
                 std::string why = picks.empty() ? w_.planBlock(acting, pd) : w.timeLeft() > 0 ? "" : "這一季沒有空閒了";
-                plans.push_back(Obj().text("id", pd.id).text("name", pd.name).text("desc", pd.desc).text("needs", pd.needs).text("why", why)
+                plans.push_back(Obj().text("id", pd.id).text("name", pd.name).text("desc", pd.desc + "（用一段空閒）").text("needs", pd.needs).text("why", why)
                                     .b("open", !picks.empty() && w.timeLeft() > 0).b("ambition", forAmb).raw("targets", arr(targets)).done());
             }
             o.raw("plans", arr(plans));
@@ -655,6 +688,9 @@ int main(int argc, char** argv) {
                     w.runCommands();
                 } else if (what == "focus") {
                     w.issue({w.today(), "focus", head, m["focus"], toInt(m, "who"), kNone});
+                    w.runCommands();
+                } else if (what == "agenda") {
+                    w.issue({w.today(), "agenda", head, m["id"], kNone, kNone});
                     w.runCommands();
                 } else if (what == "plan") {
                     w.issue({w.today(), "start_plan", w.actingHead(), m["plan"], toInt(m, "target"), toInt(m, "subject")});

@@ -84,6 +84,12 @@ struct EventDef {
     // The event is about the person sought out ({name}, who answers); the head is its {target}.
     Json interaction;
     int cooldownMonths = 0;
+    // Repeats (design/fun-r5.md C): a story the family met is not met again within three years. "repeat": "person"
+    // keys it by the person instead of the house (a second son's own turn at the same age), "free" for a rule that
+    // answers a state as often as it comes (an empty larder). "institution": true for what comes round every year by
+    // law or custom (the king's tax): never held back, but it must have at least three ways of telling it.
+    std::string repeat = "household";
+    bool institution = false;
 };
 
 // A long-running intention started by a person (Crusader Kings "scheme"): it gains progress

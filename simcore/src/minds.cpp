@@ -491,7 +491,7 @@ void World::actOnIntentions() {
             p.intent.kind = "none";
             continue;
         }
-        if (startPlan(p.id, pick->plan, pick->target, pick->subject)) {
+        if (startPlan(p.id, pick->plan, pick->target, pick->subject).empty()) {
             ++counters_["intent_acted:" + pick->plan];
             p.intent.kind = "done";  // one go a year; what they meant to do still shows in the report
         }

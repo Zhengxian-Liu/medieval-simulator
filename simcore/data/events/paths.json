@@ -1,7 +1,7 @@
 {
   "_doc": "人生的岔路 (design/life-paths.md): checkpoints at set ages whose options come from the family's means, standing and the places free; tries that can fail and send a life down another road; and the yearly lot of those living away (scope away). Stations are in data/paths.json.",
   "events": [
-    {"id": "path_school", "title": "認字", "prompt": "神父願意教村裡的孩子認字。{name} {age} 歲了，家裡也正缺人手。", "scope": "anyone", "pulse": "yearly", "chance": 0.7, "parent_decides": true,
+    {"id": "path_school", "repeat": "person", "title": "認字", "prompt": "神父願意教村裡的孩子認字。{name} {age} 歲了，家裡也正缺人手。", "scope": "anyone", "pulse": "yearly", "chance": 0.7, "parent_decides": true,
      "conditions": {"age": [7, 9], "station": "home", "no_flag": "school_decided", "is_head": false},
      "options": [
        {"text": "跟神父認字（12 便士）", "conditions": {"money_ge": 12}, "log": "{name} 開始跟神父認字。",
@@ -14,7 +14,7 @@
         "ai": {"base": 2, "if": [{"cond": {"food_days_lt": 60}, "add": 10}]}}
      ]},
 
-    {"id": "path_youth_m", "title": "出路", "prompt": "{name} {age} 歲了，往後走哪條路，家裡得拿個主意。", "scope": "anyone", "pulse": "yearly", "chance": 0.6, "parent_decides": true,
+    {"id": "path_youth_m", "repeat": "person", "title": "出路", "prompt": "{name} {age} 歲了，往後走哪條路，家裡得拿個主意。", "scope": "anyone", "pulse": "yearly", "chance": 0.6, "parent_decides": true,
      "conditions": {"sex": "male", "age": [11, 13], "station": "home", "no_flag": "trade_decided", "is_head": false},
      "options": [
        {"text": "留在家裡，跟著家裡的活", "log": "", "effects": [{"set_flag": "trade_decided"}],
@@ -49,7 +49,7 @@
         "ai": {"base": 3, "traits": {"pious": 6, "ambitious": 4, "clever": 8}, "if": [{"cond": {"heir_apparent": true}, "add": -10}, {"cond": {"tradition": "lettered"}, "add": 15}]}}
      ]},
 
-    {"id": "path_youth_f", "title": "出路", "prompt": "{name} {age} 歲了，往後走哪條路，家裡得拿個主意。", "scope": "anyone", "pulse": "yearly", "chance": 0.6, "parent_decides": true,
+    {"id": "path_youth_f", "repeat": "person", "title": "出路", "prompt": "{name} {age} 歲了，往後走哪條路，家裡得拿個主意。", "scope": "anyone", "pulse": "yearly", "chance": 0.6, "parent_decides": true,
      "conditions": {"sex": "female", "age": [11, 14], "station": "home", "no_flag": "trade_decided", "is_head": false, "married": false},
      "options": [
        {"text": "在家學持家", "log": "", "effects": [{"set_flag": "trade_decided"}], "ai": {"base": 12}},
@@ -63,7 +63,7 @@
         "ai": {"base": 2, "traits": {"ambitious": 5, "shy": -3}, "if": [{"cond": {"money_lt": 30}, "add": 3}]}}
      ]},
 
-    {"id": "path_grown_m", "title": "長大了", "prompt": "{name} {age} 歲了。家裡的地將來歸誰，大家心裡都有數。", "scope": "anyone", "pulse": "yearly", "chance": 0.5, "parent_decides": true,
+    {"id": "path_grown_m", "repeat": "person", "title": "長大了", "prompt": "{name} {age} 歲了。家裡的地將來歸誰，大家心裡都有數。", "scope": "anyone", "pulse": "yearly", "chance": 0.5, "parent_decides": true,
      "conditions": {"sex": "male", "age": [16, 22], "station": "home", "no_flag": "grown_decided", "is_head": false, "married": false},
      "options": [
        {"text": "留在家，等著接手或分地", "log": "", "effects": [{"set_flag": "grown_decided"}],
@@ -79,7 +79,7 @@
         "ai": {"base": 1.5, "traits": {"brave": 6, "ambitious": 6, "content": -8}, "if": [{"cond": {"heir_apparent": true}, "add": -10}, {"cond": {"year": [1349, 1400]}, "add": 3}]}}
      ]},
 
-    {"id": "path_grown_f", "title": "長大了", "prompt": "{name} {age} 歲了，還沒說親。", "scope": "anyone", "pulse": "yearly", "chance": 0.4, "parent_decides": true,
+    {"id": "path_grown_f", "repeat": "person", "title": "長大了", "prompt": "{name} {age} 歲了，還沒說親。", "scope": "anyone", "pulse": "yearly", "chance": 0.4, "parent_decides": true,
      "conditions": {"sex": "female", "age": [15, 20], "station": "home", "no_flag": "grown_decided", "is_head": false, "married": false},
      "options": [
        {"text": "在家等人說媒", "log": "", "effects": [{"set_flag": "grown_decided"}], "ai": {"base": 12}},
@@ -90,7 +90,7 @@
         "effects": [{"set_flag": "grown_decided"}, {"take_any_place": "service"}], "ai": {"base": 4}}
      ]},
 
-    {"id": "widow_suitor", "parent_decides": true, "title": "有地的寡婦", "prompt": "{target} 守了寡，一個人撐著家裡的地。村裡人說，誰娶了她，誰就有地種。", "scope": "anyone", "pulse": "yearly", "chance": 0.25, "cooldown_years": 3,
+    {"id": "widow_suitor", "repeat": "person", "parent_decides": true, "title": "有地的寡婦", "prompt": "{target} 守了寡，一個人撐著家裡的地。村裡人說，誰娶了她，誰就有地種。", "scope": "anyone", "pulse": "yearly", "chance": 0.25, "cooldown_years": 3,
      "conditions": {"sex": "male", "age": [18, 35], "married": false, "is_head": false, "station": ["home", "labourer", "veteran"]},
      "target": {"pick": "random_villager", "conditions": {"sex": "female", "widowed": true, "is_head": true, "acres_ge": 4, "age": [22, 48], "married": false, "not_kin": true, "same_class": true, "player_family": false}},
      "options": [
@@ -102,7 +102,7 @@
        {"text": "算了", "log": "", "effects": [], "ai": {"base": 8, "traits": {"content": 4, "shy": 4}}}
      ]},
 
-    {"id": "commission_of_array", "title": "點兵", "prompt": "國王又要用兵了。領主的管家在教堂門口點人去當弓兵：管吃，一天三便士，搶到的東西歸自己。他點到了 {name}。", "scope": "anyone", "pulse": "yearly", "chance": 0.12, "cooldown_years": 4, "parent_decides": true,
+    {"id": "commission_of_array", "repeat": "person", "title": "點兵", "prompt": "國王又要用兵了。領主的管家在教堂門口點人去當弓兵：管吃，一天三便士，搶到的東西歸自己。他點到了 {name}。", "scope": "anyone", "pulse": "yearly", "chance": 0.12, "cooldown_years": 4, "parent_decides": true,
      "conditions": {"sex": "male", "age": [16, 35], "is_head": false, "station": ["home", "labourer", "veteran"], "any": [{"year": [1333, 1360]}, {"year": [1369, 1389]}]},
      "options": [
        {"text": "去當弓兵", "log": "{name} 背上長弓，跟著點來的人走了。",
@@ -130,7 +130,7 @@
         "ai": {"base": 2, "traits": {"ambitious": 6, "content": -6}, "if": [{"cond": {"heir_apparent": true}, "add": -12}, {"cond": {"year": [1349, 1400]}, "add": 3}]}}
      ]},
 
-    {"id": "veteran_back", "parent_decides": true, "title": "老兵", "prompt": "{name} 打完仗回來了，身上有點積蓄，也見過了世面。", "scope": "anyone", "pulse": "yearly", "chance": 0.8,
+    {"id": "veteran_back", "repeat": "person", "parent_decides": true, "title": "老兵", "prompt": "{name} 打完仗回來了，身上有點積蓄，也見過了世面。", "scope": "anyone", "pulse": "yearly", "chance": 0.8,
      "conditions": {"station": "veteran", "is_head": false},
      "options": [
        {"text": "安心回田裡", "log": "", "effects": [{"station": {"id": "home", "note": "回田裡"}}], "ai": {"base": 10, "traits": {"content": 6}}},
@@ -143,7 +143,7 @@
         "effects": [{"station": {"id": "archer", "years": [2, 4], "note": "再次出征"}}], "ai": {"base": 2, "traits": {"brave": 8, "wrathful": 4}}}
      ]},
 
-    {"id": "chapman_start", "title": "小買賣", "prompt": "趕集的商販說，鎮上的羊毛、鹽和鐵釘，跟村裡的價錢差得多。手上有點本錢的人，農閒時也能挑擔子去做點買賣。", "scope": "anyone", "pulse": "yearly", "chance": 0.12, "cooldown_years": 5,
+    {"id": "chapman_start", "repeat": "person", "title": "小買賣", "prompt": "趕集的商販說，鎮上的羊毛、鹽和鐵釘，跟村裡的價錢差得多。手上有點本錢的人，農閒時也能挑擔子去做點買賣。", "scope": "anyone", "pulse": "yearly", "chance": 0.12, "cooldown_years": 5,
      "conditions": {"is_head": true, "age": [22, 55], "station": "home", "money_ge": 60},
      "options": [
        {"text": "湊 40 便士本錢，農閒時挑擔子去賣", "log": "{name} 湊了 40 便士本錢，農閒時挑著擔子到鄰近的集上做起小買賣。",
@@ -177,7 +177,7 @@
         "ai": {"base": 6, "traits": {"content": 6}}}
      ]},
 
-    {"id": "clerk_road", "parent_decides": true, "title": "書記的路", "prompt": "{name} 當書記有幾年了。往後是一輩子替人寫字，還是往上走？", "scope": "anyone", "pulse": "yearly", "chance": 0.4,
+    {"id": "clerk_road", "repeat": "person", "parent_decides": true, "title": "書記的路", "prompt": "{name} 當書記有幾年了。往後是一輩子替人寫字，還是往上走？", "scope": "anyone", "pulse": "yearly", "chance": 0.4,
      "conditions": {"station": "clerk", "station_years_ge": 2, "age": [18, 40], "no_flag": "clerk_decided", "is_head": false},
      "options": [
        {"text": "求神父舉薦，受神職（{odds}）", "conditions": {"married": false}, "log": "",
@@ -193,7 +193,7 @@
         "ai": {"base": 4, "traits": {"lustful": 8, "pious": -4}}}
      ]},
 
-    {"id": "path_midlife", "title": "半輩子", "prompt": "{name} {age} 歲了，沒有成家，一直在家裡幫忙。往後就這樣過一輩子，還是換條路走？",
+    {"id": "path_midlife", "repeat": "person", "title": "半輩子", "prompt": "{name} {age} 歲了，沒有成家，一直在家裡幫忙。往後就這樣過一輩子，還是換條路走？",
      "scope": "anyone", "pulse": "yearly", "chance": 0.3, "parent_decides": true,
      "conditions": {"age": [23, 45], "station": "home", "no_flag": "midlife_decided", "is_head": false, "married": false, "widowed": false},
      "options": [

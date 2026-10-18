@@ -412,6 +412,113 @@ int main() {
         CHECK(moved > movedStart, "no land changed hands in 60 years");
         std::printf("land: %.0f acres in %zu parcels, %d moved in 60 years\n", before, w.parcels().size(), moved);
     }
+    // Round 5 C (design/fun-r5.md): impressions that stop growing and fade, asks that can fail and name terms
+    // answered on the spot, the season's list of things to do, plans that say why they cannot start.
+    {
+        Config c;
+        c.seed = 72;
+        c.prerun = 25;
+        World w(defs, c);
+        w.runYears(30);
+        std::vector<Id> heads;
+        for (const auto& h : w.households())
+            if (!h.extinct && h.head != kNone && !h.members.empty() && h.id != w.playerHousehold()) heads.push_back(h.head);
+        int pairs = 0, fast = 0;
+        for (Id a : heads)
+            for (Id b : heads) {
+                if (a == b) continue;
+                ++pairs;
+                fast += w.opinion(a, b) >= 90;
+                for (const auto& [lab, v] : w.opinionBreakdown(a, b))
+                    if (lab == "good_times" || lab == "quarrels") CHECK(std::abs(v) <= 25.01, "everyday impressions grew past their cap");
+            }
+        CHECK(fast * 20 <= pairs, "most of the village's heads became fast friends");
+        std::printf("opinions: %d of %d head pairs at 90 or more after 30 years\n", fast, pairs);
+    }
+    {
+        bool threw = false;
+        try {
+            parseEvent(Json::parse(R"({"id": "x", "institution": true, "prompt": "a", "prompts": ["a", "b"], "options": [{"text": "t"}]})"));
+        } catch (const JsonError&) {
+            threw = true;
+        }
+        CHECK(threw, "an institution with fewer than three ways of telling it was loaded");
+    }
+    {
+        std::map<int, int> answers;
+        int cards = 0, agendaDone = 0, agendaShown = 0;
+        std::map<std::string, int> kinds;
+        for (int seed : {3, 5, 8, 11}) {
+            Config c;
+            c.seed = seed;
+            c.prerun = 25;
+            World w(defs, c);
+            bool card = false;
+            // The family takes whatever terms are named (the first option of the 開口 card); nothing else is asked.
+            w.setChooser([&](const World::ChoicePrompt& p) {
+                if (p.title != "開口") return -1;
+                card = true;
+                return 0;
+            });
+            for (int season = 0; season < 20 && !w.gameOver(); ++season) {
+                w.startSeason();
+                std::vector<World::AgendaItem> items = w.seasonAgenda();
+                std::set<std::string> ids;
+                CHECK(items.size() <= 4, "the season's list has more than four things");
+                for (const auto& a : items) CHECK(ids.insert(a.id).second, "the season's list names one thing twice");
+                agendaShown += !items.empty();
+                for (const auto& a : items) {
+                    if (!a.open) continue;
+                    int before = w.timeLeft();
+                    w.issue({w.today(), "agenda", w.actingHead(), a.id, kNone, kNone});
+                    w.runCommands();
+                    CHECK(w.household(w.playerHousehold()).money > -0.01, "a thing on the season's list left the family in the red");
+                    CHECK(w.timeLeft() == before - 1, "a thing on the season's list did not take one free day");
+                    ++agendaDone;
+                    ++kinds[a.id.substr(0, a.id.find(':'))];
+                    break;
+                }
+                for (Id who : w.peopleToSee()) {
+                    if (w.playerHead() == kNone || w.timeLeft() < 1) break;
+                    for (const auto& o : w.asksFor(who)) {
+                        if (!o.open) continue;
+                        std::string sub = o.subject == kNone ? "" : std::to_string(o.subject);
+                        int before = w.timeLeft();
+                        card = false;
+                        w.issue({w.today(), "ask", w.playerHead(), o.ask + "|" + o.office + "||" + sub, who, o.object});
+                        w.runCommands();
+                        CHECK(w.timeLeft() == before - 1, "an ask (with its terms) took other than one day");
+                        CHECK(w.household(w.playerHousehold()).money > -0.01, "taking the terms left the family in the red");
+                        if (card) {
+                            ++cards;
+                            CHECK(w.lastAsk().answer != 2 || w.lastAsk().text.find("你") == 0, "terms taken on the card were left hanging");
+                        }
+                        ++answers[w.lastAsk().answer];
+                        break;
+                    }
+                }
+                for (int d = 0; d < kDaysPerYear / 4 && !w.gameOver(); ++d) w.stepDay();
+            }
+            checkInvariants(w, "season list");
+            // A plan clicked for the wrong person says why it cannot start, and takes no day.
+            if (!w.gameOver() && w.actingHead() != kNone) {
+                w.startSeason();
+                int before = w.timeLeft();
+                size_t lines = w.chronicle().size();
+                w.issue({w.today(), "start_plan", w.actingHead(), "befriend", w.actingHead(), kNone});
+                w.runCommands();
+                bool said = w.chronicle().size() > lines && w.chronicle().back().text.find("辦不成：") != std::string::npos;
+                CHECK(said || before == 0, "a plan that could not start did not say why");
+                CHECK(w.timeLeft() == before, "a plan that did not start took a day");
+            }
+        }
+        CHECK(answers[3] + answers[4] > 0, "nobody ever said no to an ask");
+        CHECK(cards > 0, "no ask ever named terms to answer on the spot");
+        CHECK(agendaShown > 0 && agendaDone > 0, "the season's list was never there to act on");
+        std::printf("season list: %d done (", agendaDone);
+        for (const auto& [k, n] : kinds) std::printf(" %s %d", k.c_str(), n);
+        std::printf(" ); asks: yes %d, terms %d (%d answered on the spot), no %d, offence %d\n", answers[1], answers[2], cards, answers[3], answers[4]);
+    }
     // Different seeds -> different histories.
     {
         Config c1, c2;

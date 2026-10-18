@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <set>
 #include <filesystem>
 
 namespace sim {
@@ -52,6 +53,14 @@ EventDef parseEvent(const Json& e) {
     d.interaction = e["interaction"];
     if (d.scope == "interaction") d.pulse = "interaction";
     d.cooldownMonths = static_cast<int>(e.numberOr("cooldown_months", 0));
+    d.repeat = e.stringOr("repeat", "household");
+    if (d.repeat != "household" && d.repeat != "person" && d.repeat != "free") throw JsonError("event " + d.id + ": unknown repeat " + d.repeat);
+    d.institution = e["institution"].isBool() && e["institution"].asBool();
+    if (d.institution) {
+        std::set<std::string> told(d.prompts.begin(), d.prompts.end());
+        if (!d.prompt.empty()) told.insert(d.prompt);
+        if (told.size() < 3) throw JsonError("event " + d.id + ": an institution needs at least 3 prompt variants (has " + std::to_string(told.size()) + ")");
+    }
     for (const auto& o : e["options"].asArray()) {
         OptionDef od;
         od.text = o.stringOr("text", "");

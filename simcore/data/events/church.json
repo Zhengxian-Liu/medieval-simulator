@@ -1,6 +1,6 @@
 {
   "events": [
-    {"id": "found_chantry", "title": "祈唱壇", "prompt": "神父說，要在教堂裡立一座祈唱壇，照《永久管業法》得先向國王買一張執照，不然王家的官員查到了，捐出去的錢一文也留不下。",
+    {"id": "found_chantry", "repeat": "free", "title": "祈唱壇", "prompt": "神父說，要在教堂裡立一座祈唱壇，照《永久管業法》得先向國王買一張執照，不然王家的官員查到了，捐出去的錢一文也留不下。",
      "scope": "anyone", "chance": 0.5, "cooldown_years": 1,
      "conditions": {"is_head": true, "ambition": "chantry", "money_ge": 700, "no_flag": "chantry"},
      "options": [

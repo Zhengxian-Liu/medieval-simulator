@@ -22,22 +22,36 @@ void World::addMemory(Id holder, const Memory& m) {
     memories_[holder].push_back(copy);
 }
 
-// Small everyday impressions (chats, quarrels, gifts). Repeats of the same kind add up.
+namespace {
+// How far one kind of everyday impression can go (design/fun-r5.md C): a run of good evenings is worth so much and
+// no more, and so is a run of squabbles; only deeds (recordDeed) reach ±60.
+double impressionCap(const std::string& label) {
+    if (label == "good_times" || label == "quarrels") return 25;
+    return 40;
+}
+}  // namespace
+
+// Small everyday impressions (chats, quarrels, gifts). Repeats of the same kind add up, less and less as the
+// impression nears its cap, and the whole of it fades slowly (half gone in half its years) instead of all at once
+// on a set day. years 0: it does not fade.
 void World::addOpinion(Id from, Id to, const std::string& modId, double value, int years) {
-    int expires = years > 0 ? day_ + years * kDaysPerYear : -1;
+    const double cap = impressionCap(modId);
+    const double halfLife = years > 0 ? years / 2.0 : 0;
     for (auto& m : memories_[from])
         if (m.deed == kNone && m.about == to && m.label == modId) {
-            m.value = std::clamp(memoryValue(m) + value, -60.0, 60.0);
+            double cur = memoryValue(m);
+            double add = cur * value > 0 ? value * std::max(0.0, 1 - std::abs(cur) / cap) : value;
+            m.value = std::clamp(cur + add, -cap, cap);
             m.sinceDay = day_;
-            if (expires < 0 || expires > m.expiresDay) m.expiresDay = expires;
+            m.expiresDay = -1;  // (its half-life stays the one it was made with, a grudge's lengthened for the vengeful)
             return;
         }
     Memory m;
     m.about = to;
     m.label = modId;
-    m.value = value;
+    m.value = std::clamp(value, -cap, cap);
     m.sinceDay = day_;
-    m.expiresDay = expires;
+    m.halfLife = halfLife;
     addMemory(from, m);
 }
 

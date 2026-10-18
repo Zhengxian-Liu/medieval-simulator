@@ -38,6 +38,9 @@ private:
     Id deed_ = kNone;   // the deed a signal-driven event is about
     double writtenOff_ = 0;  // what target_lord_debt last wrote off the manor book without payment
     bool eligible(const EventDef& ev, const Person& p, Id playerHead) const;
+    // Where a story the family met is remembered so as not to come again soon (World::metStory_); first = kNone
+    // when it is not held back (signals, institutions, rules that fire whenever their state holds, villagers).
+    std::pair<Id, std::string> storyKey(const EventDef& ev, const Person& p) const;
     void fire(const EventDef& ev, Person& p, Id target);
     const std::string& pickLog(const OptionDef& o, Id who);  // a variant this person was not told last time
     bool asked_ = false;   // the last chooseOption was the player's to make (the 「選擇」 is theirs)

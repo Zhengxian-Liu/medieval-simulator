@@ -54,8 +54,28 @@ bool EventRunner::eligible(const EventDef& ev, const Person& p, Id playerHead) c
         auto it = w_.budgetUsed_.find({p.household, ev.budget, w_.year()});
         if (it != w_.budgetUsed_.end() && it->second >= 2) return false;
     }
+    if (auto key = storyKey(ev, p); key.first != kNone && w_.metLately(key.first, key.second)) return false;
     auto cd = w_.cooldowns_.find({p.id, ev.id});
     return cd == w_.cooldowns_.end() || cd->second <= w_.day_;
+}
+
+std::pair<Id, std::string> EventRunner::storyKey(const EventDef& ev, const Person& p) const {
+    if (ev.institution || ev.repeat == "free" || ev.chance >= 1 || ev.scope == "away" || (ev.pulse != "monthly" && ev.pulse != "yearly"))
+        return {kNone, ""};
+    if (!w_.isPlayerFamily(p) && !w_.inPlayerHouse(p.household)) return {kNone, ""};
+    if (ev.repeat == "person") return {p.id, "p:" + ev.id};
+    return {p.household, ev.id};
+}
+
+int World::freshVariant(Id house, const std::string& story, int n, Rng& rng) {
+    auto& told = toldPrompts_[{house, story}];
+    if (static_cast<int>(told.size()) >= n) told.clear();
+    std::vector<int> fresh;
+    for (int k = 0; k < n; ++k)
+        if (std::find(told.begin(), told.end(), k) == told.end()) fresh.push_back(k);
+    int k = fresh[rng.range(0, static_cast<int>(fresh.size()) - 1)];
+    told.push_back(k);
+    return k;
 }
 
 // A signal-driven event whose day has come: the target and the deed come from the signal.
@@ -164,6 +184,7 @@ void EventRunner::fire(const EventDef& ev, Person& p, Id target) {
     const OptionDef& o = ev.options[chooseOption(ev, p, target)];
     natureStress(ev, o, p, target);
     if (ev.once) p.flags.insert("ev_" + ev.id);
+    if (auto key = storyKey(ev, p); key.first != kNone) w_.meetStory(key.first, key.second);
     if (!ev.budget.empty()) ++w_.budgetUsed_[{p.household, ev.budget, w_.year()}];
     if (ev.cooldownMonths > 0) w_.cooldowns_[{p.id, ev.id}] = w_.day_ + ev.cooldownMonths * kDaysPerMonth;
     if (ev.cooldownYears > 0) {
@@ -490,7 +511,10 @@ int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
             lines.push_back(format(o.logs.empty() ? o.log : o.logs[0], p, target));
         }
         if (!ev.prompt.empty()) {
-            const std::string& said = ev.prompts.size() > 1 ? ev.prompts[w_.rngEvents_.range(0, static_cast<int>(ev.prompts.size()) - 1)] : ev.prompt;
+            // Another way of telling it each time, until the house has heard them all.
+            const std::string& said = ev.prompts.size() > 1
+                                          ? ev.prompts[w_.freshVariant(p.household, ev.id, static_cast<int>(ev.prompts.size()), w_.rngEvents_)]
+                                          : ev.prompt;
             prompt.situation = format(said, p, target);
         } else {
             // The situation: what every option's line agrees on, up to the last full stop or comma in it,
@@ -1606,6 +1630,30 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                     std::string where = master == (w.lord_ != kNone ? w.people_[w.lord_].household : kNone) ? "莊園的自營地上" : w.fullName(mh.head) + " 家";
                     w.log(1, "  家裡 " + std::to_string(n) + " 個能幹活的人去" + where + "當長工，管吃，一個月每人 4 便士，做到明年這時候。");
                 }
+            } else if (k == "sell_grain") {
+                // {"sell_grain": 90}: up to that many days of the house's bread carted to the town market (it keeps
+                // enough to see it past the next harvest).
+                if (!h) continue;
+                double got = w.sellGrainAtMarket(*h, v.asNumber());
+                if (w.inPlayerHouse(h->id)) w.log(1, got > 0 ? "  賣了 " + std::to_string(static_cast<long>(got)) + " 便士。" : "  到了市集才發現，家裡的糧其實不夠賣。");
+            } else if (k == "hire_hand") {
+                // {"hire_hand": {"pay": 24, "bonus": 0.05}}: the target works the house's harvest for a season's wage.
+                if (!h || target == kNone) continue;
+                w.hireHand(*h, target, v.numberOr("pay", 24), v.numberOr("bonus", 0.05));
+            } else if (k == "give_parcel") {
+                // {"give_parcel": <parcel id>}: one of the house's parcels given to the target's house to till.
+                if (!h || target == kNone || w.people_[target].household == kNone) continue;
+                Id pc = static_cast<Id>(v.asNumber());
+                if (pc < 0 || pc >= static_cast<Id>(w.parcels_.size()) || w.parcels_[pc].holder != h->id) continue;
+                w.giveParcelTo(pc, w.people_[target].household, p.id);
+            } else if (k == "take_in") {
+                // The target comes to live in p's house.
+                if (!h || target == kNone) continue;
+                w.takeIn(target, h->id, p.id);
+            } else if (k == "hire_kin") {
+                // The grown of the target's house hire on with p's house for the year (bed, board and a wage).
+                if (!h || target == kNone || w.people_[target].household == kNone) continue;
+                w.hireKin(w.people_[target].household, h->id);
             } else if (k == "rent_vacant_credit") {
                 if (!h) continue;
                 std::string no = w.rentVacantOnCredit(*h, v.numberOr("min", 3));
@@ -1640,6 +1688,13 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                         w.log(1, "  「" + w.secretWords(told[i], who) + "。」");
                     if (told.size() > 3) w.log(1, "  還有幾件，" + w.people_[who].firstName + "聽不下去了。");
                 }
+            } else if (k == "village_opinion") {
+                // How the other heads of the village take what p did to them all (assessing the king's tax).
+                std::string mod = v.stringOr("mod", "event");
+                Id lordHouse = w.lord_ != kNone ? w.people_[w.lord_].household : kNone;
+                for (const auto& oh : w.households_)
+                    if (!oh.extinct && oh.head != kNone && oh.id != p.household && oh.id != lordHouse && oh.head != w.priest_)
+                        w.addOpinion(oh.head, p.id, mod, v["value"].asNumber(), static_cast<int>(v.numberOr("years", 4)));
             } else if (k == "household_opinion") {
                 // Everyone at home thinks differently of this person now.
                 if (!h) continue;

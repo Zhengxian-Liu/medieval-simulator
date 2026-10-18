@@ -590,6 +590,28 @@ public:
         std::string why;       // when closed: why not
     };
     std::vector<Interaction> interactionsWith(Id target);
+    // 這一季的事 (design/fun-r5.md C): two to four things worth a free day this season, from the family's state (kin
+    // going hungry, grain to sell, a hand for the harvest, a grieving child, a match to make), each one button.
+    struct AgendaItem {
+        std::string id;     // stable while the situation holds: "sell_grain", "company:12", "help_land:4"
+        std::string title, desc, why;
+        bool open = true;   // false: why
+        std::string kind;   // interact | plan | effects
+        std::string event;  // interact: the interaction (or keep_company); plan: the plan
+        Id who = kNone, target = kNone, subject = kNone;
+        std::string effects;  // kind effects: a JSON effect list run on the head, with `target` as its other party
+        std::string done;     // kind effects: the chronicle line
+        int rank = 0;
+    };
+    std::vector<AgendaItem> seasonAgenda();
+    void doAgenda(const std::string& id);
+    // 陪家人: of 談心, 一起上教堂, 誇獎 and 帶去市集, the one this person wants or needs most now ("" when none is open).
+    std::string companyEvent(Id who);
+    // Lasting help for a house that cannot feed itself (season agenda, 〔親友挨餓〕): a parcel the family can spare
+    // and still eat, the one of theirs it could take in, whether it can take their grown on as hands for the year.
+    Id spareParcel(Id toHouse) const;
+    Id takeInWho(Id house) const;
+    bool canHireKin(Id house) const;
     // 處境 and 人生路 (design/life-paths.md).
     std::string stationName(const Person& p) const;
     std::string occupationName(const Person& p) const;  // "主婦", or "閨女" for a girl not yet married
@@ -609,6 +631,7 @@ public:
     struct FamilySnapshot {
         std::map<Id, std::pair<std::string, double>> people;  // mood word, opinion of the head
         std::map<Id, std::map<std::string, double>> why;       // the reasons behind that opinion
+        std::map<Id, double> kinAway;                          // near kin in other houses: their opinion of the head
         double money = 0, food = 0, acres = 0;
         Id head = kNone;
         std::map<std::string, double> ledger;
@@ -708,6 +731,18 @@ private:
     uint64_t scheduleSeq_ = 0;
     std::map<std::pair<Id, std::string>, int> cooldowns_;  // (person, event) -> day allowed again
     std::map<std::pair<Id, std::string>, int> lastLog_;    // (person, option text) -> the variant last told
+    // No repeats (design/fun-r5.md C): (household, event / beat / card id) -> the day the family last met it; a story
+    // keyed by person is stored as (person, "p:" + id). Within kRepeatYears it is not met again.
+    std::map<std::pair<Id, std::string>, int> metStory_;
+    std::map<std::pair<Id, std::string>, std::vector<int>> toldPrompts_;  // (household, event) -> prompt variants told
+    static constexpr int kRepeatYears = 3;
+    bool metLately(Id key, const std::string& story) const {
+        auto it = metStory_.find({key, story});
+        return it != metStory_.end() && day_ - it->second < kRepeatYears * kDaysPerYear;
+    }
+    void meetStory(Id key, const std::string& story) { metStory_[{key, story}] = day_; }
+    // One of n ways of telling a thing, not one this house has heard while others are left (then round again).
+    int freshVariant(Id house, const std::string& story, int n, Rng& rng);
     std::map<std::pair<Id, std::string>, int> chatterSaid_;  // (person, chatter id) -> day they last talked of it
     std::map<std::pair<Id, std::string>, int> chatterHeard_;  // (listening house, line) -> day it last heard it said
     std::set<std::string> worldFlags_;
@@ -772,7 +807,7 @@ private:
 
     // plans.cpp
     void processCommands();
-    bool startPlan(Id actor, const std::string& plan, Id target, Id subject);
+    std::string startPlan(Id actor, const std::string& plan, Id target, Id subject);  // "" when started, else why not
     void monthlyPlans();
     void npcStartPlans();
     void endPlan(size_t index, const std::string& outcome);
@@ -823,6 +858,16 @@ private:
     double dowryCap(const Household& h) const;  // what a house of its standing is expected to give with a daughter  // the king's fifteenth on what the house has: coin, spare grain, beasts
     void yearlyTax();
     void askToFeed(Household& h);           // kin or a close friend near the end of their bread: the player is asked
+    std::map<Id, int> feedHelped_;          // house -> times the family has helped it through hunger
+    void feedHouse(Household& h);           // help came: nobody in it goes hungry this month
+    // The season agenda's deeds (also effects: sell_grain, hire_hand, give_parcel, take_in, hire_kin).
+    double sellGrainAtMarket(Household& h, double days);  // pence it fetched
+    void hireHand(Household& h, Id hand, double pay, double bonus);
+    void giveParcelTo(Id parcel, Id house, Id giver);
+    void takeIn(Id who, Id house, Id giver);
+    void hireKin(Id house, Id master);
+    Id harvestHand() const;                 // a poor man glad of a season's wage at the family's harvest
+    int daysToHarvest() const;
     std::map<Id, int> feedAskedUntil_;
     int ambitionAskAfter_ = 0;  // the player's head put off choosing an ambition: not asked again before this day
     std::map<Id, Id> lastMatchSubject_;     // head -> the one whose match last fell through (for "另說一門親")      // household -> no asking again before this day

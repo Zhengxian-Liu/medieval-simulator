@@ -1,6 +1,6 @@
 {
   "events": [
-    {"id": "child_bell_tower", "title": "爬上鐘樓", "prompt": "{name} 偷爬上教堂鐘樓，被大人揪了下來。", "scope": "player_family", "chance": 0.006, "once": true,
+    {"id": "child_bell_tower", "title": "爬上鐘樓", "prompt": "{name} 偷爬上教堂鐘樓，被大人揪了下來。", "scope": "player_family", "chance": 0.006, "once": true, "cooldown_years": 3, "cooldown_scope": "household",
      "conditions": {"age": [6, 11]},
      "options": [
        {"text": "狠狠罵一頓", "log": "{name} 偷爬上教堂鐘樓，被大人揪下來罵了一頓。", "effects": [{"set_flag": "childhood_craven"}], "ai": {"base": 10, "traits": {}}},
@@ -19,17 +19,17 @@
        {"text": "教孩子打回去", "log": "{name} 和 {target} 在泥地裡扭打成一團。", "effects": [{"set_flag": "childhood_wrathful"}, {"mutual_opinion": {"value": -15, "mod": "childhood_fight", "years": 15}}], "ai": {"base": 8}},
        {"text": "拉著孩子去道歉", "log": "{name} 和 {target} 打了一架，大人拉著{pron}去道歉，兩個孩子後來倒成了朋友。", "effects": [{"set_flag": "childhood_calm"}, {"mutual_opinion": {"value": 15, "mod": "childhood_friend", "years": 20}}], "ai": {"base": 10}}
      ]},
-    {"id": "becomes_literate", "title": "識字了", "scope": "anyone", "chance": 0.12, "once": true,
+    {"id": "becomes_literate", "repeat": "person", "title": "識字了", "scope": "anyone", "chance": 0.12, "once": true,
      "conditions": {"age": [10, 16], "flag": "schooled", "skill_ge": {"learning": 2.5}},
      "options": [{"text": "好", "log": "{name} 跟神父學會了讀寫拉丁文的禱詞，往後能替家裡念契約、記帳了。", "effects": [{"add_trait": "literate"}, {"reputation": 3}]}]},
-    {"id": "courtship_m", "parent_decides": true, "title": "心上人", "prompt": "五朔節的舞會上，{name} 一直看著 {target}。", "scope": "player_family", "chance": 0.03, "cooldown_years": 2,
+    {"id": "courtship_m", "repeat": "person", "parent_decides": true, "title": "心上人", "prompt": "五朔節的舞會上，{name} 一直看著 {target}。", "scope": "player_family", "chance": 0.03, "cooldown_years": 2,
      "conditions": {"sex": "male", "age": [18, 30], "married": false, "widowed": false, "match_pending": false},
      "target": {"pick": "random_villager", "conditions": {"sex": "female", "age": [16, 26], "married": false, "same_class": true, "match_pending": false, "not_kin": true}},
      "options": [
        {"text": "去提親", "log": "{name} 在五朔節的舞會上看上了 {target}，第二天就上門提親。", "effects": [{"marry_target": true}], "ai": {"base": 10, "traits": {"gregarious": 8, "lustful": 8, "shy": -6}}},
        {"text": "再等等", "log": "", "effects": [{"opinion": {"value": 10, "mod": "crush", "years": 3}}], "ai": {"base": 10, "traits": {"shy": 10}}}
      ]},
-    {"id": "courtship_f", "parent_decides": true, "title": "求親的人", "prompt": "{target} 託人來說媒，想娶 {name}。", "scope": "player_family", "chance": 0.03, "cooldown_years": 2,
+    {"id": "courtship_f", "repeat": "person", "parent_decides": true, "title": "求親的人", "prompt": "{target} 託人來說媒，想娶 {name}。", "scope": "player_family", "chance": 0.03, "cooldown_years": 2,
      "conditions": {"sex": "female", "age": [16, 26], "married": false, "widowed": false, "match_pending": false},
      "target": {"pick": "random_villager", "conditions": {"sex": "male", "age": [18, 32], "married": false, "same_class": true, "match_pending": false, "not_kin": true}},
      "options": [
@@ -71,7 +71,7 @@
         "effects": [{"stress": 10}],
         "ai": {"base": 3, "traits": {"content": 6, "cynical": 4}}}
      ]},
-    {"id": "widow_grief", "title": "喪偶", "prompt": "{name} 剛送走了另一半。家裡的活還得有人做。", "scope": "player_family", "chance": 0.3, "cooldown_years": 3,
+    {"id": "widow_grief", "repeat": "person", "title": "喪偶", "prompt": "{name} 剛送走了另一半。家裡的活還得有人做。", "scope": "player_family", "chance": 0.3, "cooldown_years": 3,
      "conditions": {"widowed": true, "age": [20, 70], "recently_widowed": true},
      "options": [
        {"text": "日日去墳前", "log": "{name} 天天去墓園，整個人消瘦了下去。", "effects": [{"trait_chance": {"trait": "melancholy", "chance": 50}}, {"health": -5}], "ai": {"base": 8, "traits": {"kind": 6}}},

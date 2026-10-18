@@ -73,17 +73,37 @@ void World::processCommands() {
                 continue;
             }
             if (ours && !planRoom(c.actor)) {
-                log(1, "〔計畫〕" + name + "沒辦成：" + (c.actor == actingHead() ? "手上已經有兩件事在辦。" : "手上已經有一件事在辦。"));
+                log(1, "〔計畫〕" + name + "沒辦成：" + (c.actor == actingHead() ? "手上已經有兩件事在辦（放棄一件才能開新的）。" : "手上已經有一件事在辦。"));
                 continue;
             }
-            if (startPlan(c.actor, c.plan, c.target, c.subject)) {
+            // The click names who it is with and for: it must still be one the plan could be started on now.
+            if (ours && pd) {
+                bool listed = false;
+                for (const auto& op : availablePlans(c.actor))
+                    if (op.plan == c.plan && op.target == c.target && op.subject == c.subject) listed = true;
+                if (!listed) {
+                    std::string why = planBlock(c.actor, *pd);
+                    bool anyOpen = false;
+                    for (const auto& op : availablePlans(c.actor))
+                        if (op.plan == c.plan) anyOpen = true;
+                    log(1, "〔計畫〕" + name + "眼下辦不成：" + (anyOpen || why.empty() ? std::string("對象不對／不在了") : why) + "。");
+                    continue;
+                }
+            }
+            std::string why = startPlan(c.actor, c.plan, c.target, c.subject);
+            if (why.empty()) {
                 if (ours) spendTime(1);
             } else if (ours) {
-                log(1, "〔計畫〕" + name + "眼下辦不成。");
+                log(1, "〔計畫〕" + name + "眼下辦不成：" + why + "。");
             }
+        } else if (c.type == "agenda") {
+            doAgenda(c.plan);  // 這一季的事: plan = the item's id
         } else if (c.type == "interact") {
+            // 陪家人 (keep_company): whichever of the company visits this person needs most now.
+            std::string id = c.plan == "keep_company" && c.target != kNone ? companyEvent(c.target) : c.plan;
+            if (id.empty()) log(1, "〔陪家人〕眼下沒法陪" + shortName(c.target) + "：" + (timeLeft() < 1 ? "這一季沒有空了。" : "最近才陪過。"));
             for (const auto& ev : defs_.events)
-                if (ev.id == c.plan && ev.scope == "interaction" && c.target != kNone) {
+                if (ev.id == id && ev.scope == "interaction" && c.target != kNone) {
                     EventRunner er(*this);
                     er.interact(ev, people_[c.target], actingHead());
                     break;
@@ -134,7 +154,7 @@ std::string World::planBlock(Id actorId, const PlanDef& pd) {
     if (cd != cooldowns_.end() && cd->second > day_) return "上回才辦過，還要 " + seasonsTo(cd->second) + " 季才能再辦";
     for (const auto& p : plans_)
         if (p.actor == actorId && p.plan == pd.id) return "正在辦";
-    if (!planRoom(actorId)) return actorId == actingHead() ? "手上已經有兩件事在辦" : "手上已經有一件事在辦";
+    if (!planRoom(actorId)) return actorId == actingHead() ? "手上已經有兩件事在辦（放棄一件才能開新的）" : "手上已經有一件事在辦";
     Person& actor = people_[actorId];
     EventRunner ev(*this);
     if (!ev.eval(pd.actor, actor, kNone)) return pd.needs.empty() ? "眼下不合條件" : "要：" + pd.needs;
@@ -239,17 +259,18 @@ std::vector<PlanOption> World::availablePlans(Id actorId) {
     return out;
 }
 
-bool World::startPlan(Id actorId, const std::string& planId, Id target, Id subject) {
+std::string World::startPlan(Id actorId, const std::string& planId, Id target, Id subject) {
     const PlanDef* pd = defs_.plan(planId);
-    if (!pd || actorId == kNone || !planRoom(actorId)) return false;
+    if (!pd || actorId == kNone) return "沒有這件事";
     for (const auto& p : plans_)
-        if (p.actor == actorId && p.plan == planId) return false;
+        if (p.actor == actorId && p.plan == planId) return "已經在辦";
+    if (!planRoom(actorId)) return planBlock(actorId, *pd);
     Person& actor = people_[actorId];
-    if (!actor.alive() || actor.household == kNone) return false;
+    if (!actor.alive() || actor.household == kNone) return "人不在了";
     EventRunner check(*this);
-    if (!check.eval(pd->actor, actor, kNone)) return false;
+    if (!check.eval(pd->actor, actor, kNone)) return planBlock(actorId, *pd);
     if (!pd->target.isNull() && (target == kNone || !people_[target].alive() || people_[target].household == kNone))
-        return false;
+        return "對象不對／不在了";
 
     plans_.push_back({actorId, target, subject, planId, 0, day_, {}});
     ++counters_["plan:" + planId + ":start"];
@@ -261,7 +282,7 @@ bool World::startPlan(Id actorId, const std::string& planId, Id target, Id subje
         EventRunner ev(*this, &plans_.back());
         log(1, "【計畫】" + ev.format(pd->startLog, actor, target));
     }
-    return true;
+    return "";
 }
 
 void World::endPlan(size_t index, const std::string& requested) {
@@ -437,10 +458,15 @@ void World::monthlyPlans() {
                 const std::string beatKey = "beat:" + pd->id + ":" + beat.id + ":" + std::to_string(plan.target) + ":" + std::to_string(plan.subject);
                 auto again = cooldowns_.find({actor.id, beatKey});
                 if (again != cooldowns_.end() && again->second > day_) continue;
+                // Nor does the family meet the same scene within a few years in another plan (a second child's match,
+                // the freehold tried again by the son): the house remembers it.
+                const std::string houseBeat = "beat:" + pd->id + ":" + beat.id;
+                if (actorHome && metLately(actor.household, houseBeat)) continue;
                 if (!ev.eval(beat.conditions, actor, plan.target)) continue;
                 if (!rngPlans_.chance(beat.chance)) continue;
                 copy.beatsSeen.push_back(beat.id);
                 cooldowns_[{actor.id, beatKey}] = day_ + 6 * kDaysPerYear;
+                if (actorHome) meetStory(actor.household, houseBeat);
                 // A beat is the doer's side of it (their haggling, their doubts): told only when the doer is the family.
                 int importance = actorHome ? 1 : 0;
                 ev.runEvent(beat, actor, plan.target, importance);

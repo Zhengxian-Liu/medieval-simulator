@@ -35,6 +35,7 @@ std::vector<AskOption> World::asksFor(Id target) {
     Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
     bool isHead = th.head == target;
     bool hiding = hp.flags.count("plague_shelter") > 0;
+    const std::string tp = t.sex == Sex::Male ? "他" : "她";  // the target's pronoun, for the option labels
     auto push = [&](AskOption o) {
         if (o.open && hiding) o.open = false, o.why = "全家躲在林子裡避瘟疫，不和外人來往";
         auto cd = asked_.find({target, o.ask, o.object});
@@ -58,7 +59,7 @@ std::vector<AskOption> World::asksFor(Id target) {
         for (const auto& pc : parcels_) {
             if (pc.gone || pc.holder != th.id) continue;
             double price = std::round(pc.acres * kAcrePrice);
-            AskOption o = opt("sell_parcel", "請他把" + parcelName(pc) + "讓給你（" + pence(price) + "）", pc.id);
+            AskOption o = opt("sell_parcel", "請" + tp + "把" + parcelName(pc) + "讓給你（" + pence(price) + "）", pc.id);
             if (ph.money < price) o.open = false, o.why = "錢不夠（要 " + pence(price) + "）";
             push(o);
         }
@@ -78,7 +79,7 @@ std::vector<AskOption> World::asksFor(Id target) {
     // A loan.
     if (isHead && th.money >= 100 && th.debt <= 0.5 && target != lord_ && t.occupation != "priest") {
         double amount = th.money >= 300 ? 60 : 40;
-        AskOption o = opt("lend", "向他借 " + pence(amount));
+        AskOption o = opt("lend", "向" + tp + "借 " + pence(amount));
         o.object = static_cast<Id>(amount);
         if (ph.debt > 0.5) o.open = false, o.why = "你家還欠著債";
         push(o);
@@ -116,7 +117,7 @@ std::vector<AskOption> World::asksFor(Id target) {
         }
     // A word with the lord, from the reeve or the priest.
     if (target != lord_ && (t.flags.count("reeve") || target == priest_) && lord_ != kNone && people_[lord_].alive())
-        push(opt("speak", "請他在領主面前替你說句話"));
+        push(opt("speak", "請" + tp + "在領主面前替你說句話"));
     // To stand aside from something both houses are after.
     for (const auto& wt : wants_) {
         if (!wt.open || wt.house != th.id || !isHead) continue;
@@ -126,7 +127,7 @@ std::vector<AskOption> World::asksFor(Id target) {
                 (wt.kind == "office" ? mine.office == wt.office : mine.object == wt.object))
                 both = true;
         if (!both) continue;
-        AskOption o = opt("stand_aside", "請他別跟你搶" + wantThing(wt), wt.id);
+        AskOption o = opt("stand_aside", "請" + tp + "別跟你搶" + wantThing(wt), wt.id);
         push(o);
     }
     (void)surname;
@@ -195,13 +196,42 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
     };
     std::vector<Factor> fs;
     double op = opinion(who, head);
-    fs.push_back({op * 0.6, op >= 20 ? "看在兩家的交情上" : op <= -15 ? "我們兩家沒那個交情" : ""});
+    // Friendship carries an ask only so far (design/fun-r5.md C): a friend of many years does not give away the
+    // family's bread for it. A grudge counts in full.
+    fs.push_back({std::min(op, 40.0) * 0.6, op >= 20 ? "看在兩家的交情上" : op <= -15 ? "我們兩家沒那個交情" : ""});
+    bool sworn = std::any_of(memories_[who].begin(), memories_[who].end(),
+                             [&](const Memory& m) { return m.label == "sworn_friend" && m.about == head && !m.inherited; });
+    if (sworn) fs.push_back({10, "我們是交心的朋友"});
     double owed = favourOwed(who, head);
     if (owed >= 3) fs.push_back({owed, "上回你幫過我"});
     double weOwe = favourOwed(head, who);
     if (weOwe >= 10) fs.push_back({-weOwe * 0.5, "上回的人情你家還沒還"});
     if (closeKin(who, head)) fs.push_back({15, "都是自家人"});
     if (feudStage(who, head) >= 2) fs.push_back({-40, "我們兩家的仇還沒了"});
+    else if (feudStage(who, head) == 1) fs.push_back({-15, "我們兩家之間還有疙瘩"});
+    else {
+        // Two houses after the same thing are rivals, however they get on.
+        for (const auto& wt : wants_) {
+            if (!wt.open || wt.house != th.id) continue;
+            bool both = std::any_of(wants_.begin(), wants_.end(), [&](const Want& mine) {
+                return mine.open && inPlayerHouse(mine.house) && mine.kind == wt.kind &&
+                       (wt.kind == "office" ? mine.office == wt.office : mine.object == wt.object);
+            });
+            if (both && what != "stand_aside") {
+                fs.push_back({-25, "你家跟我家在爭" + wantThing(wt)});
+                break;
+            }
+        }
+    }
+    // The family's name in the village, good or bad.
+    double rep = std::clamp(people_[head].reputation * 2, -20.0, 20.0);
+    if (std::abs(rep) >= 2) fs.push_back({rep, rep >= 10 ? "你家在村裡名聲好" : rep <= -6 ? "你家名聲不好" : ""});
+    // A vote the family promised them, kept: one good turn deserves another.
+    for (const auto& [key, man] : promises_)
+        if (key.first == head && man != kNone && people_[man].household == th.id) {
+            fs.push_back({20, "你家答應過投我家的人"});
+            break;
+        }
     if (hasTrait(t, "generous")) fs.push_back({8, ""});
     if (hasTrait(t, "kind")) fs.push_back({4, ""});
     if (hasTrait(t, "greedy")) fs.push_back({-6, ""});
@@ -235,6 +265,16 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
         else if (th.lean) fs.push_back({10, "今年手頭緊"});
         std::string r = rivalFavoured("parcel", object, "");
         if (!r.empty()) fs.push_back({-20, "我已經答應" + r + "家了"});
+        // Two things no friendship buys: the land a farming house lives on, and land when they are after more.
+        bool farms = true;
+        if (const OccupationDef* od = defs_.occupation(t.occupation)) farms = od->farms || t.occupation == "peasant";
+        double need = consumption(th) * kDaysPerYear, left = (th.acres - pc.acres) * 100 + 220;
+        if (farms && left < need * 0.75) {
+            if (th.debt > 0.5) fs.push_back({-25, "賣了這塊，家裡就不太夠吃了"});
+            else hardNo = true, hardWhy = "賣了我家就不夠吃了";
+        }
+        if (!hardNo && std::any_of(wants_.begin(), wants_.end(), [&](const Want& x) { return x.open && x.house == th.id && x.kind == "parcel"; }))
+            hardNo = true, hardWhy = "我家自己還想多要地呢，哪有往外賣的道理";
         big = 40;
     } else if (what == "rent_vacant") {
         const Parcel& pc = parcels_[object];
@@ -261,6 +301,7 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
         double amount = object;
         fs.push_back({-(15 + amount / 4 - th.money / 25), "手頭也不寬裕"});
         if (ph.debt > 0.5 || ph.lean) fs.push_back({-10, "怕你家還不起"});
+        if (amount > th.money * 0.4) fs.push_back({-15, "這差不多是我家一半的積蓄"});
         big = 20;
     } else if (what == "match") {
         const Household& oh = households_[playerHousehold_];
@@ -374,7 +415,12 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
     double s = 0;
     for (const auto& f : fs) s += f.v;
     int answer;
+    // A big deal (land, a match) is seldom given outright even by a friend: they name their terms. So is money
+    // asked of a house that is short itself.
+    bool terms = lever.empty() && !demand.empty() &&
+                 (((what == "sell_parcel" || what == "match") && s < 40) || (what == "lend" && (th.debt > 0.5 || th.lean)));
     if (hardNo && lever != "hook") answer = 3;
+    else if (s >= 15 && terms) answer = 2;
     else if (s >= 15) answer = 1;
     else if (s >= -12 && !demand.empty() && lever != "meet") answer = 2;
     else if (s < -45 && op < 0 && (big >= 30 || hasTrait(t, "wrathful"))) answer = 4;
@@ -403,6 +449,7 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
             break;
         }
     if (hardNo) why = hardWhy;
+    const std::string misgiving = why;  // said even with a yes: "好吧。只是兒子們還指望這塊地。"
     if (why.empty() && what == "match") {
         std::string kw = kinWord(who, object);
         why = (kw.empty() ? people_[object].firstName : kw) + "的親事我還想再看看";
@@ -434,7 +481,7 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
     res.answer = answer;
     std::string name = shortName(who);
     if (answer == 1) {
-        res.text = name + "點頭了：「" + (plus.empty() ? "好吧" : plus + "，好吧") + "。」";
+        res.text = name + "點頭了：「" + (plus.empty() ? "好吧" : plus + "，好吧") + (misgiving.empty() ? "" : "。只是" + misgiving) + "。」";
         if (what == "sell_parcel") {
             double pay = price + (lever == "meet" ? demandMoney : 0);
             ph.money -= pay;
@@ -527,6 +574,7 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
     } else if (answer == 3) {
         res.text = name + "搖了搖頭：「" + why + "。」";
         asked_[{who, what, object}] = day_ + 90;
+        if (what == "sell_parcel") recordDeed("refused_land", who, head);  // the family remembers being turned away
     } else {
         res.text = name + "沉下臉來：「你也太看得起自己了！」";
         addOpinion(who, head, "asked_too_much", -8, 4);
@@ -551,6 +599,25 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
     befriend(who, head, 6);
     lastAsk_ = res;
     ++counters_["ask:" + what + ":" + std::to_string(answer)];
+    // Terms are answered there and then, in the same talk: take them, turn them down, or sweeten it with a gift.
+    if (answer == 2 && lever.empty()) {
+        std::vector<std::string> opts;
+        std::vector<std::string> how;
+        if (leverOpen("meet")) opts.push_back("答應：" + res.demand), how.push_back("meet");
+        if (leverOpen("gift")) opts.push_back("送 " + pence(res.giftSum) + "的禮，再說說看"), how.push_back("gift");
+        opts.push_back("回絕"), how.push_back("");
+        std::string sit = res.text + (dealCost > 0 ? "（這件事本身要 " + pence(dealCost) + "，你家有 " + pence(ph.money) + "。）" : "");
+        int r = opts.size() > 1 ? askPlayer("開口", sit, opts) : -1;
+        if (r >= 0 && !how[r].empty()) {
+            ask(who, what, object, subject, officeId, how[r]);
+        } else if (r >= 0) {
+            log(1, "〔開口〕你回絕了" + name + "的條件（選擇：回絕），這件事就此作罷。");
+            seasonNotes_.push_back("你沒答應" + name + "開的條件。");
+            addOpinion(who, head, "turned_down_terms", -3, 4);
+            asked_[{who, what, object}] = day_ + 90;
+            lastAsk_.levers.clear();
+        }
+    }
 }
 
 bool World::leverOpen(const std::string& lever) const {

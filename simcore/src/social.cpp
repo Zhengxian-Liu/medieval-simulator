@@ -1,6 +1,7 @@
 // Friendships, quarrels and the yearly reeve election.
 #include <algorithm>
 #include <map>
+#include <set>
 
 #include "simcore/world.h"
 
@@ -9,6 +10,14 @@ namespace sim {
 void World::monthlySocial() {
     std::vector<Id> all = livingInVillage();
     if (all.size() < 2) return;
+    // Houses after the same thing (a parcel, a post, a match) rub each other the wrong way when they meet.
+    std::set<std::pair<Id, Id>> competing;
+    for (const auto& x : wants_)
+        if (x.open)
+            for (const auto& y : wants_)
+                if (y.open && y.house != x.house && y.kind == x.kind &&
+                    (x.kind == "office" ? x.office == y.office : x.object == y.object && (x.kind != "place" || x.office == y.office)))
+                    competing.insert({x.house, y.house});
     for (Id a : all) {
         Person& pa = people_[a];
         double age = ageYears(pa);
@@ -26,7 +35,18 @@ void World::monthlySocial() {
             if (ageB < 6 || (stranger && std::abs(ageB - age) > 15)) continue;
             befriend(a, b, 4);
             double before = opinion(a, b);
-            double friendly = 0.7 + before / 300 + traitMod(pa, "sociable") * 0.1 - traitMod(pa, "quarrel") * 0.15;
+            // How a meeting goes is down to the two natures and what lies between the houses, not to how well they
+            // already get on (that made every acquaintance a friend in the end).
+            int alike = 0;
+            for (const auto& t : pa.traits) {
+                const TraitDef* td = defs_.trait(t);
+                if (!td || td->category != "personality") continue;
+                if (hasTrait(pb, t)) ++alike;
+                if (!td->opposite.empty() && hasTrait(pb, td->opposite)) --alike;
+            }
+            double friendly = 0.7 + alike * 0.05 + traitMod(pa, "sociable") * 0.1 - traitMod(pa, "quarrel") * 0.15;
+            if (competing.count({pa.household, pb.household})) friendly -= 0.2;
+            friendly -= 0.08 * feudStage(a, b);
             if (rngSocial_.chance(std::clamp(friendly, 0.1, 0.95))) {
                 addOpinion(a, b, "good_times", 3, 6);
                 addOpinion(b, a, "good_times", 3, 6);
