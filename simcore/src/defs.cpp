@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <set>
 #include <filesystem>
 
 namespace sim {
@@ -34,6 +35,7 @@ EventDef parseEvent(const Json& e) {
     d.title = e.stringOr("title", d.id);
     d.prompt = e.stringOr("prompt", "");
     d.prompts = readStrings(e["prompts"]);
+    d.promptIf = e["prompt_if"];
     d.quietLog = e.stringOr("quiet_log", "");
     d.ask = !e["ask"].isBool() || e["ask"].asBool();
     d.parentDecides = e["parent_decides"].isBool() && e["parent_decides"].asBool();
@@ -52,6 +54,14 @@ EventDef parseEvent(const Json& e) {
     d.interaction = e["interaction"];
     if (d.scope == "interaction") d.pulse = "interaction";
     d.cooldownMonths = static_cast<int>(e.numberOr("cooldown_months", 0));
+    d.repeat = e.stringOr("repeat", "household");
+    if (d.repeat != "household" && d.repeat != "person" && d.repeat != "free") throw JsonError("event " + d.id + ": unknown repeat " + d.repeat);
+    d.institution = e["institution"].isBool() && e["institution"].asBool();
+    if (d.institution) {
+        std::set<std::string> told(d.prompts.begin(), d.prompts.end());
+        if (!d.prompt.empty()) told.insert(d.prompt);
+        if (told.size() < 3) throw JsonError("event " + d.id + ": an institution needs at least 3 prompt variants (has " + std::to_string(told.size()) + ")");
+    }
     for (const auto& o : e["options"].asArray()) {
         OptionDef od;
         od.text = o.stringOr("text", "");
@@ -202,13 +212,15 @@ Defs Defs::loadFromDir(const std::string& dir) {
         ad.tradition = a.stringOr("tradition", "");
         ad.maxYears = static_cast<int>(a.numberOr("max_years", 25));
         if (a["milestones"].isArray())
-            for (const auto& m : a["milestones"].asArray()) ad.milestones.push_back({m["name"].asString(), m["goal"]});
+            for (const auto& m : a["milestones"].asArray())
+                ad.milestones.push_back({m["name"].asString(), m["goal"], m["gate"].isBool() && m["gate"].asBool()});
         if (a["plans"].isArray())
             for (const auto& pl : a["plans"].asArray()) ad.plans.push_back(pl.asString());
         ad.next = readStrings(a["next"]);
         ad.final = a.stringOr("final", ad.name);
         ad.hint = a.stringOr("hint", "");
         ad.keep = a["keep"];
+        ad.office = a.stringOr("office", "");
         d.ambitions.push_back(ad);
     }
 
@@ -264,6 +276,8 @@ Defs Defs::loadFromDir(const std::string& dir) {
         pd.discovery = p.numberOr("discovery", 0);
         pd.npc = !p["npc"].isBool() || p["npc"].asBool();
         pd.notifyTarget = p["notify_target"].isBool() && p["notify_target"].asBool();
+        pd.consent = p["consent"].isBool() && p["consent"].asBool();
+        pd.personal = p["personal"].isBool() && p["personal"].asBool();
         pd.startLog = p.stringOr("start_log", "");
         pd.successLog = p.stringOr("success_log", "");
         pd.failLog = p.stringOr("fail_log", "");

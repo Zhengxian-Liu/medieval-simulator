@@ -8,6 +8,7 @@
 #include <string>
 
 #include "simcore/autoplayer.h"
+#include "simcore/events.h"
 #include "simcore/world.h"
 
 using namespace sim;
@@ -107,8 +108,47 @@ static void checkInvariants(const World& w, const char* label) {
         CHECK(std::abs(freehold[h.id] - h.freehold) < 1e-6, "household freehold differs from its parcels");
         if (h.extinct) CHECK(h.acres < 1e-6, "extinct household still holds land");
     }
+    // Village posts: one man, one post, and only the living hold one.
+    std::set<Id> holders;
+    for (const auto& o : w.offices())
+        if (o.holder != kNone) {
+            CHECK(w.person(o.holder).alive(), "a dead man holds a post");
+            CHECK(holders.insert(o.holder).second, "one man holds two posts");
+        }
     (void)label;
 }
+
+namespace sim {
+// The cases a run rarely reaches, set up by hand: a head with money to spare, a family at the top of the ladder,
+// a manor short of coin.
+struct WorldTest {
+    static Person& person(World& w, Id id) { return w.people_[id]; }
+    static Household& house(World& w, Id id) { return w.households_[id]; }
+    static void choose(World& w, Id head) {
+        w.people_[head].ambition.clear();
+        w.chooseAmbition(w.people_[head]);
+    }
+    static void setAmbition(World& w, Id head, const std::string& id) {
+        Person& p = w.people_[head];
+        const Household& h = w.households_[p.household];
+        p.ambition = id;
+        p.ambitionSince = w.day_;
+        p.ambitionStep = 0;
+        p.ambitionDone = 0;
+        p.ambitionBase.money = h.money, p.ambitionBase.acres = h.acres, p.ambitionBase.freehold = h.freehold;
+    }
+    // A small landholder: free, 45 acres, 22 of them freehold, from the lord's own; and the lord thinks well of them.
+    static void makeFranklin(World& w, Id hid) {
+        Household& h = w.households_[hid];
+        for (Id m : h.members) w.people_[m].free = true;
+        Id lordHouse = w.people_[w.lord_].household;
+        if (h.acres < 45) w.moveLand(lordHouse, hid, 45 - h.acres, LandPick::CustomaryFirst, "test");
+        if (h.freehold < 22) w.makeFree(h, 22 - h.freehold);
+        w.addOpinion(w.lord_, h.head, "test", 60, 30);
+    }
+    static void rivalForLand(World& w) { w.rivalForLand(w.people_[w.playerHead()]); }
+};
+}  // namespace sim
 
 static double villageAcres(const World& w) {
     double a = 0;
@@ -273,13 +313,104 @@ int main() {
         }
         CHECK(giftTried && seasonTried, "found no ask to press with a gift");
     }
+    // Money is the family's to decide (design/fun-r5.md A): grain is bought to the harvest and no further, on a card
+    // for the player's house; at Michaelmas a rent the purse cannot meet is reckoned on a card before anything goes on
+    // the books; a season's money lists every item.
+    {
+        Config c;
+        c.seed = 58;
+        c.prerun = 25;
+        World base(defs, c);
+        const Id hh = base.playerHousehold();
+        auto foodDays = [&](const World& w) {
+            double per = 0;
+            for (Id m : w.household(hh).members) per += w.ageYears(w.person(m)) < 10 ? 0.6 : 1.0;
+            return w.household(hh).food / std::max(0.5, per);
+        };
+        auto runTo = [&](World& w, int month, int day) {  // to the start of that day, before it runs
+            while (!w.gameOver() && !(w.month() == month && w.dayOfMonth() == day)) w.stepDay();
+        };
+        // No one to ask: a month before the harvest the house buys to the harvest, not three months.
+        {
+            World w = base;
+            runTo(w, 7, 0);
+            w.setMoneyForTest(hh, 300);
+            w.setFoodForTest(hh, 10);
+            w.stepDay();  // month 7, day 0: thirty days to the harvest
+            CHECK(foodDays(w) > 30 && foodDays(w) < 47, "grain was bought past the harvest");
+        }
+        // Asked: the card says how far the barn is from the harvest, and "buy to the harvest" buys just that.
+        {
+            World w = base;
+            std::vector<World::ChoicePrompt> asked;
+            w.setChooser([&](const World::ChoicePrompt& p) {
+                asked.push_back(p);
+                if (p.title != "買糧") return -1;
+                for (size_t i = 0; i < p.options.size(); ++i)
+                    if (p.options[i].rfind("買到收成", 0) == 0) return static_cast<int>(i);
+                return -1;
+            });
+            runTo(w, 6, 0);
+            w.setMoneyForTest(hh, 400);
+            w.setFoodForTest(hh, 20);
+            w.stepDay();  // month 6, day 0: sixty days to the harvest
+            bool card = false;
+            for (const auto& p : asked)
+                if (p.title == "買糧" && p.situation.find("離秋收還有 60 天") != std::string::npos) card = true;
+            CHECK(card, "the family was not asked about buying grain");
+            CHECK(foodDays(w) > 70 && foodDays(w) < 77, "buying to the harvest did not buy to the harvest");
+            // Once a harvest year: short again a month later, the house keeps to what it said.
+            asked.clear();
+            w.setFoodForTest(hh, 10);
+            runTo(w, 7, 1);
+            bool again = false;
+            for (const auto& p : asked) again = again || p.title == "買糧";
+            CHECK(!again, "the grain card was asked twice before one harvest");
+        }
+        // Michaelmas with an empty purse: the reckoning card comes before any debt, and its levers work.
+        auto michaelmas = [&](const std::string& pick, double& owedAtCard, std::string& sit) {
+            World w = base;
+            owedAtCard = -1;
+            w.setChooser([&](const World::ChoicePrompt& p) {
+                if (p.title != "米迦勒節算帳") return -1;
+                sit = p.situation;
+                owedAtCard = w.household(hh).debt + w.household(hh).heldDebt;
+                for (size_t i = 0; i < p.options.size(); ++i)
+                    if (p.options[i].rfind(pick, 0) == 0) return static_cast<int>(i);
+                return static_cast<int>(p.options.size()) - 1;
+            });
+            runTo(w, 8, 29);
+            w.setMoneyForTest(hh, 3);
+            w.setFoodForTest(hh, 600);
+            w.stepDay();  // rent day
+            w.setChooser({});  // it holds this frame's `w`
+            return w;
+        };
+        double owed = 0;
+        std::string sit;
+        World books = michaelmas("差的先記在", owed, sit);
+        CHECK(owed >= 0 && owed < 1, "the rent shortfall went on the books before the family was asked");
+        CHECK(sit.find("今年的租") != std::string::npos && sit.find("×5") != std::string::npos, "the reckoning card does not say how the rent is made up");
+        CHECK(books.owedAll(hh) > 5 && books.debtText(hh).find("欠莊園") != std::string::npos, "the shortfall the family let go was not on the manor's books");
+        World sold = michaelmas("賣 ", owed, sit);
+        CHECK(sold.owedAll(hh) < 1, "selling grain on the reckoning card did not pay the rent");
+        CHECK(foodDays(sold) < 600 - 5, "the grain sold on the reckoning card is still in the barn");
+        // A season's money, item by item: what came in apart from what went out.
+        World w = base;
+        World::FamilySnapshot before = w.snapshot();
+        w.runYears(1);
+        std::string money = w.moneySince(before);
+        CHECK(money.find("進：") != std::string::npos && money.find("出：") != std::string::npos && money.find("其他") == std::string::npos,
+              "a year's money is not listed as incomings and outgoings");
+        std::printf("money: %s\n", money.c_str());
+    }
     // 年度重心 (data/focus.json): the same children, years spent playing or in the fields, grow up differently;
     // a focus the person cannot take is refused; the choice shows in the command log.
     {
         // Villages (by seed) whose family has young children at home when the player takes over. Several, since a
         // child's three years also hang on chance (a father who dies, a place in service): the sum shows the focus.
         std::vector<std::pair<World, std::vector<Id>>> bases;
-        for (int seed = 4; bases.size() < 4 && seed < 40; ++seed) {
+        for (int seed = 4; bases.size() < 6 && seed < 40; ++seed) {
             Config c;
             c.seed = seed;
             c.prerun = 25;
@@ -412,6 +543,113 @@ int main() {
         CHECK(moved > movedStart, "no land changed hands in 60 years");
         std::printf("land: %.0f acres in %zu parcels, %d moved in 60 years\n", before, w.parcels().size(), moved);
     }
+    // Round 5 C (design/fun-r5.md): impressions that stop growing and fade, asks that can fail and name terms
+    // answered on the spot, the season's list of things to do, plans that say why they cannot start.
+    {
+        Config c;
+        c.seed = 72;
+        c.prerun = 25;
+        World w(defs, c);
+        w.runYears(30);
+        std::vector<Id> heads;
+        for (const auto& h : w.households())
+            if (!h.extinct && h.head != kNone && !h.members.empty() && h.id != w.playerHousehold()) heads.push_back(h.head);
+        int pairs = 0, fast = 0;
+        for (Id a : heads)
+            for (Id b : heads) {
+                if (a == b) continue;
+                ++pairs;
+                fast += w.opinion(a, b) >= 90;
+                for (const auto& [lab, v] : w.opinionBreakdown(a, b))
+                    if (lab == "good_times" || lab == "quarrels") CHECK(std::abs(v) <= 25.01, "everyday impressions grew past their cap");
+            }
+        CHECK(fast * 20 <= pairs, "most of the village's heads became fast friends");
+        std::printf("opinions: %d of %d head pairs at 90 or more after 30 years\n", fast, pairs);
+    }
+    {
+        bool threw = false;
+        try {
+            parseEvent(Json::parse(R"({"id": "x", "institution": true, "prompt": "a", "prompts": ["a", "b"], "options": [{"text": "t"}]})"));
+        } catch (const JsonError&) {
+            threw = true;
+        }
+        CHECK(threw, "an institution with fewer than three ways of telling it was loaded");
+    }
+    {
+        std::map<int, int> answers;
+        int cards = 0, agendaDone = 0, agendaShown = 0;
+        std::map<std::string, int> kinds;
+        for (int seed : {3, 5, 8, 11}) {
+            Config c;
+            c.seed = seed;
+            c.prerun = 25;
+            World w(defs, c);
+            bool card = false;
+            // The family takes whatever terms are named (the first option of the 開口 card); nothing else is asked.
+            w.setChooser([&](const World::ChoicePrompt& p) {
+                if (p.title != "開口") return -1;
+                card = true;
+                return 0;
+            });
+            for (int season = 0; season < 20 && !w.gameOver(); ++season) {
+                w.startSeason();
+                std::vector<World::AgendaItem> items = w.seasonAgenda();
+                std::set<std::string> ids;
+                CHECK(items.size() <= 4, "the season's list has more than four things");
+                for (const auto& a : items) CHECK(ids.insert(a.id).second, "the season's list names one thing twice");
+                agendaShown += !items.empty();
+                for (const auto& a : items) {
+                    if (!a.open) continue;
+                    int before = w.timeLeft();
+                    w.issue({w.today(), "agenda", w.actingHead(), a.id, kNone, kNone});
+                    w.runCommands();
+                    CHECK(w.household(w.playerHousehold()).money > -0.01, "a thing on the season's list left the family in the red");
+                    CHECK(w.timeLeft() == before - 1, "a thing on the season's list did not take one free day");
+                    ++agendaDone;
+                    ++kinds[a.id.substr(0, a.id.find(':'))];
+                    break;
+                }
+                for (Id who : w.peopleToSee()) {
+                    if (w.playerHead() == kNone || w.timeLeft() < 1) break;
+                    for (const auto& o : w.asksFor(who)) {
+                        if (!o.open) continue;
+                        std::string sub = o.subject == kNone ? "" : std::to_string(o.subject);
+                        int before = w.timeLeft();
+                        card = false;
+                        w.issue({w.today(), "ask", w.playerHead(), o.ask + "|" + o.office + "||" + sub, who, o.object});
+                        w.runCommands();
+                        CHECK(w.timeLeft() == before - 1, "an ask (with its terms) took other than one day");
+                        CHECK(w.household(w.playerHousehold()).money > -0.01, "taking the terms left the family in the red");
+                        if (card) {
+                            ++cards;
+                            CHECK(w.lastAsk().answer != 2 || w.lastAsk().text.find("你") == 0, "terms taken on the card were left hanging");
+                        }
+                        ++answers[w.lastAsk().answer];
+                        break;
+                    }
+                }
+                for (int d = 0; d < kDaysPerYear / 4 && !w.gameOver(); ++d) w.stepDay();
+            }
+            checkInvariants(w, "season list");
+            // A plan clicked for the wrong person says why it cannot start, and takes no day.
+            if (!w.gameOver() && w.actingHead() != kNone) {
+                w.startSeason();
+                int before = w.timeLeft();
+                size_t lines = w.chronicle().size();
+                w.issue({w.today(), "start_plan", w.actingHead(), "befriend", w.actingHead(), kNone});
+                w.runCommands();
+                bool said = w.chronicle().size() > lines && w.chronicle().back().text.find("辦不成：") != std::string::npos;
+                CHECK(said || before == 0, "a plan that could not start did not say why");
+                CHECK(w.timeLeft() == before, "a plan that did not start took a day");
+            }
+        }
+        CHECK(answers[3] + answers[4] > 0, "nobody ever said no to an ask");
+        CHECK(cards > 0, "no ask ever named terms to answer on the spot");
+        CHECK(agendaShown > 0 && agendaDone > 0, "the season's list was never there to act on");
+        std::printf("season list: %d done (", agendaDone);
+        for (const auto& [k, n] : kinds) std::printf(" %s %d", k.c_str(), n);
+        std::printf(" ); asks: yes %d, terms %d (%d answered on the spot), no %d, offence %d\n", answers[1], answers[2], cards, answers[3], answers[4]);
+    }
     // Different seeds -> different histories.
     {
         Config c1, c2;
@@ -450,6 +688,101 @@ int main() {
     }
     std::printf("gentle mode: family survived 60 years in %d / %d runs\n", gentleSurvived, runs);
     CHECK(gentleSurvived * 10 >= runs * 9, "gentle mode should keep most families alive");
+
+    // Ambitions follow the family's fortunes (design/fun-r5.md D). Every head made rich and asked again: none takes
+    // up a goal with half its road already behind it, and a money goal is not met the day it is chosen. Every post's
+    // conditions are listed, and what bars a man is the first one he does not meet.
+    {
+        Config c;
+        c.seed = 11;
+        World w(defs, c);
+        w.runYears(15);
+        int chosen = 0, halfDone = 0, metAtOnce = 0;
+        std::map<std::string, int> picks;
+        for (const auto& hc : w.households()) {
+            if (hc.extinct || hc.head == kNone || hc.members.empty() || w.ageYears(w.person(hc.head)) < 16) continue;
+            Id head = hc.head;
+            WorldTest::house(w, hc.id).money = 3000;
+            WorldTest::choose(w, head);
+            const Person& p = w.person(head);
+            const AmbitionDef* a = w.defs().ambition(p.ambition);
+            if (!a) continue;
+            ++chosen;
+            ++picks[a->id];
+            EventRunner ev(w);
+            int steps = 1, done = 0;
+            for (const auto& m : a->milestones)
+                if (!m.gate) ++steps, done += ev.eval(m.goal, p, kNone);
+            halfDone += done > 0 && done * 2 >= steps && steps > 2;
+            metAtOnce += ev.eval(a->goal, p, kNone) || (a->id == "save_money" && ev.eval(a->milestones[0].goal, p, kNone));
+            if (a->id == "chantry") CHECK(w.standing(hc.id) == 3, "a chantry goal offered to a house that can already pay for it");
+        }
+        std::string top;
+        for (const auto& [id, n] : picks) top += " " + id + ":" + std::to_string(n);
+        std::printf("ambitions: %d rich heads chose:%s\n", chosen, top.c_str());
+        CHECK(chosen >= 10, "too few heads chose an ambition");
+        CHECK(halfDone == 0, "an ambition taken up with half its road already behind it");
+        CHECK(metAtOnce == 0, "a goal met the day it was chosen");
+        int people = 0;
+        for (const auto& q : w.people())
+            for (const char* of : {"reeve", "aletaster", "hayward"}) {
+                if (!q.alive()) continue;
+                ++people;
+                std::vector<OfficeGate> gs = w.officeGates(q.id, of);
+                std::string first;
+                for (const auto& g : gs)
+                    if (!g.ok && first.empty()) first = g.detail;
+                CHECK(!gs.empty() && first == w.officeBar(q.id, of), "officeBar is not the first unmet condition");
+            }
+        CHECK(people > 100, "no one to check the posts on");
+    }
+    // The late game: a small landholder lends the manor a large sum; when the manor cannot pay at term, land or the
+    // mill passes to the family (the rules answer for the player). A rival bids for the family's land, and the
+    // lord's family may marry into the house.
+    {
+        Config c;
+        c.seed = 7;
+        World w(defs, c);
+        w.runYears(3);
+        Id hid = w.playerHousehold();
+        WorldTest::makeFranklin(w, hid);
+        CHECK(w.standing(hid) == 3, "the family is not a small landholder after the setup");
+        Id gent = kNone;
+        for (const auto& q : w.people())
+            if (q.alive() && q.household != kNone && w.gentry(q.id) && q.occupation != "lord") gent = q.id;
+        Id kid = kNone;
+        for (Id m : w.household(hid).members)
+            if (m != w.playerHead() && w.person(m).dynasty == w.playerDynasty()) kid = m;
+        if (gent != kNone && kid != kNone) CHECK(w.mayWed(kid, gent), "a small landholder the lord favours may not ask for his family's hand");
+        WorldTest::house(w, hid).money = 3000;
+        WorldTest::setAmbition(w, w.playerHead(), "manor_creditor");
+        auto n = [&](const std::string& k) { return w.counters().count(k) ? w.counters().at(k) : 0; };
+        for (int d = 0; d < 12 * kDaysPerYear && !w.gameOver() && n("manor_loan:land") + n("manor_loan:mill") == 0; ++d) {
+            w.stepDay();
+            if (w.person(w.playerHead()).ambition != "manor_creditor" && w.manorBond().house == kNone) {
+                WorldTest::house(w, w.playerHousehold()).money += 1000;
+                WorldTest::setAmbition(w, w.playerHead(), "manor_creditor");  // repaid: lend again
+            }
+        }
+        std::printf("late game: lent %d, land %d, mill %d, repaid %d\n", n("manor_loan:lent"), n("manor_loan:land"), n("manor_loan:mill"), n("manor_loan:repaid"));
+        CHECK(n("manor_loan:lent") >= 1, "the steward never came to borrow");
+        CHECK(n("manor_loan:land") + n("manor_loan:mill") >= 1, "the manor never pledged land or the mill");
+        CHECK(n("manor_loan:lent") <= n("manor_loan:land") + n("manor_loan:mill") + n("manor_loan:repaid") + 1, "a loan to the manor never came due");
+        checkInvariants(w, "manor loan");
+        // 「村裡第一大戶」: a rival house bids for one of the family's parcels; refused (the rules), it goes after it.
+        hid = w.playerHousehold();
+        WorldTest::setAmbition(w, w.playerHead(), "first_house");
+        if (Id big = w.biggestOther(hid); big != kNone) WorldTest::house(w, big).money += 2000;
+        size_t before = w.chronicle().size();
+        WorldTest::rivalForLand(w);
+        bool bid = false, pressed = false;
+        for (size_t i = before; i < w.chronicle().size(); ++i) bid = bid || w.chronicle()[i].text.find("〔搶地〕") != std::string::npos;
+        for (const auto& wt : w.wants())
+            pressed = pressed || (wt.open && wt.kind == "parcel" && wt.house != hid && w.parcels()[wt.object].holder == hid);
+        CHECK(bid, "no rival came for the family's land");
+        CHECK(pressed, "a rival refused his bid did not go after the land");
+        checkInvariants(w, "first house");
+    }
 
     if (failures == 0) std::printf("all tests passed\n");
     return failures == 0 ? 0 : 1;

@@ -13,6 +13,8 @@
 //       {"do":"plan","plan":"arrange_match","target":3,"subject":5} {"do":"cancel","plan":"befriend"}
 //       {"do":"choose","index":0} {"do":"ai"} {"do":"inspect","who":12} {"do":"report"}
 //       {"do":"focus","who":12,"focus":"letters"}   (年度重心; free, any time in the season)
+//       {"do":"agenda","id":"sell_grain"}            (這一季的事: one of the state's "agenda" items)
+//       {"do":"interact","who":12,"event":"keep_company"}   (陪家人: the company visit this person needs most)
 #include <algorithm>
 #include <cmath>
 #include <fstream>
@@ -114,7 +116,30 @@ public:
         EventRunner er(w_);
         const Person& p = w_.people()[who];
         const WantDef* want = w_.defs().want(p.want);
+        // 談心, 一起上教堂, 誇獎 and 帶去市集 are one button, 陪伴: the engine picks the one this person needs (design/fun-r5.md C).
+        static const std::set<std::string> company{"talk_heart", "talk_church", "talk_praise", "talk_market"};
+        bool companyShown = false;
+        std::string pick = w_.companyEvent(who);
         for (const auto& in : ins) {
+            if (company.count(in.ev->id)) {
+                if (companyShown) continue;
+                companyShown = true;
+                const World::Interaction* use = &in;
+                for (const auto& x : ins)
+                    if (x.ev->id == pick) use = &x;
+                bool wanted = want && !pick.empty() && std::find(want->answeredBy.begin(), want->answeredBy.end(), pick) != want->answeredBy.end();
+                out.push_back(Obj()
+                                  .text("event", "keep_company")
+                                  .text("title", pick.empty() ? std::string("陪伴") : "陪伴：" + use->ev->title)
+                                  .text("desc", er.format(use->ev->interaction.stringOr("desc", ""), p, head.id))
+                                  .b("open", !pick.empty() && use->open)
+                                  .text("why", pick.empty() ? (use->why.empty() ? "最近才陪過" : use->why) : "")
+                                  .b("wanted", wanted && use->open)
+                                  .n("time", use->ev->interaction.numberOr("time", 1))
+                                  .n("money", use->ev->interaction.numberOr("money", 0))
+                                  .done());
+                continue;
+            }
             bool wanted = want && std::find(want->answeredBy.begin(), want->answeredBy.end(), in.ev->id) != want->answeredBy.end();
             out.push_back(Obj()
                               .text("event", in.ev->id)
@@ -179,12 +204,20 @@ public:
                            .n("food_days", std::floor(h.food / std::max(1.0, perDay)))
                            .n("acres", h.acres)
                            .n("freehold", h.freehold)
-                           .n("debt", std::floor(h.debt))
+                           .n("debt", std::floor(w.owedAll(hh)))  // all the house owes, as the cards count it
+                           .text("debt_text", w.debtText(hh))     // to whom, and when it falls due
                            .text("home", h.house)
                            .text("standing", rung >= 0 ? World::standingName(rung) : "領主家")
                            .b("lean", h.lean)
                            .done());
         o.n("time_left", w.timeLeft());
+        // 這一季的事: the few things worth a free day now, each a button ({"do":"agenda","id":...}).
+        if (withActions) {
+            std::vector<std::string> items;
+            for (const auto& a : w_.seasonAgenda())
+                items.push_back(Obj().text("id", a.id).text("title", a.title).text("desc", a.desc).b("open", a.open).text("why", a.why).done());
+            o.raw("agenda", arr(items));
+        }
         // Holding the house for a child: the head may hand the years to the steward and answer only what is asked.
         if (const Household& ph = w.households()[w.playerHousehold()]; ph.ward != kNone && w.people()[ph.ward].alive()) {
             double left = 16 - w.ageYears(w.people()[ph.ward]);
@@ -196,14 +229,24 @@ public:
             std::vector<std::string> steps;
             std::vector<int> st = w.milestoneState(head);
             for (size_t i = 0; i < a->milestones.size(); ++i)
-                steps.push_back(Obj().text("name", a->milestones[i].name).b("done", st[i] == 1).b("slipped", st[i] == 2).done());
-            steps.push_back(Obj().text("name", a->final).b("done", false).b("final", true).done());
+                steps.push_back(Obj().text("name", w.milestoneName(hp, i)).b("done", st[i] == 1).b("slipped", st[i] == 2)
+                                    .b("gate", a->milestones[i].gate).done());
+            steps.push_back(Obj().text("name", w.ambitionFinal(hp)).b("done", false).b("final", true).done());
             int left = a->maxYears - (w.today() - hp.ambitionSince) / kDaysPerYear;
             std::vector<std::string> helps;
             for (const auto& pid : a->plans)
                 if (const PlanDef* pd = w.defs().plan(pid)) helps.push_back(str(pd->name));
-            o.raw("ambition", Obj().text("name", a->name).text("desc", a->desc).raw("steps", arr(steps)).text("hint", a->hint)
-                                   .raw("plans", arr(helps)).n("years_left", std::max(0, left)).done());
+            // The post it is about, each of its conditions ✓ or ✗; who stands in the way; the loan to the manor.
+            std::string gates;
+            if (const Office* of = w.office(a->office)) gates = of->name + "的條件：" + World::gatesText(w.officeGates(head, a->office));
+            std::string note;
+            const ManorBond& bond = w.manorBond();
+            if (bond.house == w.playerHousehold())
+                note = "莊園欠你家 " + std::to_string(long(bond.owed)) + " 便士（借出 " + std::to_string(long(bond.lent)) + "），" +
+                       std::to_string(bond.due) + " 年米迦勒節到期。";
+            o.raw("ambition", Obj().text("name", a->name).text("desc", w.ambitionDesc(hp)).raw("steps", arr(steps)).text("hint", a->hint)
+                                   .raw("plans", arr(helps)).n("years_left", std::max(0, left)).n("deadline", w.ambitionDeadline(hp))
+                                   .text("gates", gates).text("rival", w.rivalLine(hp)).text("note", note).done());
         }
 
         // The family at home.
@@ -413,6 +456,13 @@ public:
                 offs.push_back(Obj().text("id", of.id).text("name", of.name).text("holder", of.holder != kNone ? w.fullName(of.holder) : "")
                                    .b("mine", of.holder != kNone && w.people()[of.holder].household == hh).n("until", of.until)
                                    .b("can", w.familyOfficeMan(of.id, head) != kNone).text("why", w.familyOfficeBar(of.id))
+                                   .raw("gates", [&] {
+                                       // Every condition for the man who would stand (else the head), met or not.
+                                       Id man = w.familyOfficeMan(of.id, head);
+                                       std::vector<std::string> v;
+                                       for (const auto& g : w.officeGates(man != kNone ? man : head, of.id))
+                                           v.push_back(Obj().text("label", g.label).b("ok", g.ok).text("detail", g.detail).done());
+                                       return arr(v); }())
                                    .n("want", [&] { for (const auto& x : w.wants()) if (x.open && x.house == hh && x.kind == "office" && x.office == of.id) return x.id; return kNone; }())
                                    .text("runner", [&] { for (const auto& x : w.wants()) if (x.open && x.house == hh && x.kind == "office" && x.office == of.id && x.subject != kNone) return w.shortName(x.subject); return std::string(); }())
                                    .raw("men", [&] {
@@ -433,7 +483,7 @@ public:
             o.raw("contest", c.done());
             const AskResult& la = w.lastAsk();
             // Only the levers that can work now: the season it was given and the money it takes (a press is part of the same talk).
-            if (la.who != kNone && la.day >= w.today() - 2)
+            if (la.who != kNone && la.day >= w.today() - 2 && w.people()[la.who].alive())
                 o.raw("last_ask", Obj().n("who", la.who).text("name", w.fullName(la.who)).text("ask", la.ask).text("office", la.office)
                                       .n("object", la.object).n("subject", la.subject).n("answer", la.answer).text("text", la.text)
                                       .raw("levers", [&] { std::vector<std::string> v; for (const auto& l : la.levers) if (w.leverOpen(l)) v.push_back(str(l)); return arr(v); }()).done());
@@ -465,7 +515,8 @@ public:
             }
             o.raw("plans_going", arr(going));
         }
-        if (withActions && acting != kNone && w.planRoom(acting)) {
+        // Listed even with both plans going, each saying why it cannot start (give one up to start another).
+        if (withActions && acting != kNone) {
             std::vector<PlanOption> opts = w_.availablePlans(acting);
             const AmbitionDef* amb = w.defs().ambition(hp.ambition);
             std::vector<std::string> plans;
@@ -500,7 +551,7 @@ public:
                     targets.push_back(Obj().n("target", op.target).n("subject", op.subject).text("label", label).done());
                 }
                 std::string why = picks.empty() ? w_.planBlock(acting, pd) : w.timeLeft() > 0 ? "" : "這一季沒有空閒了";
-                plans.push_back(Obj().text("id", pd.id).text("name", pd.name).text("desc", pd.desc).text("needs", pd.needs).text("why", why)
+                plans.push_back(Obj().text("id", pd.id).text("name", pd.name).text("desc", pd.desc + "（用一段空閒）").text("needs", pd.needs).text("why", why)
                                     .b("open", !picks.empty() && w.timeLeft() > 0).b("ambition", forAmb).raw("targets", arr(targets)).done());
             }
             o.raw("plans", arr(plans));
@@ -655,6 +706,9 @@ int main(int argc, char** argv) {
                     w.runCommands();
                 } else if (what == "focus") {
                     w.issue({w.today(), "focus", head, m["focus"], toInt(m, "who"), kNone});
+                    w.runCommands();
+                } else if (what == "agenda") {
+                    w.issue({w.today(), "agenda", head, m["id"], kNone, kNone});
                     w.runCommands();
                 } else if (what == "plan") {
                     w.issue({w.today(), "start_plan", w.actingHead(), m["plan"], toInt(m, "target"), toInt(m, "subject")});

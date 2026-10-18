@@ -73,17 +73,37 @@ void World::processCommands() {
                 continue;
             }
             if (ours && !planRoom(c.actor)) {
-                log(1, "〔計畫〕" + name + "沒辦成：" + (c.actor == actingHead() ? "手上已經有兩件事在辦。" : "手上已經有一件事在辦。"));
+                log(1, "〔計畫〕" + name + "沒辦成：" + (c.actor == actingHead() ? "手上已經有兩件事在辦（放棄一件才能開新的）。" : "手上已經有一件事在辦。"));
                 continue;
             }
-            if (startPlan(c.actor, c.plan, c.target, c.subject)) {
+            // The click names who it is with and for: it must still be one the plan could be started on now.
+            if (ours && pd) {
+                bool listed = false;
+                for (const auto& op : availablePlans(c.actor))
+                    if (op.plan == c.plan && op.target == c.target && op.subject == c.subject) listed = true;
+                if (!listed) {
+                    std::string why = planBlock(c.actor, *pd);
+                    bool anyOpen = false;
+                    for (const auto& op : availablePlans(c.actor))
+                        if (op.plan == c.plan) anyOpen = true;
+                    log(1, "〔計畫〕" + name + "眼下辦不成：" + (anyOpen || why.empty() ? std::string("對象不對／不在了") : why) + "。");
+                    continue;
+                }
+            }
+            std::string why = startPlan(c.actor, c.plan, c.target, c.subject);
+            if (why.empty()) {
                 if (ours) spendTime(1);
             } else if (ours) {
-                log(1, "〔計畫〕" + name + "眼下辦不成。");
+                log(1, "〔計畫〕" + name + "眼下辦不成：" + why + "。");
             }
+        } else if (c.type == "agenda") {
+            doAgenda(c.plan);  // 這一季的事: plan = the item's id
         } else if (c.type == "interact") {
+            // 陪家人 (keep_company): whichever of the company visits this person needs most now.
+            std::string id = c.plan == "keep_company" && c.target != kNone ? companyEvent(c.target) : c.plan;
+            if (id.empty()) log(1, "〔陪家人〕眼下沒法陪" + shortName(c.target) + "：" + (timeLeft() < 1 ? "這一季沒有空了。" : "這陣子不方便（最近才陪過，或手頭、時局不許）。"));
             for (const auto& ev : defs_.events)
-                if (ev.id == c.plan && ev.scope == "interaction" && c.target != kNone) {
+                if (ev.id == id && ev.scope == "interaction" && c.target != kNone) {
                     EventRunner er(*this);
                     er.interact(ev, people_[c.target], actingHead());
                     break;
@@ -134,7 +154,7 @@ std::string World::planBlock(Id actorId, const PlanDef& pd) {
     if (cd != cooldowns_.end() && cd->second > day_) return "上回才辦過，還要 " + seasonsTo(cd->second) + " 季才能再辦";
     for (const auto& p : plans_)
         if (p.actor == actorId && p.plan == pd.id) return "正在辦";
-    if (!planRoom(actorId)) return actorId == actingHead() ? "手上已經有兩件事在辦" : "手上已經有一件事在辦";
+    if (!planRoom(actorId)) return actorId == actingHead() ? "手上已經有兩件事在辦（放棄一件才能開新的）" : "手上已經有一件事在辦";
     Person& actor = people_[actorId];
     EventRunner ev(*this);
     if (!ev.eval(pd.actor, actor, kNone)) return pd.needs.empty() ? "眼下不合條件" : "要：" + pd.needs;
@@ -239,19 +259,28 @@ std::vector<PlanOption> World::availablePlans(Id actorId) {
     return out;
 }
 
-bool World::startPlan(Id actorId, const std::string& planId, Id target, Id subject) {
+std::string World::startPlan(Id actorId, const std::string& planId, Id target, Id subject) {
     const PlanDef* pd = defs_.plan(planId);
-    if (!pd || actorId == kNone || !planRoom(actorId)) return false;
+    if (!pd || actorId == kNone) return "沒有這件事";
     for (const auto& p : plans_)
-        if (p.actor == actorId && p.plan == planId) return false;
+        if (p.actor == actorId && p.plan == planId) return "已經在辦";
+    if (!planRoom(actorId)) return planBlock(actorId, *pd);
     Person& actor = people_[actorId];
-    if (!actor.alive() || actor.household == kNone) return false;
+    if (!actor.alive() || actor.household == kNone) return "人不在了";
     EventRunner check(*this);
-    if (!check.eval(pd->actor, actor, kNone)) return false;
+    if (!check.eval(pd->actor, actor, kNone)) return planBlock(actorId, *pd);
     if (!pd->target.isNull() && (target == kNone || !people_[target].alive() || people_[target].household == kNone))
-        return false;
+        return "對象不對／不在了";
+    // Life-changing for the family: the one keeping the house says yes or no first.
+    if (!familyAllows(actorId, *pd, target)) return "家裡沒答應";
+    bool consented = false;
+    if (pd->consent && target != kNone && (target == actingHead() || target == playerHead()) && !inPlayerHouse(actor.household)) {
+        if (!headConsents(actorId, *pd, target)) return "對方沒答應";
+        consented = true;
+    }
 
     plans_.push_back({actorId, target, subject, planId, 0, day_, {}});
+    if (consented) plans_.back().beatsSeen.push_back("_consent");
     ++counters_["plan:" + planId + ":start"];
     if (isPlayerFamily(actor)) ++counters_["plan_family:" + planId + ":start"];
     // The head taking up a child's cause (a match for them) is what that child was waiting for.
@@ -259,9 +288,77 @@ bool World::startPlan(Id actorId, const std::string& planId, Id target, Id subje
     bool home = inPlayerHouse(actor.household);
     if (home && !pd->startLog.empty()) {
         EventRunner ev(*this, &plans_.back());
-        log(1, "【計畫】" + ev.format(pd->startLog, actor, target));
+        log(1, (actorId == actingHead() ? "【計畫】" : "【家人】") + ev.format(pd->startLog, actor, target));
     }
-    return true;
+    return "";
+}
+
+namespace {
+// What a family member asks the head, per plan: the plans a grown son or daughter may take up on their own that change
+// the family's life (whom they marry, money for letters, a scheme against another house).
+const char* familyAskText(const std::string& plan) {
+    if (plan == "court") return "{first}來跟你說：心裡有了 {target}，想去追求{target_pron}。成了，就是一門親事。";
+    if (plan == "study") return "{first}想每天收工後去跟神父學認字，每月要花家裡 1 便士，少說也得一兩年。";
+    if (plan == "revenge") return "{first}咽不下 {target} 家那口氣，想暗中報復。萬一敗露，全家都抬不起頭。";
+    if (plan == "slander") return "{first}看 {target} 不順眼，想在井邊說{target_pron}的閒話。萬一被查出來，要上莊園法庭。";
+    return nullptr;
+}
+}  // namespace
+
+bool World::familyAllows(Id actorId, const PlanDef& pd, Id target) {
+    const Person& a = people_[actorId];
+    Id acting = actingHead();
+    const char* ask = familyAskText(pd.id);
+    // The family's own, wherever they live (a daughter in service elsewhere too), not a servant under the roof.
+    if (!ask || acting == kNone || actorId == acting || !inPlayerHouse(a.home != kNone ? a.home : a.household)) return true;
+    EventRunner ev(*this);
+    std::string sit = ev.format(ask, a, target);
+    int r = askPlayer("家人的打算", sit, {"准", "不准"});
+    bool yes;
+    if (r >= 0) {
+        yes = r == 0;
+    } else {
+        // Without a player the head answers by temper: a match and letters are welcome, a scheme only to one who
+        // hates that house too.
+        const Person& h = people_[acting];
+        bool scheme = pd.id == "revenge" || pd.id == "slander";
+        double hate = target != kNone ? -opinion(acting, target) : 0;
+        double c = !scheme ? (pd.id == "study" && households_[a.household].money < 40 ? 0.5 : 0.85)
+                           : 0.15 + (hate > 30 ? 0.35 : 0) + (hasTrait(h, "vengeful") || hasTrait(h, "cruel") ? 0.3 : 0) - (hasTrait(h, "kind") ? 0.1 : 0);
+        yes = rngPlans_.chance(std::clamp(c, 0.0, 1.0));
+    }
+    log(1, "〔家人的打算〕" + sit + (r >= 0 ? "（選擇：" + std::string(yes ? "准" : "不准") + "）" : yes ? "家裡點了頭。" : "家裡沒答應。"));
+    if (!yes) {
+        // Told no: not asked again for a year, and it stings a little.
+        cooldowns_[{actorId, "plan:" + pd.id}] = day_ + kDaysPerYear;
+        addOpinion(actorId, acting, "forbade_plan", -6, 4);
+    }
+    return yes;
+}
+
+bool World::headConsents(Id actorId, const PlanDef& pd, Id target) {
+    const Person& a = people_[actorId];
+    const Person& h = people_[target];
+    std::string sit = fullName(actorId) + "（" + std::to_string(int(ageYears(a))) + " 歲" +
+                      (a.spouse != kNone && people_[a.spouse].alive() ? "，有家室" : "") + "；你對" + (a.sex == Sex::Male ? "他" : "她") + " " +
+                      std::to_string(std::lround(opinion(target, actorId))) + "）這陣子總找機會跟你說話，看你的眼神不一樣。" +
+                      (h.spouse != kNone && people_[h.spouse].alive() ? "你家裡還有 " + fullName(h.spouse) + "。" : "");
+    const std::string title = shortName(actorId) + " 對你有意思";
+    int r = askPlayer(title, sit, {"拒絕", "順水推舟"});
+    bool yes;
+    if (r >= 0) {
+        yes = r == 1;
+    } else {
+        EventRunner ev(*this);
+        double w = ev.weight(pd.aiWeight, h);  // the same temper that would start one
+        yes = rngPlans_.chance(std::clamp(w / (w + 25), 0.0, 0.9));
+    }
+    log(1, "〔" + title + "〕" + sit + (r >= 0 ? "（選擇：" + std::string(yes ? "順水推舟" : "拒絕") + "）" : yes ? "你沒有推開。" : "你裝作沒看懂。"));
+    if (!yes) {
+        cooldowns_[{actorId, "plan:" + pd.id}] = day_ + std::max(1, pd.retryYears) * kDaysPerYear;
+        addOpinion(actorId, target, "rebuffed", -8, 5);
+    }
+    return yes;
 }
 
 void World::endPlan(size_t index, const std::string& requested) {
@@ -281,22 +378,35 @@ void World::endPlan(size_t index, const std::string& requested) {
     bool actorHome = inPlayerHouse(actor.household);
     bool victimHome = plan.target != kNone && inPlayerHouse(people_[plan.target].household);
     EventRunner ev(*this, &plan);
+    // A family member's own plan is theirs, told as theirs (「艾格妮絲 自己的「追求」落空了」), not in the head's voice.
+    bool own = actorHome && plan.actor != actingHead();
+    std::string whose = own ? "【家人】" + fullName(plan.actor) + " 自己的「" + pd->name + "」" : "「" + pd->name + "」";
 
+    if (outcome == "aborted") return;  // called off in a beat that already said so: no failure, no deed, no talk
     if (outcome == "cancel") {
         if (actorHome) log(1, fullName(plan.actor) + " 放棄了「" + pd->name + "」。");
         return;
     }
     if (outcome == "lost_target") {
-        if (actorHome) log(1, "「" + pd->name + "」落空了：" + fullName(plan.target) + " 已經不在了。");
+        Id gone = plan.target != kNone && (!people_[plan.target].alive() || people_[plan.target].household == kNone) ? plan.target : plan.subject;
+        if (actorHome && gone != kNone) log(1, whose + "落空了：" + fullName(gone) + " 已經不在了。");
         return;
     }
     if (outcome == "married_off") {
-        Id wed = plan.subject != kNone && people_[plan.subject].spouse != kNone && people_[plan.subject].spouse != plan.target ? plan.subject
-               : plan.target != kNone && people_[plan.target].spouse != kNone && people_[plan.target].spouse != plan.subject && people_[plan.target].spouse != plan.actor
-                   ? plan.target : plan.actor;
-        if (actorHome) log(1, "「" + pd->name + "」落空了：" + fullName(wed) + " 已經另結了親。");
+        // The one who married someone else, by the same test monthlyPlans ended it on.
+        auto wedTo = [&](Id x, Id other) {
+            return x != kNone && people_[x].spouse != kNone && people_[x].spouse != other && people_[people_[x].spouse].alive();
+        };
+        Id partner = plan.plan == "court" ? plan.actor : plan.subject;
+        Id wed = wedTo(plan.subject, plan.target) ? plan.subject : wedTo(plan.target, partner) ? plan.target : plan.actor;
+        if (actorHome) log(1, whose + "落空了：" + fullName(wed) + " 已經另結了親。");
         return;
     }
+    // An affair aimed at the one keeping the player's house goes nowhere without their yes (asked here when the plan
+    // began before they kept the house).
+    if (pd->consent && outcome == "success" && plan.target != kNone && (plan.target == actingHead() || plan.target == playerHead()) && !actorHome &&
+        std::find(plan.beatsSeen.begin(), plan.beatsSeen.end(), "_consent") == plan.beatsSeen.end() && !headConsents(plan.actor, *pd, plan.target))
+        return;
     // Someone courting the player's head, or matching their own child with one of the player's house: the family answers.
     bool matching = plan.plan == "court" || plan.plan == "arrange_match";
     if (matching && !actorHome && victimHome && (outcome == "success" || outcome == "fail")) {
@@ -356,11 +466,17 @@ void World::endPlan(size_t index, const std::string& requested) {
     const std::string& text = outcome == "success" ? pd->successLog : outcome == "exposed" ? pd->exposedLog : pd->failLog;
     const Json& effects = outcome == "success" ? pd->success : outcome == "exposed" ? pd->exposed : pd->fail;
     std::string line = text.empty() ? "" : ev.format(text, actor, plan.target);
-    if (pd->secret && outcome == "success" && victimHome && !actorHome) {
+    // The one keeping the player's house said yes to it (順水推舟): it is theirs as much as the actor's.
+    const bool consented = std::find(plan.beatsSeen.begin(), plan.beatsSeen.end(), "_consent") != plan.beatsSeen.end();
+    if (consented && !line.empty()) {
+        log(1, (outcome == "success" ? std::string("【成功】") : outcome == "exposed" ? "【敗露】" : "【失敗】") + line);
+    } else if (pd->secret && outcome == "success" && victimHome && !actorHome) {
         // The victim sees what happened, not who did it.
         if (!pd->victimLog.empty()) log(1, ev.format(pd->victimLog, actor, plan.target));
+    } else if (own && pd->secret && pd->consent && outcome == "success") {
+        // A family member's affair is theirs to hide: the head comes to hear of it by stages (hooks.cpp familyAffairs).
     } else if (!line.empty() && (actorHome || (victimHome && pd->notifyTarget))) {
-        log(1, (outcome == "success" ? "【成功】" : outcome == "exposed" ? "【敗露】" : "【失敗】") + line);
+        log(1, (own ? std::string("【家人】") : outcome == "success" ? "【成功】" : outcome == "exposed" ? "【敗露】" : "【失敗】") + line);
     } else if (!line.empty() && outcome == "exposed") {
         log(2, line);
     }
@@ -437,10 +553,15 @@ void World::monthlyPlans() {
                 const std::string beatKey = "beat:" + pd->id + ":" + beat.id + ":" + std::to_string(plan.target) + ":" + std::to_string(plan.subject);
                 auto again = cooldowns_.find({actor.id, beatKey});
                 if (again != cooldowns_.end() && again->second > day_) continue;
+                // Nor does the family meet the same scene within a few years in another plan (a second child's match,
+                // the freehold tried again by the son): the house remembers it.
+                const std::string houseBeat = "beat:" + pd->id + ":" + beat.id;
+                if (actorHome && metLately(actor.household, houseBeat)) continue;
                 if (!ev.eval(beat.conditions, actor, plan.target)) continue;
                 if (!rngPlans_.chance(beat.chance)) continue;
                 copy.beatsSeen.push_back(beat.id);
                 cooldowns_[{actor.id, beatKey}] = day_ + 6 * kDaysPerYear;
+                if (actorHome) meetStory(actor.household, houseBeat);
                 // A beat is the doer's side of it (their haggling, their doubts): told only when the doer is the family.
                 int importance = actorHome ? 1 : 0;
                 ev.runEvent(beat, actor, plan.target, importance);
@@ -452,6 +573,7 @@ void World::monthlyPlans() {
                     p.progress = copy.progress;
                     p.beatsSeen = copy.beatsSeen;
                     p.priceAdd = copy.priceAdd;
+                    p.aborted = copy.aborted;
                 }
         }
         ActivePlan& cur = plans_[i];
@@ -465,6 +587,10 @@ void World::monthlyPlans() {
         }
         if (!people_[cur.actor].alive()) {
             plans_.erase(plans_.begin() + static_cast<long>(i));
+            continue;
+        }
+        if (cur.aborted) {
+            endPlan(i, "aborted");
             continue;
         }
         if (pd->secret && rngPlans_.chance(pd->discovery)) {

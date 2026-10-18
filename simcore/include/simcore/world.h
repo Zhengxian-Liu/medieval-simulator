@@ -17,6 +17,8 @@ namespace sim {
 
 using Id = int32_t;
 constexpr Id kNone = -1;
+// What a standing affair with someone's husband or wife takes off one's opinion of them (World::opinion).
+constexpr double kGuilt = 25;
 
 // Calendar: 12 months of 30 days. Day 0 is 1 January of the start year.
 constexpr int kDaysPerMonth = 30;
@@ -97,6 +99,8 @@ struct Person {
     int ambitionStep = 0;       // milestones of the ambition reached so far
     std::string lastAmbition;   // the last one completed: its harder sequels are offered first
     uint32_t ambitionDone = 0;  // which of them (bit i: milestone i), in whatever order they came
+    // What the house had when the ambition was taken up: money and land goals are counted from it ("再存 200").
+    struct { double money = 0, acres = 0, freehold = 0; } ambitionBase;
     Intention intent;
     std::string lastReason;     // why they chose what they last chose, when a model decided for them
     bool free = true;           // false = villein (unfree), bound to the manor
@@ -156,6 +160,7 @@ struct Household {
     double leaseAcres = 0; // the lord's demesne farmed on a lease (包租), with its own rent, until leaseUntil
     int leaseUntil = -1;
     int millUntil = -1;    // the lord's mill farmed (包下磨坊): the multure is the house's, the farm paid at Michaelmas
+    bool millFree = false;  // ...held against the manor's debt (莊園抵債): no farm paid for it
     int hiredUntil = -1;   // the grown hands are hired on for the year by another house (bed and board, a wage)
     Id hiredBy = kNone;
     int boonUntil = -1;    // working off a debt on the lord's demesne: fewer days on their own land
@@ -165,6 +170,10 @@ struct Household {
     bool lean = false;     // last harvest fell short of the household's needs
     double lastYield = 0;  // last harvest, in days of the household's food
     double lastRent = 0, lastRentPaid = 0;
+    double lastRentMult = 0; // the times' rent multiplier (war, plague) and the free/villein rate at last Michaelmas,
+    int lastRentFree = -1;   // so a change in the rent can be explained to the family
+    int grainAsked = -1;     // the harvest (day / year) the family was last asked to get its bread through to, and what it chose
+    int grainChoice = -1;
     // The head's time this season (design/season-loop.md): spent on people and plans, or else on the work.
     std::map<std::string, double> ledger;  // the player's money, by what it came from or went on (running totals)
     int timeSeason = -1;   // year * 4 + season the budget belongs to
@@ -236,6 +245,18 @@ enum class LandPick { CustomaryOnly, CustomaryFirst, FreeFirst };
 
 // The contested ledger (design/contested.md): what only so many can have, what each house is after,
 // and who owes whom.
+// One condition for standing for a post, as the office row and the ambition card show it: 「欠債 62／上限 20」.
+struct OfficeGate {
+    std::string label;   // 「欠債不到 20 便士」
+    bool ok = false;
+    std::string detail;  // how it stands for this man: 「欠債 62／上限 20」, 「還要 3 年滿 25」
+};
+// A large loan to the manor (「莊園欠我家的錢」): due in full on a Michaelmas, or the steward pledges land or the mill.
+struct ManorBond {
+    Id house = kNone;    // the household owed
+    double lent = 0, owed = 0;
+    int due = -1;        // year it falls due (after the Michaelmas rents)
+};
 // A village post: the reeve (elected every three years), the ale-taster and the hayward (every Michaelmas).
 struct Office {
     std::string id, name;
@@ -426,6 +447,7 @@ struct ActivePlan {
     int startDay = 0;
     std::vector<std::string> beatsSeen;  // each beat happens at most once per plan
     double priceAdd = 0;                 // what a buyer has offered on top of the asking price (outbid for land)
+    bool aborted = false;                // called off in a beat (「不買了」): ends quietly, not as a failure
 };
 
 struct PlanOption {
@@ -473,6 +495,21 @@ public:
     const Config& config() const { return cfg_; }
     const std::vector<Person>& people() const { return people_; }
     std::vector<int> milestoneState(Id head) const;  // per step: 1 holds now, 2 was reached but no longer holds, 0 not yet
+    // An ambition's words for this head: {gain}/{target} from a goal counted from what the house had when it was
+    // taken up, {chantry} its price for the house, {top} the house with most land after this one.
+    std::string ambitionText(const Person& head, const std::string& text, const Json& goal) const;
+    std::string milestoneName(const Person& head, size_t i) const;
+    std::string ambitionFinal(const Person& head) const;
+    std::string ambitionDesc(const Person& head) const;
+    int ambitionDeadline(const Person& head) const;  // the last year it can be done in
+    std::string rivalLine(const Person& head) const;  // who stands in the way of the late-game ambitions ("" for others)
+    // How much more of money, acres or freehold a goal asks for: v is a number, or {"min": n, "pct": p} (p% of what
+    // the house had, at least n).
+    double ambitionGain(const Person& p, const std::string& what, const Json& v) const;
+    double chantryPrice(Id house) const;  // a chantry fitting the house's standing
+    double acresLead(Id house) const;     // acres beyond the biggest other house in the village (negative: behind)
+    Id biggestOther(Id house) const;      // that house
+    const ManorBond& manorBond() const { return manorBond_; }
     const std::vector<Household>& households() const { return households_; }
     const std::vector<Dynasty>& dynasties() const { return dynasties_; }
     const std::vector<Item>& items() const { return items_; }
@@ -590,6 +627,28 @@ public:
         std::string why;       // when closed: why not
     };
     std::vector<Interaction> interactionsWith(Id target);
+    // 這一季的事 (design/fun-r5.md C): two to four things worth a free day this season, from the family's state (kin
+    // going hungry, grain to sell, a hand for the harvest, a grieving child, a match to make), each one button.
+    struct AgendaItem {
+        std::string id;     // stable while the situation holds: "sell_grain", "company:12", "help_land:4"
+        std::string title, desc, why;
+        bool open = true;   // false: why
+        std::string kind;   // interact | plan | effects
+        std::string event;  // interact: the interaction (or keep_company); plan: the plan
+        Id who = kNone, target = kNone, subject = kNone;
+        std::string effects;  // kind effects: a JSON effect list run on the head, with `target` as its other party
+        std::string done;     // kind effects: the chronicle line
+        int rank = 0;
+    };
+    std::vector<AgendaItem> seasonAgenda();
+    void doAgenda(const std::string& id);
+    // 陪家人: of 談心, 一起上教堂, 誇獎 and 帶去市集, the one this person wants or needs most now ("" when none is open).
+    std::string companyEvent(Id who);
+    // Lasting help for a house that cannot feed itself (season agenda, 〔親友挨餓〕): a parcel the family can spare
+    // and still eat, the one of theirs it could take in, whether it can take their grown on as hands for the year.
+    Id spareParcel(Id toHouse) const;
+    Id takeInWho(Id house) const;
+    bool canHireKin(Id house) const;
     // 處境 and 人生路 (design/life-paths.md).
     std::string stationName(const Person& p) const;
     std::string occupationName(const Person& p) const;  // "主婦", or "閨女" for a girl not yet married
@@ -599,6 +658,7 @@ public:
     std::vector<Id> peopleToSee() const;  // family first, then those the head knows
     void runCommands() { processCommands(); }
     void setMoneyForTest(Id house, double money) { households_[house].money = money; }  // tests only
+    void setFoodForTest(Id house, double days) { households_[house].food = consumption(households_[house]) * days; }  // tests only
     void startSeason() { rollSeason(); }  // on a season's first day, before it runs: free time and the family's wants  // carry out what the player just asked for, before the day runs
     // The season at a glance, and what changed since a snapshot taken at its start.
     std::string familyGlance() const;
@@ -609,6 +669,7 @@ public:
     struct FamilySnapshot {
         std::map<Id, std::pair<std::string, double>> people;  // mood word, opinion of the head
         std::map<Id, std::map<std::string, double>> why;       // the reasons behind that opinion
+        std::map<Id, double> kinAway;                          // near kin in other houses: their opinion of the head
         double money = 0, food = 0, acres = 0;
         Id head = kNone;
         std::map<std::string, double> ledger;
@@ -617,9 +678,16 @@ public:
     FamilySnapshot snapshot() const;
     std::string seasonChanges(const FamilySnapshot& before) const;
     std::string moneySince(const FamilySnapshot& before) const;
+    // What the house owes, to whom, and when it falls due ("欠莊園 62（拖了一年）、欠 艾倫·米勒 30（明年米迦勒節）").
+    std::string debtText(Id household) const;
+    double owedAll(Id household) const;  // the main debt and the one waiting behind it
     bool isPlayerFamily(const Person& p) const;
     bool closeKin(Id a, Id b) const;
     bool gentry(Id id) const;  // the lord's family: they do not marry tenants
+    // Whether a and b may marry: the same class, or a small landholder's child the lord thinks well of
+    // (「和德·阿什科姆家結親」).
+    bool mayWed(Id a, Id b) const;
+    bool gentrySingle() const;  // an unmarried young person of the lord's family lives in the village
     int swornFriends(Id id) const;  // living people this person has sworn friendship with
     int livingCount() const;
     // The web of acquaintance (design/news.md): how close two people are, 0–100 (kin, then 熟識), and two
@@ -645,6 +713,11 @@ public:
     bool placeOpen(Id master, const std::string& kind) const;
     bool officeEligible(Id who, const std::string& id) const { return officeBar(who, id).empty(); }
     std::string officeBar(Id who, const std::string& id) const;  // why they cannot stand for it: "" when they can
+    // Every condition of the post for this man, met or not (officeBar is the first one not met).
+    std::vector<OfficeGate> officeGates(Id who, const std::string& id) const;
+    static std::string gatesText(const std::vector<OfficeGate>& gates);  // 「✓ 一家之主 ✗ 欠債 62／上限 20」
+    int familyOffices(Id dynasty) const;  // posts held now by living people of that blood
+    int reeveTerms(Id dynasty) const;     // terms running the reeve of that blood has served on end (0: none)
     // The family's man who would stand for a post: the preferred one if he can, else the head, else any man of the
     // house who can (kNone: none). familyOfficeBar: why none of them can ("" when one can).
     Id familyOfficeMan(const std::string& id, Id preferred) const;
@@ -687,6 +760,7 @@ public:
 
 private:
     friend class EventRunner;
+    friend struct WorldTest;  // tests/tests.cpp: sets up the cases a run rarely reaches (a rich head, a manor short of coin)
 
     const Defs& defs_;
     Config cfg_;
@@ -708,6 +782,18 @@ private:
     uint64_t scheduleSeq_ = 0;
     std::map<std::pair<Id, std::string>, int> cooldowns_;  // (person, event) -> day allowed again
     std::map<std::pair<Id, std::string>, int> lastLog_;    // (person, option text) -> the variant last told
+    // No repeats (design/fun-r5.md C): (household, event / beat / card id) -> the day the family last met it; a story
+    // keyed by person is stored as (person, "p:" + id). Within kRepeatYears it is not met again.
+    std::map<std::pair<Id, std::string>, int> metStory_;
+    std::map<std::pair<Id, std::string>, std::vector<int>> toldPrompts_;  // (household, event) -> prompt variants told
+    static constexpr int kRepeatYears = 3;
+    bool metLately(Id key, const std::string& story) const {
+        auto it = metStory_.find({key, story});
+        return it != metStory_.end() && day_ - it->second < kRepeatYears * kDaysPerYear;
+    }
+    void meetStory(Id key, const std::string& story) { metStory_[{key, story}] = day_; }
+    // One of n ways of telling a thing, not one this house has heard while others are left (then round again).
+    int freshVariant(Id house, const std::string& story, int n, Rng& rng);
     std::map<std::pair<Id, std::string>, int> chatterSaid_;  // (person, chatter id) -> day they last talked of it
     std::map<std::pair<Id, std::string>, int> chatterHeard_;  // (listening house, line) -> day it last heard it said
     std::set<std::string> worldFlags_;
@@ -772,10 +858,15 @@ private:
 
     // plans.cpp
     void processCommands();
-    bool startPlan(Id actor, const std::string& plan, Id target, Id subject);
+    std::string startPlan(Id actor, const std::string& plan, Id target, Id subject);  // "" when started, else why not
     void monthlyPlans();
     void npcStartPlans();
     void endPlan(size_t index, const std::string& outcome);
+    // A family member (not the one keeping the house) means to start a plan that changes the family's life: the
+    // head is asked first. False: not allowed (and said).
+    bool familyAllows(Id actor, const PlanDef& pd, Id target);
+    // The acting head is the one an outsider's affair is aimed at: the head is asked, and nothing happens without a yes.
+    bool headConsents(Id actor, const PlanDef& pd, Id target);
 
     // setup.cpp
     void setupVillage();
@@ -797,6 +888,19 @@ private:
     void yearlyAdulthood();
     void giveBirth(Person& mother);
     void kill(Id id, const std::string& cause);
+    // An illness before most grown deaths (design/fun-r5.md B): a month or two abed, the family's care shifting the odds.
+    struct Sickness {
+        std::string cause;
+        int due = 0;        // the day it turns, one way or the other
+        double odds = 0.7;  // chance it kills
+    };
+    std::map<Id, Sickness> sick_;
+    void fallIll(Id id, const std::string& cause);
+    void monthlySickness();
+    bool sickCause(const std::string& cause) const;  // a death that comes on slowly (fever, flux), not an accident
+    // A plan the dead head had going goes on with the heir when the heir now keeps a house (life.cpp onHeadDied).
+    void carryPlans(Id dead, Id heir, bool tell);
+    std::string kinByname(Id id) const;  // "你的弟弟" for the family's own, "" otherwise
     // What a head left behind (before an heir moved in with their own), for the lord's dues and the 【分家產】 line.
     struct Estate {
         double acres = 0, freehold = 0, money = 0;
@@ -823,13 +927,37 @@ private:
     double dowryCap(const Household& h) const;  // what a house of its standing is expected to give with a daughter  // the king's fifteenth on what the house has: coin, spare grain, beasts
     void yearlyTax();
     void askToFeed(Household& h);           // kin or a close friend near the end of their bread: the player is asked
+    std::map<Id, int> feedHelped_;          // house -> times the family has helped it through hunger
+    void feedHouse(Household& h);           // help came: nobody in it goes hungry this month
+    // The season agenda's deeds (also effects: sell_grain, hire_hand, give_parcel, take_in, hire_kin).
+    double sellGrainAtMarket(Household& h, double days);  // pence it fetched
+    void hireHand(Household& h, Id hand, double pay, double bonus);
+    void giveParcelTo(Id parcel, Id house, Id giver);
+    void takeIn(Id who, Id house, Id giver);
+    void hireKin(Id house, Id master);
+    Id harvestHand() const;                 // a poor man glad of a season's wage at the family's harvest
     std::map<Id, int> feedAskedUntil_;
     int ambitionAskAfter_ = 0;  // the player's head put off choosing an ambition: not asked again before this day
+    ManorBond manorBond_;       // the family's loan to the manor, if any
+    std::map<std::string, int> lateAsked_;  // late-game asks (a rival's bid, the steward's loan): not again before this day
     std::map<Id, Id> lastMatchSubject_;     // head -> the one whose match last fell through (for "另說一門親")      // household -> no asking again before this day
     void gatherFirewood();
     void payRent();
     double consumption(const Household& h) const;
     void ensureFood(Household& h);
+    int daysToHarvest() const;  // days until the next harvest day (month 8, day 0)
+    bool askGrain(Household& h);  // the player's house short of bread: the family says how much to buy; false if no one was asked
+    // The Michaelmas rent: what it is and why (the breakdown the reckoning card shows), with `lessAcres` given back.
+    double rentOf(const Household& h, std::string* why = nullptr, double lessAcres = 0) const;
+    void explainRent(Household& h, double rent);  // the rent changed since last year for a reason not the family's: say why
+    void reckonRent(Household& h, double rent, const std::string& why);   // the player's house cannot pay: the reckoning card
+    void settleRent(Household& h, double rent, bool respite, bool begged = false);  // pay what the purse holds, the rest on the books
+    void askOx(Household& h);
+    Id borrowGrain(Household& h, Id asker, double days, Id cause);  // a neighbour's grain against the harvest
+    double grainLoanOwed(const Household& h, double days) const;   // what that grain costs back at Michaelmas
+    static constexpr double kSurrenderCredit = 12;  // pence of arrears an acre given back to the lord takes off
+    std::set<Id> lordCleared_;    // houses whose arrears were paid or forgiven at this Michaelmas: the new shortfall waits a year
+    std::set<Id> stewardOnCard_;  // the player's house: the steward's call about old arrears is taken up on the reckoning card
 
     // social.cpp
     void monthlySocial();
@@ -919,6 +1047,7 @@ private:
     Id lineHead(const Household& h) const;      // the heir a regent holds for when not of the same blood, else the head
     bool houseFree(const Household& h) const;
     double owedLord(const Household& h) const;         // rent arrears and loans the house owes the manor
+    bool debtRoom(const Household& h, Id creditor) const;  // a new loan from them has a place on the house's books
     double reduceLordDebt(Household& h, double amount);                     // once a season: a secret the head keeps may come up
     Id hookDeed(Id holder, Id culprit) const;  // a secret holder believes culprit did, usable as leverage
     bool hasHook(Id holder) const;
@@ -933,6 +1062,12 @@ private:
     void takeLover(Id a, Id b);
     void endLiaison(Id a);
     void yearlyLiaisons();
+    // The church court for a pair of lovers: fines, the white sheet at Sunday mass, the village knows (both sides).
+    void exposeAffair(Id a, Id b);
+    // hooks.cpp: a family member's affair surfacing to the head by stages (rumour, a neighbour's hint, caught),
+    // and the child who does not look like the head. Once a season.
+    void familyAffairs();
+    std::map<Id, int> affairNext_;  // affair deed -> the day its next stage may come
     void addDebt(Household& h, double amount, Id creditor);
     void monthlyDebts();
     void yearlyDebts();
@@ -1026,6 +1161,13 @@ private:
     void checkMilestones(Person& head, bool quiet);
     void checkStandings();
     void yearlyTown();
+    // The late game (design/fun-r5.md D): the rivals and the steward around the family's ambition.
+    void lateGameMonth(Person& head);
+    void rivalForLand(Person& head);
+    void rivalForMatch(Person& head);
+    void rivalForOffice(Person& head);
+    void stewardLoan(Person& head);
+    void manorBondDue(Person& head);
 
     // minds.cpp: rings, yearly intentions, and acting on them
     void computeRings();

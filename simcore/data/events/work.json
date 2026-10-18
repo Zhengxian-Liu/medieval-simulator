@@ -14,14 +14,14 @@
         "ai": {"base": 12, "traits": {"ambitious": 10, "diligent": 6, "lazy": -6}, "if": [{"cond": {"money_lt": 30}, "add": -30}]}},
        {"text": "人手不夠，算了", "log": "", "effects": [], "ai": {"base": 6, "traits": {"content": 6}}}
      ]},
-    {"id": "build_timber_house", "title": "蓋木屋", "prompt": "泥牆茅屋又漏雨了。木匠說，250 便士能蓋一棟有橡木框架和閣樓的木屋。", "scope": "player_head", "chance": 0.15, "cooldown_years": 6, "cooldown_scope": "household",
+    {"id": "build_timber_house", "repeat": "free", "title": "蓋木屋", "prompt": "泥牆茅屋又漏雨了。木匠說，250 便士能蓋一棟有橡木框架和閣樓的木屋。", "scope": "player_head", "chance": 0.15, "cooldown_years": 6, "cooldown_scope": "household",
      "conditions": {"age": [14, 120], "money_ge": 320, "house": "cottage"},
      "options": [
        {"text": "請木匠來蓋（250 便士）", "log": "{name} 請木匠把漏雨的泥牆茅屋拆了，蓋起有橡木框架的木屋，屋頂還多了一間閣樓。", "effects": [{"money": -250}, {"house": "timber"}, {"prestige": 3}, {"reputation": 2}],
         "ai": {"base": 10, "traits": {"ambitious": 6, "greedy": -4, "diligent": 3}, "if": [{"cond": {"ambition": "stone_house"}, "add": 30}]}},
        {"text": "錢先留著", "log": "", "effects": [], "ai": {"base": 10, "traits": {"greedy": 8, "content": 4}}}
      ]},
-    {"id": "build_stone_house", "title": "蓋石屋", "prompt": "石匠說，1300 便士能把木屋改成石屋。全村還沒幾家住得起。", "scope": "player_head", "chance": 0.1, "cooldown_years": 1,
+    {"id": "build_stone_house", "repeat": "free", "title": "蓋石屋", "prompt": "石匠說，1300 便士能把木屋改成石屋。全村還沒幾家住得起。", "scope": "player_head", "chance": 0.1, "cooldown_years": 1,
      "conditions": {"age": [14, 120], "money_ge": 1600, "house": "timber", "acres_ge": 18},
      "options": [
        {"text": "請石匠來蓋（1300 便士）", "log": "{name} 請來石匠，把木屋改建成石屋，全村都來看熱鬧。", "effects": [{"money": -1300}, {"house": "stone"}, {"prestige": 8}, {"reputation": 4}],
@@ -83,13 +83,13 @@
     {"id": "sheep_rot", "title": "羊瘟", "scope": "anyone", "chance": 0.02, "cooldown_years": 4,
      "conditions": {"occupation": "shepherd"},
      "options": [{"text": "好", "log": "{name} 的羊群得了肝蛭病，死了一大半。", "effects": [{"money": -30}, {"need": {"spirit": -15}}]}]},
-    {"id": "hard_winter", "title": "難熬的冬天", "prompt": "糧食快吃完了，離開春還有好幾個月。", "scope": "player_head", "chance": 0.25, "cooldown_years": 1,
+    {"id": "hard_winter", "repeat": "free", "budget": "hunger", "title": "難熬的冬天", "prompt": "糧食快吃完了，離開春還有好幾個月。", "scope": "player_head", "chance": 0.25, "cooldown_years": 1,
      "conditions": {"winter": true, "food_days_lt": 30},
      "options": [
        {"text": "宰了豬", "log": "糧食快吃完了，{name} 只好把家裡的豬宰了。", "effects": [{"food": 120}, {"money": -10}], "ai": {"base": 10}},
        {"text": "去求領主施捨", "log": "{name} 拉下臉去莊園討了些燕麥。", "effects": [{"food": 80}, {"reputation": -3}], "ai": {"base": 6, "traits": {"craven": 6, "ambitious": -6}}}
      ]},
-    {"id": "no_land", "title": "沒有地的人家", "prompt": "家裡只剩巴掌大的一塊園子，種不出一家人的口糧。米迦勒節前後，是村裡換佃、雇長工的時候，得想個長久的辦法。",
+    {"id": "no_land", "repeat": "free", "title": "沒有地的人家", "prompt": "家裡只剩巴掌大的一塊園子，種不出一家人的口糧。米迦勒節前後，是村裡換佃、雇長工的時候，得想個長久的辦法。",
      "scope": "player_head", "chance": 0.8, "cooldown_months": 5,
      "conditions": {"age": [16, 70], "acres_lt": 3, "any": [{"month": [2, 3]}, {"month": [8, 9]}], "hired": false,
                     "not": {"occupation": ["smith", "carpenter", "miller", "weaver", "priest", "clerk", "lord", "lady"]}},
@@ -106,14 +106,14 @@
        {"text": "靠打短工再撐一陣", "log": "{name} 決定還是靠打短工過日子，有活就幹。", "effects": [],
         "ai": {"base": 4, "traits": {"content": 4, "lazy": 4}}}
      ]},
-    {"id": "empty_larder", "budget": "hunger", "title": "米缸見底", "prompt": "家裡的糧食只剩不到二十天了，離下一次收成還遠。再這樣下去，最先撐不住的是孩子。",
+    {"id": "empty_larder", "repeat": "free", "budget": "hunger", "title": "米缸見底", "prompt": "家裡的糧食只剩不到二十天了，離下一次收成還遠。再這樣下去，最先撐不住的是孩子。",
      "scope": "player_head", "chance": 0.5, "cooldown_years": 1,
      "conditions": {"food_days_lt": 20},
      "options": [
-       {"text": "去市集買糧（20 便士）", "log": "{name} 數出 20 便士，去市集買了兩袋燕麥。",
-        "effects": [{"money": -20}, {"food_days": 45}], "ai": {"base": 12, "traits": {"greedy": -4}}},
-       {"text": "去求鄰居借糧（秋收後還 30 便士）",
-        "log": "{name} 拉下臉，挨家挨戶去問誰家還有餘糧。", "effects": [{"borrow_grain": {"days": 90, "debt": 30}}, {"stress": 4}],
+       {"text": "去市集買二十天的糧（{food_cost:20} 便士）", "conditions": {"money_ge": 5}, "log": "{name} 數出錢，去市集買了幾袋燕麥。",
+        "effects": [{"buy_food_days": 20}], "ai": {"base": 12, "traits": {"greedy": -4}}},
+       {"text": "去求鄰居借糧（借兩個月的糧，秋收後還 {grain_loan:60} 便士）",
+        "log": "{name} 拉下臉，挨家挨戶去問誰家還有餘糧。", "effects": [{"borrow_grain": {"days": 60}}, {"stress": 4}],
         "ai": {"base": 8, "traits": {"gregarious": 4, "shy": -4}}},
        {"text": "去大戶家當一年長工（管吃）", "conditions": {"hire_master": true, "hired": false, "acres_lt": 10},
         "log": "{name} 帶著家裡能幹活的人去大戶家當長工，好歹有口飯吃。", "effects": [{"hire_on": {"months": 12}}, {"stress": 6}, {"reputation": -1}],
@@ -139,14 +139,14 @@
         "effects": [{"food_days": 8}, {"stress": 10}],
         "ai": {"base": 2, "traits": {"content": 4, "diligent": 2}}}
      ]},
-    {"id": "empty_larder_dire", "budget": "hunger", "title": "斷糧", "prompt": "家裡已經斷糧了。孩子餓得哭不出聲，再不想辦法就要出人命。",
+    {"id": "empty_larder_dire", "repeat": "free", "budget": "hunger", "title": "斷糧", "prompt": "家裡已經斷糧了。孩子餓得哭不出聲，再不想辦法就要出人命。",
      "scope": "player_head", "chance": 1, "cooldown_years": 1,
      "conditions": {"food_days_lt": 3},
      "options": [
-       {"text": "去市集買糧（20 便士）", "log": "{name} 把壓在箱底的最後幾個銅板都翻出來，換了兩袋燕麥回家。",
-        "effects": [{"money": -20}, {"food_days": 45}], "ai": {"base": 12, "traits": {"greedy": -4}}},
-       {"text": "去求鄰居借糧（秋收後還 30 便士）",
-        "log": "{name} 抱著餓得發昏的孩子去敲鄰居的門，一家一家地求。", "effects": [{"borrow_grain": {"days": 90, "debt": 30}}, {"stress": 4}],
+       {"text": "去市集買二十天的糧（{food_cost:20} 便士）", "conditions": {"money_ge": 5}, "log": "{name} 把壓在箱底的最後幾個銅板都翻出來，換了幾袋燕麥回家。",
+        "effects": [{"buy_food_days": 20}], "ai": {"base": 12, "traits": {"greedy": -4}}},
+       {"text": "去求鄰居借糧（借兩個月的糧，秋收後還 {grain_loan:60} 便士）",
+        "log": "{name} 抱著餓得發昏的孩子去敲鄰居的門，一家一家地求。", "effects": [{"borrow_grain": {"days": 60}}, {"stress": 4}],
         "ai": {"base": 8, "traits": {"gregarious": 4, "shy": -4}}},
        {"text": "去大戶家當一年長工（管吃）", "conditions": {"hire_master": true, "hired": false, "acres_lt": 10},
         "log": "{name} 帶著家裡能幹活的人去大戶家當長工，好歹有口飯吃。", "effects": [{"hire_on": {"months": 12}}, {"stress": 6}, {"reputation": -1}],

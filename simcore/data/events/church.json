@@ -1,13 +1,22 @@
 {
   "events": [
-    {"id": "found_chantry", "title": "祈唱壇", "prompt": "神父說，要在教堂裡立一座祈唱壇，照《永久管業法》得先向國王買一張執照，不然王家的官員查到了，捐出去的錢一文也留不下。",
+    {"id": "found_chantry", "repeat": "free", "title": "祈唱壇", "prompt": "神父說，要在教堂裡立一座祈唱壇，照《永久管業法》得先向國王買一張執照，不然王家的官員查到了，捐出去的錢一文也留不下。",
      "scope": "anyone", "chance": 0.5, "cooldown_years": 1,
-     "conditions": {"is_head": true, "ambition": "chantry", "money_ge": 700, "no_flag": "chantry"},
+     "conditions": {"is_head": true, "ambition": "chantry", "money_ge_chantry": 1, "no_flag": "chantry"},
+     // Priced by the house's standing (World::chantryPrice): a small landholder's chantry is a bigger one.
      "options": [
-       {"text": "照規矩買執照再捐（700 便士）", "log": "{name} 托人去倫敦買了執照，捐錢在教堂南牆邊立起一座祈唱壇。往後每個禮拜，神父都要為這一家的亡人唱一臺彌撒。",
+       {"text": "照規矩買執照再捐（700 便士）", "conditions": {"standing_lt": 3}, "log": "{name} 托人去倫敦買了執照，捐錢在教堂南牆邊立起一座祈唱壇。往後每個禮拜，神父都要為這一家的亡人唱一臺彌撒。",
         "effects": [{"money": -700}, {"set_flag": "chantry"}, {"prestige": 15}, {"reputation": 5}, {"need": {"spirit": 30}}],
         "ai": {"base": 8, "traits": {"pious": 6, "greedy": -4}}},
-       {"text": "不買執照，直接捐（600 便士，七成沒人查）", "log": "{name} 沒去買執照，直接把 600 便士捐給了教堂。",
+       {"text": "照規矩買執照，捐一座帶石雕的祈唱壇（1200 便士）", "conditions": {"standing_ge": 3}, "log": "{name} 托人去倫敦買了執照，請石匠在教堂南牆邊雕了一座祈唱壇，刻上家裡的紋章。往後每個禮拜，神父都要為這一家的亡人唱一臺彌撒。",
+        "effects": [{"money": -1200}, {"set_flag": "chantry"}, {"prestige": 20}, {"reputation": 6}, {"need": {"spirit": 30}}],
+        "ai": {"base": 8, "traits": {"pious": 6, "greedy": -4}}},
+       {"text": "不買執照，直接捐（1000 便士，七成沒人查）", "conditions": {"standing_ge": 3}, "log": "{name} 沒去買執照，直接把 1000 便士捐給了教堂。",
+        "effects": [{"money": -1000}, {"random": {"percent": 70,
+           "effects": [{"set_flag": "chantry"}, {"prestige": 20}, {"reputation": 6}, {"need": {"spirit": 30}}, {"log": "  教堂南牆邊立起了一座祈唱壇，沒有人來過問。"}],
+           "else": [{"stress": 25}, {"reputation": -2}, {"log": "  沒過半年，王家的官員查到了這筆沒有執照的捐獻，連本帶利收走。"}]}}],
+        "ai": {"base": 5, "traits": {"greedy": 8, "brave": 4}}},
+       {"text": "不買執照，直接捐（600 便士，七成沒人查）", "conditions": {"standing_lt": 3}, "log": "{name} 沒去買執照，直接把 600 便士捐給了教堂。",
         "effects": [{"money": -600}, {"random": {"percent": 70,
            "effects": [{"set_flag": "chantry"}, {"prestige": 15}, {"reputation": 5}, {"need": {"spirit": 30}}, {"log": "  教堂南牆邊立起了一座祈唱壇，沒有人來過問。"}],
            "else": [{"stress": 25}, {"reputation": -2}, {"log": "  沒過半年，王家的官員查到了這筆沒有執照的捐獻，連本帶利收走。"}]}}],

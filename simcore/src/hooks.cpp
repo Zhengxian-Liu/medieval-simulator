@@ -43,6 +43,7 @@ bool World::deedSpoken(Id deed) const { return deedNotes_.count({deed, "spoken"}
 // What the head knows and has never said comes up when the people in it cross paths: a wife's old lover at the
 // church door, the man who fired the ricks greeting you at the mill. Now and then, once for each secret.
 void World::secretSurfaces() {
+    familyAffairs();
     Id head = playerHead();
     if (head == kNone || ageYears(people_[head]) < 16 || playerHousehold_ == kNone) return;
     if (!rngKnow_.chance(0.12)) return;
@@ -75,6 +76,132 @@ void World::secretSurfaces() {
     auto [deed, other] = found[rngKnow_.range(0, static_cast<int>(found.size()) - 1)];
     deedNotes_.insert({deed, "surfaced"});
     runEventById(deeds_[deed].type == "affair" ? "old_flame" : "old_wrong", head, other, deed);
+}
+
+// A family member's affair does not stay hidden for years and then fade in one line: it reaches the one keeping the
+// house by stages, each a season or more apart. First talk (a 【風聲】 a neighbour lets drop), then a neighbour's hint
+// the head can press, ignore or answer by watching, then the two are seen together and the head decides what to do.
+// The head's own affair is the head's choice and the head's secret: that one the spouse may find out by the yearly roll.
+void World::familyAffairs() {
+    Id knower = actingHead();
+    if (knower == kNone || playerHousehold_ == kNone || ageYears(people_[knower]) < 16) return;
+    const int season = kDaysPerYear / 4;
+    const Household& home = households_[playerHousehold_];
+    for (Id x : std::vector<Id>(home.members)) {
+        Person& px = people_[x];
+        if (!px.alive() || x == knower || x == playerHead() || px.lover == kNone || px.loverDeed == kNone || px.lover == knower) continue;
+        const Id deed = px.loverDeed, lover = px.lover;
+        const Deed& d = deeds_[deed];
+        if (d.target == kNone || !people_[d.target].alive() || !people_[lover].alive() || people_[lover].household == kNone) continue;
+        if (deedSpoken(deed) || deedNotes_.count({deed, "caught"})) continue;
+        const Belief* known = beliefAbout(knower, deed);
+        if (known && known->culprit == x && known->confidence >= 60) {
+            deedNotes_.insert({deed, "caught"});  // found out another way: nothing left to surface
+            continue;
+        }
+        auto next = affairNext_.find(deed);
+        if (next == affairNext_.end()) next = affairNext_.emplace(deed, px.loverSince + rngKnow_.range(3, 9) * kDaysPerMonth).first;
+        if (day_ < next->second) continue;
+        // Who lets it drop: someone the head knows, not of either house.
+        auto outsider = [&](Id t) {
+            return t != kNone && people_[t].alive() && people_[t].household != kNone && people_[t].household != home.id && t != lover &&
+                   people_[t].household != people_[lover].household && ageYears(people_[t]) >= 16;
+        };
+        Id teller = pickAcquaintance(knower, rngKnow_);
+        if (!outsider(teller)) {
+            teller = kNone;
+            for (int tries = 0; tries < 8 && teller == kNone; ++tries) {
+                std::vector<Id> village = livingInVillage();
+                Id t = village.empty() ? kNone : village[rngKnow_.range(0, static_cast<int>(village.size()) - 1)];
+                if (outsider(t)) teller = t;
+            }
+        }
+        if (teller == kNone) continue;
+        if (!deedNotes_.count({deed, "rumour"})) {
+            // 1. Talk: the head half-believes it (not enough to act on), and hears it said.
+            deedNotes_.insert({deed, "rumour"});
+            whispered_.insert(deed);  // told here, as the head hears it
+            addBelief(knower, deed, x, 30, teller);
+            News n;
+            n.subject = x;
+            n.other = d.target;
+            n.subjectName = shortName(x);
+            if (d.target == knower) n.otherName = "你";
+            auto it = defs_.whispers.find("affair");
+            std::string text = formatNews(it != defs_.whispers.end() ? it->second : "{subject}背著{other}在外頭有人", n);
+            Heard hd;
+            hd.day = day_;
+            hd.teller = teller;
+            hd.text = text;
+            hd.weight = 3;
+            hd.logged = true;
+            heard_.push_back(hd);
+            log(1, "【風聲】" + tellerName(teller) + "悄悄說，" + text + "，不知真假。");
+            next->second = day_ + season * rngKnow_.range(1, 2);
+        } else if (!deedNotes_.count({deed, "hint"})) {
+            // 2. A neighbour's hint, plainer: the head chooses what to make of it.
+            if (!rngKnow_.chance(0.6)) {
+                next->second = day_ + season;
+                continue;
+            }
+            runEventById("affair_hint", knower, teller, deed);
+            deedNotes_.insert({deed, "hint"});
+            next->second = day_ + season * (deedNotes_.count({deed, "watched"}) ? 1 : 2);
+        } else {
+            // 3. Seen together. Watching her finds it soonest; a hint let go may never come to more.
+            double c = deedNotes_.count({deed, "watched"}) ? 0.6 : deedNotes_.count({deed, "asked"}) ? 0.4 : 0.15;
+            if (!rngKnow_.chance(c)) {
+                next->second = day_ + season;
+                continue;
+            }
+            deedNotes_.insert({deed, "caught"});
+            static const char* kSeen[] = {"天快亮的時候，{x}從 {lover} 家後頭的小路溜回來，鞋上全是露水。",
+                                          "收麥那天，{x}和 {lover} 一前一後鑽進了磨坊後面的樹林，半天沒出來。",
+                                          "夜裡醒來，{x}不在床上。後門虛掩著，泥地上有兩個人的腳印，一直通到 {lover} 家那邊。"};
+            std::string seen = kSeen[rngKnow_.range(0, 2)];
+            for (auto [key, val] : {std::pair<std::string, std::string>{"{x}", shortName(x)}, {"{lover}", fullName(lover)}})
+                for (size_t at; (at = seen.find(key)) != std::string::npos;) seen.replace(at, key.size(), val);
+            toldPlayer_.insert({deed, x});  // said just now, not again as a 【秘密】 line
+            addBelief(knower, deed, x, 90, kNone);
+            if (d.target == knower) {
+                log(1, "〔撞見〕" + seen);
+                runEventById("spouse_learns_affair", knower, x, deed);
+            } else {
+                // Someone else's husband or wife is wronged (a son's wife and a neighbour): the head decides whether
+                // they hear it.
+                // By full name: the wronged one's first name is often the lover's, or the head of the house it went to.
+                const std::string bn = fullName(d.target), xn = people_[x].firstName == people_[d.target].firstName ? fullName(x) : shortName(x);
+                std::string sit = seen + bn + "還什麼都不知道。";
+                std::vector<std::string> opts{"告訴" + bn, "私下叫" + xn + "斷了", "當作沒看見"};
+                int r = askPlayer("撞見", sit, opts);
+                bool asked = r >= 0;
+                if (!asked) r = 0;
+                log(1, "〔撞見〕" + sit + (asked ? "（選擇：" + opts[r] + "）" : "你告訴了" + bn + "。"));
+                if (r == 0) {
+                    addBelief(d.target, deed, x, 90, knower);
+                } else if (r == 1) {
+                    endLiaison(x);
+                    addOpinion(x, knower, "hard_words", -15, 10);
+                    deedNotes_.insert({deed, "spoken"});
+                } else {
+                    addStress(knower, 8, "撞見了家裡的醜事");
+                }
+            }
+        }
+    }
+    // A child born while the mother had a lover: as the years pass the head may come to see a stranger's face in it.
+    if (!rngKnow_.chance(0.25)) return;
+    for (Id c : std::vector<Id>(home.members)) {
+        Person& cp = people_[c];
+        if (!cp.alive() || !cp.flags.count("paternity_doubt") || cp.flags.count("paternity_told")) continue;
+        double age = ageYears(cp);
+        if (age < 3 || age > 14 || cp.father == kNone || (cp.father != knower && cp.father != playerHead())) continue;
+        const Person& f = people_[cp.father];
+        if (!f.alive() || f.household != home.id || ageYears(f) < 16) continue;
+        cp.flags.insert("paternity_told");
+        runEventById("not_like_you", cp.father, c);
+        break;
+    }
 }
 
 // Before dying, someone who did a secret wrong may send for the one they wronged. Families who

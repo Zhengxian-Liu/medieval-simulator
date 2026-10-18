@@ -62,6 +62,7 @@ struct EventDef {
     std::string title;
     std::string prompt;  // what the player is told when asked to choose; optional
     std::vector<std::string> prompts;  // other ways of telling it, picked at random (with prompt)
+    Json promptIf;  // [{"cond": {...}, "prompt": "..."}]: the first whose conditions hold is told instead
     std::string quietLog;  // said instead when it comes again while still on cooldown (a second child buried)
     bool ask = true;     // false: routine, the AI chooses even for a human player
     bool parentDecides = false;  // the head chooses for their unmarried children living at home
@@ -84,6 +85,12 @@ struct EventDef {
     // The event is about the person sought out ({name}, who answers); the head is its {target}.
     Json interaction;
     int cooldownMonths = 0;
+    // Repeats (design/fun-r5.md C): a story the family met is not met again within three years. "repeat": "person"
+    // keys it by the person instead of the house (a second son's own turn at the same age), "free" for a rule that
+    // answers a state as often as it comes (an empty larder). "institution": true for what comes round every year by
+    // law or custom (the king's tax): never held back, but it must have at least three ways of telling it.
+    std::string repeat = "household";
+    bool institution = false;
 };
 
 // A long-running intention started by a person (Crusader Kings "scheme"): it gains progress
@@ -104,6 +111,8 @@ struct PlanDef {
     double discovery = 0;  // monthly chance a secret plan is exposed
     bool npc = true;       // NPCs may start it
     bool notifyTarget = false;  // the target's family hears how it ended
+    bool consent = false;       // aimed at the one keeping the player's house: they are asked before it starts
+    bool personal = false;      // the actor's own (a courtship, their studies, a secret they hold): it dies with them
     std::string targetAsk;                  // when it targets the player's head: what they are asked (answers: yes = success, no = fail)
     std::vector<std::string> targetAnswers;
     std::string startLog, successLog, failLog, exposedLog, victimLog;
@@ -135,6 +144,7 @@ struct AmbitionDef {
     struct Milestone {
         std::string name;
         Json goal;
+        bool gate = false;  // a condition of the road (no debt over 20 for a reeve), not progress along it
     };
     std::vector<Milestone> milestones;  // steps on the way, reached in order; the goal is the last step
     std::vector<std::string> plans;     // plans that move it forward: listed first and wanted more
@@ -142,6 +152,7 @@ struct AmbitionDef {
     std::string final;                  // the last step in words (the goal itself)
     std::string hint;                   // how the player moves it on
     Json keep;                          // conditions it can still be done under; false: 【志向受挫】 (null: always)
+    std::string office;                 // the post it is about: its conditions are shown with it, each ✓ or ✗
 };
 
 struct DeedDef {

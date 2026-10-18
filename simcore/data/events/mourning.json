@@ -27,22 +27,71 @@
        "ai": {"base": 6, "traits": {"diligent": 8, "calm": 4, "cruel": 3}}}
      ]},
 
+    // Told by how it came (a second loss, all at once, a short or a long marriage, little children left), first match.
     {"id": "mourn_spouse", "title": "喪偶", "scope": "player_family", "chance": 1,
      "on": {"signal": "bereaved:spouse", "after_months": [0, 0]},
      "prompt": "{target}走了。床的另一半空了，{name}夜裡還會伸手去摸。",
+     "prompt_if": [
+       {"cond": {"flag": "widowed_again"}, "prompt": "不到五年，{name}又站在墳前。上一回埋的那個人還沒忘掉，如今{target}也走了。村裡有人在背後說{name}命硬。"},
+       {"cond": {"target": {"died_suddenly": true}}, "prompt": "早上{target_first}出門的時候還好好的，到了傍晚，人是讓鄰居抬回來的。{name}到現在還不肯信。"},
+       {"cond": {"married_years_lt": 3}, "prompt": "才成親沒幾年，{target}就走了。新縫的被面還沒洗舊，{name}已經一個人睡在上頭。"},
+       {"cond": {"any_child": {"age": [0, 9]}}, "prompt": "{target}走了。孩子們還不懂，一直問{target_pron}什麼時候回來。{name}答不上來，只能把他們摟緊一點。"},
+       {"cond": {"married_years_ge": 25}, "prompt": "{name}和{target_first}做了二十多年夫妻，吵過，也一起熬過荒年。往後吃飯，桌邊少了一個人。"}
+     ],
      "options": [
       {"text": "請神父做彌撒，好好送{target_pron}走（6 便士）",
        "log": "{name}請神父替{target}做了彌撒，全村的人都來送了。",
-       "effects": [{"money": -6}, {"ease_concern": {"kind": "grief", "by": 15}}, {"need": {"spirit": 35}}, {"reputation": 1}],
+       "effects": [{"money": -6}, {"ease_concern": {"kind": "grief", "by": 15}}, {"need": {"spirit": 35}}, {"reputation": 1}, {"set_flag": "mourned_spouse"}],
        "ai": {"base": 10, "traits": {"pious": 8, "generous": 3, "greedy": -6}}},
+      {"text": "把孩子們叫到身邊，告訴他們往後要互相照應", "conditions": {"living_children_ge": 1},
+       "log": "埋了{target}那晚，{name}把孩子們叫到身邊：「往後就剩咱們了，要互相照應。」",
+       "effects": [{"ease_concern": {"kind": "grief", "by": 8}}, {"ease_concern_house": {"kind": "grief", "by": 10}}, {"household_opinion": {"value": 4, "mod": "comforted", "years": 8}}, {"set_flag": "mourned_spouse"}],
+       "ai": {"base": 8, "traits": {"kind": 8, "gregarious": 3}}},
       {"text": "把{target_pron}的衣服收進箱子，不讓人碰",
        "log": "{name}把{target}的衣服疊好收進箱子，誰也不許碰。",
-       "effects": [{"ease_concern": {"kind": "grief", "by": 6}}, {"trait_chance": {"trait": "melancholy", "chance": 12}}],
+       "effects": [{"ease_concern": {"kind": "grief", "by": 6}}, {"trait_chance": {"trait": "melancholy", "chance": 12}}, {"set_flag": "mourned_spouse"}],
        "ai": {"base": 6, "traits": {"melancholy": 8, "shy": 4, "chaste": 3}}},
       {"text": "咬牙撐起這個家",
        "log": "埋了{target}，{name}咬著牙把家裡的活全扛了起來。",
-       "effects": [{"work_bonus": 0.02}, {"stress": 6}, {"skill": {"farming": 0.5}}],
+       "effects": [{"work_bonus": 0.02}, {"stress": 6}, {"skill": {"farming": 0.5}}, {"set_flag": "mourned_spouse"}],
        "ai": {"base": 8, "traits": {"diligent": 8, "brave": 4, "calm": 3}}}
+     ]},
+
+    // A brother or sister gone (at home, or word of it from away).
+    {"id": "mourn_sibling", "title": "手足", "scope": "player_family", "chance": 0.7, "cooldown_years": 2,
+     "on": {"signal": "bereaved:sibling", "after_months": [0, 1]},
+     "conditions": {"age": [8, 120]},
+     "prompt": "{target}走了。{name}總想起小時候和{target_first}一起在河邊摸魚、搶一塊麵包的樣子。",
+     "options": [
+      {"text": "去{target_first}墳前放一把野花", "log": "{name}去{target}墳前放了一把野花，坐了很久。",
+       "effects": [{"ease_concern": {"kind": "grief", "by": 12}}, {"need": {"spirit": 10}}],
+       "ai": {"base": 8, "traits": {"kind": 6, "melancholy": 4}}},
+      {"text": "把{target_first}留下的小刀收起來，留個念想", "log": "{name}把{target}留下的一把小刀收進了自己的包袱。",
+       "effects": [{"ease_concern": {"kind": "grief", "by": 8}}],
+       "ai": {"base": 6, "traits": {"shy": 4, "content": 4}}},
+      {"text": "把眼淚吞回去，照常幹活", "log": "{name}一句話也沒說，照常下田去了。",
+       "effects": [{"stress": 6}, {"work_bonus": 0.01}],
+       "ai": {"base": 6, "traits": {"diligent": 6, "calm": 4}}}
+     ]},
+
+    // One of the house died away from it (at school, in town, at the war): word comes, and the one keeping the house
+    // decides what is done for them. The dead is {target}.
+    {"id": "word_from_away", "title": "從外頭捎來的消息", "scope": "player_family", "chance": 1,
+     "on": {"signal": "bereaved:away", "after_months": [0, 0]},
+     "prompt": "從外頭捎來消息：{target}死在外地了，人還停在那邊的教堂裡。家裡得拿個主意。",
+     "options": [
+      {"text": "派人把{target_first}運回來，葬在村裡的墓地（12 便士）",
+       "log": "{name}託人雇了一輛車，把{target}運回村裡，葬在教堂墓地。全家都去送了。",
+       "effects": [{"money": -12}, {"ease_concern_house": {"kind": "grief", "by": 15}}, {"need": {"spirit": 20}}, {"reputation": 1}],
+       "ai": {"base": 10, "traits": {"kind": 6, "pious": 4, "greedy": -6}}},
+      {"text": "請神父替{target_first}做一台彌撒（4 便士）",
+       "log": "{target}葬在了外地。{name}請神父做了一台彌撒，全家跪在教堂裡替{target_pron}禱告。",
+       "effects": [{"money": -4}, {"ease_concern_house": {"kind": "grief", "by": 8}}, {"need": {"spirit": 25}}],
+       "ai": {"base": 8, "traits": {"pious": 8}}},
+      {"text": "家裡拿不出錢，只能點一根蠟燭",
+       "log": "{target}葬在了外地，家裡拿不出錢。{name}在灶台邊點了一根蠟燭，一家人坐了一夜。",
+       "effects": [{"ease_concern_house": {"kind": "grief", "by": 3}}, {"stress": 6}],
+       "ai": {"base": 4, "traits": {"greedy": 6}}}
      ]},
 
     {"id": "mourn_parent", "title": "送終", "scope": "player_family", "chance": 0.7,

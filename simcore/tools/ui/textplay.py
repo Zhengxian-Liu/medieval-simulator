@@ -10,7 +10,9 @@
 Actions (the page's buttons):
   {"do":"choose","index":0}                         answer a question (options are numbered from 0)
   {"do":"ai"}                                       let the AI answer the current question
-  {"do":"interact","who":12,"event":"talk_heart"}   spend season time on someone (see each person's actions)
+  {"do":"agenda","id":"sell_grain"}                one of 這一季的事 (the season's list at the top of the view)
+  {"do":"interact","who":12,"event":"talk_heart"}   spend season time on someone (see each person's actions;
+                                                    keep_company = 陪伴, the visit they need most)
   {"do":"ask","who":12,"ask":"sell_parcel","object":30,"subject":-1,"office":"","lever":""}   開口 (see asks)
   {"do":"plan","plan":"befriend","target":64,"subject":-1}   start a plan (see 計畫)   {"do":"cancel","plan":"<id>"}
   {"do":"want","what":"parcel","object":30} / {"do":"want","what":"office:reeve"}
@@ -105,18 +107,23 @@ def render(v, full=False):
     season = bool(a) and a.get("kind") == "season"
     d, h = s["date"], s["house"]
     out.append(f"\n=== {d['year']} 年 {d['season']} ｜ {h['surname']}家（{h['standing']}，住 {HOUSE.get(h['home'], h['home'])}）｜ 錢 {h['money']} 便士 ｜ 存糧 {h['food_days']} 天 ｜ "
-               f"地 {h['acres']} 畝（自有 {h['freehold']}）｜ 欠債 {h['debt']}" + ("｜ 今年缺糧" if h.get("lean") else "")
+               f"地 {h['acres']} 畝（自有 {h['freehold']}）｜ 欠債 {h['debt']}" + (f"（{h['debt_text']}）" if h.get("debt_text") else "")
+               + ("｜ 今年缺糧" if h.get("lean") else "")
                + (f" ｜ 這一季還有 {s.get('time_left')} 段空閒" if season else ""))
     if season and s.get("regency"):
         r = s["regency"]
         out.append(f"（你在替 {r['ward']} 持家，還有約 {r['years_left']} 年。可以 act '{{\"do\":\"regency\"}}' 交給管家，直到{r['ward']}成年，路上有大事還是會問你。）")
     amb = s.get("ambition")
     if amb:
-        mark = lambda x: "✓" if x.get("done") else "△" if x.get("slipped") else "◎" if x.get("final") else "○"
-        out.append(f"志向：{amb['name']}（{amb.get('desc', '')}）還剩 {amb.get('years_left', '?')} 年　" + " → ".join(mark(x) + x["name"] for x in amb.get("steps", []))
+        mark = lambda x: "✓" if x.get("done") else "△" if x.get("slipped") else "◎" if x.get("final") else "✗" if x.get("gate") else "○"
+        left = f"限到 {amb['deadline']} 年底（還剩 {amb.get('years_left', '?')} 年）" if amb.get("deadline") else f"還剩 {amb.get('years_left', '?')} 年"
+        out.append(f"志向：{amb['name']}（{amb.get('desc', '')}）{left}　" + " → ".join(mark(x) + x["name"] for x in amb.get("steps", []))
                    + ("　（△ 做到過，現在又不夠了；◎ 最後一步）" if any(x.get("slipped") for x in amb.get("steps", [])) else "　（◎ 最後一步）"))
         if amb.get("hint"):
             out.append(f"  怎麼推進：{amb['hint']}" + (f"（★ 計畫：{'、'.join(amb['plans'])}）" if amb.get("plans") else ""))
+        for k in ("gates", "rival", "note"):
+            if amb.get(k):
+                out.append(f"  {amb[k]}")
     fine = (s.get("contest") or {}).get("fine")
     if fine:
         out.append(f"入地費 {fine['amount']} 便士，{fine['year']} 年 {fine['month']} 月前要交給領主{'（已寬限過）' if fine.get('extended') else ''}。"
@@ -131,6 +138,15 @@ def render(v, full=False):
             press = {"do": "ask", "who": la["who"], "ask": la["ask"], "object": la["object"], "subject": la["subject"],
                      "office": la.get("office", ""), "lever": lv}
             out.append(f"  再爭取一次：{names.get(lv, lv)} → act '{json.dumps(press, ensure_ascii=False)}'")
+    if season and s.get("agenda"):
+        out.append("―― 這一季的事 ――（各用一段空閒）")
+        for it in s["agenda"]:
+            line = f"  ・{it['title']}：{it.get('desc', '')}"
+            if it.get("open", True):
+                line += "  → act '" + json.dumps({"do": "agenda", "id": it["id"]}, ensure_ascii=False) + "'"
+            else:
+                line += f"［不行：{it.get('why', '')}］"
+            out.append(line)
     out.append("―― 家人 ――")
     for p in s["family"]:
         t = f"[{p['id']}] {p['full']}（{p['kin']}，{p['age']} 歲）心情 {p['mood']}{('：' + p['mood_cause']) if p.get('mood_cause') else ''}，健康 {p['health']}"
@@ -159,9 +175,15 @@ def render(v, full=False):
     for g in s.get("plans_going") or []:
         out.append("―― 進行中的計畫 ―― %s%s 進度 %s/100（放棄：{\"do\":\"cancel\",\"plan\":\"%s\"}）" % (
             g.get("name", ""), "（對象 " + g["target"] + "）" if g.get("target") else "", g.get("progress", 0), g.get("id", "")))
-    shut = [p for p in s.get("plans", []) if not p.get("open") and p.get("why") and p["why"] != "正在辦" and (p.get("ambition") or not p["why"].startswith("要："))]
+    shut = [p for p in s.get("plans", []) if not p.get("open") and p.get("why") and p["why"] != "正在辦"]
     if shut:
-        out.append("―― 現在開不了的計畫 ―― " + "；".join(f"{'★' if p.get('ambition') else ''}「{p['name']}」{p['why']}" for p in shut))
+        # The ambition's plans with why they are shut; the rest by name only, so the list stays short.
+        star = [p for p in shut if p.get("ambition")]
+        rest = [p for p in shut if not p.get("ambition")]
+        line = "；".join(f"★「{p['name']}」{p['why']}" for p in star)
+        if rest:
+            line += ("；" if line else "") + f"其他 {len(rest)} 個：" + "、".join(p["name"] for p in rest)
+        out.append("―― 現在開不了的計畫 ―― " + line)
     ops = [p for p in s.get("plans", []) if p.get("open")]
     if ops:
         out.append("―― 能開始的計畫 ――")
@@ -199,9 +221,7 @@ def render(v, full=False):
             out.append(f"  {ids}{it['thing']}（{it['holder']}）想要的：{ws or '沒人'}")
         for o in c.get("offices", []):
             who = f"{o['holder']}，到 {o['until']} 年" if o.get("holder") else "空著"
-            if o.get("mine"):
-                tail = "（你家的）"
-            elif o.get("wanted"):
+            if o.get("wanted"):
                 tail = f"（你家想當，出來選的是{o.get('runner', '')}；不想了：act {{\"do\":\"want\",\"what\":\"drop\",\"object\":{o.get('want', -1)}}}）"
             elif o.get("can"):
                 men = o.get("men", [])
@@ -210,8 +230,11 @@ def render(v, full=False):
                 else:
                     tail = f"（可以爭：act {{\"do\":\"want\",\"what\":\"office:{o['id']}\",\"object\":-1}}）"
             else:
-                tail = f"（爭不了：{o.get('why', '')}）"
-            out.append(f"  {o['name']}：{who}{tail}")
+                tail = "" if o.get("mine") else f"（爭不了：{o.get('why', '')}）"
+            if o.get("mine"):
+                tail = "（你家的，到期自動出來連任）" + tail
+            gates = "　".join(("✓ " + g["label"]) if g.get("ok") else ("✗ " + g.get("detail", "")) for g in o.get("gates", []))
+            out.append(f"  {o['name']}：{who}{tail}" + (f"\n    條件：{gates}" if gates and not o.get("mine") else ""))
         for pst in c.get("past", [])[:4]:
             out.append(f"  {pst['year']} {pst['thing']}：{pst['outcome']}")
     heard = [x for x in s.get("heard", []) if x.get("recent")]
@@ -228,7 +251,7 @@ def render(v, full=False):
             out.append(f"  （不能選）{u}")
         out.append('回答：{"do":"choose","index":N}，或 {"do":"ai"}')
     elif season:
-        out.append('這一季：用 interact / ask / plan / focus / want 花時間，然後 {"do":"pass"} 結束這一季（或 {"do":"year"} 讓 AI 過一年）')
+        out.append('這一季：先看上面「這一季的事」（agenda），也可以用 interact / ask / plan / focus / want 花時間，然後 {"do":"pass"} 結束這一季（或 {"do":"year"} 讓 AI 過一年）')
     elif a:
         out.append(json.dumps(a, ensure_ascii=False))
     else:
@@ -261,7 +284,7 @@ elif cmd == "act":
         bad = "現在沒有在問你（遊戲還在跑或已結束），先 view。"
     elif a.get("kind") == "choice" and not (do == "ai" or (do == "choose" and 0 <= int(obj.get("index", -1)) < len(a.get("options", [])))):
         bad = "現在是在問一個問題：只能 choose（index 在選項範圍內）或 ai。"
-    elif a.get("kind") == "season" and do not in ("interact", "ask", "plan", "cancel", "want", "focus", "pass", "year", "regency", "quit"):
+    elif a.get("kind") == "season" and do not in ("agenda", "interact", "ask", "plan", "cancel", "want", "focus", "pass", "year", "regency", "quit"):
         bad = "現在是一季的空閒：choose / ai 只能用在問題上。"
     if bad:
         print("不行：" + bad + "\n")

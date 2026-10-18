@@ -54,8 +54,28 @@ bool EventRunner::eligible(const EventDef& ev, const Person& p, Id playerHead) c
         auto it = w_.budgetUsed_.find({p.household, ev.budget, w_.year()});
         if (it != w_.budgetUsed_.end() && it->second >= 2) return false;
     }
+    if (auto key = storyKey(ev, p); key.first != kNone && w_.metLately(key.first, key.second)) return false;
     auto cd = w_.cooldowns_.find({p.id, ev.id});
     return cd == w_.cooldowns_.end() || cd->second <= w_.day_;
+}
+
+std::pair<Id, std::string> EventRunner::storyKey(const EventDef& ev, const Person& p) const {
+    if (ev.institution || ev.repeat == "free" || ev.chance >= 1 || ev.scope == "away" || (ev.pulse != "monthly" && ev.pulse != "yearly"))
+        return {kNone, ""};
+    if (!w_.isPlayerFamily(p) && !w_.inPlayerHouse(p.household)) return {kNone, ""};
+    if (ev.repeat == "person") return {p.id, "p:" + ev.id};
+    return {p.household, ev.id};
+}
+
+int World::freshVariant(Id house, const std::string& story, int n, Rng& rng) {
+    auto& told = toldPrompts_[{house, story}];
+    if (static_cast<int>(told.size()) >= n) told.clear();
+    std::vector<int> fresh;
+    for (int k = 0; k < n; ++k)
+        if (std::find(told.begin(), told.end(), k) == told.end()) fresh.push_back(k);
+    int k = fresh[rng.range(0, static_cast<int>(fresh.size()) - 1)];
+    told.push_back(k);
+    return k;
 }
 
 // A signal-driven event whose day has come: the target and the deed come from the signal.
@@ -164,6 +184,7 @@ void EventRunner::fire(const EventDef& ev, Person& p, Id target) {
     const OptionDef& o = ev.options[chooseOption(ev, p, target)];
     natureStress(ev, o, p, target);
     if (ev.once) p.flags.insert("ev_" + ev.id);
+    if (auto key = storyKey(ev, p); key.first != kNone) w_.meetStory(key.first, key.second);
     if (!ev.budget.empty()) ++w_.budgetUsed_[{p.household, ev.budget, w_.year()}];
     if (ev.cooldownMonths > 0) w_.cooldowns_[{p.id, ev.id}] = w_.day_ + ev.cooldownMonths * kDaysPerMonth;
     if (ev.cooldownYears > 0) {
@@ -489,8 +510,20 @@ int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
             prompt.options.push_back(optionText(o, p, target));
             lines.push_back(format(o.logs.empty() ? o.log : o.logs[0], p, target));
         }
-        if (!ev.prompt.empty()) {
-            const std::string& said = ev.prompts.size() > 1 ? ev.prompts[w_.rngEvents_.range(0, static_cast<int>(ev.prompts.size()) - 1)] : ev.prompt;
+        const std::string* when = nullptr;  // a telling for this case (prompt_if): the first whose conditions hold
+        if (ev.promptIf.isArray())
+            for (const auto& c : ev.promptIf.asArray())
+                if (eval(c["cond"], p, target)) {
+                    when = &c["prompt"].asString();
+                    break;
+                }
+        if (when) {
+            prompt.situation = format(*when, p, target);
+        } else if (!ev.prompt.empty()) {
+            // Another way of telling it each time, until the house has heard them all.
+            const std::string& said = ev.prompts.size() > 1
+                                          ? ev.prompts[w_.freshVariant(p.household, ev.id, static_cast<int>(ev.prompts.size()), w_.rngEvents_)]
+                                          : ev.prompt;
             prompt.situation = format(said, p, target);
         } else {
             // The situation: what every option's line agrees on, up to the last full stop or comma in it,
@@ -713,6 +746,29 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     if (k == "deed_noted") return deed_ != kNone && w.deedNotes_.count({deed_, v.asString()}) > 0;
     if (k == "heir_apparent") return (h && h->head != kNone && h->head != p.id && w.heirOf(*h, h->head) == p.id) == v.asBool();
     if (k == "has_lover") return (p.lover != kNone) == v.asBool();
+    if (k == "is_lord") return (p.id == w.lord_) == v.asBool();  // the lord himself, not his sons or a steward
+    if (k == "deed_with_here") {  // the other party of the affair this event is about is still about
+        Id o = deed_ != kNone ? w.deeds_[deed_].with : kNone;
+        return (o != kNone && w.people_[o].alive() && w.people_[o].household != kNone) == v.asBool();
+    }
+    if (k == "deed_with_lord") return (deed_ != kNone && w.deeds_[deed_].with != kNone && w.deeds_[deed_].with == w.lord_) == v.asBool();
+    if (k == "died_suddenly") {  // on the dead: an accident, childbed or a sword, not a sickness that came on slowly
+        const std::string& c = p.deathCause;
+        return (!p.alive() && (c.rfind("意外", 0) == 0 || c == "難產" || c.find("戰死") != std::string::npos)) == v.asBool();
+    }
+    if (k == "married_years_ge" || k == "married_years_lt") {
+        // Since the wedding (the "wed:<day>" flag marry() sets); for older marriages, since the eldest child came.
+        int wed = -1;
+        for (const auto& f : p.flags)
+            if (f.rfind("wed:", 0) == 0) wed = std::stoi(f.substr(4));
+        if (wed < 0)
+            for (Id c : p.children)
+                if (p.spouse != kNone && (w.people_[c].father == p.spouse || w.people_[c].mother == p.spouse) && (wed < 0 || w.people_[c].birthDay < wed))
+                    wed = w.people_[c].birthDay - kDaysPerYear;
+        int end = p.spouse != kNone && !w.people_[p.spouse].alive() ? w.people_[p.spouse].deathDay : w.day_;
+        double years = wed < 0 ? 10 : (end - wed) / double(kDaysPerYear);
+        return k == "married_years_ge" ? years >= v.asNumber() : years < v.asNumber();
+    }
     if (k == "kin_boy_at_home") return (w.boyForMaster(p) != kNone) == v.asBool();
     if (k == "hired") return (h && h->hiredUntil > w.day_) == v.asBool();
     if (k == "hire_master") return (h && w.hireMaster(h->id) != kNone) == v.asBool();
@@ -878,6 +934,30 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     }
     if (k == "lord_opinion_ge")
         return w.lord_ != kNone && w.people_[w.lord_].alive() && w.lord_ != p.id && w.opinion(w.lord_, p.id) >= v.asNumber();
+    // The later rungs (design/fun-r5.md D): goals counted from what the house had when the ambition was taken up,
+    // the chantry priced by the house's standing, the lead in land, the posts the blood holds, the lord's family.
+    if (k == "money_gain_ge") return h && h->money >= p.ambitionBase.money + w.ambitionGain(p, "money", v);
+    if (k == "acres_gain_ge") return h && h->acres >= p.ambitionBase.acres + w.ambitionGain(p, "acres", v);
+    if (k == "freehold_gain_ge") return h && h->freehold >= p.ambitionBase.freehold + w.ambitionGain(p, "freehold", v);
+    if (k == "money_ge_chantry") return h && h->money >= w.chantryPrice(h->id) * v.asNumber();
+    if (k == "acres_lead_ge") return h && w.acresLead(h->id) >= v.asNumber();
+    if (k == "lords_debtor") {  // begged the lord to forgive a debt (debt_reckoning): no reeve for ten years
+        auto c = w.cooldowns_.find({p.id, "lords_debtor"});
+        return (c != w.cooldowns_.end() && c->second > w.day_) == v.asBool();
+    }
+    if (k == "manor_owes_ge") return h && w.manorBond_.house == h->id && w.manorBond_.owed >= v.asNumber();
+    if (k == "family_offices_ge") return w.familyOffices(p.dynasty) >= v.asNumber();
+    if (k == "reeve_terms_ge") return w.reeveTerms(p.dynasty) >= v.asNumber();
+    if (k == "gentry_single") return w.gentrySingle() == v.asBool();
+    if (k == "gentry_kin") {  // someone of the blood is married into the lord's family
+        bool any = false;
+        Id lordDyn = w.lord_ != kNone ? w.people_[w.lord_].dynasty : kNone;
+        for (const auto& q : w.people_)
+            if (q.alive() && p.dynasty != kNone && q.dynasty == p.dynasty && q.spouse != kNone && w.people_[q.spouse].alive() &&
+                lordDyn != kNone && w.people_[q.spouse].dynasty == lordDyn && q.dynasty != lordDyn)
+                any = true;
+        return any == v.asBool();
+    }
     if (k == "feud_any_ge") {
         bool any = false;
         if (p.dynasty != kNone)
@@ -1070,7 +1150,7 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
             } else if (k == "marry_target") {
                 if (target == kNone) continue;
                 Person& t = w.people_[target];
-                if (p.sex == t.sex || w.closeKin(p.id, t.id) || w.gentry(p.id) != w.gentry(t.id)) continue;
+                if (p.sex == t.sex || w.closeKin(p.id, t.id) || !w.mayWed(p.id, t.id)) continue;
                 auto married = [&](const Person& x) { return x.spouse != kNone && w.people_[x.spouse].alive(); };
                 if (married(p) || married(t)) continue;
                 Id man = p.sex == Sex::Male ? p.id : t.id;
@@ -1086,7 +1166,7 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 // The buyer bids more for the land (outbid by another house): paid to the seller when the deal is struck.
                 if (plan_) plan_->priceAdd += v.asNumber();
             } else if (k == "abort_plan") {
-                if (plan_) plan_->progress = -1000;  // resolved as a failure at month end
+                if (plan_) plan_->aborted = true;  // ends quietly at month end: called off, not refused
             } else if (k == "subject") {
                 if (plan_ && plan_->subject != kNone) apply(v, w.people_[plan_->subject], target);
             } else if (k == "marry_subject_target") {
@@ -1390,25 +1470,28 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
             } else if (k == "food_days") {
                 if (h) h->food = std::max(0.0, h->food + w.consumption(*h) * v.asNumber());
             } else if (k == "borrow_grain") {
-                // A neighbour who thinks well of the family lends grain against the next harvest.
+                // A neighbour who thinks well of the family lends grain against the next harvest (economy.cpp).
+                if (h) w.borrowGrain(*h, p.id, v.numberOr("days", 60), cause_);
+            } else if (k == "buy_food_days") {
+                // Grain from the market at its price, as many days of it as the purse covers.
                 if (!h) continue;
-                double owed = 0;
-                Id lender = w.seekLender(*h, v.numberOr("debt", 30), "借糧度荒", owed);
-                if (lender == kNone) {
-                    if (h->id == w.playerHousehold_) w.log(1, "  可是村裡沒有一家肯借，" + p.firstName + " 空著手回家。");
-                    continue;
-                }
-                h->food += w.consumption(*h) * v.numberOr("days", 90);
-                // The grain is the lender's whatever is asked back for it (given outright, it still came out of his store).
-                Household& lh = w.households_[w.people_[lender].household];
-                double cost = std::round(v.numberOr("debt", 30) * 0.6);
-                lh.money -= cost;
-                w.book(lh, owed > 0 ? "借糧給人" : "接濟別人", -cost);
-                if (owed > 0 && (h->debt <= 0.5 || h->creditor == lender)) w.addDebt(*h, owed, lender);
-                if (owed > 0) w.recordDeed("lent_money", lender, p.id, 1, cause_);  // a gift is recorded where it was given
+                double price = w.param("grain_price", 0.5);
+                double b = std::clamp(w.consumption(*h) * v.asNumber(), 0.0, std::max(0.0, h->money) / price);
+                h->food += b;
+                h->money = std::max(0.0, h->money - b * price);
+                w.book(*h, "買糧", -b * price);
+            } else if (k == "surrender_acres") {
+                // A few customary acres back into the lord's hand against the arrears (kSurrenderCredit pence an acre):
+                // a number, or "debt" for as many as clear what is owed the manor, at most a quarter of the customary land.
+                if (!h) continue;
+                double customary = h->acres - h->freehold;
+                double n = v.isNumber() ? v.asNumber() : std::ceil(w.owedLord(*h) / World::kSurrenderCredit);
+                n = std::min(n, std::floor(customary * 0.25));
+                if (n < 1 || customary < 6) continue;
+                double moved = w.moveLand(h->id, kNone, n, LandPick::CustomaryOnly, "交回領主");
+                double off = w.reduceLordDebt(*h, moved * World::kSurrenderCredit);
                 if (h->id == w.playerHousehold_)
-                    w.log(1, "  " + w.fullName(lender) + (owed > 0 ? " 借了一袋燕麥和豆子，說好秋收後還 " + std::to_string(int(owed)) + " 便士。"
-                                                                     : " 送來一袋燕麥和豆子，說不用還。"));
+                    w.log(1, "  把" + w.movedText() + "交還給領主，抵了 " + std::to_string(int(off)) + " 便士的欠租。");
             } else if (k == "service_for_food") {
                 // One mouth fewer: a child goes to serve a better-off house for bed and board.
                 if (!h) continue;
@@ -1606,6 +1689,30 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                     std::string where = master == (w.lord_ != kNone ? w.people_[w.lord_].household : kNone) ? "莊園的自營地上" : w.fullName(mh.head) + " 家";
                     w.log(1, "  家裡 " + std::to_string(n) + " 個能幹活的人去" + where + "當長工，管吃，一個月每人 4 便士，做到明年這時候。");
                 }
+            } else if (k == "sell_grain") {
+                // {"sell_grain": 90}: up to that many days of the house's bread carted to the town market (it keeps
+                // enough to see it past the next harvest).
+                if (!h) continue;
+                double got = w.sellGrainAtMarket(*h, v.asNumber());
+                if (w.inPlayerHouse(h->id)) w.log(1, got > 0 ? "  賣了 " + std::to_string(static_cast<long>(got)) + " 便士。" : "  到了市集才發現，家裡的糧其實不夠賣。");
+            } else if (k == "hire_hand") {
+                // {"hire_hand": {"pay": 24, "bonus": 0.05}}: the target works the house's harvest for a season's wage.
+                if (!h || target == kNone) continue;
+                w.hireHand(*h, target, v.numberOr("pay", 24), v.numberOr("bonus", 0.05));
+            } else if (k == "give_parcel") {
+                // {"give_parcel": <parcel id>}: one of the house's parcels given to the target's house to till.
+                if (!h || target == kNone || w.people_[target].household == kNone) continue;
+                Id pc = static_cast<Id>(v.asNumber());
+                if (pc < 0 || pc >= static_cast<Id>(w.parcels_.size()) || w.parcels_[pc].holder != h->id) continue;
+                w.giveParcelTo(pc, w.people_[target].household, p.id);
+            } else if (k == "take_in") {
+                // The target comes to live in p's house.
+                if (!h || target == kNone) continue;
+                w.takeIn(target, h->id, p.id);
+            } else if (k == "hire_kin") {
+                // The grown of the target's house hire on with p's house for the year (bed, board and a wage).
+                if (!h || target == kNone || w.people_[target].household == kNone) continue;
+                w.hireKin(w.people_[target].household, h->id);
             } else if (k == "rent_vacant_credit") {
                 if (!h) continue;
                 std::string no = w.rentVacantOnCredit(*h, v.numberOr("min", 3));
@@ -1622,6 +1729,39 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                     const Deed& d = w.deeds_[deed_];
                     if (d.actor != kNone && d.with != kNone && w.people_[d.actor].lover == d.with) w.endLiaison(d.actor);
                 }
+            } else if (k == "expose_affair") {
+                // The affair this event is about, taken to the church court: both of them, in front of the parish.
+                if (deed_ != kNone && w.deeds_[deed_].with != kNone) w.exposeAffair(w.deeds_[deed_].actor, w.deeds_[deed_].with);
+            } else if (k == "fight_lover") {
+                // Going for the other man (or woman) of the affair this event is about: a brawl the village sees, and the
+                // affair is over. Against the lord it is the manor that remembers, and its court may fine.
+                if (deed_ == kNone) continue;
+                const Id lv = w.deeds_[deed_].with, doer = w.deeds_[deed_].actor;  // copies: recordDeed grows deeds_
+                if (lv == kNone || !w.people_[lv].alive() || w.people_[lv].household == kNone) continue;
+                w.recordDeed("brawl", p.id, lv, 1, deed_);
+                p.health = std::max(0.0, p.health - 6);
+                w.deedNotes_.insert({deed_, "spoken"});
+                if (doer != kNone && w.people_[doer].lover == lv) w.endLiaison(doer);
+                if (lv == w.lord_) {
+                    w.addOpinion(lv, p.id, "struck_the_lord", -40, 20);
+                    if (h && w.rngEvents_.chance(0.5)) {
+                        double fine = std::min(12.0, std::max(0.0, h->money));
+                        h->money -= fine;
+                        w.book(*h, "毆打領主的罰款", -fine);
+                        if (w.inPlayerHouse(h->id)) w.log(1, "  管家把這事記上了莊園法庭的案卷，罰了 " + std::to_string(int(fine)) + " 便士。");
+                    }
+                }
+            } else if (k == "suspect") {
+                // Believes a little more firmly that the one in the deed did it (a neighbour's hint, pressed).
+                if (deed_ != kNone) w.addBelief(p.id, deed_, w.deeds_[deed_].actor, v.asNumber(), target != kNone ? target : kNone);
+            } else if (k == "nurse") {
+                // Care for the one lying sick (the target): the odds the illness kills move by this much.
+                Id who = target != kNone ? target : p.id;
+                auto it = w.sick_.find(who);
+                if (it != w.sick_.end()) it->second.odds = std::clamp(it->second.odds + v.asNumber(), 0.05, 0.95);
+            } else if (k == "disown_target") {
+                // Not acknowledged as the head's child: does not take the land (life.cpp heirOf).
+                if (target != kNone) w.people_[target].flags.insert("disowned");
             } else if (k == "on_target") {
                 // Effects on the other party, who then has this person as their target.
                 if (target != kNone && w.people_[target].alive()) apply(v, w.people_[target], p.id);
@@ -1640,6 +1780,13 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                         w.log(1, "  「" + w.secretWords(told[i], who) + "。」");
                     if (told.size() > 3) w.log(1, "  還有幾件，" + w.people_[who].firstName + "聽不下去了。");
                 }
+            } else if (k == "village_opinion") {
+                // How the other heads of the village take what p did to them all (assessing the king's tax).
+                std::string mod = v.stringOr("mod", "event");
+                Id lordHouse = w.lord_ != kNone ? w.people_[w.lord_].household : kNone;
+                for (const auto& oh : w.households_)
+                    if (!oh.extinct && oh.head != kNone && oh.id != p.household && oh.id != lordHouse && oh.head != w.priest_)
+                        w.addOpinion(oh.head, p.id, mod, v["value"].asNumber(), static_cast<int>(v.numberOr("years", 4)));
             } else if (k == "household_opinion") {
                 // Everyone at home thinks differently of this person now.
                 if (!h) continue;
@@ -1770,7 +1917,23 @@ std::string EventRunner::format(const std::string& tmpl, const Person& p, Id tar
                 Id d = target != kNone ? w_.hookDeed(p.id, target) : kNone;
                 val = d != kNone ? w_.describeDeed(d) : "那件事";
             } else if (key == "tax") val = p.household != kNone ? std::to_string(static_cast<long>(w_.taxDue(w_.households_[p.household]))) : "0";
-            else if (key == "debt") val = p.household != kNone ? std::to_string(int(w_.households_[p.household].debt)) : "0";
+            else if (key == "debt") {
+                // What is owed to the one at the door (the steward, the neighbour), else all the house owes.
+                double d = 0;
+                if (p.household != kNone) {
+                    const Household& dh = w_.households_[p.household];
+                    d = w_.owedAll(dh.id);
+                    double t = (dh.debt > 0.5 && dh.creditor == target ? dh.debt : 0.0) + (dh.heldDebt > 0.5 && dh.heldCreditor == target ? dh.heldDebt : 0.0);
+                    if (target != kNone && t > 0.5) d = t;
+                }
+                val = std::to_string(int(d));
+            } else if (key.rfind("grain_loan:", 0) == 0) {
+                // {grain_loan:60}: what N days of the house's bread borrowed now will cost back at Michaelmas.
+                val = p.household != kNone ? std::to_string(static_cast<long>(w_.grainLoanOwed(w_.households_[p.household], std::stod(key.substr(11))))) : "0";
+            } else if (key.rfind("food_cost:", 0) == 0) {
+                // {food_cost:20}: what N days of the house's bread cost at the market today.
+                val = p.household != kNone ? std::to_string(static_cast<long>(std::lround(w_.consumption(w_.households_[p.household]) * std::stod(key.substr(10)) * w_.param("grain_price", 0.5)))) : "0";
+            }
             else if (key == "feud_cause") {
                 const Feud* f = target != kNone ? w_.feudBetween(p.dynasty, w_.people_[target].dynasty) : nullptr;
                 val = f ? w_.describeDeed(f->cause) : "";
@@ -1800,6 +1963,9 @@ std::string EventRunner::format(const std::string& tmpl, const Person& p, Id tar
             else if (key == "stress_cause") val = p.stressCause.empty() ? "說不出的心事" : p.stressCause;
             else if (key == "deed_actor" || key == "deed_victim") {
                 Id a = deed_ == kNone ? kNone : key == "deed_actor" ? w_.deeds_[deed_].actor : w_.deeds_[deed_].target;
+                val = a == kNone ? "" : w_.isPlayerFamily(w_.people_[a]) ? w_.shortName(a) : w_.fullName(a);
+            } else if (key == "deed_with") {  // the other party of an affair
+                Id a = deed_ == kNone ? kNone : w_.deeds_[deed_].with;
                 val = a == kNone ? "" : w_.isPlayerFamily(w_.people_[a]) ? w_.shortName(a) : w_.fullName(a);
             } else if (key == "deed_year") val = deed_ != kNone ? std::to_string(w_.cfg_.startYear + w_.deeds_[deed_].day / kDaysPerYear) : "";
             else val = "{" + key + "}";

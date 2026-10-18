@@ -143,23 +143,64 @@
         "ai": {"base": 6, "traits": {"forgiving": 10, "calm": 6, "content": 4, "vengeful": -10}}}
      ]},
 
-    {"id": "spouse_learns_affair", "title": "枕邊的背叛", "prompt": "{name} 知道了 {target} 背著{pron}和別人好過。", "scope": "anyone", "chance": 0.85,
+    // Found out (a belief strong enough to act on), or caught at it by the head (hooks.cpp familyAffairs runs it at
+    // once): what to do about a husband's or wife's affair. Once per affair ("confronted").
+    {"id": "spouse_learns_affair", "title": "枕邊的背叛", "prompt": "{name} 知道了 {target} 背著{pron}和 {deed_with} 好過。", "scope": "anyone", "chance": 0.85,
+     "prompt_if": [{"cond": {"deed_with_lord": true}, "prompt": "{target}和領主 {deed_with} 的事，{name} 這回知道得清清楚楚。對方是老爺，你家的地還捏在他手裡。"}],
      "on": {"signal": "belief", "deed_type": "affair", "victim_side": true, "after_months": [0, 2]},
-     "conditions": {"married": true, "age": [16, 80]},
+     "conditions": {"married": true, "age": [16, 80], "not": {"deed_noted": "confronted"}},
      "target": {"conditions": {"is_spouse": true}},
      "options": [
-       {"text": "原諒", "log": "{name} 知道了 {target} 背著{pron}和別人好過。哭了一夜之後，{name} 還是原諒了{target_pron}。",
-        "effects": [{"stress": 15}, {"opinion": {"value": -10, "mod": "betrayed", "years": 8}}],
-        "ai": {"base": 6, "traits": {"kind": 8, "forgiving": 10, "pious": 4, "vengeful": -8}}},
-       {"text": "大吵一架", "log": "{name} 知道了 {target} 背著{pron}和別人好過，兩人吵得整條街都聽見了。",
-        "effects": [{"mutual_opinion": {"value": -25, "mod": "betrayed", "years": 12}}, {"reputation": -1}, {"note_deed": "spoken"}],
-        "ai": {"base": 8, "traits": {"wrathful": 10, "gregarious": 4, "calm": -4}}},
-       {"text": "告到教會法庭", "log": "{name} 把 {target} 告到教會法庭，罪名是私通。",
-        "effects": [{"accuse": true}, {"opinion": {"value": -30, "mod": "betrayed", "years": 20}}, {"note_deed": "spoken"}],
-        "ai": {"base": 3, "traits": {"vengeful": 10, "pious": 6, "cruel": 4, "kind": -6}}},
-       {"text": "什麼也不說", "log": "{name} 知道了 {target} 背著{pron}和別人好過，從此再也沒有正眼看過{target_pron}。",
-        "effects": [{"opinion": {"value": -20, "mod": "betrayed", "years": 15}}, {"stress": 20}],
-        "ai": {"base": 6, "traits": {"shy": 8, "calm": 6, "melancholy": 6}}}
+       {"text": "關起門來跟{target_pron}對質，叫{target_pron}斷了", "log": "{name} 關上門跟 {target} 對質。{target_first}哭了，說往後再也不見 {deed_with}。",
+        "logs": ["{name} 關上門跟 {target} 對質。{target_first}哭了，說往後再也不見 {deed_with}。",
+                 "{name} 關上門跟 {target} 對質，兩人吵到半夜。第二天起，{target_first}再也沒往 {deed_with} 那邊去。"],
+        "effects": [{"note_deed": "confronted"}, {"end_affair": true}, {"mutual_opinion": {"value": -20, "mod": "betrayed", "years": 12}}, {"note_deed": "spoken"}, {"stress": 8}],
+        "ai": {"base": 8, "traits": {"wrathful": 6, "brave": 4, "calm": 2, "craven": -4}}},
+       {"text": "告到教會法庭，讓兩人當眾悔罪", "log": "{name} 把 {target} 和 {deed_with} 告到教會法庭，罪名是私通。",
+        "effects": [{"note_deed": "confronted"}, {"expose_affair": true}, {"opinion": {"value": -30, "mod": "betrayed", "years": 20}}, {"reputation": -2}],
+        "ai": {"base": 3, "traits": {"vengeful": 10, "pious": 6, "cruel": 4, "kind": -6}, "if": [{"cond": {"deed_with_lord": true}, "add": -3}]}},
+       {"text": "去找 {deed_with} 打一架", "conditions": {"deed_with_here": true, "sex": "male"},
+        "log": "{name} 在磨坊前截住 {deed_with}，一拳打了過去。圍過來的人都看見了。",
+        "effects": [{"note_deed": "confronted"}, {"fight_lover": true}, {"opinion": {"value": -15, "mod": "betrayed", "years": 12}}, {"stress": -6}],
+        "ai": {"base": 4, "traits": {"wrathful": 10, "brave": 8, "strong": 4, "craven": -10, "calm": -6}, "if": [{"cond": {"deed_with_lord": true}, "add": -3}]}},
+       {"text": "忍下來，什麼也不說", "log": "{name} 知道了 {target} 背著{pron}和別人好過，從此再也沒有正眼看過{target_pron}。",
+        "effects": [{"note_deed": "confronted"}, {"opinion": {"value": -20, "mod": "betrayed", "years": 15}}, {"stress": 20}],
+        "ai": {"base": 6, "traits": {"shy": 8, "calm": 6, "melancholy": 6, "craven": 4}, "if": [{"cond": {"deed_with_lord": true}, "add": 6}]}}
+     ]},
+
+    // The second stage of a family member's affair reaching the head (hooks.cpp familyAffairs): a neighbour, {target},
+    // drops a plainer hint. Watching finds it soonest; pressing the neighbour makes it likelier; letting it go, least.
+    {"id": "affair_hint", "title": "鄰居的話", "scope": "anyone", "chance": 1,
+     "on": {"signal": "manual"},
+     "prompt": "{target} 在井邊跟{name}說話，說著說著壓低了聲音：「{deed_actor}這陣子常往 {deed_with} 那邊走，天黑了才回來……我可什麼都沒說。」",
+     "options": [
+       {"text": "把{target_pron}拉到一邊，問清楚看見了什麼", "log": "{name} 把 {target} 拉到一邊追問。{target_first}支支吾吾，只說好幾回看見{deed_actor}和 {deed_with} 在一塊。",
+        "effects": [{"note_deed": "asked"}, {"suspect": 15}, {"stress": 6}],
+        "ai": {"base": 8, "traits": {"brave": 4, "wrathful": 4, "gregarious": 3}}},
+       {"text": "閒話而已，不理", "log": "{target} 話裡有話，{name} 只當沒聽懂。",
+        "effects": [],
+        "ai": {"base": 6, "traits": {"calm": 6, "content": 4, "forgiving": 4}}},
+       {"text": "不動聲色，暗中盯著{deed_actor}", "log": "{name} 什麼也沒說。從那天起，暗中留意{deed_actor}每天往哪裡去。",
+        "effects": [{"note_deed": "watched"}, {"stress": 4}],
+        "ai": {"base": 6, "traits": {"clever": 6, "vengeful": 4, "cynical": 4}}}
+     ]},
+
+    // A child born while the mother had a lover grows up looking like someone else (hooks.cpp familyAffairs).
+    {"id": "not_like_you", "title": "長得不像你", "scope": "anyone", "chance": 1,
+     "on": {"signal": "manual"},
+     "prompt": "{target_first}一天天長大，眉眼卻一點也不像{name}。在教堂裡，有人看看{target_first}，又看看別處，交頭接耳。",
+     "options": [
+       {"text": "{target_first}就是我的孩子，誰也別多嘴", "log": "有人在教堂門口說{target_first}長得不像爹，{name} 把話頂了回去：「{target_first}是我的孩子。」",
+        "effects": [{"target_opinion": {"value": 8, "mod": "stood_by", "years": 12}}, {"stress": 4}],
+        "ai": {"base": 8, "traits": {"kind": 8, "forgiving": 6, "calm": 4, "vengeful": -6}}},
+       {"text": "心裡起了疙瘩，對{target_pron}冷了下來", "log": "{name} 嘴上沒說，看{target_first}的眼神卻冷了。",
+        "effects": [{"opinion": {"value": -25, "mod": "doubted_paternity", "years": 20}}, {"target_opinion": {"value": -10, "mod": "cold_father", "years": 15}}, {"stress": 8}],
+        "ai": {"base": 6, "traits": {"vengeful": 4, "melancholy": 4, "cynical": 6}}},
+       {"text": "不認{target_pron}，家業不傳給{target_pron}", "conditions": {"target": {"sex": "male", "age": [0, 15]}},
+        "log": "{name} 當著家裡人的面說：{target_first}不是我的種，這個家將來沒{target_pron}的份。",
+        "effects": [{"disown_target": true}, {"opinion": {"value": -40, "mod": "doubted_paternity", "years": 30}}, {"target_opinion": {"value": -30, "mod": "cold_father", "years": 25}},
+                    {"household_opinion": {"value": -8, "mod": "hard_words", "years": 8}}, {"reputation": -2}],
+        "ai": {"base": 1, "traits": {"cruel": 8, "vengeful": 6, "wrathful": 4, "kind": -8}}}
      ]}
   ]
 }

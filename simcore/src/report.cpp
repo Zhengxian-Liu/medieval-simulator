@@ -27,7 +27,7 @@ const std::map<std::string, std::string>& modNames() {
         {"tithe", "什一稅"}, {"tithe_quarrel", "吵過什一稅"}, {"trusted_tenant", "信得過的佃戶"},
         {"voted_against_me", "陪審時投了我有罪"}, {"voted_for_them", "陪審時偏袒對方"}, {"welched", "賴過帳"},
         {"worked_off_debt", "做工抵過債"}, {"envy", "眼紅你家"}, {"refused_kindness", "不准我幫朋友"}, {"respect", "敬重你家"}, {"worthy_tenant", "體面的佃戶"}, {"lords_man", "領主的人"}, {"event", "往來"},
-        {"comforted", "陪過我熬過難關"}, {"taught", "手把手教過我"}, {"took_to_market", "帶我去過市集"},
+        {"comforted", "陪過我熬過難關"}, {"talked_back", "當面頂撞過我"}, {"taught", "手把手教過我"}, {"took_to_market", "帶我去過市集"},
         {"swapped_work", "農忙時換過工"}, {"helped_kin", "日子難過時接濟過"}, {"praised", "誇過我"}, {"scolded", "管教過我"}, {"prayed_together", "一起上過教堂"},
         {"slighted", "給過我臉色"}, {"helped_me", "借糧給我"}, {"helped_them", "幫過他們"}, {"refused_help", "不肯幫忙"},
         {"condolence", "來弔唁過"}, {"took_our_want", "搶了我們看中的"}, {"mill_toll", "嫌他家磨坊抽得重"}, {"usury", "放債吃利"}, {"settled_son", "替小兒子置了產"}, {"took_our_land", "趁機拿走我家的地"},
@@ -35,7 +35,15 @@ const std::map<std::string, std::string>& modNames() {
         {"refused_ask", "回絕過我的請求"}, {"pressed_with_secret", "拿把柄壓過我"}, {"haggled", "跟我討價還價過"}, {"helped_us", "替我家墊過租"}, {"lied_to_me", "瞞過我的帳"}, {"stood_aside", "讓過我一步"}, {"hard_words", "說過狠話"}, {"forbade_match", "不准我的親事"}, {"put_off", "推託過我的事"},
         {"cold_shoulder", "給過我冷臉"}, {"heeded", "把我的事放在心上"}, {"neglected", "冷落過我"},
         {"came_to_wake", "來守過靈"}, {"missed_funeral", "喪事沒來露面"}, {"came_to_wedding", "來喝過喜酒"},
-        {"wedding_gift", "送過賀禮"}, {"helps_at_home", "在家很幫忙"}, {"for_the_dead", "看在先人份上"}, {"same_house", "一家人"}, {"helped_the_manor", "替莊園解過圍"}, {"held_back", "要錢時推託過"}, {"paid_up", "欠債按時還清"}, {"against_the_dead", "記著先人的舊帳"}, {"missed_wedding", "喜事沒來"}};
+        {"wedding_gift", "送過賀禮"}, {"helps_at_home", "在家很幫忙"}, {"for_the_dead", "看在先人份上"}, {"same_house", "一家人"}, {"helped_the_manor", "替莊園解過圍"}, {"held_back", "要錢時推託過"}, {"paid_up", "欠債按時還清"}, {"against_the_dead", "記著先人的舊帳"}, {"missed_wedding", "喜事沒來"},
+        // design/fun-r5.md C: asks with terms, the king's tax, the season's deeds.
+        {"turned_down_terms", "沒答應我開的條件"}, {"assessed_us", "估稅估得狠"}, {"spared_us", "估稅時手下留情"},
+        {"cheated_the_tax", "估稅的自己少交"}, {"pushed_tax_on_us", "把稅推給別家"}, {"carried_our_share", "替窮人家擔了稅"},
+        {"honest_assessor", "估稅公道"}, {"hired_me", "雇我幹活"}, {"took_us_in", "收留了我家的人"}, {"gave_land", "分了地給我家"},
+        {"fed_us", "挨餓時送過糧"}, {"left_us_hungry", "挨餓時沒伸手"},
+        // design/fun-r5.md B: family plans asked, affairs, illness.
+        {"forbade_plan", "不准我的打算"}, {"rebuffed", "拒絕過我"}, {"struck_the_lord", "對我動過手"}, {"doubted_paternity", "疑心不是親生的"},
+        {"cold_father", "對我冷淡"}, {"stood_by", "護著我"}, {"nursed", "病中照顧過我"}};
     return names;
 }
 
@@ -233,15 +241,15 @@ std::string World::familyReport() const {
         Id acting = actingHead();
         const Person& ap = people_[acting];
         if (const AmbitionDef* a = defs_.ambition(hp.ambition)) {
-            o << "這一代的志向：「" << a->name << "」，" << a->desc;
+            o << "這一代的志向：「" << a->name << "」，" << ambitionDesc(hp);
             int total = static_cast<int>(a->milestones.size()) + 1;
             int nx = nextMilestone(hp);
             if (nx >= 0)
-                o << "（已做到 " << hp.ambitionStep << "/" << total << " 步；還差：" << a->milestones[nx].name << "）";
+                o << "（已做到 " << hp.ambitionStep << "/" << total << " 步；還差：" << milestoneName(hp, nx) << "）";
             else
-                o << "（最後一步：" << a->final << "）";
+                o << "（最後一步：" << ambitionFinal(hp) << "）";
             int left = a->maxYears - (day_ - hp.ambitionSince) / kDaysPerYear;
-            if (left <= 5) o << "還剩 " << std::max(0, left) << " 年。";
+            if (left <= 5) o << "限到 " << ambitionDeadline(hp) << " 年底，還剩 " << std::max(0, left) << " 年。";
             std::string plans;
             for (const auto& pl : a->plans)
                 if (const PlanDef* pd = defs_.plan(pl)) plans += (plans.empty() ? "" : "、") + pd->name;
@@ -460,7 +468,7 @@ std::string World::personReport(Id id) const {
 
     bool known = aimsKnown(p);
     if (const AmbitionDef* a = defs_.ambition(p.ambition)) {
-        if (known) o << pr << "這輩子想要：「" << a->name << "」，" << a->desc << "\n";
+        if (known) o << pr << "這輩子想要：「" << a->name << "」，" << ambitionDesc(p) << "\n";
         else o << pr << "這輩子想要什麼，你看不透。\n";
     }
     if (id != head && p.intent.kind != "none" && !p.intent.why.empty()) {
