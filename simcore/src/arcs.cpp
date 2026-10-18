@@ -179,6 +179,37 @@ double World::owedLord(const Household& h) const {
     return (h.debt > 0.5 && h.creditor == lord_ ? h.debt : 0.0) + (h.heldCreditor == lord_ ? h.heldDebt : 0.0);
 }
 
+double World::owedAll(Id household) const {
+    const Household& h = households_[household];
+    return (h.debt > 0.5 ? h.debt : 0.0) + (h.heldDebt > 0.5 ? h.heldDebt : 0.0);
+}
+
+// "欠莊園 62 便士（拖了一年）、欠 艾倫·米勒 30 便士（明年米迦勒節到期）": what is owed, to whom, and when.
+std::string World::debtText(Id household) const {
+    const Household& h = households_[household];
+    auto whom = [&](Id c) { return c == kNone || c == lord_ ? std::string("欠莊園 ") : "欠 " + fullName(c) + " "; };
+    std::vector<std::string> parts;
+    if (h.debt > 0.5) {
+        bool lord = h.creditor == kNone || h.creditor == lord_;
+        std::string when;
+        if (h.debtYears >= 1) when = lord ? "（拖了 " + std::to_string(h.debtYears) + " 年）" : "（約定的日子已經過了）";
+        else {
+            // Due at the Michaelmas after (−debtYears) more of them; rent day is the end of the ninth month.
+            int ahead = 1 - h.debtYears;  // Michaelmases from now until it is due
+            bool past = month() > 8 || (month() == 8 && dayOfMonth() == 29);  // this year's rent day is behind us
+            int y = year() + (past ? 1 : 0) + ahead - 1;
+            int dy = y - year();
+            std::string at = dy == 0 ? "今年" : dy == 1 ? "明年" : dy == 2 ? "後年" : std::to_string(y) + " 年";
+            when = lord ? (ahead >= 2 ? "（寬限到" + at + "米迦勒節）" : "（" + at + "米迦勒節管家來收）") : "（" + at + "米迦勒節到期）";
+        }
+        parts.push_back(whom(h.creditor) + std::to_string(static_cast<long>(h.debt)) + " 便士" + when);
+    }
+    if (h.heldDebt > 0.5) parts.push_back(whom(h.heldCreditor) + std::to_string(static_cast<long>(h.heldDebt)) + " 便士（排在前一筆後面）");
+    std::string s;
+    for (const auto& x : parts) s += (s.empty() ? "" : "、") + x;
+    return s;
+}
+
 // Takes up to `amount` off what the house owes the manor; returns how much came off.
 double World::reduceLordDebt(Household& h, double amount) {
     double done = 0;
@@ -280,6 +311,10 @@ void World::monthlyDebts() {
             continue;
         }
         if (h.head != kNone && !manor && month() % 3 == 0) addStress(h.head, 2, "還不清的債");
+        // The harvest month's coin goes to the rent first (rent day settles the arrears with it), and a neighbour's
+        // loan is paid at the Michaelmas agreed, not a little each month; only once overdue is it dunned monthly.
+        bool toLord = h.creditor == kNone || h.creditor == lord_;
+        if (!manor && (month() == 8 || (!toLord && h.debtYears < 1))) continue;
         // Bread first: only money beyond a few months' food goes to the creditor.
         double need = consumption(h) * 360 - h.food;
         double spare = h.money - 40 - std::max(0.0, need) * param("grain_price", 0.5);
@@ -313,12 +348,17 @@ void World::yearlyDebts() {
     bool hardTimes = param("harvest_mult", 1) < 0.8 || param("plague_monthly", 0) > 0;
     for (auto& h : households_)
         if (!h.extinct && h.lodgerUntil > day_) h.money += 14, book(h, "房客的租錢", 14);
+    // Whose arrears get settled today (paid, forgiven, worked off): this year's shortfall then waits a year (payRent).
+    lordCleared_.clear();
+    stewardOnCard_.clear();
+    std::map<Id, double> owedBefore;
+    for (const auto& h : households_)
+        if (!h.extinct && owedLord(h) > 0.5) owedBefore[h.id] = owedLord(h);
     for (auto& h : households_) {
         promoteHeldDebt(h);
         if (h.extinct || h.members.empty() || h.debt <= 0.5 || h.head == kNone) continue;
         if (lord_ != kNone && people_[lord_].household == h.id) continue;  // the manor pays on its own terms (monthlyDebts)
-        if (hardTimes || h.debt < 20) continue;  // small arrears just stay on the books
-        if (++h.debtYears <= 0) continue;  // not due yet
+        if (hardTimes) continue;
         bool lordIsCreditor = h.creditor == lord_ || h.creditor == kNone ||
                               people_[h.creditor].household == kNone || !people_[h.creditor].alive();
         if (!lordIsCreditor && people_[h.creditor].household == h.id) {  // owed to their own house now
@@ -326,6 +366,27 @@ void World::yearlyDebts() {
             continue;
         }
         bool home = inPlayerHouse(h.id);
+        if (lordIsCreditor) {
+            if (h.debt < 20) continue;  // small arrears just stay on the books
+            if (++h.debtYears <= 0) continue;  // not due yet
+        } else {
+            // A neighbour's loan falls due at the Michaelmas agreed, small or large, and is paid then if the purse allows
+            // (the player's house answers its creditor itself, unless the sum is a trifle).
+            if (++h.debtYears <= 0) continue;
+            if ((!home || h.debt < 20) && h.money - (h.debt < 20 ? 0 : 20) >= h.debt) {
+                Household& ch = households_[people_[h.creditor].household];
+                h.money -= h.debt;
+                book(h, "還債", -h.debt);
+                ch.money += h.debt;
+                book(ch, "收回借款", h.debt);
+                if (home) log(1, "米迦勒節到了，照約定還了欠 " + fullName(h.creditor) + " 的 " + std::to_string(int(h.debt)) + " 便士。");
+                else if (inPlayerHouse(ch.id))
+                    log(1, fullName(h.head) + " 家照約定，在米迦勒節還了欠你家的 " + std::to_string(int(h.debt)) + " 便士。");
+                clearDebt(h);
+                continue;
+            }
+            if (h.debt < 20) continue;  // a trifle: dunned month by month from now on (monthlyDebts)
+        }
         // Owed to the player's house: whether to press, wait or let it go is the player's to say.
         if (!lordIsCreditor && !home && inPlayerHouse(people_[h.creditor].household) && actingHead() != kNone) {
             Id ours = actingHead();
@@ -350,6 +411,11 @@ void World::yearlyDebts() {
             }
         }
         if (h.debtYears == 1) {
+            // Old arrears and a rent the purse cannot meet either: one reckoning on the Michaelmas card (payRent).
+            if (lordIsCreditor && home && chooser_ && h.money < rentOf(h) - 1) {
+                stewardOnCard_.insert(h.id);
+                continue;
+            }
             runEventById(lordIsCreditor ? "debt_steward" : "debt_neighbour", h.head, lordIsCreditor ? lord_ : h.creditor);
             continue;
         }
@@ -373,7 +439,7 @@ void World::yearlyDebts() {
             }
             if (h.debtYears == 2) {
                 if (lord_ != kNone) recordDeed("distrained", lord_, h.head);
-                addStress(h.head, 20, "被管家牽走的牛");
+                addStress(h.head, 20, "管家牽走的牛");
                 continue;
             }
         }
@@ -427,6 +493,8 @@ void World::yearlyDebts() {
         }
         clearDebt(h);
     }
+    for (const auto& [id, owed] : owedBefore)
+        if (owedLord(households_[id]) <= 0.5) lordCleared_.insert(id);
 }
 
 void World::clearDebt(Household& h) {

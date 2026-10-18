@@ -1,17 +1,18 @@
 {
   // Dated events of 14th-century England. Effects either last N months or are permanent.
+  // A rent_mult effect's "note" is how the steward names it on the Michaelmas reckoning (economy.cpp rentOf).
   "history": [
     {"year": 1315, "month": 5, "id": "great_famine", "text": "連月大雨，莊稼爛在田裡。大饑荒開始了。",
      "effects": [{"param": "harvest_mult", "mult": 0.45, "months": 26}, {"param": "grain_price", "mult": 3.0, "months": 30}, {"param": "mortality_mult", "mult": 1.6, "months": 30}]},
     {"year": 1318, "month": 2, "id": "famine_ends", "text": "饑荒總算過去了，但村裡少了好些人。", "effects": []},
     {"year": 1327, "month": 0, "id": "edward_iii", "text": "年輕的愛德華三世登基。", "effects": []},
-    {"year": 1337, "month": 4, "id": "hundred_years_war", "text": "國王向法蘭西宣戰，各郡開始徵召弓兵。",
-     "effects": [{"world_flag": "war"}, {"param": "rent_mult", "mult": 1.15, "permanent": true}]},
+    {"year": 1337, "month": 4, "id": "hundred_years_war", "text": "國王向法蘭西宣戰，各郡開始徵召弓兵。領主說打仗要錢，從今年米迦勒節起，地租加一成五。",
+     "effects": [{"world_flag": "war"}, {"param": "rent_mult", "mult": 1.15, "permanent": true, "note": "打仗"}]},
     {"year": 1346, "month": 7, "id": "crecy", "text": "傳來克雷西大捷的消息，英格蘭長弓兵名震歐洲。", "effects": []},
     {"year": 1348, "month": 7, "id": "black_death", "text": "黑死病從港口一路傳到了村子。",
      "effects": [{"param": "plague_monthly", "value": 0.055, "months": 9}, {"world_flag": "post_plague"}]},
-    {"year": 1349, "month": 6, "id": "plague_aftermath", "text": "瘟疫退了，田地空了一半，活下來的人工錢漲了。",
-     "effects": [{"param": "wage_mult", "mult": 1.6, "permanent": true}, {"param": "rent_mult", "mult": 0.7, "permanent": true}, {"param": "grain_price", "mult": 0.8, "permanent": true}]},
+    {"year": 1349, "month": 6, "id": "plague_aftermath", "text": "瘟疫退了，田地空了一半，活下來的人工錢漲了。地沒人種，領主怕佃戶跑掉，地租減了三成。",
+     "effects": [{"param": "wage_mult", "mult": 1.6, "permanent": true}, {"param": "rent_mult", "mult": 0.7, "permanent": true, "note": "瘟疫後人少"}, {"param": "grain_price", "mult": 0.8, "permanent": true}]},
     {"year": 1351, "month": 1, "id": "statute_of_labourers", "text": "國會頒布《勞工法令》，想把工錢壓回瘟疫以前的水準，村裡怨聲四起。",
      "effects": [{"world_flag": "statute_labourers"}, {"param": "wage_mult", "mult": 0.9, "permanent": true}]},
     {"year": 1361, "month": 3, "id": "second_plague", "text": "瘟疫又回來了，這次多半帶走的是孩子。",
@@ -21,8 +22,8 @@
     {"year": 1377, "month": 5, "id": "richard_ii", "text": "十歲的理查二世登基。", "effects": []},
     {"year": 1381, "month": 5, "id": "peasants_revolt", "text": "埃塞克斯和肯特的農民起來造反，要廢除農奴制。",
      "effects": [{"world_flag": "revolt"}]},
-    {"year": 1382, "month": 0, "id": "revolt_crushed", "text": "起義被鎮壓了，但領主們再也不太敢逼得太緊。",
-     "effects": [{"param": "rent_mult", "mult": 0.9, "permanent": true}]},
+    {"year": 1382, "month": 0, "id": "revolt_crushed", "text": "起義被鎮壓了，但領主們再也不太敢逼得太緊，地租又鬆了一成。",
+     "effects": [{"param": "rent_mult", "mult": 0.9, "permanent": true, "note": "起義後"}]},
     {"year": 1390, "month": 7, "id": "plague_1390", "text": "瘟疫再度流行。", "effects": [{"param": "plague_monthly", "value": 0.01, "months": 5}]},
     {"year": 1399, "month": 8, "id": "henry_iv", "text": "理查二世被廢，亨利四世登基。", "effects": []},
     {"year": 1415, "month": 9, "id": "agincourt", "text": "傳來阿金庫爾大捷的消息。", "effects": []},

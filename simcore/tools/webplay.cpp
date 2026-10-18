@@ -179,7 +179,8 @@ public:
                            .n("food_days", std::floor(h.food / std::max(1.0, perDay)))
                            .n("acres", h.acres)
                            .n("freehold", h.freehold)
-                           .n("debt", std::floor(h.debt))
+                           .n("debt", std::floor(w.owedAll(hh)))  // all the house owes, as the cards count it
+                           .text("debt_text", w.debtText(hh))     // to whom, and when it falls due
                            .text("home", h.house)
                            .text("standing", rung >= 0 ? World::standingName(rung) : "領主家")
                            .b("lean", h.lean)
