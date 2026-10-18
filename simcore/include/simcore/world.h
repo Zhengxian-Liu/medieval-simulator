@@ -935,7 +935,6 @@ private:
     void takeIn(Id who, Id house, Id giver);
     void hireKin(Id house, Id master);
     Id harvestHand() const;                 // a poor man glad of a season's wage at the family's harvest
-    int daysToHarvest() const;
     std::map<Id, int> feedAskedUntil_;
     int ambitionAskAfter_ = 0;  // the player's head put off choosing an ambition: not asked again before this day
     ManorBond manorBond_;       // the family's loan to the manor, if any

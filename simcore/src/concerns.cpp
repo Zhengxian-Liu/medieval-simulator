@@ -519,11 +519,6 @@ bool isCompany(const std::string& id) {
 std::string pence(double v) { return std::to_string(static_cast<long>(std::lround(v))) + " 便士"; }
 }  // namespace
 
-int World::daysToHarvest() const {
-    int m = month() < 8 ? 8 - month() : 20 - month();
-    return m * kDaysPerMonth - dayOfMonth();
-}
-
 std::string World::companyEvent(Id who) {
     if (who == kNone) return "";
     const Person& p = people_[who];
