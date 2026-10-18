@@ -575,7 +575,9 @@ function renderPlans(s) {
   const plans = s.plans || [];
   if (!going.length && !plans.length) html += '<p class="muted">這時候不能定計畫。</p>';
   const sorted = [...plans].sort((a, b) => (b.ambition - a.ambition) || (b.open - a.open));
-  html += sorted.map((p) => {
+  // Plans that cannot start and push no ambition fold into one line each, under a closed heading.
+  const shut = sorted.filter((p) => !p.open && !p.ambition);
+  html += sorted.filter((p) => p.open || p.ambition).map((p) => {
     const open = p.open && seasonOpen();
     const expanded = openPlan === p.id && open;
     return `<div class="card">
@@ -585,6 +587,8 @@ function renderPlans(s) {
       ${expanded ? `<div class="actions" style="flex-direction:column;align-items:stretch">${p.targets.map((t) => `<button style="text-align:left" onclick="openPlan=null;act({do:'plan',plan:'${p.id}',target:${t.target},subject:${t.subject}})">${esc(t.label)}</button>`).join("")}</div>` : ""}
     </div>`;
   }).join("");
+  if (shut.length) html += `<details class="card"><summary class="muted">現在不行的計畫（${shut.length}）</summary>${shut.map((p) =>
+    `<div style="font-size:12px;margin-top:4px"><b>${esc(p.name)}</b> <span class="muted">${esc(p.why || (p.needs ? "要：" + p.needs : ""))}</span></div>`).join("")}</details>`;
   if (plans.some((p) => p.ambition)) html = `<p class="muted" style="margin-top:0">★ 是能推動這一代志向的計畫。</p>` + html;
   $("tab-body").innerHTML = html;
 }

@@ -1022,7 +1022,7 @@ Id World::fineLender(const Household& h, double amount) const {
     double bestOp = 20;
     for (const auto& o : households_) {
         if (o.extinct || o.members.empty() || o.id == h.id || o.id == lordHouse || o.head == kNone || o.money < amount + 40 || o.debt > 0) continue;
-        if (people_[o.head].occupation == "priest" || h.head == kNone) continue;
+        if (people_[o.head].occupation == "priest" || h.head == kNone || !debtRoom(h, o.head)) continue;
         double op = opinion(o.head, h.head) + favourOwed(o.head, h.head) * 2;
         if (op > bestOp) bestOp = op, best = o.head;
     }

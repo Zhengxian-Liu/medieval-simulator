@@ -2,7 +2,7 @@
   // Plans are intentions a person pursues for months. The player starts them with a command;
   // NPCs start them on their own. Progress reaches 100 = success; running out of time = failure.
   "plans": [
-    {"id": "court", "name": "追求", "requires": "未婚、17 到 40 歲", "notify_target": true, "desc": "追求心上人，成了就結婚。",
+    {"id": "court", "name": "追求", "personal": true, "requires": "未婚、17 到 40 歲", "notify_target": true, "desc": "追求心上人，成了就結婚。",
      "actor": {"age": [17, 40], "married": false},
      "target": {"pick": "villager", "conditions": {"opposite_sex": true, "not_kin": true, "married": false, "age": [16, 35], "same_class": true}},
      "max_months": 18,
@@ -106,7 +106,7 @@
      "exposed": [{"money": -12}, {"reputation": -8}, {"deed": {"type": "exposed_plot", "scale": 0.8}}],
      "ai": {"base": 3, "traits": {"cruel": 8, "gregarious": 4, "greedy": 3, "kind": -8, "shy": -4, "pious": -3}}},
 
-    {"id": "hire_out", "name": "打短工", "requires": "家主，16 到 60 歲，存錢不到 60 便士", "desc": "替地多人少的富戶幹一季活，換現錢。自家的地就得少顧一些。",
+    {"id": "hire_out", "name": "打短工", "personal": true, "requires": "家主，16 到 60 歲，存錢不到 60 便士", "desc": "替地多人少的富戶幹一季活，換現錢。自家的地就得少顧一些。",
      "actor": {"is_head": true, "age": [16, 60], "money_lt": 60, "not": {"occupation": ["lord", "priest"]}},
      "target": {"pick": "villager", "conditions": {"is_head": true, "not_kin": true, "acres_ge": 30, "age": [20, 80], "not": {"occupation": ["lord", "priest"]}}},
      "max_months": 5, "retry_years": 1,
@@ -117,7 +117,7 @@
      "fail_log": "{target} 家說今年不缺人手，{name} 白跑了幾趟。", "fail": [],
      "ai": {"base": 0.3, "traits": {"diligent": 2}, "if": [{"cond": {"money_lt": 20}, "add": 3}]}},
 
-    {"id": "poach", "name": "偷獵", "requires": "家主，14 到 60 歲", "desc": "夜裡去領主的林子下套子。逮到了，莊園法庭罰錢，領主也記得你。",
+    {"id": "poach", "name": "偷獵", "personal": true, "requires": "家主，14 到 60 歲", "desc": "夜裡去領主的林子下套子。逮到了，莊園法庭罰錢，領主也記得你。",
      "actor": {"is_head": true, "age": [14, 60], "not": {"occupation": ["lord", "priest"]}},
      "target": {"pick": "lord", "conditions": {}},
      "secret": true, "discovery": 0.12, "max_months": 3, "retry_years": 5,
@@ -130,7 +130,7 @@
      "exposed": [{"money": -12}, {"lord_opinion": {"value": -20, "mod": "poacher", "years": 12}}, {"reputation": -4}],
      "ai": {"base": 0.1, "traits": {"brave": 0.5}, "if": [{"cond": {"food_days_lt": 25}, "add": 1}]}},
 
-    {"id": "befriend", "name": "結交", "requires": "交心的朋友不到兩個", "desc": "和一個人交上朋友。",
+    {"id": "befriend", "name": "結交", "personal": true, "requires": "交心的朋友不到兩個", "desc": "和一個人交上朋友。",
      "actor": {"age": [14, 75], "sworn_friends_lt": 2},
      "target": {"pick": "villager", "conditions": {"age": [14, 80], "not_kin": true, "kin_tie": false, "not": {"remembers": {"holder": "target", "about": "other", "type": "sworn_friend"}}}},
      "max_months": 12, "retry_years": 1,
@@ -162,7 +162,7 @@
          {"text": "在法庭上替領主作證", "log": "莊園法庭上，{name} 站出來替 {target} 作證，鄰居們看{pron}的眼神變了。", "effects": [{"progress": 30}, {"reputation": -4}], "ai": {"base": 6, "traits": {"ambitious": 6, "kind": -4, "craven": 4}}}]}
      ]},
 
-    {"id": "affair", "name": "私通", "requires": "已婚", "consent": true, "desc": "背著配偶和人私通。教會法庭會罰，鄰居會說閒話。",
+    {"id": "affair", "name": "私通", "personal": true, "requires": "已婚", "consent": true, "desc": "背著配偶和人私通。教會法庭會罰，鄰居會說閒話。",
      "actor": {"married": true, "age": [18, 50], "has_lover": false},
      "target": {"pick": "villager", "conditions": {"opposite_sex": true, "not_kin": true, "age": [18, 50], "has_lover": false}},
      "secret": true, "discovery": 0.03, "max_months": 10, "retry_years": 5,
@@ -175,7 +175,7 @@
      "exposed": [{"money": -20}, {"reputation": -15}, {"set_flag": "adulterer"}, {"target": [{"reputation": -15}, {"money": -20}]}, {"deed": {"type": "affair_exposed"}}],
      "ai": {"base": 1, "traits": {"lustful": 12, "chaste": -10, "pious": -6}, "if": [{"cond": {"mood_lt": 40}, "add": 3}]}},
 
-    {"id": "blackmail", "name": "要脅", "requires": "手上握有別人的把柄", "desc": "拿別人的把柄逼對方就範：要錢、要地、要一門親事，或要他家從此別找麻煩。要是把柄是假的，丟臉的是你。",
+    {"id": "blackmail", "name": "要脅", "personal": true, "requires": "手上握有別人的把柄", "desc": "拿別人的把柄逼對方就範：要錢、要地、要一門親事，或要他家從此別找麻煩。要是把柄是假的，丟臉的是你。",
      "actor": {"is_head": true, "age": [18, 70], "has_hook": true},
      "target": {"pick": "villager", "conditions": {"age": [16, 80], "hooked": true, "other_dynasty": true, "not_kin": true}},
      "max_months": 12, "retry_years": 6,
@@ -191,7 +191,7 @@
      "fail_log": "{target} 咬定不知道 {name} 在說什麼，{name} 也拿{target_pron}沒辦法。", "fail": [{"use_hook": true}],
      "ai": {"base": 1.5, "traits": {"greedy": 6, "cruel": 8, "ambitious": 5, "kind": -8, "pious": -4, "craven": -4}}},
 
-    {"id": "expose", "name": "揭發", "requires": "手上握有仇人的把柄", "desc": "把仇家的秘密告到莊園法庭。證據不足、或者你根本弄錯了人，都可能反咬你一口。",
+    {"id": "expose", "name": "揭發", "personal": true, "requires": "手上握有仇人的把柄", "desc": "把仇家的秘密告到莊園法庭。證據不足、或者你根本弄錯了人，都可能反咬你一口。",
      "actor": {"is_head": true, "age": [18, 75], "has_hook": true},
      "target": {"pick": "rival", "conditions": {"age": [16, 80], "hooked": true, "other_dynasty": true, "not_kin": true}},
      "max_months": 10, "retry_years": 5,
@@ -201,7 +201,7 @@
      "fail_log": "", "fail": [],
      "ai": {"base": 2, "traits": {"vengeful": 8, "wrathful": 5, "pious": 4, "brave": 3, "craven": -6, "forgiving": -6}}},
 
-    {"id": "study", "name": "苦讀", "requires": "不識字，存錢 20 便士以上", "desc": "跟神父學讀寫。識字的人能當書記、讀契約。",
+    {"id": "study", "name": "苦讀", "personal": true, "requires": "不識字，存錢 20 便士以上", "desc": "跟神父學讀寫。識字的人能當書記、讀契約。",
      "actor": {"age": [12, 40], "no_trait": "literate", "no_flag": "study_failed", "money_ge": 20},
      "max_months": 24, "monthly_cost": 1,
      "progress": {"base": 3, "skill": {"learning": 1.5}, "traits": {"clever": 3, "diligent": 2, "dull": -2, "lazy": -2}},
@@ -224,7 +224,7 @@
      "fail_log": "{target} 說家裡不缺人手。", "fail": [],
      "ai": {"base": 6, "traits": {"ambitious": 4, "kind": -2}, "if": [{"cond": {"food_days_lt": 200}, "add": 10}, {"cond": {"household_size_ge": 7}, "add": 8}]}},
 
-    {"id": "investigate", "name": "打聽", "requires": "家裡吃過還沒查清的暗虧", "notify_target": false,
+    {"id": "investigate", "name": "打聽", "personal": true, "requires": "家裡吃過還沒查清的暗虧", "notify_target": false,
      "desc": "家裡吃了暗虧，卻不知道是誰幹的。找人套話：請喝酒、拐彎抹角地問。聽到的不一定是真的。",
      "actor": {"is_head": true, "unsolved_secret": true},
      "target": {"pick": "villager", "conditions": {"age": [14, 80]}},
@@ -328,7 +328,7 @@
      "success_log": "老爺點了頭：{subject} 要和 {target} 成親了。",
      "success": [{"marry_subject_target": true},
                  {"if": {"cond": {"gentry_kin": true},
-                         "then": [{"money": -300}, {"prestige": 20}, {"reputation": 3}, {"log": "  聘禮和嫁妝花了 300 便士。從此你家和莊園是親家了（家族聲望 +20）。"}],
+                         "then": [{"money": -300}, {"prestige": 20}, {"reputation": 3}, {"log": "  聘禮和嫁妝幾乎掏空了家底。從此你家和莊園是親家了（家族聲望 +20）。"}],
                          "else": [{"log": "  可是到了要下聘的時候，老爺又改了主意。"}, {"prestige": -5}]}}],
      "fail_log": "德·阿什科姆家回絕了：老爺說，佃戶的兒女再體面，也還是佃戶。", "fail": [{"prestige": -5}, {"reputation": -2}, {"need": {"spirit": -10}}],
      "ai": {"base": 1, "traits": {"ambitious": 6}, "if": [{"cond": {"ambition": "gentry_match"}, "add": 40}]},
@@ -359,7 +359,7 @@
      "fail_log": "{target} 說孩子坐不住，不肯再教。", "fail": [],
      "ai": {"base": 1.5, "traits": {"pious": 4, "clever": 3}}},
 
-    {"id": "church_post", "name": "謀神職", "requires": "家主，存錢 40 便士以上，家裡有識字、未婚的 14 到 25 歲兒子", "notify_target": true,
+    {"id": "church_post", "name": "謀神職", "personal": true, "requires": "家主，存錢 40 便士以上，家裡有識字、未婚的 14 到 25 歲兒子", "notify_target": true,
      "desc": "託神父替識字的兒子在修道院謀個書記的差事。家裡少一雙手，但多了一個在修士和領主面前說得上話的人。",
      "actor": {"is_head": true, "money_ge": 40},
      "subject": {"pick": "any_child", "conditions": {"sex": "male", "trait": "literate", "age": [14, 25], "married": false, "not": {"occupation": ["clerk", "priest"]}}},

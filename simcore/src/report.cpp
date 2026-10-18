@@ -27,7 +27,7 @@ const std::map<std::string, std::string>& modNames() {
         {"tithe", "什一稅"}, {"tithe_quarrel", "吵過什一稅"}, {"trusted_tenant", "信得過的佃戶"},
         {"voted_against_me", "陪審時投了我有罪"}, {"voted_for_them", "陪審時偏袒對方"}, {"welched", "賴過帳"},
         {"worked_off_debt", "做工抵過債"}, {"envy", "眼紅你家"}, {"refused_kindness", "不准我幫朋友"}, {"respect", "敬重你家"}, {"worthy_tenant", "體面的佃戶"}, {"lords_man", "領主的人"}, {"event", "往來"},
-        {"comforted", "陪過我熬過難關"}, {"taught", "手把手教過我"}, {"took_to_market", "帶我去過市集"},
+        {"comforted", "陪過我熬過難關"}, {"talked_back", "當面頂撞過我"}, {"taught", "手把手教過我"}, {"took_to_market", "帶我去過市集"},
         {"swapped_work", "農忙時換過工"}, {"helped_kin", "日子難過時接濟過"}, {"praised", "誇過我"}, {"scolded", "管教過我"}, {"prayed_together", "一起上過教堂"},
         {"slighted", "給過我臉色"}, {"helped_me", "借糧給我"}, {"helped_them", "幫過他們"}, {"refused_help", "不肯幫忙"},
         {"condolence", "來弔唁過"}, {"took_our_want", "搶了我們看中的"}, {"mill_toll", "嫌他家磨坊抽得重"}, {"usury", "放債吃利"}, {"settled_son", "替小兒子置了產"}, {"took_our_land", "趁機拿走我家的地"},

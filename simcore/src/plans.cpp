@@ -101,7 +101,7 @@ void World::processCommands() {
         } else if (c.type == "interact") {
             // 陪家人 (keep_company): whichever of the company visits this person needs most now.
             std::string id = c.plan == "keep_company" && c.target != kNone ? companyEvent(c.target) : c.plan;
-            if (id.empty()) log(1, "〔陪家人〕眼下沒法陪" + shortName(c.target) + "：" + (timeLeft() < 1 ? "這一季沒有空了。" : "最近才陪過。"));
+            if (id.empty()) log(1, "〔陪家人〕眼下沒法陪" + shortName(c.target) + "：" + (timeLeft() < 1 ? "這一季沒有空了。" : "這陣子不方便（最近才陪過，或手頭、時局不許）。"));
             for (const auto& ev : defs_.events)
                 if (ev.id == id && ev.scope == "interaction" && c.target != kNone) {
                     EventRunner er(*this);
@@ -309,7 +309,8 @@ bool World::familyAllows(Id actorId, const PlanDef& pd, Id target) {
     const Person& a = people_[actorId];
     Id acting = actingHead();
     const char* ask = familyAskText(pd.id);
-    if (!ask || acting == kNone || actorId == acting || !inPlayerHouse(a.household)) return true;
+    // The family's own, wherever they live (a daughter in service elsewhere too), not a servant under the roof.
+    if (!ask || acting == kNone || actorId == acting || !inPlayerHouse(a.home != kNone ? a.home : a.household)) return true;
     EventRunner ev(*this);
     std::string sit = ev.format(ask, a, target);
     int r = askPlayer("家人的打算", sit, {"准", "不准"});
@@ -465,7 +466,11 @@ void World::endPlan(size_t index, const std::string& requested) {
     const std::string& text = outcome == "success" ? pd->successLog : outcome == "exposed" ? pd->exposedLog : pd->failLog;
     const Json& effects = outcome == "success" ? pd->success : outcome == "exposed" ? pd->exposed : pd->fail;
     std::string line = text.empty() ? "" : ev.format(text, actor, plan.target);
-    if (pd->secret && outcome == "success" && victimHome && !actorHome) {
+    // The one keeping the player's house said yes to it (順水推舟): it is theirs as much as the actor's.
+    const bool consented = std::find(plan.beatsSeen.begin(), plan.beatsSeen.end(), "_consent") != plan.beatsSeen.end();
+    if (consented && !line.empty()) {
+        log(1, (outcome == "success" ? std::string("【成功】") : outcome == "exposed" ? "【敗露】" : "【失敗】") + line);
+    } else if (pd->secret && outcome == "success" && victimHome && !actorHome) {
         // The victim sees what happened, not who did it.
         if (!pd->victimLog.empty()) log(1, ev.format(pd->victimLog, actor, plan.target));
     } else if (own && pd->secret && pd->consent && outcome == "success") {

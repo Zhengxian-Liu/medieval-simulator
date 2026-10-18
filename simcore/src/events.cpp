@@ -1736,13 +1736,12 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 // Going for the other man (or woman) of the affair this event is about: a brawl the village sees, and the
                 // affair is over. Against the lord it is the manor that remembers, and its court may fine.
                 if (deed_ == kNone) continue;
-                const Deed& d = w.deeds_[deed_];
-                Id lv = d.with;
+                const Id lv = w.deeds_[deed_].with, doer = w.deeds_[deed_].actor;  // copies: recordDeed grows deeds_
                 if (lv == kNone || !w.people_[lv].alive() || w.people_[lv].household == kNone) continue;
                 w.recordDeed("brawl", p.id, lv, 1, deed_);
                 p.health = std::max(0.0, p.health - 6);
                 w.deedNotes_.insert({deed_, "spoken"});
-                if (d.actor != kNone && w.people_[d.actor].lover == lv) w.endLiaison(d.actor);
+                if (doer != kNone && w.people_[doer].lover == lv) w.endLiaison(doer);
                 if (lv == w.lord_) {
                     w.addOpinion(lv, p.id, "struck_the_lord", -40, 20);
                     if (h && w.rngEvents_.chance(0.5)) {

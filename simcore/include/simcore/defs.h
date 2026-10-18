@@ -112,6 +112,7 @@ struct PlanDef {
     bool npc = true;       // NPCs may start it
     bool notifyTarget = false;  // the target's family hears how it ended
     bool consent = false;       // aimed at the one keeping the player's house: they are asked before it starts
+    bool personal = false;      // the actor's own (a courtship, their studies, a secret they hold): it dies with them
     std::string targetAsk;                  // when it targets the player's head: what they are asked (answers: yes = success, no = fail)
     std::vector<std::string> targetAnswers;
     std::string startLog, successLog, failLog, exposedLog, victimLog;

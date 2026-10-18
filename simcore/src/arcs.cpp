@@ -174,6 +174,17 @@ void World::addDebt(Household& h, double amount, Id creditor) {
     h.debt += amount;
 }
 
+// Whether a new loan from `creditor` has a place on the house's books (two creditors at most). A neighbour never takes
+// the last place while the manor holds none: Michaelmas arrears must always have somewhere to go.
+bool World::debtRoom(const Household& h, Id creditor) const {
+    if (creditor == kNone) creditor = lord_;
+    const bool inMain = h.debt > 0.5, inHeld = h.heldDebt > 0.5;
+    if ((inMain && h.creditor == creditor) || (inHeld && h.heldCreditor == creditor)) return true;
+    if (inMain && inHeld) return false;
+    if (creditor != lord_ && lord_ != kNone && (inMain || inHeld) && owedLord(h) <= 0.5) return false;
+    return true;
+}
+
 double World::owedLord(const Household& h) const {
     if (lord_ == kNone) return 0;
     return (h.debt > 0.5 && h.creditor == lord_ ? h.debt : 0.0) + (h.heldCreditor == lord_ ? h.heldDebt : 0.0);
@@ -248,7 +259,7 @@ Id World::seekLender(Household& h, double amount, const std::string& why, double
         double bestMoney = 0;
         for (const auto& o : households_) {
             if (o.extinct || o.members.empty() || o.id == h.id || o.id == lordHouse || o.head == kNone || asked.count(o.id)) continue;
-            if (people_[o.head].occupation == "priest") continue;
+            if (people_[o.head].occupation == "priest" || !debtRoom(h, o.head)) continue;
             if (o.money < amount + 60 || o.debt > 0) continue;
             if (h.head != kNone && opinion(o.head, h.head) < 5) continue;
             if (o.money > bestMoney) bestMoney = o.money, best = o.head;

@@ -17,7 +17,7 @@
         "log": "管家上門來催 {debt} 便士的欠租。{name} 把耕牛牽到市集賣了，明年只能跟人借牲口犁地。",
         "effects": [{"sell_ox": true}, {"stress": 6}],
         "ai": {"base": 6, "traits": {"diligent": 4, "brave": 2, "greedy": -4}}},
-       {"text": "退回幾畝地給領主抵債", "conditions": {"acres_ge": 8},
+       {"text": "退回幾畝地給領主抵債", "conditions": {"customary_ge": 6},
         "log": "管家上門來催 {debt} 便士的欠租。{name} 咬咬牙，把幾畝地交回給領主抵債。",
         "effects": [{"surrender_acres": "debt"}, {"stress": 8}],
         "ai": {"base": 3, "traits": {"content": 4, "ambitious": -6}}},

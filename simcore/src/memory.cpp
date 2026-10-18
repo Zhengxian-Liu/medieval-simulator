@@ -26,17 +26,17 @@ namespace {
 // How far one kind of everyday impression can go (design/fun-r5.md C): a run of good evenings is worth so much and
 // no more, and so is a run of squabbles; only deeds (recordDeed) reach ±60.
 double impressionCap(const std::string& label) {
-    if (label == "good_times" || label == "quarrels") return 25;
+    if (label == "good_times" || label == "quarrels") return 30;
     return 40;
 }
 }  // namespace
 
 // Small everyday impressions (chats, quarrels, gifts). Repeats of the same kind add up, less and less as the
-// impression nears its cap, and the whole of it fades slowly (half gone in half its years) instead of all at once
+// impression nears its cap, and the whole of it fades slowly (half gone in its years) instead of all at once
 // on a set day. years 0: it does not fade.
 void World::addOpinion(Id from, Id to, const std::string& modId, double value, int years) {
     const double cap = impressionCap(modId);
-    const double halfLife = years > 0 ? years / 2.0 : 0;
+    const double halfLife = years > 0 ? years : 0;
     for (auto& m : memories_[from])
         if (m.deed == kNone && m.about == to && m.label == modId) {
             double cur = memoryValue(m);

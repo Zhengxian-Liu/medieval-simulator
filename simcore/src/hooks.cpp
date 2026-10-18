@@ -169,7 +169,8 @@ void World::familyAffairs() {
             } else {
                 // Someone else's husband or wife is wronged (a son's wife and a neighbour): the head decides whether
                 // they hear it.
-                const std::string bn = shortName(d.target), xn = shortName(x);
+                // By full name: the wronged one's first name is often the lover's, or the head of the house it went to.
+                const std::string bn = fullName(d.target), xn = people_[x].firstName == people_[d.target].firstName ? fullName(x) : shortName(x);
                 std::string sit = seen + bn + "還什麼都不知道。";
                 std::vector<std::string> opts{"告訴" + bn, "私下叫" + xn + "斷了", "當作沒看見"};
                 int r = askPlayer("撞見", sit, opts);

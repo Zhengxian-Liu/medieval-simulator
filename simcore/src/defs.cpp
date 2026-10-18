@@ -277,6 +277,7 @@ Defs Defs::loadFromDir(const std::string& dir) {
         pd.npc = !p["npc"].isBool() || p["npc"].asBool();
         pd.notifyTarget = p["notify_target"].isBool() && p["notify_target"].asBool();
         pd.consent = p["consent"].isBool() && p["consent"].asBool();
+        pd.personal = p["personal"].isBool() && p["personal"].asBool();
         pd.startLog = p.stringOr("start_log", "");
         pd.successLog = p.stringOr("success_log", "");
         pd.failLog = p.stringOr("fail_log", "");

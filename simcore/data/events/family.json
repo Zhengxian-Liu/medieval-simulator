@@ -84,7 +84,7 @@
        {"text": "喝悶酒", "log": "{name} 心裡煩，在酒館一喝就是一整晚。", "effects": [{"money": -8}, {"need": {"social": 25}}, {"trait_chance": {"trait": "drunkard", "chance": 25}}], "ai": {"base": 10, "traits": {"gregarious": 6, "pious": -6}}},
        {"text": "去教堂坐坐", "log": "{name} 心裡煩，一個人在教堂坐到天黑。", "effects": [{"need": {"spirit": 25}}], "ai": {"base": 8, "traits": {"pious": 12}}}
      ]},
-    {"id": "sick_child", "title": "孩子病了", "prompt": "{name} 發起高燒，一夜沒退。", "scope": "player_family", "chance": 0.08, "cooldown_years": 2, "cooldown_scope": "household",
+    {"id": "sick_child", "repeat": "free", "title": "孩子病了", "prompt": "{name} 發起高燒，一夜沒退。", "scope": "player_family", "chance": 0.08, "cooldown_years": 2, "cooldown_scope": "household",
      "conditions": {"age": [0, 8], "health_lt": 75},
      "options": [
        {"text": "請老婦人來看（8 便士）", "log": "{name} 發起高燒，家裡請來會草藥的老婦人。", "effects": [{"money": -8}, {"health": 18}], "ai": {"base": 10, "if": [{"cond": {"money_lt": 10}, "add": -10}]}},

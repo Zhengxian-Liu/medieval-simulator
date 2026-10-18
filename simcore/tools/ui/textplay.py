@@ -177,7 +177,13 @@ def render(v, full=False):
             g.get("name", ""), "（對象 " + g["target"] + "）" if g.get("target") else "", g.get("progress", 0), g.get("id", "")))
     shut = [p for p in s.get("plans", []) if not p.get("open") and p.get("why") and p["why"] != "正在辦"]
     if shut:
-        out.append("―― 現在開不了的計畫 ―― " + "；".join(f"{'★' if p.get('ambition') else ''}「{p['name']}」{p['why']}" for p in shut))
+        # The ambition's plans with why they are shut; the rest by name only, so the list stays short.
+        star = [p for p in shut if p.get("ambition")]
+        rest = [p for p in shut if not p.get("ambition")]
+        line = "；".join(f"★「{p['name']}」{p['why']}" for p in star)
+        if rest:
+            line += ("；" if line else "") + f"其他 {len(rest)} 個：" + "、".join(p["name"] for p in rest)
+        out.append("―― 現在開不了的計畫 ―― " + line)
     ops = [p for p in s.get("plans", []) if p.get("open")]
     if ops:
         out.append("―― 能開始的計畫 ――")

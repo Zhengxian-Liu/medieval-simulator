@@ -359,6 +359,13 @@ int main() {
                 if (p.title == "買糧" && p.situation.find("離秋收還有 60 天") != std::string::npos) card = true;
             CHECK(card, "the family was not asked about buying grain");
             CHECK(foodDays(w) > 70 && foodDays(w) < 77, "buying to the harvest did not buy to the harvest");
+            // Once a harvest year: short again a month later, the house keeps to what it said.
+            asked.clear();
+            w.setFoodForTest(hh, 10);
+            runTo(w, 7, 1);
+            bool again = false;
+            for (const auto& p : asked) again = again || p.title == "買糧";
+            CHECK(!again, "the grain card was asked twice before one harvest");
         }
         // Michaelmas with an empty purse: the reckoning card comes before any debt, and its levers work.
         auto michaelmas = [&](const std::string& pick, double& owedAtCard, std::string& sit) {

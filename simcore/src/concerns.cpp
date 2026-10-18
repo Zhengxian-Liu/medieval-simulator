@@ -709,6 +709,7 @@ std::vector<World::AgendaItem> World::seasonAgenda() {
             hungry.push_back({days, h.id});
         }
         std::sort(hungry.begin(), hungry.end());
+        std::set<Id> offered;  // one spare parcel is offered to one house
         for (size_t k = 0; k < hungry.size() && k < 2; ++k) {
             const Household& h = households_[hungry[k].second];
             std::string who = fullName(h.head) + " 家";
@@ -723,7 +724,7 @@ std::vector<World::AgendaItem> World::seasonAgenda() {
                 a.rank = 92;
                 items.push_back(a);
             }
-            if (Id pc = spareParcel(h.id); pc != kNone) {
+            if (Id pc = spareParcel(h.id); pc != kNone && offered.insert(pc).second) {
                 AgendaItem a;
                 a.id = "help_land:" + std::to_string(h.id);
                 a.title = "分" + parcelName(parcels_[pc]) + "給" + who;
@@ -739,8 +740,8 @@ std::vector<World::AgendaItem> World::seasonAgenda() {
             if (Id t = room ? takeInWho(h.id) : kNone; t != kNone) {
                 AgendaItem a;
                 a.id = "help_take:" + std::to_string(t);
-                a.title = "把" + shortName(t) + "接到家裡來住";
-                a.desc = who + state + "。" + shortName(t) + "（" + std::to_string(int(ageYears(people_[t]))) + " 歲）搬來你家，吃你家的飯；他家少一張嘴。";
+                a.title = "把" + fullName(t) + "接到家裡來住";  // (a 小馬修 of theirs is not the 小馬修 at home)
+                a.desc = who + state + "。" + fullName(t) + "（" + std::to_string(int(ageYears(people_[t]))) + " 歲）搬來你家，吃你家的飯；他家少一張嘴。";
                 a.kind = "effects", a.target = t, a.effects = "[{\"take_in\": true}]";
                 a.done = fullName(head) + " 把 " + fullName(t) + " 從" + who + "接到家裡來住，往後吃住都在你家。";
                 a.rank = 88;
@@ -851,6 +852,40 @@ std::vector<World::AgendaItem> World::seasonAgenda() {
         }
     }
 
+    // The next step of this generation's ambition, and wage work when the purse is empty and money is owed.
+    {
+        std::vector<PlanOption> opts = availablePlans(head);
+        auto best = [&](const std::string& plan) -> const PlanOption* {
+            const PlanOption* pick = nullptr;
+            for (const auto& op : opts)
+                if (op.plan == plan && !named.count(op.subject) && (!pick || op.targetWeight > pick->targetWeight)) pick = &op;
+            return pick;
+        };
+        auto planItem = [&](const PlanOption& op, const std::string& why, int rank) {
+            const PlanDef* pd = defs_.plan(op.plan);
+            AgendaItem a;
+            a.id = "step:" + op.plan;
+            a.title = (pd ? pd->name : op.plan) + (op.target != kNone ? "：" + fullName(op.target) : op.subject != kNone ? "（" + shortName(op.subject) + "）" : "");
+            a.desc = why + (pd ? pd->desc : "") + "（用一段空閒）";
+            a.kind = "plan", a.event = op.plan, a.target = op.target, a.subject = op.subject;
+            a.rank = rank;
+            items.push_back(a);
+            if (op.subject != kNone) named.insert(op.subject);
+        };
+        std::string stepPlan;
+        if (const AmbitionDef* amb = defs_.ambition(hp.ambition)) {
+            for (const auto& pid : amb->plans)
+                if (const PlanOption* op = best(pid)) {
+                    planItem(*op, "為了「" + amb->name + "」：", 70);
+                    stepPlan = pid;
+                    break;
+                }
+        }
+        if (stepPlan != "hire_out" && owedAll(ph.id) > 0.5 && ph.money < owedAll(ph.id))
+            if (const PlanOption* op = best("hire_out"))
+                planItem(*op, debtText(ph.id) + "，手上只有 " + pence(ph.money) + "。", 65);
+    }
+
     // A match to make, when there is exactly one in the house of an age for it.
     {
         std::vector<PlanOption> opts = availablePlans(head);
@@ -945,6 +980,11 @@ std::vector<World::AgendaItem> World::seasonAgenda() {
     }
 
     std::stable_sort(items.begin(), items.end(), [](const AgendaItem& x, const AgendaItem& y) { return x.rank > y.rank; });
+    // One plan once: the ambition's step may be the match or the courting found below it.
+    std::set<std::tuple<std::string, Id, Id>> plansNamed;
+    items.erase(std::remove_if(items.begin(), items.end(), [&](const AgendaItem& x) {
+                    return x.kind == "plan" && !plansNamed.insert({x.event, x.target, x.subject}).second;
+                }), items.end());
     // At most four, and the company kept among them when there is room: the season's list, not the village's.
     if (items.size() > 4) {
         auto company = std::find_if(items.begin(), items.end(), [](const AgendaItem& x) { return x.id.rfind("company:", 0) == 0; });

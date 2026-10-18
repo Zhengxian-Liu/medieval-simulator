@@ -224,8 +224,9 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
         }
     }
     // The family's name in the village, good or bad.
-    double rep = std::clamp(people_[head].reputation * 2, -20.0, 20.0);
-    if (std::abs(rep) >= 2) fs.push_back({rep, rep >= 10 ? "你家在村裡名聲好" : rep <= -6 ? "你家名聲不好" : ""});
+    // (Reputation runs about −45..+35: a few points either way is any family's lot, not a name.)
+    double rep = std::clamp(people_[head].reputation * 0.5, -12.0, 12.0);
+    if (std::abs(rep) >= 2) fs.push_back({rep, rep >= 6 ? "你家在村裡名聲好" : rep <= -5 ? "你家名聲不好" : ""});
     // A vote the family promised them, kept: one good turn deserves another.
     for (const auto& [key, man] : promises_)
         if (key.first == head && man != kNone && people_[man].household == th.id) {
@@ -302,6 +303,7 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
         fs.push_back({-(15 + amount / 4 - th.money / 25), "手頭也不寬裕"});
         if (ph.debt > 0.5 || ph.lean) fs.push_back({-10, "怕你家還不起"});
         if (amount > th.money * 0.4) fs.push_back({-15, "這差不多是我家一半的積蓄"});
+        if (!debtRoom(ph, who)) hardNo = true, hardWhy = "你家已經欠著別人的債了，再借，到時候先還誰";
         big = 20;
     } else if (what == "match") {
         const Household& oh = households_[playerHousehold_];
@@ -345,7 +347,8 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
             if (of) demand = "選" + of->name + "時你家得投我", demandOffice = wt.office;
         }
     }
-    if (demand.empty() && (what == "sell_parcel" || what == "lend" || what == "match" || what == "apprentice")) {
+    // Kin lend without interest.
+    if (demand.empty() && (what == "sell_parcel" || (what == "lend" && !closeKin(who, head)) || what == "match" || what == "apprentice")) {
         demandMoney = what == "sell_parcel" ? std::round(price * 0.25) : what == "lend" ? std::round(object * 0.2) : what == "match" ? 30 : 12;
         demand = what == "lend" ? "到時候多還 " + pence(demandMoney) : what == "match" ? "嫁妝（聘禮）得給 " + pence(demandMoney) : "再加 " + pence(demandMoney);
         if (what != "lend" && ph.money < price + demandMoney) demand.clear(), demandMoney = 0;
@@ -419,9 +422,11 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
     // asked of a house that is short itself.
     bool terms = lever.empty() && !demand.empty() &&
                  (((what == "sell_parcel" || what == "match") && s < 40) || (what == "lend" && (th.debt > 0.5 || th.lean)));
+    // A small thing (a vote, a word, a place) a friend gives; land and a match take more than friendship.
+    const double yesAt = std::clamp(big * 0.5, 5.0, 15.0);
     if (hardNo && lever != "hook") answer = 3;
-    else if (s >= 15 && terms) answer = 2;
-    else if (s >= 15) answer = 1;
+    else if (s >= yesAt && terms) answer = 2;
+    else if (s >= yesAt) answer = 1;
     else if (s >= -12 && !demand.empty() && lever != "meet") answer = 2;
     else if (s < -45 && op < 0 && (big >= 30 || hasTrait(t, "wrathful"))) answer = 4;
     else answer = 3;

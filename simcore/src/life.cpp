@@ -89,7 +89,9 @@ void World::fallIll(Id id, const std::string& cause) {
     bool self = id == acting;
     std::string who = self ? "你" : shortName(id);
     std::string kin = acting != kNone && !self ? kinWord(acting, id) : "";
-    std::string sit = (self ? "你" : fullName(id) + "（" + (kin.empty() ? "" : kin + "，") + std::to_string(int(ageYears(p))) + " 歲）") + sickWords(cause) + "。";
+    const std::string fn = fullName(id);  // (already "（你的妻子）" when a namesake needs telling apart)
+    if (fn.find("（") != std::string::npos) kin.clear();
+    std::string sit = (self ? "你" : fn + "（" + (kin.empty() ? "" : kin + "，") + std::to_string(int(ageYears(p))) + " 歲）") + sickWords(cause) + "。";
     struct Care { std::string text, done; double cost, food, odds, spirit; };  // done: as the chronicle tells it
     std::vector<Care> cares;
     if (h.money >= 4) cares.push_back({"請會草藥的老婦人來看（4 便士）", "家裡請來了會草藥的老婦人。", 4, 0, -0.3, 0});
@@ -351,12 +353,14 @@ void World::kill(Id id, const std::string& cause) {
                 addStress(c, 15, std::string(male ? "父親 " : "母親 ") + p.firstName + " 的死");
     // What stays after the stress of the day: grief, to be lived with (and answered, design/season-loop.md).
     // "bereaved:<relation>" lets events give the mourner a moment with it, the dead as the target.
+    // Died away from home: word comes to the one keeping the house (bereaved:away below), and that is their card.
+    const bool wordAway = away && hid == kNone && inPlayerHouse(p.awayFrom) && actingHead() != kNone && actingHead() != id;
     auto mourn = [&](Id who, double strength, const char* relation, bool signal = true) {
         if (who == kNone || !people_[who].alive() || people_[who].household == kNone) return;
         // Love, not blood, sets the depth of it.
         double op = opinion(who, id);
         addConcern(who, "grief", id, std::clamp(strength + op * 0.2, 15.0, 100.0));
-        if (signal) emit({std::string("bereaved:") + relation, kNone, who, id, false, 0});
+        if (signal && !(wordAway && who == actingHead())) emit({std::string("bereaved:") + relation, kNone, who, id, false, 0});
     };
     // A child's burial is one rite for the house: asked of the one keeping it when that is a parent, else the mother.
     auto living = [&](Id x) { return x != kNone && people_[x].alive() && people_[x].household != kNone; };
@@ -391,17 +395,21 @@ void World::kill(Id id, const std::string& cause) {
             if (people_[c].alive() && ageYears(people_[c]) < 40) mourn(c, ageYears(people_[c]) < 16 ? 60 : 45, "parent");
     // Brothers and sisters under the roof grieve too; for one who died away (at school, in town), those at the home
     // they belonged to.
+    // (One of them, the eldest, has the moment of it: a card per brother and sister is a pile of the same card.)
     Id griefHouse = hid != kNone ? hid : away ? p.awayFrom : kNone;
-    if (griefHouse != kNone && age >= 1)
+    if (griefHouse != kNone && age >= 1) {
+        std::vector<Id> sibs;
         for (Id m : households_[griefHouse].members)
             if (m != id && m != p.spouse && m != p.father && m != p.mother && people_[m].alive() &&
                 ((p.father != kNone && people_[m].father == p.father) || (p.mother != kNone && people_[m].mother == p.mother)))
-                mourn(m, 40, "sibling");
+                sibs.push_back(m);
+        std::stable_sort(sibs.begin(), sibs.end(), [&](Id a, Id b) { return people_[a].birthDay < people_[b].birthDay; });
+        for (size_t k = 0; k < sibs.size(); ++k) mourn(sibs[k], 40, "sibling", k == 0);
+    }
     // Word goes round (design/news.md): the houses close to this one know today, and are asked to the wake.
     if (griefHouse != kNone) addNews(age < 1 ? "infant_death" : age < 14 ? "child_death" : "death", id, age < 1 ? p.mother : kNone, griefHouse);
     // Died away from home: word comes to the one keeping the house, who decides what is done for them.
-    if (away && hid == kNone && inPlayerHouse(p.awayFrom) && actingHead() != kNone && actingHead() != id)
-        emit({"bereaved:away", kNone, actingHead(), id, false, 0});
+    if (wordAway) emit({"bereaved:away", kNone, actingHead(), id, false, 0});
     inheritMemories(id);
     if (hid == kNone) return;
     Household& h = households_[hid];
@@ -802,9 +810,10 @@ World::Estate World::onHeadDied(Household& h, Id dead) {
     return left;
 }
 
-// What the old head had in hand passes to the heir who now keeps the house (or holds it for a child), whatever the
-// heir's purse or age: success pays the price, and a broke heir fails then. Not what is aimed at the heir, nor a second
-// of the same; told to the family when it is theirs (tell).
+// What the old head had in hand for the house passes to the heir who now keeps it (or holds it for a child), whatever
+// the heir's purse or age: success pays the price, and a broke heir fails then. Not the old head's own (a courtship,
+// studies, a secret: `personal`), not what is aimed at the heir, nor a second of the same; told to the family when it
+// is theirs (tell). A yes the player gave the old head is not a yes to the heir.
 void World::carryPlans(Id dead, Id heir, bool tell) {
     if (heir == kNone) return;
     const Person& hp = people_[heir];
@@ -823,8 +832,9 @@ void World::carryPlans(Id dead, Id heir, bool tell) {
             continue;
         }
         bool dup = std::any_of(plans_.begin(), plans_.end(), [&](const ActivePlan& o) { return o.actor == heir && o.plan == pl.plan; });
-        if (pd && keeps && pl.target != heir && pl.subject != heir && !dup && planRoom(heir)) {
+        if (pd && !pd->personal && keeps && pl.target != heir && pl.subject != heir && !dup && planRoom(heir)) {
             pl.actor = heir;
+            pl.beatsSeen.erase(std::remove(pl.beatsSeen.begin(), pl.beatsSeen.end(), "_consent"), pl.beatsSeen.end());
             if (tell) log(1, "【計畫】" + fullName(dead) + " 沒辦完的「" + name + "」，由 " + fullName(heir) + " 接著辦。");
             ++i;
         } else {
@@ -867,7 +877,7 @@ void World::mergeHousehold(Household& from, Household& to, const std::string& ho
     to.noOxUntil = std::max(to.noOxUntil, from.noOxUntil);
     to.rentFactor = std::max(to.rentFactor, from.rentFactor);
     if (from.leaseUntil > to.leaseUntil) to.leaseAcres = from.leaseAcres, to.leaseUntil = from.leaseUntil;
-    to.millUntil = std::max(to.millUntil, from.millUntil);
+    if (from.millUntil > to.millUntil) to.millUntil = from.millUntil, to.millFree = from.millFree;
     for (const auto& [k, v] : from.ledger) to.ledger[k] += v;
     // The village's view of the old house is now of this one: its wants, the fine it owes, its servants away.
     // A parcel either house was after that the joined house now holds is no longer wanted: it is theirs.
@@ -987,6 +997,7 @@ void World::handOver(Household& h, Id to, const std::string& why) {
     }
     noteLife(to, why);
     settleAsHead(to);
+    if (regent != kNone && regent != to) carryPlans(regent, to, inPlayerHouse(h.id));  // the house's business goes with the house
     if (!inPlayerHouse(h.id)) return;
     for (Id m : h.members) {
         people_[m].want.clear();

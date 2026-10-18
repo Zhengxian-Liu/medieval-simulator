@@ -155,7 +155,9 @@ void World::electReeve() {
         log(2, how);
     }
     if (winner != old) r.reputation += 5;
-    reeveTerms_[winner] = winner == old ? reeveTerms_[winner] + 1 : 1;
+    // Terms on end of one blood: a son after his father carries the count on (「十年莊頭」 is the family's).
+    const bool sameBlood = old != kNone && winner != old && r.dynasty != kNone && people_[old].dynasty == r.dynasty;
+    reeveTerms_[winner] = winner == old ? reeveTerms_[winner] + 1 : sameBlood ? reeveTerms_[old] + 1 : 1;
     settleWants("office", kNone, "reeve", r.household, "當上了");
 }
 

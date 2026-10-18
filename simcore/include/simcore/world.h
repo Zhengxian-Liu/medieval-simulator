@@ -160,6 +160,7 @@ struct Household {
     double leaseAcres = 0; // the lord's demesne farmed on a lease (包租), with its own rent, until leaseUntil
     int leaseUntil = -1;
     int millUntil = -1;    // the lord's mill farmed (包下磨坊): the multure is the house's, the farm paid at Michaelmas
+    bool millFree = false;  // ...held against the manor's debt (莊園抵債): no farm paid for it
     int hiredUntil = -1;   // the grown hands are hired on for the year by another house (bed and board, a wage)
     Id hiredBy = kNone;
     int boonUntil = -1;    // working off a debt on the lord's demesne: fewer days on their own land
@@ -171,7 +172,7 @@ struct Household {
     double lastRent = 0, lastRentPaid = 0;
     double lastRentMult = 0; // the times' rent multiplier (war, plague) and the free/villein rate at last Michaelmas,
     int lastRentFree = -1;   // so a change in the rent can be explained to the family
-    int grainAsked = -1;     // year * 4 + season the family was last asked about buying grain, and what it chose
+    int grainAsked = -1;     // the harvest (day / year) the family was last asked to get its bread through to, and what it chose
     int grainChoice = -1;
     // The head's time this season (design/season-loop.md): spent on people and plans, or else on the work.
     std::map<std::string, double> ledger;  // the player's money, by what it came from or went on (running totals)
@@ -950,7 +951,7 @@ private:
     double rentOf(const Household& h, std::string* why = nullptr, double lessAcres = 0) const;
     void explainRent(Household& h, double rent);  // the rent changed since last year for a reason not the family's: say why
     void reckonRent(Household& h, double rent, const std::string& why);   // the player's house cannot pay: the reckoning card
-    void settleRent(Household& h, double rent, bool respite);            // pay what the purse holds, the rest on the books
+    void settleRent(Household& h, double rent, bool respite, bool begged = false);  // pay what the purse holds, the rest on the books
     void askOx(Household& h);
     Id borrowGrain(Household& h, Id asker, double days, Id cause);  // a neighbour's grain against the harvest
     double grainLoanOwed(const Household& h, double days) const;   // what that grain costs back at Michaelmas
@@ -1046,6 +1047,7 @@ private:
     Id lineHead(const Household& h) const;      // the heir a regent holds for when not of the same blood, else the head
     bool houseFree(const Household& h) const;
     double owedLord(const Household& h) const;         // rent arrears and loans the house owes the manor
+    bool debtRoom(const Household& h, Id creditor) const;  // a new loan from them has a place on the house's books
     double reduceLordDebt(Household& h, double amount);                     // once a season: a secret the head keeps may come up
     Id hookDeed(Id holder, Id culprit) const;  // a secret holder believes culprit did, usable as leverage
     bool hasHook(Id holder) const;

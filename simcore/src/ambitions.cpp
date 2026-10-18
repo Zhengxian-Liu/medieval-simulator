@@ -334,7 +334,11 @@ void World::yearlyAmbitions() {
     // A loan to the manor held by a house that is no longer the family's (the line moved on): paid at term.
     if (manorBond_.house != kNone && !inPlayerHouse(manorBond_.house) && year() >= manorBond_.due) {
         Household& h = households_[manorBond_.house];
-        if (!h.extinct) h.money += manorBond_.owed, book(h, "莊園還的債", manorBond_.owed);
+        Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
+        if (!h.extinct) {
+            h.money += manorBond_.owed, book(h, "莊園還的債", manorBond_.owed);
+            if (lordHouse != kNone) households_[lordHouse].money = std::max(0.0, households_[lordHouse].money - manorBond_.owed);
+        }
         manorBond_ = ManorBond{};
     }
 }
@@ -610,7 +614,7 @@ void World::rivalForMatch(Person& head) {
                 const Person& c = people_[m];
                 double a = ageYears(c);
                 if (m == o.head || c.sex == gp.sex || (c.spouse != kNone && people_[c.spouse].alive()) || a < 16 || a > 32 || c.home != kNone ||
-                    closeKin(m, g) || c.occupation == "priest")
+                    closeKin(m, g) || c.occupation == "priest" || !mayWed(m, g))  // the bar the family has to clear, theirs too
                     continue;
                 double s = o.acres + o.money / 30 + opinion(lord_, o.head) / 2;
                 if (s > best) best = s, bestHouse = o.id, bestChild = m;
@@ -631,6 +635,10 @@ void World::rivalForMatch(Person& head) {
     Id man = people_[c].sex == Sex::Male ? c : g, woman = man == c ? g : c;
     marry(man, woman);
     settleWants("match", g, "", rival, "說成了");
+    // The family's own match talks for this one are over: no bride-price to pay, no 「老爺又改了主意」 on top.
+    for (size_t k = 0; k < plans_.size();)
+        if (plans_[k].plan == "gentry_match" && plans_[k].target == g && inPlayerHouse(people_[plans_[k].actor].household)) plans_.erase(plans_.begin() + k);
+        else ++k;
     if (head.dynasty != kNone) dynasties_[head.dynasty].prestige -= 3;
     log(1, "【搶親】老爺把 " + fullName(g) + " 許給了" + houseName(households_, dynasties_, rival) + "的 " + fullName(c) +
                "。你家想說的這門親，讓人家搶了先（家族聲望 -3）。");
@@ -707,8 +715,8 @@ void World::manorBondDue(Person& head) {
     // The manor's books run to thousands, but its ready coin goes to the king, the lawyers and the lord's table: at
     // term it has the money about half the time, in a year of war, dearth or plague much less often.
     bool hard = param("war_levy", 0) > 0 || param("harvest_mult", 1) < 0.8 || param("plague_monthly", 0) > 0;
-    if (rngMinds_.chance(hard ? 0.25 : 0.5)) {
-        manor.money = std::max(0.0, manor.money - b.owed);
+    if (rngMinds_.chance(hard ? 0.25 : 0.5) && manor.money >= b.owed) {
+        manor.money -= b.owed;
         h.money += b.owed;
         book(h, "莊園還的債", b.owed);
         addOpinion(lord_, head.id, "trusty_lender", 5, 8);
@@ -754,6 +762,7 @@ void World::manorBondDue(Person& head) {
                    houseName(households_, dynasties_, h.id) + "的錢。");
     } else if (k == 1) {
         h.millUntil = day_ + millYears * kDaysPerYear;
+        h.millFree = true;
         head.flags.insert("mill_farmer");
         head.flags.insert("manor_pledge");
         ++counters_["manor_loan:mill"];
