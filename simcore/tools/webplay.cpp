@@ -433,7 +433,7 @@ public:
             o.raw("contest", c.done());
             const AskResult& la = w.lastAsk();
             // Only the levers that can work now: the season it was given and the money it takes (a press is part of the same talk).
-            if (la.who != kNone && la.day >= w.today() - 2)
+            if (la.who != kNone && la.day >= w.today() - 2 && w.people()[la.who].alive())
                 o.raw("last_ask", Obj().n("who", la.who).text("name", w.fullName(la.who)).text("ask", la.ask).text("office", la.office)
                                       .n("object", la.object).n("subject", la.subject).n("answer", la.answer).text("text", la.text)
                                       .raw("levers", [&] { std::vector<std::string> v; for (const auto& l : la.levers) if (w.leverOpen(l)) v.push_back(str(l)); return arr(v); }()).done());

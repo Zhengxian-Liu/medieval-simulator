@@ -35,7 +35,9 @@ const std::map<std::string, std::string>& modNames() {
         {"refused_ask", "回絕過我的請求"}, {"pressed_with_secret", "拿把柄壓過我"}, {"haggled", "跟我討價還價過"}, {"helped_us", "替我家墊過租"}, {"lied_to_me", "瞞過我的帳"}, {"stood_aside", "讓過我一步"}, {"hard_words", "說過狠話"}, {"forbade_match", "不准我的親事"}, {"put_off", "推託過我的事"},
         {"cold_shoulder", "給過我冷臉"}, {"heeded", "把我的事放在心上"}, {"neglected", "冷落過我"},
         {"came_to_wake", "來守過靈"}, {"missed_funeral", "喪事沒來露面"}, {"came_to_wedding", "來喝過喜酒"},
-        {"wedding_gift", "送過賀禮"}, {"helps_at_home", "在家很幫忙"}, {"for_the_dead", "看在先人份上"}, {"same_house", "一家人"}, {"helped_the_manor", "替莊園解過圍"}, {"held_back", "要錢時推託過"}, {"paid_up", "欠債按時還清"}, {"against_the_dead", "記著先人的舊帳"}, {"missed_wedding", "喜事沒來"}};
+        {"wedding_gift", "送過賀禮"}, {"helps_at_home", "在家很幫忙"}, {"for_the_dead", "看在先人份上"}, {"same_house", "一家人"}, {"helped_the_manor", "替莊園解過圍"}, {"held_back", "要錢時推託過"}, {"paid_up", "欠債按時還清"}, {"against_the_dead", "記著先人的舊帳"}, {"missed_wedding", "喜事沒來"},
+        {"forbade_plan", "不准我的打算"}, {"rebuffed", "拒絕過我"}, {"struck_the_lord", "對我動過手"}, {"doubted_paternity", "疑心不是親生的"},
+        {"cold_father", "對我冷淡"}, {"stood_by", "護著我"}, {"nursed", "病中照顧過我"}};
     return names;
 }
 

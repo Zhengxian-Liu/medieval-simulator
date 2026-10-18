@@ -513,6 +513,29 @@ void World::takeLover(Id a, Id b) {
     }
 }
 
+void World::exposeAffair(Id a, Id b) {
+    if (a == kNone || b == kNone) return;
+    bool family = isPlayerFamily(people_[a]) || isPlayerFamily(people_[b]);
+    log(family ? 1 : 2, "【醜聞】" + fullName(a) + " 和 " + fullName(b) + " 的姦情敗露，兩人被教會法庭罰款，還得披著白布在主日彌撒上當眾悔罪。");
+    for (Id x : {a, b}) {
+        Person& p = people_[x];
+        p.reputation -= 15;
+        p.flags.insert("adulterer");
+        noteLife(x, "和 " + fullName(x == a ? b : a) + " 的私情敗露，在教堂當眾悔罪");
+        if (p.household != kNone) {
+            Household& ph = households_[p.household];
+            book(ph, "教會法庭罰款", -std::min(20.0, std::max(0.0, ph.money)));
+            ph.money = std::max(0.0, ph.money - 20);
+        }
+        if (p.loverDeed != kNone && p.spouse != kNone && people_[p.spouse].alive())
+            addBelief(p.spouse, p.loverDeed, x, 100, kNone);
+        if (p.loverDeed != kNone) deedNotes_.insert({p.loverDeed, "spoken"});
+    }
+    recordDeed("affair_exposed", a, b);
+    recordDeed("affair_exposed", b, a);
+    if (people_[a].lover == b) endLiaison(a);
+}
+
 void World::endLiaison(Id a) {
     Id b = people_[a].lover;
     people_[a].lover = kNone;
@@ -545,34 +568,30 @@ void World::yearlyLiaisons() {
         }
         int years = (day_ - pa.loverSince) / kDaysPerYear;
         if (years >= 1 && rngKnow_.chance(0.12 + years * 0.02)) {
-            log(imp, fullName(a) + " 和 " + fullName(b) + " 的私情，" + (years >= 5 ? "斷斷續續好了 " + std::to_string(years) + " 年，" : "") + "漸漸淡了。");
+            // Told only when the family knows of it: an affair the head never found out about ends as it went on,
+            // unseen (not a line out of nowhere about the head's own wife).
+            Id head = playerHead();
+            auto known = [&](const Person& x) {
+                const Belief* bl = x.loverDeed != kNone && head != kNone ? beliefAbout(head, x.loverDeed) : nullptr;
+                return bl && bl->culprit == x.id && bl->confidence >= 60;
+            };
+            bool told = !family || a == head || b == head || known(pa) || known(pb);
+            if (told)
+                log(imp, fullName(a) + " 和 " + fullName(b) + " 的私情，" + (years >= 5 ? "斷斷續續好了 " + std::to_string(years) + " 年，" : "") + "漸漸淡了。");
             endLiaison(a);
             continue;
         }
         if (rngKnow_.chance(0.04)) {
-            log(imp, "【醜聞】" + fullName(a) + " 和 " + fullName(b) + " 的姦情敗露，兩人被教會法庭罰款，還得披著白布在主日彌撒上當眾悔罪。");
-            for (Id x : {a, b}) {
-                Person& p = people_[x];
-                p.reputation -= 15;
-                p.flags.insert("adulterer");
-                noteLife(x, "和 " + fullName(x == a ? b : a) + " 的私情敗露，在教堂當眾悔罪");
-                Household& ph = households_[p.household];
-                book(ph, "教會法庭罰款", -std::min(20.0, std::max(0.0, ph.money)));
-                ph.money = std::max(0.0, ph.money - 20);
-                if (p.loverDeed != kNone && p.spouse != kNone && people_[p.spouse].alive())
-                    addBelief(p.spouse, p.loverDeed, x, 100, kNone);
-                if (p.loverDeed != kNone) deedNotes_.insert({p.loverDeed, "spoken"});
-            }
-            recordDeed("affair_exposed", a, b);
-            recordDeed("affair_exposed", b, a);
-            endLiaison(a);
+            exposeAffair(a, b);
             continue;
         }
         if (rngKnow_.chance(0.08)) {
-            // One betrayed spouse starts to see it.
+            // One betrayed spouse starts to see it. In the player's house that is a story told by stages instead
+            // (hooks.cpp familyAffairs), unless it is the head who strayed.
             Id x = aWed && (!bWed || rngKnow_.chance(0.5)) ? a : b;
             const Person& px = people_[x];
             if (px.loverDeed == kNone) continue;
+            if (inPlayerHouse(px.household) && x != playerHead() && x != actingHead()) continue;
             const Belief* already = beliefAbout(px.spouse, px.loverDeed);
             if (already && already->culprit == x && already->confidence >= 80) continue;
             addBelief(px.spouse, px.loverDeed, x, 85, kNone);

@@ -236,6 +236,8 @@ std::vector<std::pair<std::string, double>> World::opinionBreakdown(Id from, Id 
         sums[label] += v;
     }
     if (double k = kinBase(from, to); k != 0) sums[kinBaseLabel(from, to)] += k;
+    const Person& a = people_[from];
+    if (a.lover != kNone && a.lover == b.spouse && people_[b.spouse].alive()) sums["心裡有鬼"] -= kGuilt;  // World::opinion
     std::vector<std::pair<std::string, double>> out(sums.begin(), sums.end());
     std::sort(out.begin(), out.end(), [](auto& x, auto& y) { return std::abs(x.second) > std::abs(y.second); });
     return out;

@@ -207,33 +207,55 @@ std::string World::fullName(Id id) const {
     }
     bool marked = s != p.firstName;  // already told apart above
     if (p.dynasty != kNone) s += "·" + dynasties_[p.dynasty].surname;
-    // Another living namesake in another house: say whose child (or wife) this one is.
-    if (p.alive() && p.household != kNone && p.dynasty != kNone) {
-        bool clash = false;
+    // A namesake elsewhere: someone of the same surname (any family of it) in another house, alive here or away, or
+    // dead not ten years. Say who this one is: the family's own by what they are to the head (你的弟弟), others by
+    // whose child (or wife) they are, and by the year they were born when even that is shared.
+    auto counts = [&](const Person& x) {
+        return x.alive() ? (x.household != kNone || isAway(x)) : x.deathDay >= 0 && day_ - x.deathDay <= 10 * kDaysPerYear;
+    };
+    const std::string surname = p.dynasty != kNone ? dynasties_[p.dynasty].surname : "";
+    if (!marked && p.dynasty != kNone && counts(p)) {
+        std::vector<const Person*> namesakes;
         for (const auto& o : people_)
-            if (o.id != id && o.alive() && o.household != kNone && o.household != p.household &&
-                o.dynasty == p.dynasty && o.firstName == p.firstName && o.father != id && o.mother != id) {
-                clash = true;
-                break;
+            if (o.id != id && o.firstName == p.firstName && o.dynasty != kNone && dynasties_[o.dynasty].surname == surname && counts(o) &&
+                (o.household != p.household || p.household == kNone) && o.father != id && o.mother != id)
+                namesakes.push_back(&o);
+        if (!namesakes.empty()) {
+            std::string kin = kinByname(id);
+            bool kinClash = false;  // another namesake the head would call the same
+            for (const Person* o : namesakes) kinClash = kinClash || (!kin.empty() && kinByname(o->id) == kin);
+            if (!kin.empty() && !kinClash) return s + "（" + kin + "）";
+            // Named for a father in another house, and he is the only other one: 小 (大 with a namesake child at home
+            // who is 小 already).
+            if (namesakes.size() == 1 && namesakes[0]->id == p.father) return (younger > 0 ? "大" : "小") + s;
+            auto fatherName = [&](const Person& x) { return x.father != kNone ? people_[x.father].firstName : std::string(); };
+            std::string fn = fatherName(p);
+            bool fatherClash = fn.empty();
+            for (const Person* o : namesakes) fatherClash = fatherClash || fatherName(*o) == fn;
+            if (!fatherClash) return s + "（" + fn + (p.sex == Sex::Male ? " 的兒子）" : " 的女兒）");
+            if (fn.empty() && p.spouse != kNone) {
+                bool spouseClash = false;
+                for (const Person* o : namesakes)
+                    spouseClash = spouseClash || (o->spouse != kNone && people_[o->spouse].firstName == people_[p.spouse].firstName);
+                if (!spouseClash) return s + "（" + people_[p.spouse].firstName + (p.sex == Sex::Male ? " 的丈夫）" : " 的妻子）");
             }
-        if (clash) {
-            auto it = bynames_.find(id);
-            if (it == bynames_.end()) {
-                std::string by;
-                if (p.father != kNone && people_[p.father].firstName == p.firstName) by = "小";
-                else if (p.father != kNone) by = "（" + people_[p.father].firstName + (p.sex == Sex::Male ? " 的兒子）" : " 的女兒）");
-                else if (p.spouse != kNone) by = "（" + people_[p.spouse].firstName + (p.sex == Sex::Male ? " 的丈夫）" : " 的妻子）");
-                it = bynames_.emplace(id, by).first;
-            }
-            if (it->second == "小") {
-                // Named for a father in another house, with a namesake child at home who is 小 already: 大.
-                if (!marked) s = (younger > 0 ? "大" : "小") + s;
-            } else if (!marked) {
-                s += it->second;
-            }
+            return s + "（" + std::to_string(cfg_.startYear + p.birthDay / kDaysPerYear) + " 年生）";
         }
     }
     return s;
+}
+
+// What the head calls one of the family, for telling namesakes apart: "你的弟弟", "你的兒子" ("" for anyone else).
+std::string World::kinByname(Id id) const {
+    Id head = playerHead();
+    if (head == kNone || id == head || !isPlayerFamily(people_[id])) return id == head && head != kNone ? "你" : "";
+    std::string t = kinTie(head, id);
+    const Person& h = people_[head];
+    const Person& p = people_[id];
+    bool f = p.sex == Sex::Female, older = p.birthDay < h.birthDay;
+    if (t == "sibling") return std::string("你的") + (f ? (older ? "姊姊" : "妹妹") : (older ? "哥哥" : "弟弟"));
+    std::string w = kinWord(head, id);
+    return w.empty() || w == "親戚" ? "" : "你的" + w;
 }
 
 std::string World::shortName(Id id) const {
@@ -262,7 +284,10 @@ double World::opinion(Id from, Id to) const {
         if (m.about == to) v += memoryValue(m);
         else if (m.aboutDynasty != kNone && m.aboutDynasty == b.dynasty) v += memoryValue(m) * 0.4;
     }
-    return std::clamp(v, -100.0, 100.0);
+    v = std::clamp(v, -100.0, 100.0);
+    // Lying with someone's wife (or husband) sits between you and them however well you get on: guilt or contempt.
+    if (a.lover != kNone && a.lover == b.spouse && people_[b.spouse].alive()) v = std::max(-100.0, v - kGuilt);
+    return v;
 }
 
 bool World::hasTrait(const Person& p, const std::string& t) const {

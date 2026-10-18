@@ -44,6 +44,15 @@ const Office* World::office(const std::string& id) const {
 }
 
 void World::setOffice(const std::string& id, Id holder, const std::string& how) {
+    // A man takes one post at a time: whatever else he held falls vacant (the reeve gives up the hayward's horn).
+    if (holder != kNone)
+        for (auto& o : offices_)
+            if (o.id != id && o.holder == holder) {
+                o.holder = kNone;
+                people_[holder].flags.erase(o.id);
+                if (inPlayerHouse(people_[holder].household))
+                    log(1, "【差事】" + fullName(holder) + " 當了" + (office(id) ? office(id)->name : id) + "，" + o.name + "的差事就交出去了。");
+            }
     for (auto& o : offices_) {
         if (o.id != id) continue;
         if (o.holder != kNone && o.holder != holder) people_[o.holder].flags.erase(id);
@@ -60,7 +69,7 @@ std::string World::officeBar(Id who, const std::string& id) const {
     const Person& p = people_[who];
     Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
     if (!p.alive() || p.household == kNone) return "人已經不在了";
-    if (p.household == lordHouse || p.occupation == "lord") return "領主家的人不當村裡的差事";
+    if (p.household == lordHouse || gentry(who)) return "領主家的人不當村裡的差事";
     if (p.occupation == "priest") return "神父不當村裡的差事";
     if (p.home != kNone) return shortName(who) + "在別人家幫傭";
     if (p.sex != Sex::Male) return "村裡的差事只有男人能當，當家的" + shortName(who) + "是女人";
@@ -69,7 +78,7 @@ std::string World::officeBar(Id who, const std::string& id) const {
     std::string years = "，" + shortName(who) + "現在 " + std::to_string(age) + " 歲";
     if (id == "reeve") {
         if (h.head != who) return "莊頭得是一家之主";
-        if (age < 25 || ageYears(p) > 65) return "莊頭要 25 到 65 歲" + years;
+        if (age < 25 || age > 65) return "莊頭要 25 到 65 歲" + years;
         if (p.occupation != "peasant") return "莊頭得是種地的人，做手藝和買賣的不當";
         if (h.debt >= 20) return "家裡欠著 20 便士以上的債，沒人放心讓欠債的人收租";
         auto bound = cooldowns_.find({who, "lords_debtor"});
@@ -77,20 +86,24 @@ std::string World::officeBar(Id who, const std::string& id) const {
         return "";
     }
     if (p.flags.count("reeve")) return "已經是莊頭了，不能兼";
+    // One minor post a man: the one he has he may stand for again, not a second.
+    for (const auto& o : offices_)
+        if (o.id != id && o.id != "reeve" && o.holder == who) return shortName(who) + "已經當著" + o.name + "了";
     if (id == "aletaster") {
-        if (age < 25 || ageYears(p) > 65) return "品酒官要 25 到 65 歲" + years;
+        if (age < 25 || age > 65) return "品酒官要 25 到 65 歲" + years;
         if (h.head != who) return "品酒官得是一家之主";
         for (Id m : h.members)
             if (people_[m].occupation == "alewife") return "家裡有人釀酒賣，不能自己嚐自己的酒";
         return "";
     }
-    if (age < 20 || ageYears(p) > 60) return "看籬人要 20 到 60 歲" + years;
+    if (age < 20 || age > 60) return "看籬人要 20 到 60 歲" + years;
     return "";
 }
 
 void World::officeVacated(Id person) {
     for (auto& o : offices_)
         if (o.holder == person) o.holder = kNone;
+    for (const char* id : {"reeve", "aletaster", "hayward"}) people_[person].flags.erase(id);  // the dead hold no post
 }
 
 // ---- Elections ---------------------------------------------------------------------------------
@@ -144,6 +157,7 @@ std::vector<Id> World::officeCandidates(const std::string& id, Id old, const std
             if (officeEligible(p.id, id)) ranked.push_back({officeMerit(p, id) + noise(4) + (p.id == old ? 3 : 0), p.id});
         std::sort(ranked.rbegin(), ranked.rend());
         for (size_t i = 0; i < ranked.size() && cands.size() < 3; ++i) add(ranked[i].second);
+        add(old);  // the sitting reeve stands again, if he still may
         for (const auto& wt : wants_)
             if (wt.open && wt.kind == "office" && wt.office == id && cands.size() < 4 && wanter(wt) != head) add(wanter(wt));
         bool runs = head != kNone && officeEligible(head, id) && std::find_if(wants_.begin(), wants_.end(), [&](const Want& wt) {
@@ -155,7 +169,7 @@ std::vector<Id> World::officeCandidates(const std::string& id, Id old, const std
     // Minor posts: those who want it, the man who has it, then the likeliest others until there are two.
     for (const auto& wt : wants_)
         if (wt.open && wt.kind == "office" && wt.office == id) add(wanter(wt));
-    if (old != kNone && people_[old].alive() && old != head) add(old);
+    if (old != kNone && people_[old].alive()) add(old);  // the one who has it stands again, the family's own too
     for (const auto& p : people_)
         if (officeEligible(p.id, id) && !inPlayerHouse(p.household)) ranked.push_back({officeMerit(p, id) + noise(4), p.id});
     std::sort(ranked.rbegin(), ranked.rend());
@@ -328,7 +342,7 @@ void World::chooseOfficers() {
         }
         for (auto it = promises_.begin(); it != promises_.end();) it = it->first.second == id ? promises_.erase(it) : std::next(it);
         bool familyIn = false;
-        for (Id c : cands) familyIn = familyIn || isPlayerFamily(people_[c]);
+        for (Id c : cands) familyIn = familyIn || isPlayerFamily(people_[c]) || inPlayerHouse(people_[c].household);
         for (const auto& wt : wants_)
             if (wt.open && wt.kind == "office" && wt.office == id && inPlayerHouse(wt.house)) familyIn = true;
         const std::string& name = cur->name;
@@ -345,6 +359,10 @@ void World::chooseOfficers() {
                        return wt.open && wt.kind == "office" && wt.office == id && inPlayerHouse(wt.house); })) {
             std::string bar = familyOfficeBar(id);
             log(1, "【選" + name + "】你家這回沒能出來選" + (bar.empty() ? "" : "：" + bar) + "。" + fullName(winner) + " 當選。");
+        } else if (old != kNone && winner != old && people_[old].alive() && inPlayerHouse(people_[old].household)) {
+            // The family's man had it and could not stand again: said, not left to be noticed.
+            std::string bar = officeBar(old, id);
+            log(1, "【選" + name + "】" + fullName(old) + " 這回沒能再出來選" + (bar.empty() ? "" : "（" + bar + "）") + "，" + fullName(winner) + " 當選。");
         } else if (winner != old) {
             log(isPlayerFamily(people_[winner]) ? 1 : 2, fullName(winner) + " 被選為" + name + "。");
         }

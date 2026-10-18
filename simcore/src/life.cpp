@@ -12,6 +12,21 @@ namespace {
 double approach(double v, double target, double rate) { return v + (target - v) * rate; }
 double clamp100(double v) { return std::clamp(v, 0.0, 100.0); }
 
+// The chance a grown person's illness kills them when nothing is done (World::fallIll): the onset is that much likelier
+// than a death, so the village dies as often as before and the family's care is what changes it.
+constexpr double kSickOdds = 0.75;
+
+// What the family sees of an illness, by what it will be if it kills.
+std::string sickWords(const std::string& cause) {
+    if (cause == "熱病") return "發起高燒，燒得說胡話";
+    if (cause == "痢疾") return "拉肚子拉得脫了形，什麼也吃不下";
+    if (cause == "咳疾") return "咳個不停，帕子上有了血";
+    if (cause == "傷口感染") return "手上的傷口紅腫流膿，整條胳膊都腫了";
+    if (cause == "風寒") return "受了風寒，裹著兩條毯子還在發抖";
+    if (cause == "年老") return "老了，這一躺下就起不來了";
+    return "病倒了";
+}
+
 bool isFestival(int month, int day) {
     return (month == 11 && day == 24) || (month == 3 && day == 5) || (month == 5 && day == 23) ||
            (month == 8 && day == 28);
@@ -58,7 +73,77 @@ void World::dailyNeeds() {
     }
 }
 
+bool World::sickCause(const std::string& cause) const {
+    return cause == "熱病" || cause == "痢疾" || cause == "咳疾" || cause == "傷口感染" || cause == "風寒" || cause == "年老";
+}
+
+// Taken ill with what may kill them in a month or two. In the player's house the family sees it and the one keeping
+// the house decides what is done: the wise woman, the priest, the best of the food, or nothing.
+void World::fallIll(Id id, const std::string& cause) {
+    Person& p = people_[id];
+    sick_[id] = Sickness{cause, day_ + kDaysPerMonth * rngLife_.range(1, 2), kSickOdds};
+    p.health = std::min(p.health, 45.0);
+    if (!inPlayerHouse(p.household)) return;
+    Id acting = actingHead();
+    Household& h = households_[p.household];
+    bool self = id == acting;
+    std::string who = self ? "你" : shortName(id);
+    std::string kin = acting != kNone && !self ? kinWord(acting, id) : "";
+    std::string sit = (self ? "你" : fullName(id) + "（" + (kin.empty() ? "" : kin + "，") + std::to_string(int(ageYears(p))) + " 歲）") + sickWords(cause) + "。";
+    struct Care { std::string text, done; double cost, food, odds, spirit; };  // done: as the chronicle tells it
+    std::vector<Care> cares;
+    if (h.money >= 4) cares.push_back({"請會草藥的老婦人來看（4 便士）", "家裡請來了會草藥的老婦人。", 4, 0, -0.3, 0});
+    if (h.money >= 2) cares.push_back({"請神父來祈禱、塗油（2 便士）", "家裡請神父來祈禱、塗油。", 2, 0, -0.1, 30});
+    if (h.food >= consumption(h) * 20 + 30)
+        cares.push_back({"把家裡最好的吃的都留給" + who + "（多吃掉一個月的口糧）", "家裡把最好的吃的都留給了" + who + "。", 0, 30, -0.15, 0});
+    cares.push_back({self ? "咬牙撐著，聽天由命" : "家裡能做的不多，聽天由命", "家裡能做的不多，只能聽天由命。", 0, 0, 0, 0});
+    std::vector<std::string> opts;
+    for (const auto& c : cares) opts.push_back(c.text);
+    int r = askPlayer("生病", sit, opts);
+    bool asked = r >= 0;
+    if (!asked) r = 0;  // left to itself, a house does the best it can afford
+    const Care& c = cares[r];
+    h.money -= c.cost;
+    if (c.cost > 0) book(h, "看病", -c.cost);
+    h.food = std::max(0.0, h.food - c.food);
+    sick_[id].odds = std::clamp(kSickOdds + c.odds, 0.05, 0.95);
+    if (c.spirit > 0) p.needs[Spirit] = clamp100(p.needs[Spirit] + c.spirit);
+    if (c.odds < 0 && !self) addOpinion(id, acting, "nursed", 5, 6);
+    log(1, "〔生病〕" + sit + (asked ? "（選擇：" + c.text + "）" : c.done));
+}
+
+// The sick turn, one way or the other, on their day.
+void World::monthlySickness() {
+    std::vector<Id> ids;
+    for (const auto& [id, s] : sick_) ids.push_back(id);
+    for (Id id : ids) {
+        auto it = sick_.find(id);
+        if (it == sick_.end()) continue;
+        Person& p = people_[id];
+        if (!p.alive() || p.household == kNone) {
+            sick_.erase(it);
+            continue;
+        }
+        if (day_ < it->second.due) {
+            p.health = std::min(p.health, 45.0);
+            continue;
+        }
+        Sickness s = it->second;
+        sick_.erase(it);
+        if (cfg_.harshness == Harshness::Gentle && isPlayerFamily(p)) s.odds *= 0.5;
+        if (rngLife_.chance(s.odds)) {
+            kill(id, s.cause);
+            if (gameOver_) return;
+        } else {
+            p.health = std::max(p.health, 50.0);
+            if (inPlayerHouse(p.household)) log(1, "〔病癒〕" + fullName(id) + " 的病好了，人瘦了一大圈，總算能下床了。");
+        }
+    }
+}
+
 void World::monthlyHealth() {
+    monthlySickness();
+    if (gameOver_) return;
     double plague = param("plague_monthly", 0);
     double mortMult = param("mortality_mult", 1);
     bool gentle = cfg_.harshness == Harshness::Gentle;
@@ -96,7 +181,12 @@ void World::monthlyHealth() {
         double mult = mortMult * std::max(0.2, 1 + traitMod(p, "mortality"));
         if (p.health < 25) mult *= 4;
         else if (p.health < 50) mult *= 1.8;
+        else if (p.health >= 85) mult *= 0.8;  // the hale die less often
         double monthly = 1 - std::pow(1 - std::min(0.95, annual * mult), 1.0 / 12);
+        // A grown person who falls ill lies sick a month or two first (monthlySickness): the onset is that much likelier
+        // than a death, so the deaths come out the same unless the family's care changes the odds.
+        bool grown = age >= 15;
+        if (grown) monthly = std::min(0.95, monthly / kSickOdds);
 
         double plagueChance = plague * std::max(0.3, 1 + traitMod(p, "mortality")) * (p.health < 50 ? 1.5 : 1);
         bool family = isPlayerFamily(p);
@@ -119,6 +209,7 @@ void World::monthlyHealth() {
             if (gameOver_) return;
             continue;
         }
+        if (sick_.count(p.id)) continue;  // already abed: it turns in monthlySickness
         if (rngLife_.chance(monthly)) {
             std::string cause;
             if (age < 1) cause = "夭折";
@@ -140,6 +231,12 @@ void World::monthlyHealth() {
                     cause = std::string("意外（") + (p.sex == Sex::Male ? kMan : kWoman)[rngLife_.range(0, 4)] + "）";
                 }
             }
+            if (grown && sickCause(cause)) {
+                fallIll(p.id, cause);
+                continue;
+            }
+            // Sudden (an accident): the onset above was scaled up for the sickness stage, so scale it back.
+            if (grown && !rngLife_.chance(kSickOdds)) continue;
             if (line) --dynastyAlive;
             kill(p.id, cause);
         }
@@ -188,6 +285,8 @@ void World::giveBirth(Person& mother) {
         child.health = 70;
         // Villeinage passes by blood, through the father when there is one.
         child.free = father != kNone ? people_[father].free : people_[motherId].free;
+        // Born while the mother had a lover: whose it is, nobody can say (hooks.cpp familyAffairs: 「長得不像你」).
+        if (people_[motherId].lover != kNone && people_[motherId].lover != father) child.flags.insert("paternity_doubt");
         rollCongenital(child);
         people_[motherId].children.push_back(c);
         if (father != kNone) people_[father].children.push_back(c);
@@ -270,6 +369,19 @@ void World::kill(Id id, const std::string& cause) {
             o.concerns.erase(std::remove_if(o.concerns.begin(), o.concerns.end(),
                                             [&](const Concern& c) { return c.about == id && (c.kind == "joy" || c.kind == "longing"); }),
                              o.concerns.end());
+    if (p.spouse != kNone && people_[p.spouse].alive()) {
+        // A second husband or wife buried within five years is told as that (data/events/mourning.json).
+        Person& s = people_[p.spouse];
+        int before = -1;
+        for (auto it = s.flags.begin(); it != s.flags.end();)
+            if (it->rfind("widowed_at:", 0) == 0) before = std::stoi(it->substr(11)), it = s.flags.erase(it);
+            else ++it;
+        s.flags.erase("widowed_again");
+        if (before >= 0 && day_ - before <= 5 * kDaysPerYear) s.flags.insert("widowed_again");
+        s.flags.insert("widowed_at:" + std::to_string(day_));
+        s.flags.insert("mourned_spouse");  // the 喪偶 card (mourn_spouse) comes tomorrow: the older widow_grief stays away
+    }
+    sick_.erase(id);
     if (p.spouse != kNone) mourn(p.spouse, 75, "spouse");
     // Babies died often and were mourned all the same, the mother most.
     mourn(p.mother, age < 1 ? 60 : age < 16 ? 70 : 65, "child", riteBy == kNone || riteBy == p.mother);
@@ -277,13 +389,19 @@ void World::kill(Id id, const std::string& cause) {
     if (age >= 1)
         for (Id c : p.children)
             if (people_[c].alive() && ageYears(people_[c]) < 40) mourn(c, ageYears(people_[c]) < 16 ? 60 : 45, "parent");
-    if (p.household != kNone && age >= 1)
-        for (Id m : households_[p.household].members)
+    // Brothers and sisters under the roof grieve too; for one who died away (at school, in town), those at the home
+    // they belonged to.
+    Id griefHouse = hid != kNone ? hid : away ? p.awayFrom : kNone;
+    if (griefHouse != kNone && age >= 1)
+        for (Id m : households_[griefHouse].members)
             if (m != id && m != p.spouse && m != p.father && m != p.mother && people_[m].alive() &&
                 ((p.father != kNone && people_[m].father == p.father) || (p.mother != kNone && people_[m].mother == p.mother)))
                 mourn(m, 40, "sibling");
     // Word goes round (design/news.md): the houses close to this one know today, and are asked to the wake.
-    if (hid != kNone) addNews(age < 1 ? "infant_death" : age < 14 ? "child_death" : "death", id, age < 1 ? p.mother : kNone, hid);
+    if (griefHouse != kNone) addNews(age < 1 ? "infant_death" : age < 14 ? "child_death" : "death", id, age < 1 ? p.mother : kNone, griefHouse);
+    // Died away from home: word comes to the one keeping the house, who decides what is done for them.
+    if (away && hid == kNone && inPlayerHouse(p.awayFrom) && actingHead() != kNone && actingHead() != id)
+        emit({"bereaved:away", kNone, actingHead(), id, false, 0});
     inheritMemories(id);
     if (hid == kNone) return;
     Household& h = households_[hid];
@@ -386,10 +504,12 @@ Id World::heirOf(const Household& h, Id dead) const {
                 best = c;
         return best;
     };
-    // The dead's own lawful children: a by-blow raised under another name does not take the land.
+    // The dead's own lawful children: a by-blow raised under another name does not take the land, nor one the dead
+    // would not own as theirs.
     std::vector<Id> children;
     for (Id c : d.children)
-        if (d.dynasty == kNone || people_[c].dynasty == d.dynasty) children.push_back(c);
+        if ((d.dynasty == kNone || people_[c].dynasty == d.dynasty) && !(people_[c].flags.count("disowned") && people_[c].father == dead))
+            children.push_back(c);
     heir = eldest(children, Sex::Male);
     if (heir == kNone) {
         std::vector<Id> grandsons;
@@ -528,6 +648,7 @@ World::Estate World::onHeadDied(Household& h, Id dead) {
     if (!player && playerHousehold_ != kNone && people_[heir].household == playerHousehold_ &&
         (lord_ == kNone || people_[lord_].household != h.id)) {
         Household& ours = households_[playerHousehold_];
+        if (heir == ours.head) carryPlans(dead, heir, true);
         h.head = heir;
         chargeHeriot(h, dead, left.acres, left.money);
         h.head = kNone;
@@ -620,11 +741,15 @@ World::Estate World::onHeadDied(Household& h, Id dead) {
     if (player && outside(h.ward != kNone ? h.ward : heir)) {
         log(1, "房子和地傳給了 " + fullName(heir) + "，可是" + fullName(heir) + "不姓 " + dynasties_[playerDynasty_].surname + "。");
         h.dynasty = people_[heir].dynasty;
+        carryPlans(dead, heir, false);
         followSurvivingBranch(true);
         return left;
     }
     for (Id it : h.items) items_[it].owners.push_back(heir);
-    if (!player) return left;
+    if (!player) {
+        carryPlans(dead, heir, false);  // a village house: its new head takes up what the old one had in hand
+        return left;
+    }
 
     Person& hp = people_[heir];
     // What the family wanted of the old head (to be comforted, a match spoken for) is not what they want of the new.
@@ -632,24 +757,7 @@ World::Estate World::onHeadDied(Household& h, Id dead) {
         people_[m].want.clear();
         people_[m].wantSince = -1;
     }
-    // What the old head had in hand passes to the heir when they can carry it on; otherwise the family hears it ended.
-    {
-        EventRunner check(*this);
-        for (auto& pl : plans_) {
-            if (pl.actor != dead) continue;
-            const PlanDef* pd = defs_.plan(pl.plan);
-            std::string name = pd ? pd->name : pl.plan;
-            bool carry = pd && hp.alive() && pl.target != heir && pl.subject != heir && check.eval(pd->actor, hp, pl.target) &&
-                         std::none_of(plans_.begin(), plans_.end(), [&](const ActivePlan& o) { return o.actor == heir && o.plan == pl.plan; }) &&
-                         std::count_if(plans_.begin(), plans_.end(), [&](const ActivePlan& o) { return o.actor == heir; }) < 2;
-            if (carry) {
-                pl.actor = heir;
-                log(1, "【計畫】" + fullName(dead) + " 沒辦完的「" + name + "」，由 " + fullName(heir) + " 接著辦。");
-            } else {
-                log(1, "【計畫】" + fullName(dead) + " 沒辦完的「" + name + "」，就此擱下了。");
-            }
-        }
-    }
+    carryPlans(dead, heir, true);
     dynasties_[playerDynasty_].heads.push_back(heir);
     dynasties_[playerDynasty_].headSince.push_back(day_);
     if (h.ward != kNone) dynasties_[playerDynasty_].heldFor[dynasties_[playerDynasty_].heads.size() - 1] = h.ward;
@@ -692,6 +800,38 @@ World::Estate World::onHeadDied(Household& h, Id dead) {
     hp.ambition.clear();
     if (ageYears(hp) >= 16) chooseAmbition(hp);
     return left;
+}
+
+// What the old head had in hand passes to the heir who now keeps the house (or holds it for a child), whatever the
+// heir's purse or age: success pays the price, and a broke heir fails then. Not what is aimed at the heir, nor a second
+// of the same; told to the family when it is theirs (tell).
+void World::carryPlans(Id dead, Id heir, bool tell) {
+    if (heir == kNone) return;
+    const Person& hp = people_[heir];
+    bool keeps = hp.alive() && hp.household != kNone && households_[hp.household].head == heir;
+    for (size_t i = 0; i < plans_.size();) {
+        ActivePlan& pl = plans_[i];
+        if (pl.actor != dead) {
+            ++i;
+            continue;
+        }
+        const PlanDef* pd = defs_.plan(pl.plan);
+        std::string name = pd ? pd->name : pl.plan;
+        if (keeps && pl.plan == "buy_freedom" && hp.free) {
+            if (tell) log(1, "【計畫】不用贖了：" + fullName(heir) + " 本來就是自由人，" + fullName(dead) + " 沒辦完的「" + name + "」就此作罷。");
+            ++i;  // left with the dead, it ends at the next month (monthlyPlans), not in the middle of whatever killed them
+            continue;
+        }
+        bool dup = std::any_of(plans_.begin(), plans_.end(), [&](const ActivePlan& o) { return o.actor == heir && o.plan == pl.plan; });
+        if (pd && keeps && pl.target != heir && pl.subject != heir && !dup && planRoom(heir)) {
+            pl.actor = heir;
+            if (tell) log(1, "【計畫】" + fullName(dead) + " 沒辦完的「" + name + "」，由 " + fullName(heir) + " 接著辦。");
+            ++i;
+        } else {
+            if (tell) log(1, "【計畫】" + fullName(dead) + " 沒辦完的「" + name + "」，就此擱下了。");
+            ++i;
+        }
+    }
 }
 
 // Two households become one (an heir with a house of their own takes up the holding): people, goods, land, money and
@@ -833,14 +973,17 @@ void World::handOver(Household& h, Id to, const std::string& why) {
         }
         lord_ = to;
         if (w.sex == Sex::Male) w.occupation = "lord";
+        log(1, "【領主】" + fullName(to) + " 從 " + fullName(regent) + " 手上接下莊園。");
+    }
+    // Whoever held it, the regency is over: back to what they were before (a steward made lord for the manor's child).
+    if (regent != kNone && regent != to) {
         Person& r = people_[regent];
         for (auto it = r.flags.begin(); it != r.flags.end(); ++it)
             if (it->rfind("occ:", 0) == 0) {
-                r.occupation = it->substr(4);  // back to what they were before holding the manor
+                r.occupation = it->substr(4);
                 r.flags.erase(it);
                 break;
             }
-        log(1, "【領主】" + fullName(to) + " 從 " + fullName(regent) + " 手上接下莊園。");
     }
     noteLife(to, why);
     settleAsHead(to);
@@ -873,6 +1016,11 @@ void World::monthlyWards() {
             bool ours = next != kNone && (np.household == h.id || np.home == h.id || (isAway(np) && np.awayFrom == h.id));
             if (next == kNone || next == h.head || !ours) {
                 h.wardLine = kNone;
+                // Nobody left to hold it for: the one holding the manor is its lord now, not a steward.
+                if (h.head != kNone && h.head == lord_) {
+                    auto& rf = people_[h.head].flags;
+                    for (auto it = rf.begin(); it != rf.end();) it = it->rfind("occ:", 0) == 0 ? rf.erase(it) : std::next(it);
+                }
                 continue;
             }
             if (inPlayerHouse(h.id) && playerDynasty_ != kNone && !dynasties_[playerDynasty_].heads.empty())
@@ -919,6 +1067,11 @@ void World::marry(Id man, Id woman) {
     Person& w = people_[woman];
     m.spouse = woman;
     w.spouse = man;
+    // The wedding day, for how long a marriage lasted (the 喪偶 card speaks of it).
+    for (Person* x : {&m, &w}) {
+        for (auto it = x->flags.begin(); it != x->flags.end();) it = it->rfind("wed:", 0) == 0 ? x->flags.erase(it) : std::next(it);
+        x->flags.insert("wed:" + std::to_string(day_));
+    }
     // Marriage ends a term of service: a groom goes home first, so the bride follows him there.
     for (Person* x : {&m, &w})
         if (x->home != kNone) {
@@ -1329,7 +1482,15 @@ void World::yearlyAdulthood() {
                         p.id == households_[p.household].head)
                         occ = trade;
                     if (occ == "housewife" || occ == "lady" || occ.empty()) occ = "peasant";
-                    if (occ == "lord") occ = "lord";
+                    // Only the heir of the manor grows up its lord-to-be; his brothers are gentry by blood (World::gentry),
+                    // not lords. (A steward's "lord" while he holds the manor for a child is not passed on at all.)
+                    if (occ == "lord") {
+                        const Household& ph = households_[p.household];
+                        const auto& ef = people_[elder].flags;
+                        bool steward = std::any_of(ef.begin(), ef.end(), [](const std::string& f) { return f.rfind("occ:", 0) == 0; });
+                        bool heir = elder == lord_ && ph.head == elder && ph.ward == kNone && !steward && heirOf(ph, elder) == p.id;
+                        if (!heir) occ = "peasant";
+                    }
                 }
             }
             // A son does not take up his widowed mother's brewing (釀酒婦), nor a daughter her father's forge.

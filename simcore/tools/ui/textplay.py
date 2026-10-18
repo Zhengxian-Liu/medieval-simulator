@@ -199,9 +199,7 @@ def render(v, full=False):
             out.append(f"  {ids}{it['thing']}（{it['holder']}）想要的：{ws or '沒人'}")
         for o in c.get("offices", []):
             who = f"{o['holder']}，到 {o['until']} 年" if o.get("holder") else "空著"
-            if o.get("mine"):
-                tail = "（你家的）"
-            elif o.get("wanted"):
+            if o.get("wanted"):
                 tail = f"（你家想當，出來選的是{o.get('runner', '')}；不想了：act {{\"do\":\"want\",\"what\":\"drop\",\"object\":{o.get('want', -1)}}}）"
             elif o.get("can"):
                 men = o.get("men", [])
@@ -210,7 +208,9 @@ def render(v, full=False):
                 else:
                     tail = f"（可以爭：act {{\"do\":\"want\",\"what\":\"office:{o['id']}\",\"object\":-1}}）"
             else:
-                tail = f"（爭不了：{o.get('why', '')}）"
+                tail = "" if o.get("mine") else f"（爭不了：{o.get('why', '')}）"
+            if o.get("mine"):
+                tail = "（你家的，到期自動出來連任）" + tail
             out.append(f"  {o['name']}：{who}{tail}")
         for pst in c.get("past", [])[:4]:
             out.append(f"  {pst['year']} {pst['thing']}：{pst['outcome']}")

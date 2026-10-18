@@ -72,10 +72,11 @@
         "ai": {"base": 3, "traits": {"content": 6, "cynical": 4}}}
      ]},
     {"id": "widow_grief", "title": "喪偶", "prompt": "{name} 剛送走了另一半。家裡的活還得有人做。", "scope": "player_family", "chance": 0.3, "cooldown_years": 3,
-     "conditions": {"widowed": true, "age": [20, 70], "recently_widowed": true},
+     "conditions": {"widowed": true, "age": [20, 70], "recently_widowed": true, "no_flag": "mourned_spouse"},
      "options": [
        {"text": "日日去墳前", "log": "{name} 天天去墓園，整個人消瘦了下去。", "effects": [{"trait_chance": {"trait": "melancholy", "chance": 50}}, {"health": -5}], "ai": {"base": 8, "traits": {"kind": 6}}},
-       {"text": "把心思放在孩子身上", "log": "{name} 把眼淚吞下去，照常下田。", "effects": [{"need": {"spirit": -10}}], "ai": {"base": 10, "traits": {"diligent": 8, "calm": 5}}}
+       {"text": "把心思放在孩子身上", "conditions": {"living_children_ge": 1}, "log": "{name} 把眼淚吞下去，照常下田。", "effects": [{"need": {"spirit": -10}}], "ai": {"base": 10, "traits": {"diligent": 8, "calm": 5}}},
+       {"text": "把眼淚吞下去，照常下田", "conditions": {"living_children_ge": 0, "not": {"living_children_ge": 1}}, "log": "{name} 把眼淚吞下去，照常下田。", "effects": [{"need": {"spirit": -10}}], "ai": {"base": 10, "traits": {"diligent": 8, "calm": 5}}}
      ]},
     {"id": "tavern", "title": "酒館", "prompt": "{name} 心裡煩，天黑了還不想回家。", "scope": "player_family", "chance": 0.04, "cooldown_years": 2,
      "conditions": {"sex": "male", "age": [16, 70], "stress_ge": 30},
