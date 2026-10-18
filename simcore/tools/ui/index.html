@@ -552,9 +552,9 @@ function renderContest(s) {
   html += `<h3>村裡的差事</h3>` + c.offices.map((o) => `<div class="item" style="display:flex;justify-content:space-between;gap:6px;padding:4px 0">
       <span><b>${esc(o.name)}</b>　${o.mine ? '<span class="pos">你家的人</span> ' : ""}${o.holder ? esc(o.holder) : '<span class="muted">空著</span>'}</span>
       ${o.wanted ? `<span><span class="muted">你家想當（${esc(o.runner || "")}出來選）</span> <button ${can ? "" : "disabled"} onclick="act({do:'want',what:'drop',object:${o.want}})">放下</button></span>`
-        : o.can && !o.mine ? ((o.men || []).length > 1
-            ? `<span>${o.men.map((m) => `<button ${can ? "" : "disabled"} onclick="act({do:'want',what:'office:${o.id}',object:${m.id}})">讓${esc(m.name)}選</button>`).join(" ")}</span>`
-            : `<button ${can ? "" : "disabled"} onclick="act({do:'want',what:'office:${o.id}',object:-1})">想當</button>`)
+        : o.can ? `<span>${o.mine ? '<span class="muted" style="font-size:12px">到期自動出來連任；</span>' : ""}${(o.men || []).length > 1
+            ? o.men.map((m) => `<button ${can ? "" : "disabled"} onclick="act({do:'want',what:'office:${o.id}',object:${m.id}})">讓${esc(m.name)}選</button>`).join(" ")
+            : `<button ${can ? "" : "disabled"} onclick="act({do:'want',what:'office:${o.id}',object:-1})">${o.mine ? "想連任，去拉票" : "想當"}</button>`}</span>`
         : !o.mine && o.why ? `<span class="muted" style="font-size:12px">爭不了：${esc(o.why)}</span>` : ""}</div>`).join("");
   if (c.past.length) html += `<h3>你家最近的結果</h3>` + c.past.map((p) => `<div style="font-size:13px">${p.year} 年　${esc(p.thing)}：<b>${esc(p.outcome)}</b></div>`).join("");
   html += `<p class="legend">只列你家聽說的。去「村民」那一欄找人開口：買地、租地、請他投票、借錢、說親、收學徒。</p>`;

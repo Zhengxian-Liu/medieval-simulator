@@ -162,7 +162,7 @@
          {"text": "在法庭上替領主作證", "log": "莊園法庭上，{name} 站出來替 {target} 作證，鄰居們看{pron}的眼神變了。", "effects": [{"progress": 30}, {"reputation": -4}], "ai": {"base": 6, "traits": {"ambitious": 6, "kind": -4, "craven": 4}}}]}
      ]},
 
-    {"id": "affair", "name": "私通", "requires": "已婚", "desc": "背著配偶和人私通。教會法庭會罰，鄰居會說閒話。",
+    {"id": "affair", "name": "私通", "requires": "已婚", "consent": true, "desc": "背著配偶和人私通。教會法庭會罰，鄰居會說閒話。",
      "actor": {"married": true, "age": [18, 50], "has_lover": false},
      "target": {"pick": "villager", "conditions": {"opposite_sex": true, "not_kin": true, "age": [18, 50], "has_lover": false}},
      "secret": true, "discovery": 0.03, "max_months": 10, "retry_years": 5,

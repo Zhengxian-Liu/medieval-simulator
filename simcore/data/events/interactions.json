@@ -204,7 +204,7 @@
 
     {"id": "talk_lord", "title": "求見領主", "scope": "interaction", "cooldown_months": 12,
      "interaction": {"who": "anyone", "time": 1, "desc": "帶一隻閹雞去莊園，求領主寬限欠租"},
-     "conditions": {"occupation": "lord"},
+     "conditions": {"is_lord": true},
      "options": [
       {"text": "答應寬限一年",
        "log": "{target_first}帶著閹雞去求見{first}，{first}揮揮手：「欠的租明年再說。」",

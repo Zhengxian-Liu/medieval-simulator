@@ -107,6 +107,13 @@ static void checkInvariants(const World& w, const char* label) {
         CHECK(std::abs(freehold[h.id] - h.freehold) < 1e-6, "household freehold differs from its parcels");
         if (h.extinct) CHECK(h.acres < 1e-6, "extinct household still holds land");
     }
+    // Village posts: one man, one post, and only the living hold one.
+    std::set<Id> holders;
+    for (const auto& o : w.offices())
+        if (o.holder != kNone) {
+            CHECK(w.person(o.holder).alive(), "a dead man holds a post");
+            CHECK(holders.insert(o.holder).second, "one man holds two posts");
+        }
     (void)label;
 }
 

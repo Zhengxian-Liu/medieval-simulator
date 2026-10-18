@@ -35,6 +35,7 @@ EventDef parseEvent(const Json& e) {
     d.title = e.stringOr("title", d.id);
     d.prompt = e.stringOr("prompt", "");
     d.prompts = readStrings(e["prompts"]);
+    d.promptIf = e["prompt_if"];
     d.quietLog = e.stringOr("quiet_log", "");
     d.ask = !e["ask"].isBool() || e["ask"].asBool();
     d.parentDecides = e["parent_decides"].isBool() && e["parent_decides"].asBool();
@@ -273,6 +274,7 @@ Defs Defs::loadFromDir(const std::string& dir) {
         pd.discovery = p.numberOr("discovery", 0);
         pd.npc = !p["npc"].isBool() || p["npc"].asBool();
         pd.notifyTarget = p["notify_target"].isBool() && p["notify_target"].asBool();
+        pd.consent = p["consent"].isBool() && p["consent"].asBool();
         pd.startLog = p.stringOr("start_log", "");
         pd.successLog = p.stringOr("success_log", "");
         pd.failLog = p.stringOr("fail_log", "");

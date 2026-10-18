@@ -40,7 +40,10 @@ const std::map<std::string, std::string>& modNames() {
         {"turned_down_terms", "沒答應我開的條件"}, {"assessed_us", "估稅估得狠"}, {"spared_us", "估稅時手下留情"},
         {"cheated_the_tax", "估稅的自己少交"}, {"pushed_tax_on_us", "把稅推給別家"}, {"carried_our_share", "替窮人家擔了稅"},
         {"honest_assessor", "估稅公道"}, {"hired_me", "雇我幹活"}, {"took_us_in", "收留了我家的人"}, {"gave_land", "分了地給我家"},
-        {"fed_us", "挨餓時送過糧"}, {"left_us_hungry", "挨餓時沒伸手"}};
+        {"fed_us", "挨餓時送過糧"}, {"left_us_hungry", "挨餓時沒伸手"},
+        // design/fun-r5.md B: family plans asked, affairs, illness.
+        {"forbade_plan", "不准我的打算"}, {"rebuffed", "拒絕過我"}, {"struck_the_lord", "對我動過手"}, {"doubted_paternity", "疑心不是親生的"},
+        {"cold_father", "對我冷淡"}, {"stood_by", "護著我"}, {"nursed", "病中照顧過我"}};
     return names;
 }
 

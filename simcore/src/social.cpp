@@ -146,6 +146,9 @@ void World::electReeve() {
         log(1, "【選莊頭】" + tallyText(cands, tally, false) + "。" + tie + voteWhy(tally, winner) + how +
                    (winner == head ? fullName(head) + (old == head ? " 連任莊頭，再做三年。" : " 當上了莊頭，這一任三年。") : fullName(winner) + " 當選。"));
         if (winner != head) addStress(head, 6, "落選的難堪");
+    } else if (old != kNone && winner != old && people_[old].alive() && inPlayerHouse(people_[old].household)) {
+        std::string bar = officeBar(old, "reeve");
+        log(1, "【選莊頭】" + fullName(old) + " 這回沒能再出來選" + (bar.empty() ? "" : "（" + bar + "）") + "，" + fullName(winner) + " 當選。" + how);
     } else if (winner != old) {
         log(isPlayerFamily(r) ? 1 : 2, fullName(winner) + " 被選為莊頭（reeve），替領主管理村裡的農事。" + how);
     } else if (imposed) {

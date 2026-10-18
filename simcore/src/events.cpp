@@ -510,7 +510,16 @@ int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
             prompt.options.push_back(optionText(o, p, target));
             lines.push_back(format(o.logs.empty() ? o.log : o.logs[0], p, target));
         }
-        if (!ev.prompt.empty()) {
+        const std::string* when = nullptr;  // a telling for this case (prompt_if): the first whose conditions hold
+        if (ev.promptIf.isArray())
+            for (const auto& c : ev.promptIf.asArray())
+                if (eval(c["cond"], p, target)) {
+                    when = &c["prompt"].asString();
+                    break;
+                }
+        if (when) {
+            prompt.situation = format(*when, p, target);
+        } else if (!ev.prompt.empty()) {
             // Another way of telling it each time, until the house has heard them all.
             const std::string& said = ev.prompts.size() > 1
                                           ? ev.prompts[w_.freshVariant(p.household, ev.id, static_cast<int>(ev.prompts.size()), w_.rngEvents_)]
@@ -737,6 +746,29 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     if (k == "deed_noted") return deed_ != kNone && w.deedNotes_.count({deed_, v.asString()}) > 0;
     if (k == "heir_apparent") return (h && h->head != kNone && h->head != p.id && w.heirOf(*h, h->head) == p.id) == v.asBool();
     if (k == "has_lover") return (p.lover != kNone) == v.asBool();
+    if (k == "is_lord") return (p.id == w.lord_) == v.asBool();  // the lord himself, not his sons or a steward
+    if (k == "deed_with_here") {  // the other party of the affair this event is about is still about
+        Id o = deed_ != kNone ? w.deeds_[deed_].with : kNone;
+        return (o != kNone && w.people_[o].alive() && w.people_[o].household != kNone) == v.asBool();
+    }
+    if (k == "deed_with_lord") return (deed_ != kNone && w.deeds_[deed_].with != kNone && w.deeds_[deed_].with == w.lord_) == v.asBool();
+    if (k == "died_suddenly") {  // on the dead: an accident, childbed or a sword, not a sickness that came on slowly
+        const std::string& c = p.deathCause;
+        return (!p.alive() && (c.rfind("意外", 0) == 0 || c == "難產" || c.find("戰死") != std::string::npos)) == v.asBool();
+    }
+    if (k == "married_years_ge" || k == "married_years_lt") {
+        // Since the wedding (the "wed:<day>" flag marry() sets); for older marriages, since the eldest child came.
+        int wed = -1;
+        for (const auto& f : p.flags)
+            if (f.rfind("wed:", 0) == 0) wed = std::stoi(f.substr(4));
+        if (wed < 0)
+            for (Id c : p.children)
+                if (p.spouse != kNone && (w.people_[c].father == p.spouse || w.people_[c].mother == p.spouse) && (wed < 0 || w.people_[c].birthDay < wed))
+                    wed = w.people_[c].birthDay - kDaysPerYear;
+        int end = p.spouse != kNone && !w.people_[p.spouse].alive() ? w.people_[p.spouse].deathDay : w.day_;
+        double years = wed < 0 ? 10 : (end - wed) / double(kDaysPerYear);
+        return k == "married_years_ge" ? years >= v.asNumber() : years < v.asNumber();
+    }
     if (k == "kin_boy_at_home") return (w.boyForMaster(p) != kNone) == v.asBool();
     if (k == "hired") return (h && h->hiredUntil > w.day_) == v.asBool();
     if (k == "hire_master") return (h && w.hireMaster(h->id) != kNone) == v.asBool();
@@ -1110,7 +1142,7 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 // The buyer bids more for the land (outbid by another house): paid to the seller when the deal is struck.
                 if (plan_) plan_->priceAdd += v.asNumber();
             } else if (k == "abort_plan") {
-                if (plan_) plan_->progress = -1000;  // resolved as a failure at month end
+                if (plan_) plan_->aborted = true;  // ends quietly at month end: called off, not refused
             } else if (k == "subject") {
                 if (plan_ && plan_->subject != kNone) apply(v, w.people_[plan_->subject], target);
             } else if (k == "marry_subject_target") {
@@ -1670,6 +1702,40 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                     const Deed& d = w.deeds_[deed_];
                     if (d.actor != kNone && d.with != kNone && w.people_[d.actor].lover == d.with) w.endLiaison(d.actor);
                 }
+            } else if (k == "expose_affair") {
+                // The affair this event is about, taken to the church court: both of them, in front of the parish.
+                if (deed_ != kNone && w.deeds_[deed_].with != kNone) w.exposeAffair(w.deeds_[deed_].actor, w.deeds_[deed_].with);
+            } else if (k == "fight_lover") {
+                // Going for the other man (or woman) of the affair this event is about: a brawl the village sees, and the
+                // affair is over. Against the lord it is the manor that remembers, and its court may fine.
+                if (deed_ == kNone) continue;
+                const Deed& d = w.deeds_[deed_];
+                Id lv = d.with;
+                if (lv == kNone || !w.people_[lv].alive() || w.people_[lv].household == kNone) continue;
+                w.recordDeed("brawl", p.id, lv, 1, deed_);
+                p.health = std::max(0.0, p.health - 6);
+                w.deedNotes_.insert({deed_, "spoken"});
+                if (d.actor != kNone && w.people_[d.actor].lover == lv) w.endLiaison(d.actor);
+                if (lv == w.lord_) {
+                    w.addOpinion(lv, p.id, "struck_the_lord", -40, 20);
+                    if (h && w.rngEvents_.chance(0.5)) {
+                        double fine = std::min(12.0, std::max(0.0, h->money));
+                        h->money -= fine;
+                        w.book(*h, "毆打領主的罰款", -fine);
+                        if (w.inPlayerHouse(h->id)) w.log(1, "  管家把這事記上了莊園法庭的案卷，罰了 " + std::to_string(int(fine)) + " 便士。");
+                    }
+                }
+            } else if (k == "suspect") {
+                // Believes a little more firmly that the one in the deed did it (a neighbour's hint, pressed).
+                if (deed_ != kNone) w.addBelief(p.id, deed_, w.deeds_[deed_].actor, v.asNumber(), target != kNone ? target : kNone);
+            } else if (k == "nurse") {
+                // Care for the one lying sick (the target): the odds the illness kills move by this much.
+                Id who = target != kNone ? target : p.id;
+                auto it = w.sick_.find(who);
+                if (it != w.sick_.end()) it->second.odds = std::clamp(it->second.odds + v.asNumber(), 0.05, 0.95);
+            } else if (k == "disown_target") {
+                // Not acknowledged as the head's child: does not take the land (life.cpp heirOf).
+                if (target != kNone) w.people_[target].flags.insert("disowned");
             } else if (k == "on_target") {
                 // Effects on the other party, who then has this person as their target.
                 if (target != kNone && w.people_[target].alive()) apply(v, w.people_[target], p.id);
@@ -1855,6 +1921,9 @@ std::string EventRunner::format(const std::string& tmpl, const Person& p, Id tar
             else if (key == "stress_cause") val = p.stressCause.empty() ? "說不出的心事" : p.stressCause;
             else if (key == "deed_actor" || key == "deed_victim") {
                 Id a = deed_ == kNone ? kNone : key == "deed_actor" ? w_.deeds_[deed_].actor : w_.deeds_[deed_].target;
+                val = a == kNone ? "" : w_.isPlayerFamily(w_.people_[a]) ? w_.shortName(a) : w_.fullName(a);
+            } else if (key == "deed_with") {  // the other party of an affair
+                Id a = deed_ == kNone ? kNone : w_.deeds_[deed_].with;
                 val = a == kNone ? "" : w_.isPlayerFamily(w_.people_[a]) ? w_.shortName(a) : w_.fullName(a);
             } else if (key == "deed_year") val = deed_ != kNone ? std::to_string(w_.cfg_.startYear + w_.deeds_[deed_].day / kDaysPerYear) : "";
             else val = "{" + key + "}";

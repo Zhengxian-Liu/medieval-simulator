@@ -17,6 +17,8 @@ namespace sim {
 
 using Id = int32_t;
 constexpr Id kNone = -1;
+// What a standing affair with someone's husband or wife takes off one's opinion of them (World::opinion).
+constexpr double kGuilt = 25;
 
 // Calendar: 12 months of 30 days. Day 0 is 1 January of the start year.
 constexpr int kDaysPerMonth = 30;
@@ -426,6 +428,7 @@ struct ActivePlan {
     int startDay = 0;
     std::vector<std::string> beatsSeen;  // each beat happens at most once per plan
     double priceAdd = 0;                 // what a buyer has offered on top of the asking price (outbid for land)
+    bool aborted = false;                // called off in a beat (「不買了」): ends quietly, not as a failure
 };
 
 struct PlanOption {
@@ -811,6 +814,11 @@ private:
     void monthlyPlans();
     void npcStartPlans();
     void endPlan(size_t index, const std::string& outcome);
+    // A family member (not the one keeping the house) means to start a plan that changes the family's life: the
+    // head is asked first. False: not allowed (and said).
+    bool familyAllows(Id actor, const PlanDef& pd, Id target);
+    // The acting head is the one an outsider's affair is aimed at: the head is asked, and nothing happens without a yes.
+    bool headConsents(Id actor, const PlanDef& pd, Id target);
 
     // setup.cpp
     void setupVillage();
@@ -832,6 +840,19 @@ private:
     void yearlyAdulthood();
     void giveBirth(Person& mother);
     void kill(Id id, const std::string& cause);
+    // An illness before most grown deaths (design/fun-r5.md B): a month or two abed, the family's care shifting the odds.
+    struct Sickness {
+        std::string cause;
+        int due = 0;        // the day it turns, one way or the other
+        double odds = 0.7;  // chance it kills
+    };
+    std::map<Id, Sickness> sick_;
+    void fallIll(Id id, const std::string& cause);
+    void monthlySickness();
+    bool sickCause(const std::string& cause) const;  // a death that comes on slowly (fever, flux), not an accident
+    // A plan the dead head had going goes on with the heir when the heir now keeps a house (life.cpp onHeadDied).
+    void carryPlans(Id dead, Id heir, bool tell);
+    std::string kinByname(Id id) const;  // "你的弟弟" for the family's own, "" otherwise
     // What a head left behind (before an heir moved in with their own), for the lord's dues and the 【分家產】 line.
     struct Estate {
         double acres = 0, freehold = 0, money = 0;
@@ -978,6 +999,12 @@ private:
     void takeLover(Id a, Id b);
     void endLiaison(Id a);
     void yearlyLiaisons();
+    // The church court for a pair of lovers: fines, the white sheet at Sunday mass, the village knows (both sides).
+    void exposeAffair(Id a, Id b);
+    // hooks.cpp: a family member's affair surfacing to the head by stages (rumour, a neighbour's hint, caught),
+    // and the child who does not look like the head. Once a season.
+    void familyAffairs();
+    std::map<Id, int> affairNext_;  // affair deed -> the day its next stage may come
     void addDebt(Household& h, double amount, Id creditor);
     void monthlyDebts();
     void yearlyDebts();

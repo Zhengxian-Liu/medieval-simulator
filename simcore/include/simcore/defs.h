@@ -62,6 +62,7 @@ struct EventDef {
     std::string title;
     std::string prompt;  // what the player is told when asked to choose; optional
     std::vector<std::string> prompts;  // other ways of telling it, picked at random (with prompt)
+    Json promptIf;  // [{"cond": {...}, "prompt": "..."}]: the first whose conditions hold is told instead
     std::string quietLog;  // said instead when it comes again while still on cooldown (a second child buried)
     bool ask = true;     // false: routine, the AI chooses even for a human player
     bool parentDecides = false;  // the head chooses for their unmarried children living at home
@@ -110,6 +111,7 @@ struct PlanDef {
     double discovery = 0;  // monthly chance a secret plan is exposed
     bool npc = true;       // NPCs may start it
     bool notifyTarget = false;  // the target's family hears how it ended
+    bool consent = false;       // aimed at the one keeping the player's house: they are asked before it starts
     std::string targetAsk;                  // when it targets the player's head: what they are asked (answers: yes = success, no = fail)
     std::vector<std::string> targetAnswers;
     std::string startLog, successLog, failLog, exposedLog, victimLog;

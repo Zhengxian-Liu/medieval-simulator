@@ -38,7 +38,7 @@ void World::knowAtDeed(const Deed& d, const DeedDef& def) {
         if (rngKnow_.chance(0.15)) {
             std::vector<Id> lookalikes;
             for (Id m : households_[people_[d.actor].household].members)
-                if (m != d.actor && people_[m].sex == people_[d.actor].sex && ageYears(people_[m]) >= 14)
+                if (m != d.actor && people_[m].sex == people_[d.actor].sex && ageYears(people_[m]) >= 14 && people_[m].alive())
                     lookalikes.push_back(m);
             if (!lookalikes.empty()) seen = lookalikes[rngKnow_.range(0, static_cast<int>(lookalikes.size()) - 1)];
         }
@@ -157,15 +157,18 @@ void World::monthlyRumours() {
 
             Id told = b.culprit;
             if (rngKnow_.chance(0.08)) {
-                // Garbled in the retelling: someone else from that house, or the teller's own enemy.
+                // Garbled in the retelling: someone else from that house, or the teller's own enemy. Only someone who
+                // could have done it then: grown (12 or more) on the day of the deed.
+                const int deedDay = deeds_[b.deed].day;
+                auto couldHave = [&](Id o) { return deedDay - people_[o].birthDay >= 12 * kDaysPerYear && ageYears(people_[o]) >= 14; };
                 std::vector<Id> others;
                 if (people_[b.culprit].household != kNone)
                     for (Id m : households_[people_[b.culprit].household].members)
-                        if (m != b.culprit && ageYears(people_[m]) >= 14) others.push_back(m);
+                        if (m != b.culprit && couldHave(m)) others.push_back(m);
                 if (hasTrait(p, "cruel") || others.empty()) {
                     double worst = 0;
                     for (Id o : village)
-                        if (o != id && o != hearer && ageYears(people_[o]) >= 14 && opinion(id, o) < worst) {
+                        if (o != id && o != hearer && couldHave(o) && opinion(id, o) < worst) {
                             worst = opinion(id, o);
                             told = o;
                         }
