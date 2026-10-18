@@ -112,11 +112,15 @@ def render(v, full=False):
         out.append(f"（你在替 {r['ward']} 持家，還有約 {r['years_left']} 年。可以 act '{{\"do\":\"regency\"}}' 交給管家，直到{r['ward']}成年，路上有大事還是會問你。）")
     amb = s.get("ambition")
     if amb:
-        mark = lambda x: "✓" if x.get("done") else "△" if x.get("slipped") else "◎" if x.get("final") else "○"
-        out.append(f"志向：{amb['name']}（{amb.get('desc', '')}）還剩 {amb.get('years_left', '?')} 年　" + " → ".join(mark(x) + x["name"] for x in amb.get("steps", []))
+        mark = lambda x: "✓" if x.get("done") else "△" if x.get("slipped") else "◎" if x.get("final") else "✗" if x.get("gate") else "○"
+        left = f"限到 {amb['deadline']} 年底（還剩 {amb.get('years_left', '?')} 年）" if amb.get("deadline") else f"還剩 {amb.get('years_left', '?')} 年"
+        out.append(f"志向：{amb['name']}（{amb.get('desc', '')}）{left}　" + " → ".join(mark(x) + x["name"] for x in amb.get("steps", []))
                    + ("　（△ 做到過，現在又不夠了；◎ 最後一步）" if any(x.get("slipped") for x in amb.get("steps", [])) else "　（◎ 最後一步）"))
         if amb.get("hint"):
             out.append(f"  怎麼推進：{amb['hint']}" + (f"（★ 計畫：{'、'.join(amb['plans'])}）" if amb.get("plans") else ""))
+        for k in ("gates", "rival", "note"):
+            if amb.get(k):
+                out.append(f"  {amb[k]}")
     fine = (s.get("contest") or {}).get("fine")
     if fine:
         out.append(f"入地費 {fine['amount']} 便士，{fine['year']} 年 {fine['month']} 月前要交給領主{'（已寬限過）' if fine.get('extended') else ''}。"
@@ -211,7 +215,8 @@ def render(v, full=False):
                     tail = f"（可以爭：act {{\"do\":\"want\",\"what\":\"office:{o['id']}\",\"object\":-1}}）"
             else:
                 tail = f"（爭不了：{o.get('why', '')}）"
-            out.append(f"  {o['name']}：{who}{tail}")
+            gates = "　".join(("✓ " + g["label"]) if g.get("ok") else ("✗ " + g.get("detail", "")) for g in o.get("gates", []))
+            out.append(f"  {o['name']}：{who}{tail}" + (f"\n    條件：{gates}" if gates and not o.get("mine") else ""))
         for pst in c.get("past", [])[:4]:
             out.append(f"  {pst['year']} {pst['thing']}：{pst['outcome']}")
     heard = [x for x in s.get("heard", []) if x.get("recent")]

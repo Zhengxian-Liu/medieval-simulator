@@ -202,13 +202,15 @@ Defs Defs::loadFromDir(const std::string& dir) {
         ad.tradition = a.stringOr("tradition", "");
         ad.maxYears = static_cast<int>(a.numberOr("max_years", 25));
         if (a["milestones"].isArray())
-            for (const auto& m : a["milestones"].asArray()) ad.milestones.push_back({m["name"].asString(), m["goal"]});
+            for (const auto& m : a["milestones"].asArray())
+                ad.milestones.push_back({m["name"].asString(), m["goal"], m["gate"].isBool() && m["gate"].asBool()});
         if (a["plans"].isArray())
             for (const auto& pl : a["plans"].asArray()) ad.plans.push_back(pl.asString());
         ad.next = readStrings(a["next"]);
         ad.final = a.stringOr("final", ad.name);
         ad.hint = a.stringOr("hint", "");
         ad.keep = a["keep"];
+        ad.office = a.stringOr("office", "");
         d.ambitions.push_back(ad);
     }
 

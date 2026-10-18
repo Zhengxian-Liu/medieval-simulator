@@ -310,6 +310,25 @@ bool World::gentry(Id id) const {
            (p.household != kNone && p.household == lord.household && p.home == kNone) || p.occupation == "lord" || p.occupation == "lady";
 }
 
+bool World::mayWed(Id a, Id b) const {
+    if (gentry(a) == gentry(b)) return true;
+    // Across the line only into a small landholder's house the lord thinks well of: a match talked over with the
+    // steward (gentry_match), never one made at the church door.
+    Id c = gentry(a) ? b : a;
+    const Person& cp = people_[c];
+    if (cp.household == kNone || lord_ == kNone || !people_[lord_].alive()) return false;
+    const Household& h = households_[cp.household];
+    return h.head != kNone && standing(h.id) == 3 && opinion(lord_, h.head) >= 30;
+}
+
+bool World::gentrySingle() const {
+    for (const auto& p : people_)
+        if (p.alive() && p.household != kNone && gentry(p.id) && p.occupation != "lord" && p.occupation != "lady" &&
+            p.occupation != "priest" && (p.spouse == kNone || !people_[p.spouse].alive()) && ageYears(p) >= 16 && ageYears(p) <= 40)
+            return true;
+    return false;
+}
+
 int World::swornFriends(Id id) const {
     std::set<Id> friends;
     for (const auto& m : memories_[id])

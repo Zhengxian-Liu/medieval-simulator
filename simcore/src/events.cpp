@@ -878,6 +878,30 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     }
     if (k == "lord_opinion_ge")
         return w.lord_ != kNone && w.people_[w.lord_].alive() && w.lord_ != p.id && w.opinion(w.lord_, p.id) >= v.asNumber();
+    // The later rungs (design/fun-r5.md D): goals counted from what the house had when the ambition was taken up,
+    // the chantry priced by the house's standing, the lead in land, the posts the blood holds, the lord's family.
+    if (k == "money_gain_ge") return h && h->money >= p.ambitionBase.money + w.ambitionGain(p, "money", v);
+    if (k == "acres_gain_ge") return h && h->acres >= p.ambitionBase.acres + w.ambitionGain(p, "acres", v);
+    if (k == "freehold_gain_ge") return h && h->freehold >= p.ambitionBase.freehold + w.ambitionGain(p, "freehold", v);
+    if (k == "money_ge_chantry") return h && h->money >= w.chantryPrice(h->id) * v.asNumber();
+    if (k == "acres_lead_ge") return h && w.acresLead(h->id) >= v.asNumber();
+    if (k == "lords_debtor") {  // begged the lord to forgive a debt (debt_reckoning): no reeve for ten years
+        auto c = w.cooldowns_.find({p.id, "lords_debtor"});
+        return (c != w.cooldowns_.end() && c->second > w.day_) == v.asBool();
+    }
+    if (k == "manor_owes_ge") return h && w.manorBond_.house == h->id && w.manorBond_.owed >= v.asNumber();
+    if (k == "family_offices_ge") return w.familyOffices(p.dynasty) >= v.asNumber();
+    if (k == "reeve_terms_ge") return w.reeveTerms(p.dynasty) >= v.asNumber();
+    if (k == "gentry_single") return w.gentrySingle() == v.asBool();
+    if (k == "gentry_kin") {  // someone of the blood is married into the lord's family
+        bool any = false;
+        Id lordDyn = w.lord_ != kNone ? w.people_[w.lord_].dynasty : kNone;
+        for (const auto& q : w.people_)
+            if (q.alive() && p.dynasty != kNone && q.dynasty == p.dynasty && q.spouse != kNone && w.people_[q.spouse].alive() &&
+                lordDyn != kNone && w.people_[q.spouse].dynasty == lordDyn && q.dynasty != lordDyn)
+                any = true;
+        return any == v.asBool();
+    }
     if (k == "feud_any_ge") {
         bool any = false;
         if (p.dynasty != kNone)
@@ -1070,7 +1094,7 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
             } else if (k == "marry_target") {
                 if (target == kNone) continue;
                 Person& t = w.people_[target];
-                if (p.sex == t.sex || w.closeKin(p.id, t.id) || w.gentry(p.id) != w.gentry(t.id)) continue;
+                if (p.sex == t.sex || w.closeKin(p.id, t.id) || !w.mayWed(p.id, t.id)) continue;
                 auto married = [&](const Person& x) { return x.spouse != kNone && w.people_[x.spouse].alive(); };
                 if (married(p) || married(t)) continue;
                 Id man = p.sex == Sex::Male ? p.id : t.id;

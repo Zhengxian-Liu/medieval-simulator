@@ -56,36 +56,78 @@ void World::setOffice(const std::string& id, Id holder, const std::string& how) 
 }
 
 std::string World::officeBar(Id who, const std::string& id) const {
-    if (who == kNone) return "家裡沒有當家的";
+    for (const auto& g : officeGates(who, id))
+        if (!g.ok) return g.detail;
+    return "";
+}
+
+// Each condition of the post in turn. What bars a man from every post (the lord's household, the priest, a
+// servant, a woman) is told only when it does, and alone: there is nothing there to work towards.
+std::vector<OfficeGate> World::officeGates(Id who, const std::string& id) const {
+    std::vector<OfficeGate> g;
+    auto add = [&](const std::string& label, bool ok, const std::string& detail) { g.push_back({label, ok, detail}); };
+    auto only = [&](const std::string& label, const std::string& detail) { return std::vector<OfficeGate>{{label, false, detail}}; };
+    if (who == kNone) return only("家裡有當家的", "家裡沒有當家的");
     const Person& p = people_[who];
     Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
-    if (!p.alive() || p.household == kNone) return "人已經不在了";
-    if (p.household == lordHouse || p.occupation == "lord") return "領主家的人不當村裡的差事";
-    if (p.occupation == "priest") return "神父不當村裡的差事";
-    if (p.home != kNone) return shortName(who) + "在別人家幫傭";
-    if (p.sex != Sex::Male) return "村裡的差事只有男人能當，當家的" + shortName(who) + "是女人";
-    int age = static_cast<int>(ageYears(p));
+    if (!p.alive() || p.household == kNone) return only("人在村裡", "人已經不在了");
+    if (p.household == lordHouse || p.occupation == "lord") return only("不是領主家的人", "領主家的人不當村裡的差事");
+    if (p.occupation == "priest") return only("不是神父", "神父不當村裡的差事");
+    if (p.home != kNone) return only("住在自己家", shortName(who) + "在別人家幫傭");
+    if (p.sex != Sex::Male) return only("是男人", "村裡的差事只有男人能當，當家的" + shortName(who) + "是女人");
     const Household& h = households_[p.household];
-    std::string years = "，" + shortName(who) + "現在 " + std::to_string(age) + " 歲";
+    auto ages = [&](const std::string& post, int lo, int hi) {
+        double a = ageYears(p);
+        int y = static_cast<int>(a);
+        std::string range = post + "要 " + std::to_string(lo) + " 到 " + std::to_string(hi) + " 歲";
+        add("年紀 " + std::to_string(lo) + "–" + std::to_string(hi), y >= lo && a <= hi,
+            y < lo   ? shortName(who) + "還要 " + std::to_string(std::max(1, static_cast<int>(std::ceil(lo - a)))) + " 年才滿 " +
+                           std::to_string(lo) + " 歲（" + range + "）"
+            : a > hi ? shortName(who) + "已經 " + std::to_string(y) + " 歲（" + range + "）"
+                     : "現在 " + std::to_string(y) + " 歲");
+    };
     if (id == "reeve") {
-        if (h.head != who) return "莊頭得是一家之主";
-        if (age < 25 || ageYears(p) > 65) return "莊頭要 25 到 65 歲" + years;
-        if (p.occupation != "peasant") return "莊頭得是種地的人，做手藝和買賣的不當";
-        if (h.debt >= 20) return "家裡欠著 20 便士以上的債，沒人放心讓欠債的人收租";
+        add("一家之主", h.head == who, "莊頭得是一家之主");
+        ages("莊頭", 25, 65);
+        add("種地的人", p.occupation == "peasant", "莊頭得是種地的人，做手藝和買賣的不當");
+        add("欠債不到 20 便士", h.debt < 20, "欠債 " + std::to_string(static_cast<long>(std::lround(h.debt))) + "／上限 20（沒人放心讓欠債的人收租）");
         auto bound = cooldowns_.find({who, "lords_debtor"});
-        if (bound != cooldowns_.end() && bound->second > day_) return "欠著領主免債的人情，村裡人不會選領主捏在手裡的人";
-        return "";
+        bool beholden = bound != cooldowns_.end() && bound->second > day_;
+        add("不欠領主免債的人情", !beholden,
+            beholden ? "欠著領主免債的人情，到 " + std::to_string(cfg_.startYear + bound->second / kDaysPerYear) + " 年（村裡人不會選領主捏在手裡的人）" : "");
+        return g;
     }
-    if (p.flags.count("reeve")) return "已經是莊頭了，不能兼";
+    add("不兼莊頭", !p.flags.count("reeve"), "已經是莊頭了，不能兼");
     if (id == "aletaster") {
-        if (age < 25 || ageYears(p) > 65) return "品酒官要 25 到 65 歲" + years;
-        if (h.head != who) return "品酒官得是一家之主";
-        for (Id m : h.members)
-            if (people_[m].occupation == "alewife") return "家裡有人釀酒賣，不能自己嚐自己的酒";
-        return "";
+        ages("品酒官", 25, 65);
+        add("一家之主", h.head == who, "品酒官得是一家之主");
+        bool alewife = false;
+        for (Id m : h.members) alewife = alewife || people_[m].occupation == "alewife";
+        add("家裡沒人釀酒賣", !alewife, "家裡有人釀酒賣，不能自己嚐自己的酒");
+        return g;
     }
-    if (age < 20 || ageYears(p) > 60) return "看籬人要 20 到 60 歲" + years;
-    return "";
+    ages("看籬人", 20, 60);
+    return g;
+}
+
+std::string World::gatesText(const std::vector<OfficeGate>& gates) {
+    std::string out;
+    for (const auto& gt : gates) out += (out.empty() ? "" : "　") + std::string(gt.ok ? "✓ " + gt.label : "✗ " + gt.detail);
+    return out;
+}
+
+int World::familyOffices(Id dynasty) const {
+    int n = 0;
+    for (const auto& o : offices_)
+        n += dynasty != kNone && o.holder != kNone && people_[o.holder].alive() && people_[o.holder].dynasty == dynasty;
+    return n;
+}
+
+int World::reeveTerms(Id dynasty) const {
+    Id r = currentReeve();
+    if (r == kNone || dynasty == kNone || people_[r].dynasty != dynasty) return 0;
+    auto t = reeveTerms_.find(r);
+    return t != reeveTerms_.end() ? std::max(1, t->second) : 1;
 }
 
 void World::officeVacated(Id person) {
@@ -660,7 +702,7 @@ void World::yearlyWants() {
             else if (p.sex == Sex::Male && a >= 9) hands += 0.5;
             if (p.sex == Sex::Male && a >= 6 && m != h.head && p.father == h.head) ++sons;
         }
-        bool landAmbition = hp.ambition == "more_land" || hp.ambition == "big_landholder";
+        bool landAmbition = hp.ambition == "more_land" || hp.ambition == "big_landholder" || hp.ambition == "become_franklin" || hp.ambition == "first_house";
         // Land: sons and too little of it, or a mind to have more.
         double need = hands * 10 - h.acres;
         double hunger = need / 5 + (landAmbition ? 3 : 0) + (hasTrait(hp, "ambitious") ? 1 : 0) + (hasTrait(hp, "greedy") ? 1 : 0);
@@ -697,6 +739,8 @@ void World::yearlyWants() {
                     }
                     if (!heir && ageYears(op) > 55) s += 12, why = "他家沒有兒子接手";
                     if (oh.acres > ohHands * 15 + 5) s += 8, why = why.empty() ? "他家地多人少" : why;
+                    // A house set on being the biggest in the village is the one the land-hungry press (「村裡第一大戶」).
+                    if (landAmbition && op.ambition == "first_house") s += 10, why = why.empty() ? "不能讓他家一家獨大" : why;
                     if (hasTrait(hp, "kind")) s -= 8;
                     if (why.empty()) continue;
                 }
