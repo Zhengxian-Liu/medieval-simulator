@@ -169,6 +169,10 @@ struct Household {
     bool lean = false;     // last harvest fell short of the household's needs
     double lastYield = 0;  // last harvest, in days of the household's food
     double lastRent = 0, lastRentPaid = 0;
+    double lastRentMult = 0; // the times' rent multiplier (war, plague) and the free/villein rate at last Michaelmas,
+    int lastRentFree = -1;   // so a change in the rent can be explained to the family
+    int grainAsked = -1;     // year * 4 + season the family was last asked about buying grain, and what it chose
+    int grainChoice = -1;
     // The head's time this season (design/season-loop.md): spent on people and plans, or else on the work.
     std::map<std::string, double> ledger;  // the player's money, by what it came from or went on (running totals)
     int timeSeason = -1;   // year * 4 + season the budget belongs to
@@ -653,6 +657,7 @@ public:
     std::vector<Id> peopleToSee() const;  // family first, then those the head knows
     void runCommands() { processCommands(); }
     void setMoneyForTest(Id house, double money) { households_[house].money = money; }  // tests only
+    void setFoodForTest(Id house, double days) { households_[house].food = consumption(households_[house]) * days; }  // tests only
     void startSeason() { rollSeason(); }  // on a season's first day, before it runs: free time and the family's wants  // carry out what the player just asked for, before the day runs
     // The season at a glance, and what changed since a snapshot taken at its start.
     std::string familyGlance() const;
@@ -672,6 +677,9 @@ public:
     FamilySnapshot snapshot() const;
     std::string seasonChanges(const FamilySnapshot& before) const;
     std::string moneySince(const FamilySnapshot& before) const;
+    // What the house owes, to whom, and when it falls due ("欠莊園 62（拖了一年）、欠 艾倫·米勒 30（明年米迦勒節）").
+    std::string debtText(Id household) const;
+    double owedAll(Id household) const;  // the main debt and the one waiting behind it
     bool isPlayerFamily(const Person& p) const;
     bool closeKin(Id a, Id b) const;
     bool gentry(Id id) const;  // the lord's family: they do not marry tenants
@@ -937,6 +945,19 @@ private:
     void payRent();
     double consumption(const Household& h) const;
     void ensureFood(Household& h);
+    int daysToHarvest() const;  // days until the next harvest day (month 8, day 0)
+    bool askGrain(Household& h);  // the player's house short of bread: the family says how much to buy; false if no one was asked
+    // The Michaelmas rent: what it is and why (the breakdown the reckoning card shows), with `lessAcres` given back.
+    double rentOf(const Household& h, std::string* why = nullptr, double lessAcres = 0) const;
+    void explainRent(Household& h, double rent);  // the rent changed since last year for a reason not the family's: say why
+    void reckonRent(Household& h, double rent, const std::string& why);   // the player's house cannot pay: the reckoning card
+    void settleRent(Household& h, double rent, bool respite);            // pay what the purse holds, the rest on the books
+    void askOx(Household& h);
+    Id borrowGrain(Household& h, Id asker, double days, Id cause);  // a neighbour's grain against the harvest
+    double grainLoanOwed(const Household& h, double days) const;   // what that grain costs back at Michaelmas
+    static constexpr double kSurrenderCredit = 12;  // pence of arrears an acre given back to the lord takes off
+    std::set<Id> lordCleared_;    // houses whose arrears were paid or forgiven at this Michaelmas: the new shortfall waits a year
+    std::set<Id> stewardOnCard_;  // the player's house: the steward's call about old arrears is taken up on the reckoning card
 
     // social.cpp
     void monthlySocial();

@@ -313,13 +313,97 @@ int main() {
         }
         CHECK(giftTried && seasonTried, "found no ask to press with a gift");
     }
+    // Money is the family's to decide (design/fun-r5.md A): grain is bought to the harvest and no further, on a card
+    // for the player's house; at Michaelmas a rent the purse cannot meet is reckoned on a card before anything goes on
+    // the books; a season's money lists every item.
+    {
+        Config c;
+        c.seed = 58;
+        c.prerun = 25;
+        World base(defs, c);
+        const Id hh = base.playerHousehold();
+        auto foodDays = [&](const World& w) {
+            double per = 0;
+            for (Id m : w.household(hh).members) per += w.ageYears(w.person(m)) < 10 ? 0.6 : 1.0;
+            return w.household(hh).food / std::max(0.5, per);
+        };
+        auto runTo = [&](World& w, int month, int day) {  // to the start of that day, before it runs
+            while (!w.gameOver() && !(w.month() == month && w.dayOfMonth() == day)) w.stepDay();
+        };
+        // No one to ask: a month before the harvest the house buys to the harvest, not three months.
+        {
+            World w = base;
+            runTo(w, 7, 0);
+            w.setMoneyForTest(hh, 300);
+            w.setFoodForTest(hh, 10);
+            w.stepDay();  // month 7, day 0: thirty days to the harvest
+            CHECK(foodDays(w) > 30 && foodDays(w) < 47, "grain was bought past the harvest");
+        }
+        // Asked: the card says how far the barn is from the harvest, and "buy to the harvest" buys just that.
+        {
+            World w = base;
+            std::vector<World::ChoicePrompt> asked;
+            w.setChooser([&](const World::ChoicePrompt& p) {
+                asked.push_back(p);
+                if (p.title != "買糧") return -1;
+                for (size_t i = 0; i < p.options.size(); ++i)
+                    if (p.options[i].rfind("買到收成", 0) == 0) return static_cast<int>(i);
+                return -1;
+            });
+            runTo(w, 6, 0);
+            w.setMoneyForTest(hh, 400);
+            w.setFoodForTest(hh, 20);
+            w.stepDay();  // month 6, day 0: sixty days to the harvest
+            bool card = false;
+            for (const auto& p : asked)
+                if (p.title == "買糧" && p.situation.find("離秋收還有 60 天") != std::string::npos) card = true;
+            CHECK(card, "the family was not asked about buying grain");
+            CHECK(foodDays(w) > 70 && foodDays(w) < 77, "buying to the harvest did not buy to the harvest");
+        }
+        // Michaelmas with an empty purse: the reckoning card comes before any debt, and its levers work.
+        auto michaelmas = [&](const std::string& pick, double& owedAtCard, std::string& sit) {
+            World w = base;
+            owedAtCard = -1;
+            w.setChooser([&](const World::ChoicePrompt& p) {
+                if (p.title != "米迦勒節算帳") return -1;
+                sit = p.situation;
+                owedAtCard = w.household(hh).debt + w.household(hh).heldDebt;
+                for (size_t i = 0; i < p.options.size(); ++i)
+                    if (p.options[i].rfind(pick, 0) == 0) return static_cast<int>(i);
+                return static_cast<int>(p.options.size()) - 1;
+            });
+            runTo(w, 8, 29);
+            w.setMoneyForTest(hh, 3);
+            w.setFoodForTest(hh, 600);
+            w.stepDay();  // rent day
+            w.setChooser({});  // it holds this frame's `w`
+            return w;
+        };
+        double owed = 0;
+        std::string sit;
+        World books = michaelmas("差的先記在", owed, sit);
+        CHECK(owed >= 0 && owed < 1, "the rent shortfall went on the books before the family was asked");
+        CHECK(sit.find("今年的租") != std::string::npos && sit.find("×5") != std::string::npos, "the reckoning card does not say how the rent is made up");
+        CHECK(books.owedAll(hh) > 5 && books.debtText(hh).find("欠莊園") != std::string::npos, "the shortfall the family let go was not on the manor's books");
+        World sold = michaelmas("賣 ", owed, sit);
+        CHECK(sold.owedAll(hh) < 1, "selling grain on the reckoning card did not pay the rent");
+        CHECK(foodDays(sold) < 600 - 5, "the grain sold on the reckoning card is still in the barn");
+        // A season's money, item by item: what came in apart from what went out.
+        World w = base;
+        World::FamilySnapshot before = w.snapshot();
+        w.runYears(1);
+        std::string money = w.moneySince(before);
+        CHECK(money.find("進：") != std::string::npos && money.find("出：") != std::string::npos && money.find("其他") == std::string::npos,
+              "a year's money is not listed as incomings and outgoings");
+        std::printf("money: %s\n", money.c_str());
+    }
     // 年度重心 (data/focus.json): the same children, years spent playing or in the fields, grow up differently;
     // a focus the person cannot take is refused; the choice shows in the command log.
     {
         // Villages (by seed) whose family has young children at home when the player takes over. Several, since a
         // child's three years also hang on chance (a father who dies, a place in service): the sum shows the focus.
         std::vector<std::pair<World, std::vector<Id>>> bases;
-        for (int seed = 4; bases.size() < 4 && seed < 40; ++seed) {
+        for (int seed = 4; bases.size() < 6 && seed < 40; ++seed) {
             Config c;
             c.seed = seed;
             c.prerun = 25;

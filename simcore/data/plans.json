@@ -384,10 +384,10 @@
      "fail_log": "鎮上的師傅都嫌鄉下孩子手笨，不肯收。", "fail": [],
      "ai": {"base": 1, "traits": {"ambitious": 5}}},
 
-    {"id": "lend_out", "name": "放債收利", "requires": "家主，存錢 150 便士以上，村裡有日子緊、還沒欠債的人家",
+    {"id": "lend_out", "name": "放債收利", "requires": "家主，存錢 150 便士以上，村裡有手頭缺錢、還沒欠債的人家",
      "desc": "借 60 便士給手頭緊的人家，說好明年米迦勒節還 75 便士。錢會生錢，可是教會說放債吃利是罪，借錢的人家也未必記你的好。",
      "actor": {"is_head": true, "money_ge": 150, "age": [25, 70], "not": {"occupation": ["lord", "priest", "lady"]}},
-     "target": {"pick": "villager", "conditions": {"is_head": true, "lean": true, "in_debt": false, "not": {"occupation": ["lord", "priest", "lady"]}}},
+     "target": {"pick": "villager", "conditions": {"is_head": true, "money_lt": 40, "in_debt": false, "not": {"occupation": ["lord", "priest", "lady"]}}},
      "max_months": 4, "retry_years": 1, "notify_target": true,
      "target_ask": "{name} 託人帶話：知道你家手頭緊，可以先借你們 60 便士，明年米迦勒節還 75 便士。", "target_answers": ["借", "不借，寧可勒緊褲帶"],
      "progress": {"base": 22, "opinion": 2, "traits": {"greedy": 3}},

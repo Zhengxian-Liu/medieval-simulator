@@ -411,24 +411,32 @@ World::FamilySnapshot World::snapshot() const {
     return s;
 }
 
-// "存錢 120 → 98 便士（交租 -40、賣餘糧 +18）。": the family's money since a snapshot, item by item.
+// "存錢 120 → 98 便士（進：賣餘糧 +18、手藝收入（馬修・織工）+33；出：交租 -40、買糧 -12）。": the family's money since
+// a snapshot, every item of 5 pence or more, what came in apart from what went out; the small change is lumped.
 std::string World::moneySince(const FamilySnapshot& before) const {
     const Household& h = households_[playerHousehold_];
-    std::vector<std::pair<double, std::string>> items;
+    std::vector<std::pair<double, std::string>> in, out;
     double listed = 0;
     for (const auto& [why, total] : h.ledger) {
         auto it = before.ledger.find(why);
         double d = total - (it == before.ledger.end() ? 0 : it->second);
-        if (std::abs(d) >= 1) items.push_back({d, why});
+        if (std::abs(d) < 5) continue;
+        (d > 0 ? in : out).push_back({d, why});
+        listed += d;
     }
-    std::sort(items.begin(), items.end(), [](auto& a, auto& b) { return std::abs(a.first) > std::abs(b.first); });
+    auto bySize = [](auto& a, auto& b) { return std::abs(a.first) > std::abs(b.first); };
+    std::sort(in.begin(), in.end(), bySize);
+    std::sort(out.begin(), out.end(), bySize);
+    auto list = [](const std::vector<std::pair<double, std::string>>& xs) {
+        std::string s;
+        for (const auto& [d, why] : xs) s += (s.empty() ? "" : "、") + why + " " + signedText(d);
+        return s;
+    };
     std::string why;
-    for (size_t i = 0; i < items.size() && i < 4; ++i) {
-        why += (why.empty() ? "" : "、") + items[i].second + " " + signedText(items[i].first);
-        listed += items[i].first;
-    }
+    if (!in.empty()) why += "進：" + list(in);
+    if (!out.empty()) why += (why.empty() ? "" : "；") + std::string("出：") + list(out);
     double rest = (h.money - before.money) - listed;
-    if (std::abs(rest) >= 2) why += (why.empty() ? "" : "、") + std::string("其他 ") + signedText(rest);
+    if (std::abs(rest) >= 2) why += (why.empty() ? "" : "；") + std::string("零碎 ") + signedText(rest);
     return "存錢 " + std::to_string(int(before.money)) + " → " + std::to_string(int(h.money)) + " 便士" + (why.empty() ? "" : "（" + why + "）") + "。";
 }
 

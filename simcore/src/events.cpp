@@ -1470,25 +1470,28 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
             } else if (k == "food_days") {
                 if (h) h->food = std::max(0.0, h->food + w.consumption(*h) * v.asNumber());
             } else if (k == "borrow_grain") {
-                // A neighbour who thinks well of the family lends grain against the next harvest.
+                // A neighbour who thinks well of the family lends grain against the next harvest (economy.cpp).
+                if (h) w.borrowGrain(*h, p.id, v.numberOr("days", 60), cause_);
+            } else if (k == "buy_food_days") {
+                // Grain from the market at its price, as many days of it as the purse covers.
                 if (!h) continue;
-                double owed = 0;
-                Id lender = w.seekLender(*h, v.numberOr("debt", 30), "借糧度荒", owed);
-                if (lender == kNone) {
-                    if (h->id == w.playerHousehold_) w.log(1, "  可是村裡沒有一家肯借，" + p.firstName + " 空著手回家。");
-                    continue;
-                }
-                h->food += w.consumption(*h) * v.numberOr("days", 90);
-                // The grain is the lender's whatever is asked back for it (given outright, it still came out of his store).
-                Household& lh = w.households_[w.people_[lender].household];
-                double cost = std::round(v.numberOr("debt", 30) * 0.6);
-                lh.money -= cost;
-                w.book(lh, owed > 0 ? "借糧給人" : "接濟別人", -cost);
-                if (owed > 0 && (h->debt <= 0.5 || h->creditor == lender)) w.addDebt(*h, owed, lender);
-                if (owed > 0) w.recordDeed("lent_money", lender, p.id, 1, cause_);  // a gift is recorded where it was given
+                double price = w.param("grain_price", 0.5);
+                double b = std::clamp(w.consumption(*h) * v.asNumber(), 0.0, std::max(0.0, h->money) / price);
+                h->food += b;
+                h->money = std::max(0.0, h->money - b * price);
+                w.book(*h, "買糧", -b * price);
+            } else if (k == "surrender_acres") {
+                // A few customary acres back into the lord's hand against the arrears (kSurrenderCredit pence an acre):
+                // a number, or "debt" for as many as clear what is owed the manor, at most a quarter of the customary land.
+                if (!h) continue;
+                double customary = h->acres - h->freehold;
+                double n = v.isNumber() ? v.asNumber() : std::ceil(w.owedLord(*h) / World::kSurrenderCredit);
+                n = std::min(n, std::floor(customary * 0.25));
+                if (n < 1 || customary < 6) continue;
+                double moved = w.moveLand(h->id, kNone, n, LandPick::CustomaryOnly, "交回領主");
+                double off = w.reduceLordDebt(*h, moved * World::kSurrenderCredit);
                 if (h->id == w.playerHousehold_)
-                    w.log(1, "  " + w.fullName(lender) + (owed > 0 ? " 借了一袋燕麥和豆子，說好秋收後還 " + std::to_string(int(owed)) + " 便士。"
-                                                                     : " 送來一袋燕麥和豆子，說不用還。"));
+                    w.log(1, "  把" + w.movedText() + "交還給領主，抵了 " + std::to_string(int(off)) + " 便士的欠租。");
             } else if (k == "service_for_food") {
                 // One mouth fewer: a child goes to serve a better-off house for bed and board.
                 if (!h) continue;
@@ -1915,7 +1918,23 @@ std::string EventRunner::format(const std::string& tmpl, const Person& p, Id tar
                 Id d = target != kNone ? w_.hookDeed(p.id, target) : kNone;
                 val = d != kNone ? w_.describeDeed(d) : "那件事";
             } else if (key == "tax") val = p.household != kNone ? std::to_string(static_cast<long>(w_.taxDue(w_.households_[p.household]))) : "0";
-            else if (key == "debt") val = p.household != kNone ? std::to_string(int(w_.households_[p.household].debt)) : "0";
+            else if (key == "debt") {
+                // What is owed to the one at the door (the steward, the neighbour), else all the house owes.
+                double d = 0;
+                if (p.household != kNone) {
+                    const Household& dh = w_.households_[p.household];
+                    d = w_.owedAll(dh.id);
+                    double t = (dh.debt > 0.5 && dh.creditor == target ? dh.debt : 0.0) + (dh.heldDebt > 0.5 && dh.heldCreditor == target ? dh.heldDebt : 0.0);
+                    if (target != kNone && t > 0.5) d = t;
+                }
+                val = std::to_string(int(d));
+            } else if (key.rfind("grain_loan:", 0) == 0) {
+                // {grain_loan:60}: what N days of the house's bread borrowed now will cost back at Michaelmas.
+                val = p.household != kNone ? std::to_string(static_cast<long>(w_.grainLoanOwed(w_.households_[p.household], std::stod(key.substr(11))))) : "0";
+            } else if (key.rfind("food_cost:", 0) == 0) {
+                // {food_cost:20}: what N days of the house's bread cost at the market today.
+                val = p.household != kNone ? std::to_string(static_cast<long>(std::lround(w_.consumption(w_.households_[p.household]) * std::stod(key.substr(10)) * w_.param("grain_price", 0.5)))) : "0";
+            }
             else if (key == "feud_cause") {
                 const Feud* f = target != kNone ? w_.feudBetween(p.dynasty, w_.people_[target].dynasty) : nullptr;
                 val = f ? w_.describeDeed(f->cause) : "";
