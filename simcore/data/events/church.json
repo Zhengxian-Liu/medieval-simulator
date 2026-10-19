@@ -21,7 +21,7 @@
            "effects": [{"set_flag": "chantry"}, {"prestige": 15}, {"reputation": 5}, {"need": {"spirit": 30}}, {"log": "  教堂南牆邊立起了一座祈唱壇，沒有人來過問。"}],
            "else": [{"stress": 25}, {"reputation": -2}, {"log": "  沒過半年，王家的官員查到了這筆沒有執照的捐獻，連本帶利收走。"}]}}],
         "ai": {"base": 5, "traits": {"greedy": 8, "brave": 4}}},
-       {"text": "再等等", "log": "", "effects": [], "ai": {"base": 3, "traits": {"content": 4}}}
+       {"text": "再等等", "log": "{name} 想了想，祈唱壇的事再等幾年，錢先留在家裡。", "effects": [], "ai": {"base": 3, "traits": {"content": 4}}}
      ]},
     {"id": "pilgrimage", "title": "朝聖", "prompt": "一群朝聖者路過村子，要往坎特伯雷去。這一趟要花上 50 便士和一個多月。", "scope": "player_head", "chance": 0.06, "cooldown_years": 3,
      "conditions": {"money_ge": 70, "age": [22, 60], "no_flag": "pilgrim", "month": [3, 6]},
@@ -30,13 +30,13 @@
         "effects": [{"money": -50}, {"set_flag": "pilgrim"}, {"yield": -0.03}, {"add_item": "pilgrim_badge"}, {"need": {"spirit": 40}}, {"reputation": 3},
                     {"random": {"percent": 10, "effects": [{"health": -25}, {"log": "{name} 在回程路上染了病。"}], "else": []}}],
         "ai": {"base": 3, "traits": {"pious": 15, "cynical": -5}, "if": [{"cond": {"ambition": "pious_life"}, "add": 50}]}},
-       {"text": "今年不去", "log": "", "effects": [], "ai": {"base": 10}}
+       {"text": "今年不去", "log": "{name} 說今年地裡離不開人，朝聖的事往後再說。", "effects": [], "ai": {"base": 10}}
      ]},
     {"id": "tithe", "title": "什一稅", "prompt": "{target} 來收什一稅：今年收成的十分之一歸教會。", "scope": "player_head", "chance": 0.04, "cooldown_years": 4,
      "conditions": {"month": [8, 9]},
      "target": {"pick": "priest", "conditions": {}},
      "options": [
-       {"text": "照付", "log": "", "effects": [{"money": -10}, {"target_opinion": {"value": 5, "mod": "tithe", "years": 4}}], "ai": {"base": 12, "traits": {"pious": 10}}},
+       {"text": "照付", "log": "{name} 照數付了什一稅，{target} 在帳上記了一筆。", "effects": [{"money": -10}, {"target_opinion": {"value": 5, "mod": "tithe", "years": 4}}], "ai": {"base": 12, "traits": {"pious": 10}}},
        {"text": "拖欠", "log": "{name} 跟 {target} 吵什一稅，說教會比領主還貪。", "effects": [{"mutual_opinion": {"value": -15, "mod": "tithe_quarrel", "years": 6}}, {"trait_chance": {"trait": "cynical", "chance": 20}}], "ai": {"base": 4, "traits": {"greedy": 10, "cynical": 12}}}
      ]}
   ]

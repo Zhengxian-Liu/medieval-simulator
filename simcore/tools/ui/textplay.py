@@ -109,7 +109,7 @@ def render(v, full=False):
     d, h = s["date"], s["house"]
     out.append(f"\n=== {d['year']} 年 {d['season']} ｜ {h['surname']}家（{h['standing']}，住 {HOUSE.get(h['home'], h['home'])}）｜ 錢 {h['money']} 便士 ｜ 存糧 {h['food_days']} 天 ｜ "
                f"地 {h['acres']} 畝（自有 {h['freehold']}）｜ 欠債 {h['debt']}" + (f"（{h['debt_text']}）" if h.get("debt_text") else "")
-               + ("｜ 今年缺糧" if h.get("lean") else "")
+               + (f"｜ 到秋收還差 {h.get('short_days')} 天糧" if h.get("lean") else "")
                + (f" ｜ 這一季還有 {s.get('time_left')} 段空閒" if season else ""))
     if season and s.get("regency"):
         r = s["regency"]

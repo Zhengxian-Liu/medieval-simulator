@@ -30,7 +30,7 @@
        {"text": "求領主點名", "log": "選莊頭前，{name} 帶著一隻閹雞去莊園，請 {target} 替{pron}說句話。",
         "effects": [{"set_flag": "campaign_lord"}, {"food": -10}],
         "ai": {"base": 5, "traits": {"ambitious": 6, "craven": 2}, "if": [{"cond": {"flag": "lord_favour"}, "add": 15}, {"cond": {"ambition": "become_reeve"}, "add": 10}]}},
-       {"text": "順其自然", "log": "",
+       {"text": "順其自然", "log": "{name} 沒去拉票，選莊頭的事由各家自己拿主意。",
         "effects": [],
         "ai": {"base": 8, "traits": {"content": 8, "shy": 4, "lazy": 4}}}
      ]},

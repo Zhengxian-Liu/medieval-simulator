@@ -174,6 +174,23 @@ std::string World::lifeLine(Id id) const {
     return out;
 }
 
+std::string World::lifeSummary(Id id) const {
+    const Person& p = people_[id];
+    std::string out = lifeLine(id);
+    // A life with no turns written down (a wife married in before the family was handed over, a stepfather) is still
+    // a life: what they did, whom they married, the children they had.
+    if (out.empty()) {
+        if (std::string occ = occupationName(p); !occ.empty()) out = "做了一輩子" + occ;
+        if (p.spouse != kNone) out += (out.empty() ? "" : "，") + std::string(p.sex == Sex::Male ? "娶了 " : "嫁給 ") + fullName(p.spouse);
+    }
+    int kids = 0;
+    for (Id c : p.children) kids += people_[c].alive() ? 1 : 0;
+    if (!p.children.empty())
+        out += (out.empty() ? "" : "，") + std::string("有過 ") + std::to_string(p.children.size()) + " 個孩子" +
+               (kids == 0 ? "，一個也沒留住" : kids < static_cast<int>(p.children.size()) ? "，活下來 " + std::to_string(kids) + " 個" : "");
+    return out.empty() ? "活了 " + std::to_string(int(ageYears(p))) + " 年" : out;
+}
+
 // A villein who has lived a year and a day in a town is free: checked every month, so it is a year and a day.
 void World::monthlyAway() {
     for (Id id : livingAway()) {

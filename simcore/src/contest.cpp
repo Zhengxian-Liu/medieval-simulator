@@ -99,7 +99,9 @@ std::vector<OfficeGate> World::officeGates(Id who, const std::string& id) const 
         add("一家之主", h.head == who, "莊頭得是一家之主");
         ages("莊頭", 25, 65);
         add("種地的人", p.occupation == "peasant", "莊頭得是種地的人，做手藝和買賣的不當");
-        add("欠債不到 20 便士", h.debt < 20, "欠債 " + std::to_string(static_cast<long>(std::lround(h.debt))) + "／上限 20（沒人放心讓欠債的人收租）");
+        // All the house owes, counted as the header shows it (whole pence): one number on every page.
+        const long owed = static_cast<long>(std::floor(owedAll(h.id) + 1e-9));
+        add("欠債不到 20 便士", owed < 20, "欠債 " + std::to_string(owed) + "／上限 20（沒人放心讓欠債的人收租）");
         auto bound = cooldowns_.find({who, "lords_debtor"});
         bool beholden = bound != cooldowns_.end() && bound->second > day_;
         add("不欠領主免債的人情", !beholden,
@@ -782,7 +784,7 @@ void World::yearlyWants() {
         auto eligibleMan = [&](const Person& p, double lo, double hi) {
             return p.alive() && p.sex == Sex::Male && ageYears(p) >= lo && ageYears(p) <= hi && !p.flags.count("reeve");
         };
-        if (eligibleMan(hp, 25, 65) && hp.occupation == "peasant" && year() + 1 >= nextReeveYear_ && h.debt < 20) {
+        if (eligibleMan(hp, 25, 65) && hp.occupation == "peasant" && year() + 1 >= nextReeveYear_ && std::floor(owedAll(h.id) + 1e-9) < 20) {
             double s = (hp.ambition == "become_reeve" ? 30 : 0) + (hasTrait(hp, "ambitious") && hp.reputation >= 5 ? 15 : 0);
             if (s > 0) cands.push_back({s + rngContest_.range(0, 6), "office", kNone, h.head, "reeve", "想當莊頭，在村裡說得上話"});
         }

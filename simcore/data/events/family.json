@@ -27,7 +27,7 @@
      "target": {"pick": "random_villager", "conditions": {"sex": "female", "age": [16, 26], "married": false, "same_class": true, "match_pending": false, "not_kin": true}},
      "options": [
        {"text": "去提親", "log": "{name} 在五朔節的舞會上看上了 {target}，第二天就上門提親。", "effects": [{"marry_target": true}], "ai": {"base": 10, "traits": {"gregarious": 8, "lustful": 8, "shy": -6}}},
-       {"text": "再等等", "log": "", "effects": [{"opinion": {"value": 10, "mod": "crush", "years": 3}}], "ai": {"base": 10, "traits": {"shy": 10}}}
+       {"text": "再等等", "log": "{name} 把心事藏著，想再等等看。", "effects": [{"opinion": {"value": 10, "mod": "crush", "years": 3}}], "ai": {"base": 10, "traits": {"shy": 10}}}
      ]},
     {"id": "courtship_f", "repeat": "person", "parent_decides": true, "title": "求親的人", "prompt": "{target} 託人來說媒，想娶 {name}。", "scope": "player_family", "chance": 0.03, "cooldown_years": 2,
      "conditions": {"sex": "female", "age": [16, 26], "married": false, "widowed": false, "match_pending": false},
@@ -60,14 +60,14 @@
                                        "夏至夜裡全村點起篝火，{name} 和 {target} 跳到天亮。",
                                        "{name} 病了幾天，{target} 守在床邊沒合過眼。"],
                   "effects": [{"mutual_opinion": {"value": 8, "mod": "tender", "years": 6}}]}]},
-    {"id": "no_heir", "title": "後繼無人", "prompt": "{name} 年紀大了，家裡卻沒有能接手的孩子。地是莊園的，沒人接，就會收回去。", "scope": "player_head", "pulse": "yearly", "chance": 0.25, "cooldown_years": 3,
+    {"id": "no_heir", "title": "後繼無人", "prompt": "{name} 年紀大了，{house} 家卻沒有一個子孫能接手：家裡、村裡都沒有姓 {house} 的兒孫。地是莊園的，沒人接，就會收回去。", "scope": "player_head", "pulse": "yearly", "chance": 0.25, "cooldown_years": 3,
      "conditions": {"age": [48, 90], "heir_at_home": false},
      "options": [
-       {"text": "接遠房姪子來", "log": "{name} 年紀大了，家裡卻沒有能接手的孩子。{pron}託人捎信到鄰村的親戚家。",
+       {"text": "接遠房姪子來", "log": "{name} 年紀大了，{house} 家沒有子孫能接手。{pron}託人捎信到鄰村的親戚家。",
         "effects": [{"adopt_heir": {"min_age": 13, "max_age": 20}}],
         "ai": {"base": 10}},
        {"text": "聽天由命", "conditions": {"gentle": false},
-        "log": "{name} 年紀大了，家裡卻沒有能接手的孩子。{pron}嘆口氣：「地是領主的，誰種都一樣。」",
+        "log": "{name} 年紀大了，{house} 家沒有子孫能接手。{pron}嘆口氣：「地是領主的，誰種都一樣。」",
         "effects": [{"stress": 10}],
         "ai": {"base": 3, "traits": {"content": 6, "cynical": 4}}}
      ]},

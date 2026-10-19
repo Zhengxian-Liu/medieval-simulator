@@ -295,11 +295,16 @@ void World::giveBirth(Person& mother) {
         addNews("birth", c, motherId, people_[motherId].household);
         addConcern(motherId, "joy", c, 55);
         if (father != kNone) addConcern(father, "joy", c, 45);
-        if (isPlayerFamily(child) || isPlayerFamily(people_[motherId])) {
+        // Every birth in the house, a stepmother's or a lodger's too, and the head's grandchildren born elsewhere.
+        if (familyTold(c) || isPlayerFamily(child) || isPlayerFamily(people_[motherId])) {
             std::string traits;
             for (const auto& t : child.traits) traits += "、" + defs_.traits.at(t).name;
-            log(inPlayerHouse(people_[motherId].household) ? 1 : 2, fullName(motherId) + " 生下了" + (s == Sex::Male ? "兒子 " : "女兒 ") + fullName(c) +
-                       (traits.empty() ? "" : "（天生" + traits.substr(3) + "）") + "。");
+            bool home = inPlayerHouse(people_[motherId].household);
+            std::string kin = home ? "" : kinWord(actingHead(), c);
+            log(familyTold(c) ? 1 : 2,
+                (kin.empty() ? fullName(motherId) + " 生下了" + (s == Sex::Male ? "兒子 " : "女兒 ") + fullName(c)
+                             : kin + " " + fullName(c) + " 出生了，母親是 " + fullName(motherId)) +
+                    (traits.empty() ? "" : "（天生" + traits.substr(3) + "）") + "。");
         }
     }
     double risk = 0.02 * std::max(0.2, 1 + traitMod(people_[motherId], "mortality"));
@@ -334,15 +339,20 @@ void World::kill(Id id, const std::string& cause) {
     bool family = isPlayerFamily(p);
     double age = ageYears(p);
     bool away = isAway(p) || (p.deathDay >= 0 && hid == kNone && p.awayFrom != kNone);
-    if (family || (hid != kNone && households_[hid].head == id))
-        log(family && (inPlayerHouse(hid) || (away && inPlayerHouse(p.awayFrom))) ? 1 : 2,
-            age < 1 ? fullName(id) + " 出生沒多久就夭折了。"
-                    : (away ? "從外頭傳來消息：" + fullName(id) + "（" + stationName(p) + "）" : fullName(id)) + " 因" + cause +
-                          "去世，享年 " + std::to_string(int(age)) + " 歲。");
+    // Every death in the house (the one holding it for a child, a stepchild too) and of the head's near kin
+    // elsewhere is the family's news, told with its cause; a grown life is summed up in a line.
+    const bool told = familyTold(id);
+    const bool home = inPlayerHouse(hid) || (away && inPlayerHouse(p.awayFrom));
+    if (family || told || (hid != kNone && households_[hid].head == id)) {
+        std::string kin = !home && told ? kinWord(actingHead(), id) : "";
+        std::string who = (kin.empty() ? "" : kin + " ") + fullName(id);
+        log(told ? 1 : 2, age < 1 ? who + " 出生沒多久就夭折了。"
+                                  : (away ? "從外頭傳來消息：" + who + "（" + stationName(p) + "）" : who) + " 因" + cause +
+                                        "去世，享年 " + std::to_string(int(age)) + " 歲。");
+    }
     if (inPlayerHouse(hid) && hid != kNone && households_[hid].head == id) obituary(id);
     // The road they walked, in one line (design/life-paths.md): what a life came to, forks and all.
-    if (family && age >= 12 && (inPlayerHouse(hid) || (away && inPlayerHouse(p.awayFrom))))
-        if (std::string line = lifeLine(id); !line.empty()) log(1, "  " + p.firstName + "這一生：" + line + "。");
+    if (told && age >= 14) log(1, "  " + p.firstName + "這一生：" + lifeSummary(id) + "。");
 
     // Grief.
     bool male = p.sex == Sex::Male;
@@ -933,6 +943,7 @@ void World::mergeHousehold(Household& from, Household& to, const std::string& ho
     }
     moveLand(from.id, to.id, from.acres, LandPick::CustomaryFirst, how);
     to.money += from.money;
+    book(to, "併進來的錢（" + how + "）", from.money);
     to.food += from.food;
     to.firewood += from.firewood;
     auto rank = [](const std::string& k) { return k == "manor" ? 3 : k == "stone" ? 2 : k == "timber" ? 1 : 0; };
@@ -953,7 +964,6 @@ void World::mergeHousehold(Household& from, Household& to, const std::string& ho
     to.rentFactor = std::max(to.rentFactor, from.rentFactor);
     if (from.leaseUntil > to.leaseUntil) to.leaseAcres = from.leaseAcres, to.leaseUntil = from.leaseUntil;
     if (from.millUntil > to.millUntil) to.millUntil = from.millUntil, to.millFree = from.millFree;
-    for (const auto& [k, v] : from.ledger) to.ledger[k] += v;
     // The village's view of the old house is now of this one: its wants, the fine it owes, its servants away.
     // A parcel either house was after that the joined house now holds is no longer wanted: it is theirs.
     for (auto& wt : wants_)
@@ -1140,6 +1150,7 @@ void World::followSurvivingBranch(bool lineEnded) {
         if (other.extinct || other.dynasty != playerDynasty_ || other.head == kNone) continue;
         if (people_[other.head].dynasty != playerDynasty_) continue;
         playerHousehold_ = other.id;
+        settleBooks("接過分家的家當");
         dynasties_[playerDynasty_].heads.push_back(other.head);
         dynasties_[playerDynasty_].headSince.push_back(day_);
         dynasties_[playerDynasty_].headStart.push_back({other.acres, other.money});
@@ -1218,7 +1229,7 @@ void World::marry(Id man, Id woman) {
         if (op > -5) addConcern(a, "joy", b, std::clamp(30 + op * 0.5, 20.0, 70.0));
     }
     bool family = isPlayerFamily(m) || isPlayerFamily(w) || inPlayerHouse(m.household) || inPlayerHouse(w.household);
-    int imp = inPlayerHouse(m.household) || inPlayerHouse(w.household) ? 1 : 2;
+    int imp = inPlayerHouse(m.household) || inPlayerHouse(w.household) || headsNearKin(man) || headsNearKin(woman) ? 1 : 2;
 
     Id oldHouse = w.household;
     bool wardBride = oldHouse != kNone && households_[oldHouse].ward == woman;
@@ -1359,10 +1370,12 @@ void World::marry(Id man, Id woman) {
         if (home.head != kNone && (heirOf(home, home.head) == man || home.ward == man)) return;  // the heir stays on the family holding
         double land = std::min(vacantAcres(), rngSocial_.chance(0.5) ? 10.0 : 5.0);
         if (land < 2) return;  // nothing to rent: they stay under the family roof
-        Id nh = addHousehold(m.dynasty, 0, home.money * 0.15);
+        double share = home.money * 0.15;
+        Id nh = addHousehold(m.dynasty, 0, share);
         moveLand(kNone, nh, land, LandPick::CustomaryFirst, "分家時向領主租來");
         Household& oldHome = households_[m.household];
-        oldHome.money *= 0.85;
+        oldHome.money -= share;
+        book(oldHome, "給" + m.firstName + "成家的錢", -share);
         Household& fresh = households_[nh];
         for (Id who : {man, woman}) {
             oldHome.members.erase(std::remove(oldHome.members.begin(), oldHome.members.end(), who),
@@ -1467,6 +1480,7 @@ void World::yearlyMarriages() {
                                       "，嫁妝不多，人是勤快的。",
                           {"答應", "再等等"}) == 1) {
                 matchQuietUntil_[mid] = day_ + 2 * kDaysPerYear;
+                log(1, "〔說親〕鄰村託媒人來替" + (mid == actingHead() ? std::string("你") : " " + fullName(mid)) + "說親，家裡回話說再等等。（選擇：再等等）");
                 continue;
             }
             std::string husbandOcc = m.occupation;
@@ -1492,7 +1506,10 @@ void World::yearlyMarriages() {
         !(matchQuietUntil_.count(ph) && matchQuietUntil_[ph] > day_)) {
         int r = askPlayer("入贅", "鄰村有個後生託媒人來說，願意入贅 " + dynasties_[playerDynasty_].surname + " 家，幫著種地。",
                           {"答應", "再等等"});
-        if (r == 1) matchQuietUntil_[ph] = day_ + 2 * kDaysPerYear;
+        if (r == 1) {
+            matchQuietUntil_[ph] = day_ + 2 * kDaysPerYear;
+            log(1, "〔入贅〕鄰村有個後生託媒人來說要入贅，" + fullName(ph) + " 回話說再等等。（選擇：再等等）");
+        }
         if (r != 1) {
             Id dyn = addDynasty(defs_.surnames[rngNames_.range(0, int(defs_.surnames.size()) - 1)]);
             int bdays = day_ - static_cast<int>((ageYears(people_[ph]) + rngSocial_.range(0, 6)) * kDaysPerYear);
@@ -1514,8 +1531,10 @@ void World::yearlyMarriages() {
         if (!rngSocial_.chance(0.3)) continue;
         if (inPlayerHouse(w.home != kNone ? w.home : w.household) && w.id != actingHead() &&
             askPlayer("外村來的媒人", "外村有戶人家託媒人來說，想娶 " + fullName(w.id) + "。嫁過去就很少回來了。",
-                      {"答應", "留她在家"}) == 1)
+                      {"答應", "留她在家"}) == 1) {
+            log(1, "〔外村來的媒人〕外村託媒人來說要娶 " + fullName(w.id) + "，家裡把她留下了。（選擇：留她在家）");
             continue;
+        }
         chargeMerchet(w.id, true);
         // A girl in service marries from her own family's house: the dowry is theirs to give, and she is
         // nobody's servant once she is gone.

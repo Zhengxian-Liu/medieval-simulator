@@ -407,37 +407,106 @@ World::FamilySnapshot World::snapshot() const {
     s.money = h.money;
     s.food = h.food / std::max(1.0, consumption(h));
     s.acres = h.acres;
-    s.ledger = h.ledger;
+    s.ledger = ledger_;
     return s;
 }
 
-// "存錢 120 → 98 便士（進：賣餘糧 +18、手藝收入（馬修・織工）+33；出：交租 -40、買糧 -12）。": the family's money since
-// a snapshot, every item of 5 pence or more, what came in apart from what went out; the small change is lumped.
-std::string World::moneySince(const FamilySnapshot& before) const {
-    const Household& h = households_[playerHousehold_];
-    std::vector<std::pair<double, std::string>> in, out;
-    double listed = 0;
-    for (const auto& [why, total] : h.ledger) {
-        auto it = before.ledger.find(why);
-        double d = total - (it == before.ledger.end() ? 0 : it->second);
-        if (std::abs(d) < 5) continue;
-        (d > 0 ? in : out).push_back({d, why});
-        listed += d;
+void World::openBooks() {
+    ledger_.clear();
+    seasonLedger_.clear();
+    seasonBooks_.clear();
+    unbooked_ = 0;
+    ledgerOpen_ = seasonMoney_ = playerHousehold_ != kNone ? households_[playerHousehold_].money : 0;
+    seasonFrom_ = day_;
+}
+
+double World::settleBooks(const std::string& why) {
+    if (playerHousehold_ == kNone) return 0;
+    double booked = ledgerOpen_;
+    for (const auto& [k, v] : ledger_) booked += v;
+    double gap = households_[playerHousehold_].money - booked;
+    if (std::abs(gap) < 0.005) return 0;
+    ledger_[why] += gap;
+    return gap;
+}
+
+void World::closeSeasonBooks() {
+    if (playerHousehold_ == kNone) return;
+    SeasonBooks b;
+    b.day = seasonFrom_;
+    b.start = seasonMoney_;
+    b.end = households_[playerHousehold_].money;
+    for (const auto& [k, v] : ledger_) {
+        auto it = seasonLedger_.find(k);
+        double d = v - (it == seasonLedger_.end() ? 0 : it->second);
+        if (std::abs(d) >= 0.005) b.items[k] = d;
     }
-    auto bySize = [](auto& a, auto& b) { return std::abs(a.first) > std::abs(b.first); };
+    seasonBooks_.push_back(b);
+    if (seasonBooks_.size() > 16) seasonBooks_.erase(seasonBooks_.begin());
+    seasonMoney_ = b.end;
+    seasonLedger_ = ledger_;
+    seasonFrom_ = day_;
+}
+
+std::string World::booksText(double start, double end, const std::map<std::string, double>& items) {
+    // As the header shows the purse (whole pence, rounded down), and each item rounded so that they add up to it:
+    // the nearest whole penny, then the few pence the rounding lost or gained go to the items it cut most.
+    long from = static_cast<long>(std::floor(start + 1e-9)), to = static_cast<long>(std::floor(end + 1e-9));
+    struct Item { std::string why; double exact; long shown; };
+    std::vector<Item> xs;
+    long sum = 0;
+    for (const auto& [why, d] : items) {
+        xs.push_back({why, d, std::lround(d)});
+        sum += xs.back().shown;
+    }
+    long off = (to - from) - sum;
+    while (off != 0 && !xs.empty()) {
+        int dir = off > 0 ? 1 : -1;
+        // The item whose rounding went furthest the other way takes the penny.
+        size_t pick = 0;
+        double worst = -1e9;
+        for (size_t i = 0; i < xs.size(); ++i) {
+            double cut = (xs[i].exact - xs[i].shown) * dir;
+            if (cut > worst) worst = cut, pick = i;
+        }
+        xs[pick].shown += dir;
+        off -= dir;
+    }
+    std::vector<Item> in, out;
+    for (const auto& x : xs) (x.shown > 0 ? in : out).push_back(x);
+    out.erase(std::remove_if(out.begin(), out.end(), [](const Item& x) { return x.shown == 0; }), out.end());
+    auto bySize = [](const Item& a, const Item& b) { return std::abs(a.exact) > std::abs(b.exact); };
     std::sort(in.begin(), in.end(), bySize);
     std::sort(out.begin(), out.end(), bySize);
-    auto list = [](const std::vector<std::pair<double, std::string>>& xs) {
+    auto list = [](const std::vector<Item>& v) {
         std::string s;
-        for (const auto& [d, why] : xs) s += (s.empty() ? "" : "、") + why + " " + signedText(d);
+        for (const auto& x : v) s += (s.empty() ? "" : "、") + x.why + " " + (x.shown > 0 ? "+" : "") + std::to_string(x.shown);
         return s;
     };
     std::string why;
     if (!in.empty()) why += "進：" + list(in);
     if (!out.empty()) why += (why.empty() ? "" : "；") + std::string("出：") + list(out);
-    double rest = (h.money - before.money) - listed;
-    if (std::abs(rest) >= 2) why += (why.empty() ? "" : "；") + std::string("零碎 ") + signedText(rest);
-    return "存錢 " + std::to_string(int(before.money)) + " → " + std::to_string(int(h.money)) + " 便士" + (why.empty() ? "" : "（" + why + "）") + "。";
+    if (off != 0) why += (why.empty() ? "" : "；") + std::string("零頭 ") + (off > 0 ? "+" : "") + std::to_string(off);
+    if (from == to && why.empty()) return "存錢 " + std::to_string(from) + " 便士，沒有進出。";
+    return "存錢 " + std::to_string(from) + " → " + std::to_string(to) + " 便士" + (why.empty() ? "" : "（" + why + "）") + "。";
+}
+
+std::string World::seasonBooksText(const SeasonBooks& b) const {
+    static const char* kSeason[4] = {"冬末", "春", "夏收", "秋"};
+    return std::to_string(cfg_.startYear + b.day / kDaysPerYear) + " 年" + kSeason[(b.day % kDaysPerYear) / (3 * kDaysPerMonth)] + "：" +
+           booksText(b.start, b.end, b.items);
+}
+
+// "存錢 120 → 98 便士（進：賣餘糧 +18、手藝收入（馬修・織工）+33；出：交租 -40、買糧 -12）。": the family's money since
+// a snapshot, every item, what came in apart from what went out (booksText).
+std::string World::moneySince(const FamilySnapshot& before) const {
+    std::map<std::string, double> items;
+    for (const auto& [why, total] : ledger_) {
+        auto it = before.ledger.find(why);
+        double d = total - (it == before.ledger.end() ? 0 : it->second);
+        if (std::abs(d) >= 0.005) items[why] = d;
+    }
+    return booksText(before.money, households_[playerHousehold_].money, items);
 }
 
 std::string World::seasonChanges(const FamilySnapshot& before) const {
@@ -495,7 +564,13 @@ std::string World::seasonChanges(const FamilySnapshot& before) const {
             opinionLine(id, (kw.empty() ? "" : kw) + fullName(id), was, 15);
         }
     double food = h.food / std::max(1.0, consumption(h));
-    if (std::abs(h.money - before.money) >= 5) o += "  " + moneySince(before) + "\n";
+    // The money, every season, item by item. Over several seasons let pass at once, each season on its own line.
+    std::vector<const SeasonBooks*> past;
+    for (const auto& b : seasonBooks_)
+        if (b.day >= before.day && b.day < day_) past.push_back(&b);
+    o += "  " + moneySince(before) + "\n";
+    if (past.size() > 1)
+        for (const SeasonBooks* b : past) o += "    " + seasonBooksText(*b) + "\n";
     if (food - before.food >= 45 || (food < 60 && before.food >= 60)) o += "  存糧 " + std::to_string(int(before.food)) + " → " + std::to_string(int(food)) + " 天。\n";
     if (std::abs(h.acres - before.acres) >= 0.5) o += "  田地 " + std::to_string(int(before.acres)) + " → " + std::to_string(int(h.acres)) + " 畝。\n";
     // Over a year let pass at once, say so: the totals are for all of it.
@@ -882,9 +957,14 @@ std::vector<World::AgendaItem> World::seasonAgenda() {
                 AgendaItem a;
                 a.id = "help_take:" + std::to_string(t);
                 a.title = "把" + fullName(t) + "接到家裡來住";  // (a 小馬修 of theirs is not the 小馬修 at home)
-                a.desc = who + state + "。" + fullName(t) + "（" + std::to_string(int(ageYears(people_[t]))) + " 歲）搬來你家，吃你家的飯；他家少一張嘴。";
+                // The same grain then feeds one more: say up front what that does to the days of bread at home.
+                double mouths = consumption(ph), mouth = ageYears(people_[t]) < 10 ? 0.6 : 1.0;
+                std::string stores = "家裡的存糧從夠吃 " + std::to_string(int(ph.food / mouths)) + " 天變成夠吃 " +
+                                     std::to_string(int(ph.food / (mouths + mouth))) + " 天";
+                a.desc = who + state + "。" + fullName(t) + "（" + std::to_string(int(ageYears(people_[t]))) + " 歲）搬來你家，吃你家的飯；他家少一張嘴，" +
+                         stores + "（糧還是那些，多一個人吃）。";
                 a.kind = "effects", a.target = t, a.effects = "[{\"take_in\": true}]";
-                a.done = fullName(head) + " 把 " + fullName(t) + " 從" + who + "接到家裡來住，往後吃住都在你家。";
+                a.done = fullName(head) + " 把 " + fullName(t) + " 從" + who + "接到家裡來住，往後吃住都在你家；" + stores + "。";
                 a.rank = 88;
                 items.push_back(a);
             }
@@ -981,7 +1061,7 @@ std::vector<World::AgendaItem> World::seasonAgenda() {
         if ((cd == cooldowns_.end() || cd->second <= day_) && hand != kNone && ph.money >= pay + 30) {
             double bonus = ph.acres >= 24 ? 0.07 : 0.05;
             AgendaItem a;
-            a.id = "hire_hand";
+            a.id = "hire_hand:" + std::to_string(hand);  // the man shown is the man hired: pressed later, it is still him or nothing
             a.title = "雇 " + fullName(hand) + " 幫忙收割（" + pence(pay) + "）";
             a.desc = fullName(hand) + " 家地少，正缺工錢。雇他做到收完麥子，今年收成約多 " +
                      std::to_string(int(bonus * 100 + 0.5)) + "%。";

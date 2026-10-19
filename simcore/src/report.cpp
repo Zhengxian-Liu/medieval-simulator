@@ -15,7 +15,7 @@ namespace {
 const std::map<std::string, std::string>& modNames() {
     static const std::map<std::string, std::string> names{
         {"accused_my_family", "告過我家的人"}, {"agitator", "帶頭鬧事"}, {"begged_pardon", "上門賠過罪"},
-        {"betrayed", "背叛"}, {"bitter_words", "說過難聽的話"}, {"childhood_fight", "小時候打過架"},
+        {"betrayed", "背叛"}, {"found_out", "私情被挑明"}, {"bitter_words", "說過難聽的話"}, {"childhood_fight", "小時候打過架"},
         {"childhood_friend", "從小的玩伴"}, {"christmas_feast", "聖誕節的宴席"}, {"confided", "說過心裡話"},
         {"crush", "動過心"}, {"defiant", "頂撞過"}, {"dutiful", "肯出力"}, {"fat_pig", "送過肥豬"},
         {"firm_reeve", "收租不手軟"}, {"gift", "送過禮"}, {"good_times", "常一起說笑"}, {"good_work", "活做得好"},
@@ -456,7 +456,7 @@ std::string World::personReport(Id id) const {
         if (p.home != kNone && households_[p.household].head != kNone) o << "在 " << fullName(households_[p.household].head) << " 家幫傭。";
         int rung = standing(h.id);
         o << standingName(rung) << "，" << int(h.acres) << " 畝地" << (h.freehold >= 1 ? "（自由地 " + std::to_string(int(h.freehold)) + " 畝）" : "");
-        if (h.lean) o << "，今年缺糧";
+        if (breadShort(h) > 0) o << "，糧不夠吃到秋收";
         if (h.debt > 0.5) o << "，欠著債";
         o << "。\n";
     }

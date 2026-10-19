@@ -45,7 +45,7 @@
        {"text": "向人借錢補上", "conditions": {"fine_lender": true},
         "log": "{name} 硬著頭皮去借錢。", "effects": [{"entry_fine": "borrow"}],
         "ai": {"base": 12, "traits": {"greedy": -4}}},
-       {"text": "交不出來，讓出一部分地", "log": "", "effects": [{"entry_fine": "forfeit"}],
+       {"text": "交不出來，讓出一部分地", "log": "{name} 湊不出入地費，只好讓出一部分地。", "effects": [{"entry_fine": "forfeit"}],
         "ai": {"base": 3, "traits": {"content": 4}}}
      ]},
     {"id": "hard_master", "title": "苛刻的主人", "prompt": "{name} 在 {target} 家幫傭，常常挨打挨餓。期滿還有好幾年。", "scope": "player_family", "chance": 0.06, "cooldown_years": 6,

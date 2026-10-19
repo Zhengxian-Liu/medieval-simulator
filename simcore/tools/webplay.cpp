@@ -208,7 +208,8 @@ public:
                            .text("debt_text", w.debtText(hh))     // to whom, and when it falls due
                            .text("home", h.house)
                            .text("standing", rung >= 0 ? World::standingName(rung) : "領主家")
-                           .b("lean", h.lean)
+                           .b("lean", w.breadShort(h) > 0)    // the barn against the days to the harvest, today
+                           .n("short_days", w.breadShort(h))
                            .done());
         o.n("time_left", w.timeLeft());
         // 這一季的事: the few things worth a free day now, each a button ({"do":"agenda","id":...}).
@@ -561,7 +562,7 @@ public:
                         Id own = tp.home != kNone ? tp.home : tp.household;
                         if (own != kNone) {
                             const Household& th = w.households()[own];
-                            label += "，家裡 " + std::to_string(int(th.acres)) + " 畝" + (th.lean ? "，今年缺糧" : "") + (th.debt > 0.5 ? "，欠著債" : "");
+                            label += "，家裡 " + std::to_string(int(th.acres)) + " 畝" + (w.breadShort(th) > 0 ? "，糧不夠吃到秋收" : "") + (th.debt > 0.5 ? "，欠著債" : "");
                         }
                         if (tp.home != kNone && tp.household != kNone && w.households()[tp.household].dynasty != kNone)
                             label += "，在" + w.dynasties()[w.households()[tp.household].dynasty].surname + "家幫傭";
@@ -595,8 +596,10 @@ public:
         if (sum.rfind("這一季", 0) == 0) sum = "上一季" + sum.substr(std::string("這一季").size());
         else if (sum.rfind("這 ", 0) == 0) sum = "過去 " + sum.substr(std::string("這 ").size());
         else if (!sum.empty()) sum = "【上一季】\n" + sum;
-        if (withActions && w.playerHead() != kNone && seasonStart.head != kNone &&
-            std::abs(w.households()[w.playerHousehold()].money - seasonStart.money) >= 1)
+        // Shown whenever the purse has moved since the season began, on a question as on the season's page: every
+        // penny the header shows has its line.
+        if (w.playerHead() != kNone && seasonStart.head != kNone &&
+            std::floor(w.households()[w.playerHousehold()].money) != std::floor(seasonStart.money))
             sum += "【這一季到現在】" + w.moneySince(seasonStart) + "\n";
         o.text("summary", sum);
         return o.done();
@@ -704,6 +707,8 @@ int main(int argc, char** argv) {
             regencyFor = kNone;
             skipUntil = 0;
         }
+        // A season passed over (a year let pass): what a question on the way shows of the money starts from it.
+        if (d > 0 && w.dayOfMonth() == 0 && w.month() % 3 == 0 && w.today() < skipUntil) web.seasonStart = w.snapshot();
         if (d > 0 && w.dayOfMonth() == 0 && w.month() % 3 == 0 && w.today() >= skipUntil) {
             if (routine) {
                 w.issue({w.today(), "rule", w.actingHead(), "routine:0", kNone, kNone});

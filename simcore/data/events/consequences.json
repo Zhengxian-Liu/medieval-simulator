@@ -42,7 +42,7 @@
        {"text": "趕緊另說一門親", "log": "被 {target} 家拒婚的事傳開了，{name} 為了爭一口氣，趕緊託人另說親事。",
         "effects": [{"need": {"social": -10}}, {"rematch": true}],
         "ai": {"base": 8, "traits": {"ambitious": 6}}},
-       {"text": "算了", "log": "", "effects": [], "ai": {"base": 8, "traits": {"calm": 8, "forgiving": 10}}}
+       {"text": "算了", "log": "{name} 嘆了口氣，說強扭的瓜不甜，這門親事就算了。", "effects": [], "ai": {"base": 8, "traits": {"calm": 8, "forgiving": 10}}}
      ]},
 
     {"id": "widow_pressed", "title": "寡婦再嫁", "prompt": "丈夫才走了幾個月，田沒人種。{target} 託人上門提親；不嫁的話，就得繳錢給領主才能守寡。", "chance": 0.7, "cooldown_years": 3,

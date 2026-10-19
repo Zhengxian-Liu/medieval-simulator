@@ -4,7 +4,7 @@
   // "as": "head" it comes to the head of the holder's house, the holder as {target}.
   "events": [
     {"id": "mourn_child", "title": "喪子", "scope": "player_family", "chance": 1, "cooldown_years": 2, "cooldown_scope": "household",
-     "quiet_log": "家裡又埋了一個孩子。{name}把{target_first}的小鞋子收進箱底，沒有再多說什麼。",
+     "quiet_log": "家裡又埋了一個孩子。{name}把{target_first}的{target_keepsake}收進箱底，沒有再多說什麼。",
      "on": {"signal": "bereaved:child", "after_months": [0, 0]},
      "conditions": {"age": [16, 120]},
      "prompt": "{target}走了。{name}坐在{target_first}睡過的草墊旁，一整天沒說話。",

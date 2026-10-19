@@ -5,34 +5,34 @@
      "options": [
        {"text": "向領主租下 5 畝（120 便士）", "log": "{name} 花 120 便士向領主租下了 5 畝地。", "effects": [{"money": -120}, {"acres": 5}],
         "ai": {"base": 8, "traits": {"ambitious": 10, "content": -6}, "if": [{"cond": {"ambition": "more_land"}, "add": 40}, {"cond": {"ambition": "big_landholder"}, "add": 40}]}},
-       {"text": "不了，地夠種了", "log": "", "effects": [], "ai": {"base": 10, "traits": {"content": 8, "lazy": 6}}}
+       {"text": "不了，地夠種了", "log": "{name} 說家裡的地夠種了，沒有再租。", "effects": [], "ai": {"base": 10, "traits": {"content": 8, "lazy": 6}}}
      ]},
     {"id": "empty_holdings", "title": "空出來的地", "prompt": "這些年村裡死了不少人，空出許多田地，領主只要 30 便士就肯把 10 畝地租出去。家裡的人手夠不夠種，是另一回事。", "scope": "anyone", "chance": 0.15, "cooldown_years": 2,
      "conditions": {"is_head": true, "world_flag": "post_plague", "vacant_acres_ge": 10, "plague_active": false, "acres_lt": 50},
      "options": [
        {"text": "接下 10 畝（30 便士）", "log": "村裡空出許多田地，領主只收 30 便士就把 10 畝地租給 {name}。", "effects": [{"money": -30}, {"acres": 10}],
         "ai": {"base": 12, "traits": {"ambitious": 10, "diligent": 6, "lazy": -6}, "if": [{"cond": {"money_lt": 30}, "add": -30}]}},
-       {"text": "人手不夠，算了", "log": "", "effects": [], "ai": {"base": 6, "traits": {"content": 6}}}
+       {"text": "人手不夠，算了", "log": "{name} 說家裡人手不夠，空出來的地沒去接。", "effects": [], "ai": {"base": 6, "traits": {"content": 6}}}
      ]},
     {"id": "build_timber_house", "repeat": "free", "title": "蓋木屋", "prompt": "泥牆茅屋又漏雨了。木匠說，250 便士能蓋一棟有橡木框架和閣樓的木屋。", "scope": "player_head", "chance": 0.15, "cooldown_years": 6, "cooldown_scope": "household",
      "conditions": {"age": [14, 120], "money_ge": 320, "house": "cottage"},
      "options": [
        {"text": "請木匠來蓋（250 便士）", "log": "{name} 請木匠把漏雨的泥牆茅屋拆了，蓋起有橡木框架的木屋，屋頂還多了一間閣樓。", "effects": [{"money": -250}, {"house": "timber"}, {"prestige": 3}, {"reputation": 2}],
         "ai": {"base": 10, "traits": {"ambitious": 6, "greedy": -4, "diligent": 3}, "if": [{"cond": {"ambition": "stone_house"}, "add": 30}]}},
-       {"text": "錢先留著", "log": "", "effects": [], "ai": {"base": 10, "traits": {"greedy": 8, "content": 4}}}
+       {"text": "錢先留著", "log": "{name} 說錢先留著，木屋往後再蓋。", "effects": [], "ai": {"base": 10, "traits": {"greedy": 8, "content": 4}}}
      ]},
     {"id": "build_stone_house", "repeat": "free", "title": "蓋石屋", "prompt": "石匠說，1300 便士能把木屋改成石屋。全村還沒幾家住得起。", "scope": "player_head", "chance": 0.1, "cooldown_years": 1,
      "conditions": {"age": [14, 120], "money_ge": 1600, "house": "timber", "acres_ge": 18},
      "options": [
        {"text": "請石匠來蓋（1300 便士）", "log": "{name} 請來石匠，把木屋改建成石屋，全村都來看熱鬧。", "effects": [{"money": -1300}, {"house": "stone"}, {"prestige": 8}, {"reputation": 4}],
         "ai": {"base": 8, "traits": {"ambitious": 8, "greedy": -4}, "if": [{"cond": {"ambition": "stone_house"}, "add": 50}]}},
-       {"text": "錢先留著", "log": "", "effects": [], "ai": {"base": 10, "traits": {"greedy": 8}}}
+       {"text": "錢先留著", "log": "{name} 說錢先留著，石屋往後再蓋。", "effects": [], "ai": {"base": 10, "traits": {"greedy": 8}}}
      ]},
     {"id": "start_brewing", "title": "釀麥酒", "prompt": "鄰居都說 {name} 釀的麥酒好喝，勸{pron}掛個招牌賣酒。賣酒要向莊園交執照錢，酒不好也會被罰。", "scope": "player_family", "chance": 0.02, "once": true,
      "conditions": {"sex": "female", "age": [20, 45], "occupation": "housewife", "married": true},
      "options": [
        {"text": "掛起麥稈招牌賣酒", "log": "鄰居都說 {name} 釀的麥酒好喝，{pron}在門口掛起麥稈招牌開始賣酒。", "effects": [{"set_occupation": "alewife"}], "ai": {"base": 10, "traits": {"gregarious": 8, "diligent": 5}}},
-       {"text": "只給自家喝", "log": "", "effects": [{"need": {"social": 10}}], "ai": {"base": 8, "traits": {"shy": 8}}}
+       {"text": "只給自家喝", "log": "{name} 釀的麥酒只給自家喝，不拿出去賣。", "effects": [{"need": {"social": 10}}], "ai": {"base": 8, "traits": {"shy": 8}}}
      ]},
     {"id": "ale_fine", "title": "麥酒罰款", "scope": "anyone", "chance": 0.008, "cooldown_years": 2,
      "conditions": {"occupation": "alewife"},
@@ -100,8 +100,8 @@
        {"text": "全家能幹活的去大戶家當一年長工（管吃，有工錢）", "conditions": {"hire_master": true},
         "log": "{name} 帶著家裡能幹活的人，去大戶家當長工。", "effects": [{"hire_on": {"months": 12}}, {"stress": 6}, {"reputation": -1}],
         "ai": {"base": 8, "traits": {"diligent": 4, "ambitious": -4}}},
-       {"text": "送一個孩子去別家幫傭", "conditions": {"service_child": true},
-        "log": "家裡養不起這麼多張嘴，{name} 把一個孩子送去別家幫傭。", "effects": [{"service_for_food": {"years": 3}}, {"stress": 8}],
+       {"text": "送 {service_child} 去 {service_master} 家幫傭（管吃管住，三年）", "conditions": {"service_child": true},
+        "log": "家裡養不起這麼多張嘴，{name} 把 {service_child} 送去別家幫傭。", "effects": [{"service_for_food": {"years": 3}}, {"stress": 8}],
         "ai": {"base": 5, "traits": {"cruel": 4, "kind": -4}}},
        {"text": "靠打短工再撐一陣", "log": "{name} 決定還是靠打短工過日子，有活就幹。", "effects": [],
         "ai": {"base": 4, "traits": {"content": 4, "lazy": 4}}}
@@ -118,8 +118,8 @@
        {"text": "去大戶家當一年長工（管吃）", "conditions": {"hire_master": true, "hired": false, "acres_lt": 10},
         "log": "{name} 帶著家裡能幹活的人去大戶家當長工，好歹有口飯吃。", "effects": [{"hire_on": {"months": 12}}, {"stress": 6}, {"reputation": -1}],
         "ai": {"base": 7, "traits": {"diligent": 4, "ambitious": -4}}},
-       {"text": "送一個孩子去別家幫傭", "conditions": {"service_child": true},
-        "log": "家裡養不起這麼多張嘴，{name} 把一個孩子送去別家幫傭。", "effects": [{"service_for_food": {"years": 3}}, {"stress": 8}],
+       {"text": "送 {service_child} 去 {service_master} 家幫傭（管吃管住，三年）", "conditions": {"service_child": true},
+        "log": "家裡養不起這麼多張嘴，{name} 把 {service_child} 送去別家幫傭。", "effects": [{"service_for_food": {"years": 3}}, {"stress": 8}],
         "ai": {"base": 6, "traits": {"cruel": 4, "kind": -4}}},
        {"text": "夜裡去領主的林子下套子",
         "log": "{name} 趁著夜色，去領主的林子裡下兔子套。",
@@ -151,8 +151,8 @@
        {"text": "去大戶家當一年長工（管吃）", "conditions": {"hire_master": true, "hired": false, "acres_lt": 10},
         "log": "{name} 帶著家裡能幹活的人去大戶家當長工，好歹有口飯吃。", "effects": [{"hire_on": {"months": 12}}, {"stress": 6}, {"reputation": -1}],
         "ai": {"base": 7, "traits": {"diligent": 4, "ambitious": -4}}},
-       {"text": "送一個孩子去別家幫傭", "conditions": {"service_child": true},
-        "log": "再不送走一個就要餓死一個，{name} 咬著牙把一個孩子送去別家幫傭。", "effects": [{"service_for_food": {"years": 3}}, {"stress": 8}],
+       {"text": "送 {service_child} 去 {service_master} 家幫傭（管吃管住，三年）", "conditions": {"service_child": true},
+        "log": "再不送走一個就要餓死一個，{name} 咬著牙把 {service_child} 送去別家幫傭。", "effects": [{"service_for_food": {"years": 3}}, {"stress": 8}],
         "ai": {"base": 6, "traits": {"cruel": 4, "kind": -4}}},
        {"text": "夜裡去領主的林子下套子",
         "log": "餓到這份上也顧不得了，{name} 半夜摸進領主的林子下套。",
