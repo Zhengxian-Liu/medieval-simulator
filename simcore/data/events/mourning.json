@@ -135,7 +135,7 @@
 
     {"id": "longing_at_home", "title": "孩子的心上人", "scope": "player_head", "chance": 0.7,
      "on": {"signal": "concern:longing", "as": "head", "after_months": [1, 4]},
-     "conditions": {"target": {"child_of_target": true, "married": false, "age": [15, 40]}},
+     "conditions": {"target": {"child_of_target": true, "married": false, "age": [15, 40], "has_plan": false}},
      "prompt": "{target_first}吞吞吐吐地跟{name}說：心裡有了人，是{target_about:longing}。",
      "options": [
       {"text": "答應替{target_pron}去提親",

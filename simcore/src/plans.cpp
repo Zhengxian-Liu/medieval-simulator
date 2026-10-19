@@ -517,6 +517,12 @@ void World::monthlyPlans() {
             endPlan(i, "married_off");
             continue;
         }
+        // The pair married each other another way (her family came asking): the suit has nothing left to do.
+        auto wedEachOther = [&](Id x, Id other) { return x != kNone && other != kNone && people_[x].spouse == other; };
+        if ((plan.plan == "arrange_match" && wedEachOther(plan.subject, plan.target)) || (plan.plan == "court" && wedEachOther(plan.actor, plan.target))) {
+            plans_.erase(plans_.begin() + static_cast<long>(i));
+            continue;
+        }
         if (plan.subject != kNone && (!people_[plan.subject].alive() || people_[plan.subject].household == kNone)) {
             endPlan(i, "lost_target");
             continue;

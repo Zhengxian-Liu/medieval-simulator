@@ -41,7 +41,7 @@
     {"id": "son_to_church", "final": "家裡有人在修道院當書記", "hint": "先「送孩子讀書」，識了字、滿 14 歲再辦「謀神職」；送的是家裡的男孩（繼承人得留下來管地）",
      "keep": {"any": [{"house_boy": {"married": false, "age": [0, 25]}}, {"kin_in_church": true}]}, "lost": "家裡已經沒有能送進教會的男孩了（繼承人得留下來管地）",
      "name": "送一個兒子進教會", "desc": "讓一個兒子識字，進修道院當書記。家裡少一雙手，但多一個在修士和領主面前說得上話的人。",
-     "offer": {"house_boy": {"age": [0, 14], "married": false}, "kin_in_church": false, "not": {"occupation": ["lord", "priest", "lady"]}},
+     "offer": {"house_boy": {"age": [0, 14], "married": false}, "kin_in_church": false, "village_priest": true, "not": {"occupation": ["lord", "priest", "lady"]}},
      "goal": {"kin_in_church": true}, "tradition": "lettered", "max_years": 20,
      "milestones": [
        {"name": "有個男孩跟神父讀書", "goal": {"house_boy": {"any": [{"flag": "schooled"}, {"trait": "literate"}]}}},
@@ -138,7 +138,7 @@
      "ai": {"base": 8, "traits": {"ambitious": 15, "gregarious": 10, "shy": -8}}},
     {"id": "educate_child", "final": "有個孩子學會識字", "hint": "辦「送孩子讀書」", "keep": {"living_children_ge": 1}, "lost": "孩子都不在了",
      "name": "讓孩子識字", "desc": "讓一個孩子跟神父讀書、學會識字。",
-     "offer": {"has_children": true, "living_children_ge": 1, "no_trait": "literate"},
+     "offer": {"has_children": true, "living_children_ge": 1, "no_trait": "literate", "village_priest": true},
      "goal": {"any_descendant": {"trait": "literate"}}, "tradition": "lettered",
      "milestones": [{"name": "有個孩子跟神父讀書", "goal": {"any_descendant": {"flag": "schooled"}}}],
      "plans": ["school_child"],

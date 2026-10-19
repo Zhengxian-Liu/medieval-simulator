@@ -916,6 +916,11 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
         // Someone else in the village keeps a craft shop a child could run errands in (an apprentice has his master's).
         return (p.station == "apprentice" || w.villageCraft(p.household)) == v.asBool();
     }
+    if (k == "village_priest") {
+        // A priest lives in the village to teach a child his letters (the first step of the Church roads).
+        bool has = w.priest_ != kNone && w.people_[w.priest_].alive() && w.people_[w.priest_].household != kNone;
+        return has == v.asBool();
+    }
     if (k == "plague_active") return (w.param("plague_monthly", 0) > 0) == v.asBool();
     if (k == "household_size_ge") return h && h->members.size() >= v.asNumber();
     if (k == "remembers") return remembers(v, p, target);
@@ -1632,7 +1637,19 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 for (const auto& o : w.availablePlans(p.id))
                     if (o.plan == plan && o.target == tgt && (subj == kNone || o.subject == subj)) ok = true;
                 if (ok) w.startPlan(p.id, plan, tgt, subj);
-                else if (w.isPlayerFamily(p)) w.log(1, "  可是眼下這件事辦不成。");
+                else if (w.isPlayerFamily(p)) {
+                    // Say what stands in the way: the plan's first unmet condition, or that the pair it was for is
+                    // not one it can be started for now (another match already under way, one of them not free).
+                    const PlanDef* pd = w.defs_.plan(plan);
+                    std::string why = pd ? w.planBlock(p.id, *pd) : "";
+                    if (why.empty()) {
+                        bool busy = false;
+                        for (const auto& ap : w.plans_)
+                            if (ap.plan == plan && (ap.actor == p.id || (subj != kNone && ap.subject == subj))) busy = true;
+                        why = busy ? "家裡已經在辦一樁「" + (pd ? pd->name : plan) + "」了" : "對方眼下不合適（已經許了人家、年紀或身分不合）";
+                    }
+                    w.log(1, "  可是眼下這件事辦不成：" + why + "。");
+                }
             } else if (k == "lease_mill") {
                 // {"lease_mill": {"years": 5, "fine": 120}}: the mill's farm for so many years, the fine to the manor.
                 if (!h) continue;

@@ -980,6 +980,9 @@ void World::askToFeed(Household& h) {
     if (hire) opts.push_back("雇他家能幹活的人來當長工（管吃，每月每人 4 便士，做一年）"), what.push_back(4);
     if (parcel != kNone) opts.push_back("把" + parcelName(parcels_[parcel]) + "分給他家種（再送一個月的糧" + std::string(parcels_[parcel].free ? "；這是自由地" : "") + "）"), what.push_back(5);
     if (lodger != kNone) opts.push_back("把" + shortName(lodger) + "（" + std::to_string(int(ageYears(people_[lodger]))) + " 歲）接到家裡來住"), what.push_back(6);
+    // Fed twice and nothing lasting to offer: the family has done what handouts can do; the card stops coming
+    // (their want is in the holding, and the season's list still offers to take a child in when there is room).
+    if (opts.empty() && feedHelped_[h.id] >= 2) return;
     if (opts.empty()) {
         if (spare >= daily * 90) opts.push_back("從自家糧倉送去夠吃三個月的糧"), what.push_back(0);
         if (ph.money >= coin + 20) opts.push_back("送 " + std::to_string(int(coin)) + " 便士讓他們買糧"), what.push_back(1);
@@ -988,7 +991,7 @@ void World::askToFeed(Household& h) {
     if (opts.empty()) return;
     opts.push_back(again ? "這回先不管" : "自家也不寬裕，先不管");
     what.push_back(3);
-    feedAskedUntil_[h.id] = day_ + kDaysPerYear / 4;
+    feedAskedUntil_[h.id] = day_ + (again ? kDaysPerYear : kDaysPerYear / 2);  // the same house not every season
     feedAskedUntil_[kAnyHouse] = day_ + kDaysPerMonth;
     int children = 0;
     for (Id m : h.members)
