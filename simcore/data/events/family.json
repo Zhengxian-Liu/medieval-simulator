@@ -116,7 +116,7 @@
        {"text": "把藏了一輩子的事告訴 {target}", "conditions": {"has_secret": "target"}, "log": "{name} 拉著 {target} 的手，把這輩子沒對人說過的事一件一件說了出來：",
         "effects": [{"confess_secrets": "target"}, {"stress": -30}, {"target": [{"stress": 10}]}],
         "ai": {"base": 4, "traits": {"pious": 3, "gregarious": 2, "shy": -2}}},
-       {"text": "請神父年年為自己做彌撒（40 便士）", "log": "{name} 把 40 便士交給神父，請他往後每年忌日為自己做一臺彌撒。",
+       {"text": "請神父年年為自己做彌撒（40 便士）", "conditions": {"money_ge": 40}, "log": "{name} 把 40 便士交給神父，請他往後每年忌日為自己做一臺彌撒。",
         "effects": [{"money": -40}, {"prestige": 4}, {"stress": -20}, {"need": {"spirit": 30}}],
         "ai": {"base": 6, "traits": {"pious": 8, "greedy": -4}}},
        {"text": "叮囑 {target} 守住這份地，別跟人結仇", "log": "{name} 對 {target} 說：「地是命根子，仇是包袱。別讓這個家散了。」",
@@ -132,14 +132,14 @@
      "scope": "player_head", "chance": 1, "once": true,
      "on": {"signal": "manual"},
      "options": [
-       {"text": "請神父年年為自己做彌撒（40 便士）", "log": "{name} 把 40 便士交給神父，請他往後每年忌日為自己做一臺彌撒。小小的 {target} 在床邊看著。",
+       {"text": "請神父年年為自己做彌撒（40 便士）", "conditions": {"money_ge": 40}, "log": "{name} 把 40 便士交給神父，請他往後每年忌日為自己做一臺彌撒。小小的 {target} 在床邊看著。",
         "effects": [{"money": -40}, {"prestige": 4}, {"stress": -20}, {"need": {"spirit": 30}}],
         "ai": {"base": 6, "traits": {"pious": 8, "greedy": -4}}},
        {"text": "摸著 {target} 的頭，叮囑{target_pron}長大了守住這份地，別跟人結仇", "log": "{name} 摸著 {target} 的頭說：「地是命根子，仇是包袱。長大了，別讓這個家散了。」",
-        "effects": [{"target": [{"set_flag": "father_counsel"}]}, {"stress": -10}],
+        "effects": [{"target": [{"set_flag": "father_counsel"}, {"set_flag": "deathbed_child"}]}, {"stress": -10}],
         "ai": {"base": 6, "traits": {"calm": 4, "forgiving": 4, "vengeful": -4}}},
        {"text": "拉著 {target} 的手，叮囑{target_pron}記住誰欠了這個家", "log": "{name} 拉著 {target} 的小手說：「那幾家做過什麼，你長大了要記著。」",
-        "effects": [{"target": [{"set_flag": "father_grudges"}]}, {"stress": -10}],
+        "effects": [{"target": [{"set_flag": "father_grudges"}, {"set_flag": "deathbed_child"}]}, {"stress": -10}],
         "ai": {"base": 3, "traits": {"vengeful": 8, "wrathful": 4, "forgiving": -6}}}
      ]}
   ]

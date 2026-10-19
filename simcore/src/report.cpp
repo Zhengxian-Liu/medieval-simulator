@@ -199,7 +199,7 @@ std::string World::familyReport() const {
     o << "家主 " << fullName(head) << "，" << int(ageYears(hp)) << " 歲" << (traits.empty() ? "" : "，" + traits) << "。";
     if (hp.stress >= 40) o << "心裡壓著" << (hp.stressCause.empty() ? "很多事" : hp.stressCause) << "。";
     o << "\n家裡 " << h.members.size() << " 口人，" << int(h.acres) << " 畝地，存錢 " << int(h.money) << " 便士，糧食還夠吃 "
-      << int(h.food / std::max(1.0, consumption(h))) << " 天。";
+      << int(h.food / std::max(0.5, consumption(h))) << " 天。";
     if (h.debt > 0.5)
         o << "欠" << (h.creditor == lord_ || h.creditor == kNone ? std::string("莊園 ") : " " + fullName(h.creditor) + " ")
           << int(h.debt) << " 便士" << (h.debtYears > 0 ? "（拖了 " + std::to_string(h.debtYears) + " 年）" : h.debtYears < 0 ? "（明年秋收後到期）" : "（今年秋收後到期）") << "。";

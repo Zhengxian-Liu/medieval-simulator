@@ -502,7 +502,7 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
         } else if (what == "rent_vacant") {
             double pay = price + (lever == "meet" ? demandMoney : 0);
             ph.money -= pay;
-            if (lordHouse != kNone) households_[lordHouse].money += pay;
+            if (lordHouse != kNone) households_[lordHouse].money += pay, book(households_[lordHouse], "收入地費", pay);
             book(ph, "入地費", -pay);
             res.text += parcelName(parcels_[object]) + "租給了你家。";
             moveParcel(object, playerHousehold_, "向領主租來");

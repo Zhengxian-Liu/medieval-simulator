@@ -51,7 +51,7 @@ bool EventRunner::eligible(const EventDef& ev, const Person& p, Id playerHead) c
     if (ev.scope == "player_head" && p.id != playerHead) return false;
     if (ev.once && p.flags.count("ev_" + ev.id)) return false;
     if (!ev.budget.empty()) {
-        auto it = w_.budgetUsed_.find({p.household, ev.budget, w_.year()});
+        auto it = w_.budgetUsed_.find({p.household, ev.budget, w_.budgetYear(ev.budget)});
         if (it != w_.budgetUsed_.end() && it->second >= 2) return false;
     }
     if (auto key = storyKey(ev, p); key.first != kNone && w_.metLately(key.first, key.second)) return false;
@@ -194,13 +194,22 @@ void EventRunner::natureStress(const EventDef& ev, const OptionDef& chosen, Pers
     }
 }
 
+// The line for a choice the data writes none for: who chose it. A child's road (or a small child's moment) is the call
+// of the one keeping the house, and is said as theirs, for the child.
+std::string EventRunner::choseLine(const Person& p, Id target, const std::string& option) {
+    Id acting = w_.actingHead();
+    if (acting != kNone && acting != p.id)
+        return w_.fullName(acting) + " 替 " + format("{name}", p, target) + " 選了：" + option + "。";
+    return format("{name}", p, target) + "選了：" + option + "。";
+}
+
 void EventRunner::fire(const EventDef& ev, Person& p, Id target) {
     bookAs_ = ev.title;
     const OptionDef& o = ev.options[chooseOption(ev, p, target)];
     natureStress(ev, o, p, target);
     if (ev.once) p.flags.insert("ev_" + ev.id);
     if (auto key = storyKey(ev, p); key.first != kNone) w_.meetStory(key.first, key.second);
-    if (!ev.budget.empty()) ++w_.budgetUsed_[{p.household, ev.budget, w_.year()}];
+    if (!ev.budget.empty()) ++w_.budgetUsed_[{p.household, ev.budget, w_.budgetYear(ev.budget)}];
     if (ev.cooldownMonths > 0) w_.cooldowns_[{p.id, ev.id}] = w_.day_ + ev.cooldownMonths * kDaysPerMonth;
     if (ev.cooldownYears > 0) {
         w_.cooldowns_[{p.id, ev.id}] = w_.day_ + ev.cooldownYears * kDaysPerYear;
@@ -216,7 +225,7 @@ void EventRunner::fire(const EventDef& ev, Person& p, Id target) {
     std::string line = o.log.empty() ? "" : format(pickLog(o, p.id), p, target);
     // Never silent: what the player chose is on the record, even where the data writes no line for it.
     const bool bare = line.empty() && asked_ && ev.options.size() > 1;
-    if (bare) line = format("{name}", p, target) + "選了：" + optionText(o, p, target) + "。";
+    if (bare) line = choseLine(p, target, optionText(o, p, target));
     if (!line.empty()) {
         if (family) {
             std::string choice = ev.options.size() > 1 && asked_ && !bare ? "（選擇：" + optionText(o, p, target) + "）" : "";
@@ -238,7 +247,7 @@ void EventRunner::runEvent(const EventDef& ev, Person& p, Id target, int importa
     natureStress(ev, o, p, target);
     std::string line = o.log.empty() ? "" : format(pickLog(o, p.id), p, target);
     const bool bare = line.empty() && asked_ && ev.options.size() > 1 && importance > 0;
-    if (bare) line = format("{name}", p, target) + "選了：" + optionText(o, p, target) + "。";
+    if (bare) line = choseLine(p, target, optionText(o, p, target));
     if (!line.empty() && importance > 0) {
         bool chose = ev.options.size() > 1 && asked_ && !bare;  // only what the player was asked is the player's choice
         w_.log(importance, "  " + line + (chose ? "（選擇：" + optionText(o, p, target) + "）" : ""));
@@ -784,6 +793,11 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
         if (h && p.dynasty != kNone)
             for (const auto& q : w.people_) {
                 if (!q.alive() || q.id == p.id || q.dynasty != p.dynasty || (q.household == kNone && !w.isAway(q))) continue;
+                // Not one who can never come back for the land (heirOf, onHeadDied): a priest, a monk or a nun, or one
+                // settled away for good who is not this head's own child.
+                const StationDef* qs = w.defs_.station(q.station);
+                if (q.occupation == "priest" || q.station == "priest_away" || q.station == "monastery" || q.station == "nunnery") continue;
+                if (w.isAway(q) && qs && qs->lasting && q.father != p.id && q.mother != p.id) continue;
                 bool blood = (q.father != kNone && w.people_[q.father].dynasty == p.dynasty) ||
                              (q.mother != kNone && w.people_[q.mother].dynasty == p.dynasty);
                 if (blood && q.spouse != p.id) any = true;
@@ -1200,7 +1214,7 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 h->members.erase(std::remove(h->members.begin(), h->members.end(), p.id), h->members.end());
                 p.household = kNone;
                 p.flags.insert(v.asString());
-                if (h->head == p.id) w.onHeadDied(*h, p.id);
+                if (h->head == p.id) w.afterSuccession(*h, p.id, w.onHeadDied(*h, p.id));
                 return;
             } else if (k == "marry_target") {
                 if (target == kNone) continue;
@@ -1490,13 +1504,14 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
             } else if (k == "pay_off_debt") {
                 // Pay the whole debt out of what the house has, to whoever it is owed.
                 if (!h || h->debt <= 0.5 || h->money + 0.5 < h->debt) continue;
-                double d = h->debt, paid = std::min(d, h->money);
+                double paid = std::min(h->debt, h->money);
                 h->money -= paid;
                 w.book(*h, "還債", -paid);
                 Id cred = h->creditor != kNone ? h->creditor : w.lord_;
                 if (cred != kNone && w.people_[cred].household != kNone) {
-                    w.households_[w.people_[cred].household].money += d;
-                    w.book(w.households_[w.people_[cred].household], "收回借款", d);
+                    // The creditor gets what was paid (half a penny short is let go, not made up from nowhere).
+                    w.households_[w.people_[cred].household].money += paid;
+                    w.book(w.households_[w.people_[cred].household], "收回借款", paid);
                 }
                 w.clearDebt(*h);
             } else if (k == "pay_debt") {

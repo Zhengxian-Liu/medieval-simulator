@@ -1,4 +1,5 @@
 // Headless tests for SimCore: determinism and state invariants over long runs.
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -180,6 +181,11 @@ struct WorldTest {
         return false;
     }
     static int toHarvest(World& w) { return w.daysToHarvest(); }
+    static void yearlyFeuds(World& w) { w.yearlyFeuds(); }
+    static void yearlyFeudTurns(World& w) { w.yearlyFeudTurns(); }
+    static void takeOverScene(World& w, Id newHead, Id from) { w.takeOverScene(w.households_[w.playerHousehold_], newHead, from, false); }
+    static std::vector<ThreadEnd>& threadEnds(World& w) { return w.threadEnds_; }
+    static std::vector<Memory>& memories(World& w, Id id) { return w.memories_[id]; }
 };
 }  // namespace sim
 
@@ -540,6 +546,7 @@ int main() {
         for (const auto& a : items)
             if (a.id == "spare:day") day = &a;
         CHECK(day != nullptr, "a poor season's list has no day's work to do");
+        World sickBase = w;  // before the day's work is done (it is not offered twice in a season)
         if (day) {
             Id payer = w.person(day->target).household;
             double theirs = w.household(payer).money, ours = w.household(hh).money;
@@ -550,10 +557,25 @@ int main() {
             CHECK(got >= 4 && std::abs(theirs - w.household(payer).money - got) < 0.01, "the day's work was not paid, or not by the house it was done for");
             CHECK(w.timeLeft() == left - 1, "the day's work did not take a free day");
             CHECK(w.chronicle().back().text.find("拿到") != std::string::npos, "the day's work and its pay were not told");
+            bool again = false;
+            for (const auto& a : w.seasonAgenda()) again = again || a.id == "spare:day";
+            CHECK(!again, "the day's work was offered a second time in the same season");
         }
+        // A day's work is only at a house really short of hands (or the manor); a house all of whose hands are
+        // already hired out by the month is not paid twice for the same days.
+        for (const auto& a : sickBase.seasonAgenda())
+            if (a.id == "spare:day" && a.target != sickBase.lordId()) {
+                const Household& o = sickBase.household(sickBase.person(a.target).household);
+                double hands = 0;
+                for (Id m : o.members)
+                    if (sickBase.ageYears(sickBase.person(m)) >= 14 && sickBase.person(m).health >= 40) hands += sickBase.person(m).sex == Sex::Male ? 1.0 : 0.5;
+                CHECK(o.acres / 12 - hands >= 0.5, "a house with hands enough was said to be short of them");
+            }
+        CHECK(sickBase.spareHands(sickBase.household(hh)) < sickBase.farmHands(sickBase.household(hh)) || day == nullptr,
+              "day work offered to a house whose every hand is already hired out by the month");
         // A head too sick to work: the fittest grown member of the house goes instead.
         {
-            World sick = w;
+            World sick = sickBase;
             const Id head = sick.actingHead();
             sick.setHealthForTest(head, 20);
             sick.setMoneyForTest(hh, 5);
@@ -579,6 +601,55 @@ int main() {
         bool still = false;
         for (const auto& a : w.seasonAgenda()) still = still || a.id.rfind("spare:", 0) == 0;
         CHECK(!still, "a house with coin and bread to spare is offered day labour");
+    }
+    // r6 review (money/food): a house with coin never sits on an empty barn. The grain card is asked on the first of
+    // the month: whatever is answered, the barn lasts to the next first while the purse can buy bread (seed 58, 1330s:
+    // 22 days empty holding 405 pence).
+    for (const char* pick : {"先買一個月的", "勒緊褲帶"}) {
+        Config c;
+        c.seed = 58;
+        c.prerun = 25;
+        World w(defs, c);
+        const Id hh = w.playerHousehold();
+        w.setMoneyForTest(hh, 500);
+        w.setFoodForTest(hh, 50);
+        std::string want = pick;
+        w.setChooser([&](const World::ChoicePrompt& p) {
+            if (p.title != "買糧") return -1;
+            for (size_t k = 0; k < p.options.size(); ++k)
+                if (p.options[k].find(want) != std::string::npos) return static_cast<int>(k);
+            return -1;
+        });
+        int empty = 0;
+        const double price = w.param("grain_price", 0.5);
+        for (int d = 0; d < 14 * kDaysPerMonth && !w.gameOver(); ++d) {
+            w.stepDay();
+            const Household& h = w.household(w.playerHousehold());
+            if (h.food <= 0.01 && h.money >= w.dailyBread(h.id) * 30 * price) ++empty;
+        }
+        w.setChooser(nullptr);
+        if (empty) std::printf("  (%s) %d days with an empty barn and coin for a month's bread\n", pick, empty);
+        CHECK(empty == 0, "the family sat on an empty barn with money in the purse");
+    }
+    // r6 review: the manor's own money is booked, so playing the manor house leaves nothing 「沒記上帳的」.
+    {
+        Config c;
+        c.seed = 58;
+        c.origin = "noble";
+        World w(defs, c);
+        w.runYears(2);
+        if (w.unbookedMoney() >= 1) std::printf("  noble: %.1f pence unbooked\n", w.unbookedMoney());
+        CHECK(w.unbookedMoney() < 1, "money the manor house took in was not booked");
+    }
+    // r6 review: a mouth taken in is counted as the barn counts it.
+    {
+        Config c;
+        c.seed = 58;
+        World w(defs, c);
+        const Household& h = w.household(w.playerHousehold());
+        double sum = 0;
+        for (Id m : h.members) sum += w.portion(w.person(m));
+        CHECK(std::abs(sum - w.dailyBread(h.id)) < 1e-9, "a person's portion is not what the barn counts");
     }
     // fun-r6 C: wakes and weddings follow a standing family rule. The player's first answer sets it and later
     // invitations follow it without a card; the AI standing in sets none; a year let run goes by custom.
@@ -630,7 +701,8 @@ int main() {
             std::vector<Id> ks;
             for (Id m : v.household(v.playerHousehold()).members) {
                 double age = v.ageYears(v.person(m));
-                if (age >= 5 && age < 10) ks.push_back(m);
+                // (not another house's child in service here: their year is their own family's to set)
+                if (age >= 5 && age < 10 && v.person(m).home == kNone) ks.push_back(m);
             }
             if (!ks.empty()) bases.emplace_back(std::move(v), ks);
         }
@@ -1198,10 +1270,268 @@ int main() {
             CHECK(toHeir, "the deathbed words were not said to the heir");
             CHECK(said(w, before, "【接下的】"), "the hand-over did not say what the new head takes on");
             CHECK(said(w, before, "記得的"), "the hand-over did not say what the new head remembers of the old");
+            // The scene comes after the lord's dues, so what it says is what is left; and the estate is said once.
+            size_t scene = 0, dues = 0;
+            for (size_t i = before; i < w.chronicle().size(); ++i) {
+                const std::string& t = w.chronicle()[i].text;
+                if (t.find("【接下的】") != std::string::npos) scene = i;
+                if (t.find("【接下的】") == std::string::npos && (t.find("死後稅") != std::string::npos || t.find("入地費") != std::string::npos))
+                    dues = std::max(dues, i);
+            }
+            CHECK(dues == 0 || scene > dues, "the hand-over scene was told before the death duties");
+            CHECK(!said(w, before, "【分家產】"), "the estate is told twice (【分家產】 and 【接下的】)");
             checkInvariants(w, "deathbed");
             break;
         }
         CHECK(tried, "no seed had a grown heir to test the deathbed with");
+    }
+    // ---- r6 review fixes (events, feuds, generations) ----
+    {
+        Config c;
+        c.seed = 64;
+        World base(defs, c);
+        base.runYears(2);
+        Id lordDyn = base.person(base.lordId()).dynasty;
+        std::vector<Id> foes;  // heads of two other families
+        for (const auto& h : base.households()) {
+            if (h.extinct || h.head == kNone || h.id == base.playerHousehold() || h.dynasty == base.playerDynasty() || h.dynasty == lordDyn) continue;
+            if (base.person(h.head).occupation == "priest") continue;
+            bool dup = false;
+            for (Id f : foes) dup = dup || base.person(f).dynasty == h.dynasty;
+            if (!dup) foes.push_back(h.head);
+        }
+        CHECK(foes.size() >= 2, "no two other houses to quarrel with");
+        auto feudWith = [](World& w, Id foe) {
+            auto& fs = WorldTest::feuds(w);
+            Id a = w.playerDynasty(), b = w.person(foe).dynasty;
+            for (size_t i = 0; i < fs.size(); ++i)
+                if ((fs[i].a == a && fs[i].b == b) || (fs[i].a == b && fs[i].b == a)) return i;
+            return fs.size();
+        };
+        if (foes.size() >= 2) {
+            const Id foe = foes[0];
+            // 1. Who headed the family is set when the quarrel is told, not by a wrong nobody was told of; a quarrel the
+            // head began is not asked about as 「上一代的帳」.
+            {
+                World w = base;
+                Id head = w.playerHead();
+                w.recordDeed("public_insult", foe, head);
+                size_t fi = feudWith(w, foe);
+                CHECK(fi < WorldTest::feuds(w).size() && !WorldTest::feuds(w)[fi].told && WorldTest::feuds(w)[fi].ourFace == kNone,
+                      "an untold coolness already names who headed the family");
+                // An old head's name left on a coolness that faded and came back: reset with its cause.
+                if (fi < WorldTest::feuds(w).size()) {
+                    auto& f = WorldTest::feuds(w)[fi];
+                    f.heat = 0, f.stage = 0, f.ourFace = foe;
+                }
+                w.recordDeed("public_insult", foe, head);
+                w.recordDeed("public_insult", foe, head);
+                auto& f = WorldTest::feuds(w)[fi];
+                CHECK(f.told && f.ourFace == w.actingHead(), "the quarrel told under this head does not name this head");
+                std::string asked;
+                w.setChooser([&](const World::ChoicePrompt& p) { asked += p.title + "|"; return -1; });
+                f.nextTurn = 0;
+                WorldTest::feudTurn(w, fi);
+                w.setChooser(nullptr);
+                CHECK(asked.find("上一代的帳") == std::string::npos, "a quarrel the head began was asked about as the last generation's");
+            }
+            // 2. The priest's truce stands: no 「過去了」 in the same breath, and the quarrel stays the family's (休兵).
+            // 3. A quarrel that faded is over: a wrong after it starts a new one with its own cause.
+            {
+                World w = base;
+                Id head = w.playerHead();
+                w.recordDeed("public_insult", foe, head);
+                w.recordDeed("public_insult", foe, head);
+                size_t fi = feudWith(w, foe);
+                CHECK(fi < WorldTest::feuds(w).size() && WorldTest::feuds(w)[fi].told, "two insults were not told as a quarrel");
+                WorldTest::feuds(w)[fi].heat = 25;  // cooled by the truce to below a coolness: no fading said with it
+                size_t before = w.chronicle().size();
+                w.recordDeed("mediated", head, foe);
+                CHECK(!said(w, before, "過去了") && !said(w, before, "淡了"), "a priest's truce was told as the quarrel fading");
+                CHECK(WorldTest::feuds(w)[fi].told, "a priest's truce dropped the quarrel from the family's threads");
+                bool truce = false;
+                for (const auto& t : w.threads()) truce = truce || (t.kind == "feud" && t.text.find("暫時休兵") != std::string::npos);
+                CHECK(truce, "the truce is not shown on the quarrel's thread");
+                CHECK(WorldTest::feuds(w)[fi].stage == 0, "the test truce did not cool the quarrel to nothing");
+                // Two quiet years on (no wrong since the handshake), it is over, said as after the priest.
+                WorldTest::yearlyFeuds(w);
+                CHECK(WorldTest::feuds(w)[fi].told, "a truce was told as over the next year");
+                WorldTest::feuds(w)[fi].truceUntil -= 2 * kDaysPerYear;
+                WorldTest::feuds(w)[fi].last = kNone;
+                WorldTest::yearlyFeuds(w);
+                CHECK(said(w, before, "神父調解之後") && !WorldTest::feuds(w)[fi].told, "a truce that held was never told as the end");
+                CHECK(WorldTest::feuds(w)[fi].heat == 0, "a faded quarrel kept its heat");
+                Id d = w.recordDeed("public_insult", foe, head);
+                CHECK(WorldTest::feuds(w)[fi].cause == d, "a wrong after a quarrel faded brought back the old cause");
+                // The fade by years (no truce) zeroes it too.
+                w.recordDeed("public_insult", foe, head);
+                auto& f = WorldTest::feuds(w)[fi];
+                CHECK(f.told, "the second quarrel was not told");
+                f.truceUntil = -1;
+                f.heat = 13, f.stage = 1;
+                before = w.chronicle().size();
+                WorldTest::yearlyFeuds(w);
+                CHECK(said(w, before, "慢慢也就過去了") && f.heat == 0 && !f.told, "a quarrel that faded by years kept its heat");
+            }
+            // 6. A hot quarrel with nothing to ask does not keep a cooler one from its turn.
+            {
+                World w = base;
+                Id head = w.playerHead();
+                for (Id x : {foes[0], foes[1]}) w.recordDeed("public_insult", x, head), w.recordDeed("public_insult", x, head);
+                size_t hot = feudWith(w, foes[0]), cool = feudWith(w, foes[1]);
+                auto& fs = WorldTest::feuds(w);
+                CHECK(hot < fs.size() && cool < fs.size() && fs[hot].told && fs[cool].told, "two quarrels were not told");
+                if (hot < fs.size() && cool < fs.size()) {
+                    fs[hot].heat = 80, fs[hot].last = kNone, fs[hot].ourFace = w.actingHead(), fs[hot].nextTurn = 0;
+                    fs[cool].heat = 25, fs[cool].ourFace = foes[1], fs[cool].nextTurn = 0;  // as if begun under another head
+                    std::string asked;
+                    w.setChooser([&](const World::ChoicePrompt& p) { asked += p.title + "|"; return -1; });
+                    WorldTest::yearlyFeudTurns(w);
+                    w.setChooser(nullptr);
+                    CHECK(asked.find("上一代的帳") != std::string::npos, "a hot quarrel with nothing new kept a cooler one from its turn");
+                }
+            }
+            // 11. The one it was with died years ago: no wake offered, a visit to the grave.
+            {
+                World w = base;
+                Id head = w.playerHead();
+                w.recordDeed("public_insult", foe, head);
+                w.recordDeed("public_insult", foe, head);
+                size_t fi = feudWith(w, foe);
+                Id other = kNone;  // someone else of that family to speak for it
+                for (const auto& h : w.households())
+                    if (!h.extinct && h.head != kNone && h.head != foe && h.dynasty == w.person(foe).dynasty) other = h.head;
+                for (Id m : w.household(w.person(foe).household).members)
+                    if (other == kNone && m != foe && w.ageYears(w.person(m)) >= 16) other = m;
+                if (fi < WorldTest::feuds(w).size() && other != kNone) {
+                    WorldTest::kill(w, foe, "熱病");
+                    WorldTest::person(w, foe).deathDay -= 2 * kDaysPerYear;
+                    WorldTest::feuds(w)[fi].face = foe;
+                    std::string opts;
+                    w.setChooser([&](const World::ChoicePrompt& p) {
+                        if (p.title == "人死帳了？")
+                            for (const auto& o : p.options) opts += o + "|";
+                        return -1;
+                    });
+                    WorldTest::feudTurn(w, fi);
+                    w.setChooser(nullptr);
+                    CHECK(!opts.empty() && opts.find("守靈") == std::string::npos && opts.find("墳前") != std::string::npos,
+                          "a death years ago still offered a wake");
+                }
+            }
+        }
+        // 4. 家用排場: nobody answering a re-ask keeps the house's way (no silent change), and five quiet years with
+        // nothing changed do not bring the same card again.
+        {
+            World w = base;
+            w.runYears(5);  // (days to count six years back from)
+            Id hid = w.playerHousehold();
+            WorldTest::house(w, hid).money = 400;
+            WorldTest::house(w, hid).styleAsked = -1;
+            w.setChooser([](const World::ChoicePrompt& p) { return p.title == "家用排場" ? 1 : -1; });
+            WorldTest::houseStyle(w, hid);
+            CHECK(w.household(hid).frugal, "the house did not take up saving");
+            int asks = 0;
+            w.setChooser([&](const World::ChoicePrompt& p) { asks += p.title == "家用排場"; return -1; });
+            auto& h = WorldTest::house(w, hid);
+            h.styleAsked -= 6 * kDaysPerYear;
+            WorldTest::houseStyle(w, hid);
+            CHECK(asks == 0, "the house was asked again with nothing changed");
+            h.styleLapsed = true;
+            size_t before = w.chronicle().size();
+            WorldTest::houseStyle(w, hid);
+            CHECK(asks == 1, "the house was not asked again after its purse ran low and filled");
+            CHECK(w.household(hid).frugal && !said(w, before, "〔家用排場〕"), "nobody answering changed the house's way of living");
+            w.setChooser(nullptr);
+        }
+        // 8, 9. The words quoted at the hand-over are the ones said (to a child, 「長大了」); the ends kept are the
+        // quarrels and ambitions first.
+        {
+            World w = base;
+            Id head = w.playerHead();
+            Id heir = WorldTest::heirOf(w, w.playerHousehold());
+            if (heir != kNone) {
+                WorldTest::person(w, heir).flags.insert("father_grudges");
+                WorldTest::person(w, heir).flags.insert("deathbed_child");
+                auto& ends = WorldTest::threadEnds(w);
+                for (int k = 0; k < 5; ++k) ends.push_back({w.today(), head, "path", "路" + std::to_string(k)});
+                ends.insert(ends.begin(), {w.today() - 100, head, "feud", "和某家的恩怨：淡了"});
+                size_t before = w.chronicle().size();
+                WorldTest::takeOverScene(w, heir, head);
+                CHECK(said(w, before, "你長大了要記著") && !said(w, before, "你給我記著"), "the deathbed words to a child were misquoted");
+                CHECK(said(w, before, "和某家的恩怨：淡了"), "a quarrel's end was dropped from the generation's account for older roads");
+                CHECK(said(w, before, "路4") && !said(w, before, "路0"), "the generation's account kept the oldest roads, not the latest");
+            }
+        }
+        // 10. One who can never come back for the land (a monk) does not count as an heir.
+        {
+            World w = base;
+            Id head = w.playerHead();
+            EventRunner ev(w);
+            Json q = Json::parse(R"({"heir_at_home": true})");
+            Id son = kNone;
+            for (Id k : w.person(head).children)
+                if (w.person(k).alive() && w.person(k).household == w.playerHousehold() && w.person(k).sex == Sex::Male) son = k;
+            if (son != kNone) {
+                std::vector<Id> others;
+                for (const auto& p : w.people())
+                    if (p.alive() && p.id != head && p.id != son && p.dynasty == w.person(head).dynasty && p.id != w.person(head).spouse)
+                        others.push_back(p.id);
+                for (Id x : others) WorldTest::kill(w, x, "意外（test）");
+                CHECK(ev.eval(q, w.person(head), kNone), "the son at home is not counted as an heir");
+                WorldTest::setStation(w, son, "monastery", 0, "進了修道院");
+                CHECK(!ev.eval(q, w.person(head), kNone), "a monk was counted as an heir at home");
+            }
+        }
+        // 11. A road with no term set does not promise a term's end.
+        {
+            World w = base;
+            Id hid = w.playerHousehold();
+            Id kid = kNone;
+            for (Id m : w.household(hid).members)
+                if (m != w.playerHead() && w.ageYears(w.person(m)) >= 10 && w.person(m).station.empty()) kid = m;
+            if (kid != kNone) {
+                WorldTest::setStation(w, kid, "labourer", 0, "給人做雇工");
+                WorldTest::person(w, kid).serviceEnd = -1;
+                WorldTest::person(w, kid).stationUntil = -1;
+                for (const auto& t : w.threads())
+                    if (t.kind == "path" && t.text.find(w.person(kid).firstName) != std::string::npos)
+                        CHECK(t.ends.find("期滿") == std::string::npos && t.text.find("期滿") == std::string::npos, "a road with no term promises one");
+            }
+        }
+        // 12. An heir who remembers the deed already does not take it up a second time from the dead.
+        {
+            World w = base;
+            Id head = w.playerHead();
+            Id heir = WorldTest::heirOf(w, w.playerHousehold());
+            Id d = w.recordDeed("public_insult", foes[0], head);
+            if (heir != kNone && heir != head) {
+                Memory m;
+                for (const auto& x : w.memoriesOf(head))
+                    if (x.deed == d) m = x;
+                if (m.deed == d) {
+                    auto count = [&] {
+                        int n = 0;
+                        for (const auto& x : w.memoriesOf(heir)) n += x.deed == d;
+                        return n;
+                    };
+                    if (count() == 0) m.about = foes[0], WorldTest::memories(w, heir).push_back(m);  // (one of the family wronged: they have it already)
+                    const int had = count();
+                    WorldTest::kill(w, head, "熱病");
+                    CHECK(count() == had, "the heir took up a second memory of a deed they remember themselves");
+                }
+            }
+        }
+        // Extra: a head hanged is not given a bedside scene.
+        {
+            World w = base;
+            size_t before = w.chronicle().size();
+            int asked = 0;
+            w.setChooser([&](const World::ChoicePrompt& p) { asked += p.title == "床前"; return -1; });
+            WorldTest::kill(w, w.playerHead(), "起義失敗後被絞死");
+            w.setChooser(nullptr);
+            CHECK(asked == 0 && !said(w, before, "病得起不了床") && !said(w, before, "〔床前〕"), "a hanged head got the sickbed scene");
+        }
     }
     // One out in service who will have the house (seed 72, 1347: the words went to a neighbour while the heir was at a
     // master's): the servant is sent for before the last words, and those words and the house go to the same person.
@@ -1540,6 +1870,9 @@ int main() {
         {
             World w = base;
             bool started = false;
+            // (the head of seed 58 has his two sworn friends already: a third is refused, with that reason)
+            auto& mine = WorldTest::memories(w, head);
+            mine.erase(std::remove_if(mine.begin(), mine.end(), [](const Memory& m) { return m.label == "sworn_friend"; }), mine.end());
             for (const auto& p : w.people()) {
                 if (!p.alive() || p.household == kNone || p.household == hh || w.ageYears(p) < 18) continue;
                 if (WorldTest::startPlan(w, head, "befriend", p.id).empty()) {

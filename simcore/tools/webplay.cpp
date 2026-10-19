@@ -231,12 +231,11 @@ public:
         if (head == kNone || hh == kNone) return o.done();
         const Household& h = w.households()[hh];
         const Person& hp = w.people()[head];
-        double perDay = w.dailyBread(hh);  // as the economy counts it
         int rung = w.standing(hh);
         o.raw("house", Obj()
                            .text("surname", w.dynasties()[w.playerDynasty()].surname)
                            .n("money", std::floor(h.money))
-                           .n("food_days", std::floor(h.food / std::max(1.0, perDay)))
+                           .n("food_days", std::floor(w.foodDays(h)))
                            .n("acres", h.acres)
                            .n("freehold", h.freehold)
                            .n("debt", std::floor(w.owedAll(hh)))  // all the house owes, as the cards count it

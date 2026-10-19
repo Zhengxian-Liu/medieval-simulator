@@ -406,7 +406,7 @@ World::FamilySnapshot World::snapshot() const {
             for (const auto& [lab, v] : opinionBreakdown(p.id, s.head)) s.why[p.id][lab] += v;
         }
     s.money = h.money;
-    s.food = h.food / std::max(1.0, consumption(h));
+    s.food = h.food / std::max(0.5, consumption(h));
     s.acres = h.acres;
     s.ledger = ledger_;
     return s;
@@ -564,7 +564,7 @@ std::string World::seasonChanges(const FamilySnapshot& before) const {
             std::string kw = kinWord(head, id);
             opinionLine(id, (kw.empty() ? "" : kw) + fullName(id), was, 15);
         }
-    double food = h.food / std::max(1.0, consumption(h));
+    double food = h.food / std::max(0.5, consumption(h));
     // The money, every season, item by item. Over several seasons let pass at once, each season on its own line.
     std::vector<const SeasonBooks*> past;
     for (const auto& b : seasonBooks_)
@@ -782,8 +782,9 @@ std::vector<World::AgendaItem> World::spareWorkItems() {
         return cd == cooldowns_.end() || cd->second <= day_;
     };
     const std::string me = fullName(head);
-    // A day's work for whoever is shortest of hands for their land and can pay (the manor last).
-    if (hand != kNone) {
+    // A day's work for whoever is short of hands for their land and can pay (the manor last). Not while every hand of
+    // the house is already out hiring by the month (打短工): those days are paid once. Once a season.
+    if (hand != kNone && ready("day") && spareHands(ph) < farmHands(ph) - 1e-9) {
         const double pay = std::round((season == 2 ? 9 : 6) * wage);
         Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
         Id best = kNone;
@@ -795,7 +796,7 @@ std::vector<World::AgendaItem> World::spareWorkItems() {
             for (Id m : o.members)
                 if (ageYears(people_[m]) >= 14 && people_[m].health >= 40) hands += people_[m].sex == Sex::Male ? 1.0 : 0.5;
             double need = o.acres / 12 - hands;
-            if (need > bestNeed) bestNeed = need, best = o.id;
+            if (need >= 0.5 && need > bestNeed) bestNeed = need, best = o.id;  // really short of hands, or not asked
         }
         if (best == kNone && lordHouse != kNone && households_[lordHouse].money >= pay + 10) best = lordHouse;
         if (best != kNone) {
@@ -881,7 +882,11 @@ void World::spareWork(Household& h, Id worker, const Json& what, Id target) {
         book(o, "雇人打零工", -pay);
         h.money += pay;
         book(h, "打零工（" + (o.head != kNone && o.house != "manor" ? shortName(o.head) + "家" : std::string("莊園")) + "）", pay);
-        h.food += what.numberOr("meals", 0);  // the worker ate at the master's table those days
+        // The worker ate at the master's table those days: out of the master's bread, not from nowhere.
+        const double meals = std::min(what.numberOr("meals", 0), std::max(0.0, o.food));
+        o.food -= meals;
+        h.food += meals;
+        cooldowns_[{h.id, "spare_day"}] = nextSeason;
         const Id hand = static_cast<Id>(what.numberOr("worker", static_cast<double>(worker)));
         if (target != kNone && hand != kNone) addOpinion(target, hand, "good_work", 3, 3);
     } else if (kind == "glean") {
@@ -919,7 +924,7 @@ std::vector<World::AgendaItem> World::seasonAgenda(bool all) {
         std::vector<std::pair<double, Id>> hungry;
         for (const auto& h : households_) {
             if (h.extinct || h.head == kNone || inPlayerHouse(h.id) || h.members.empty() || h.house == "manor") continue;
-            double days = h.food / std::max(1.0, consumption(h));
+            double days = h.food / std::max(0.5, consumption(h));
             if (days >= 45 && !(h.lean && days < 120)) continue;
             bool kin = false;
             for (Id m : h.members) kin = kin || closeKin(head, m) || !kinTie(head, m).empty();
@@ -960,9 +965,9 @@ std::vector<World::AgendaItem> World::seasonAgenda(bool all) {
                 a.id = "help_take:" + std::to_string(t);
                 a.title = "把" + fullName(t) + "接到家裡來住";  // (a 小馬修 of theirs is not the 小馬修 at home)
                 // The same grain then feeds one more: say up front what that does to the days of bread at home.
-                double mouths = consumption(ph), mouth = ageYears(people_[t]) < 10 ? 0.6 : 1.0;
-                std::string stores = "家裡的存糧從夠吃 " + std::to_string(int(ph.food / mouths)) + " 天變成夠吃 " +
-                                     std::to_string(int(ph.food / (mouths + mouth))) + " 天";
+                double mouths = consumption(ph), mouth = portion(people_[t]);  // as the barn will count it
+                std::string stores = "家裡的存糧從夠吃 " + std::to_string(int(foodDays(ph))) + " 天變成夠吃 " +
+                                     std::to_string(int(ph.food / std::max(0.5, mouths + mouth))) + " 天";
                 a.desc = who + state + "。" + fullName(t) + "（" + std::to_string(int(ageYears(people_[t]))) + " 歲）搬來你家，吃你家的飯；他家少一張嘴，" +
                          stores + "（糧還是那些，多一個人吃）。";
                 a.kind = "effects", a.target = t, a.effects = "[{\"take_in\": true}]";
@@ -1038,7 +1043,7 @@ std::vector<World::AgendaItem> World::seasonAgenda(bool all) {
 
     // Grain to spare: carted to the town market it fetches half again what the corn dealer pays at the door.
     if (!hiding) {
-        double c = std::max(1.0, consumption(ph));
+        double c = std::max(0.5, consumption(ph));
         double spare = ph.food / c - daysToHarvest() - 90;
         if (spare >= 60) {
             double days = std::min(spare, 180.0);
@@ -1284,7 +1289,7 @@ std::string World::agendaGoneWhy(const AgendaItem& a) {
     }
     const std::string kind = a.id.substr(0, a.id.find(':'));
     if (kind == "sell_grain") {
-        double c = std::max(1.0, consumption(ph));
+        double c = std::max(0.5, consumption(ph));
         return "存糧只剩 " + std::to_string(int(ph.food / c)) + " 天，要留到收成後三個月（" + std::to_string(daysToHarvest() + 90) + " 天），沒有多的可賣了";
     }
     if (kind == "hire_hand") return a.target != kNone && people_[a.target].household != kNone && households_[people_[a.target].household].hiredUntil > day_
@@ -1293,7 +1298,7 @@ std::string World::agendaGoneWhy(const AgendaItem& a) {
         Id hid = a.target != kNone ? people_[a.target].household : kNone;
         if (hid == kNone) return "那一家已經不在了";
         const Household& h = households_[hid];
-        double days = h.food / std::max(1.0, consumption(h));
+        double days = h.food / std::max(0.5, consumption(h));
         if (days >= 45 && !(h.lean && days < 120)) return houseOf(a.target) + "的糧接上了（有 " + std::to_string(int(days)) + " 天）";
         if (kind == "help_take") return "你家的糧撐不起多一張嘴了（要 120 天以上、今年不缺糧）";
         if (kind == "help_land") return "你家沒有分得出去、自己又吃得飽的那幾畝地了";

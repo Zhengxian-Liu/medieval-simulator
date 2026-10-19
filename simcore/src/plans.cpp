@@ -69,11 +69,11 @@ void World::processCommands() {
             const PlanDef* pd = defs_.plan(c.plan);
             const std::string name = pd ? "「" + pd->name + "」" : "這件事";
             if (ours && timeLeft() <= 0) {
-                log(1, "〔計畫〕" + name + "沒辦成：這一季沒有空閒了。");
+                log(1, "〔計畫〕" + name + "眼下辦不成：這一季沒有空閒了。");
                 continue;
             }
             if (ours && !planRoom(c.actor)) {
-                log(1, "〔計畫〕" + name + "沒辦成：" + (c.actor == actingHead() ? "手上已經有兩件事在辦（放棄一件才能開新的）。" : "手上已經有一件事在辦。"));
+                log(1, "〔計畫〕" + name + "眼下辦不成：" + (c.actor == actingHead() ? "手上已經有兩件事在辦（放棄一件才能開新的）。" : "手上已經有一件事在辦。"));
                 continue;
             }
             // The click names who it is with and for: it must still be one the plan could be started on now.

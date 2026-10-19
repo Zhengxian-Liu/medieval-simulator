@@ -86,7 +86,7 @@ void World::setStation(Id who, const std::string& station, int years, const std:
         p.awayFrom = from;
         if (head) {
             leaving_ = who;
-            onHeadDied(households_[hid], who);
+            afterSuccession(households_[hid], who, onHeadDied(households_[hid], who));
             leaving_ = kNone;
             // Walked out of a house that ended with him: he belongs to another house of his blood, if any.
             if (households_[hid].extinct)

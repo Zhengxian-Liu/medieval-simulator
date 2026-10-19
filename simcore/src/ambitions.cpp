@@ -721,6 +721,7 @@ void World::stewardLoan(Person& head) {
     h.money -= amt;
     book(h, "借給莊園", -amt);
     manor.money += amt;
+    book(manor, "向人借的錢", amt);
     manorBond_ = ManorBond{h.id, amt, std::round(amt * 1.25), year() + 3};
     addOpinion(lord_, head.id, "lent_to_manor", 10, 10);
     ++counters_["manor_loan:lent"];
@@ -742,6 +743,7 @@ void World::manorBondDue(Person& head) {
     bool hard = param("war_levy", 0) > 0 || param("harvest_mult", 1) < 0.8 || param("plague_monthly", 0) > 0;
     if (rngMinds_.chance(hard ? 0.25 : 0.5) && manor.money >= b.owed) {
         manor.money -= b.owed;
+        book(manor, "還人的債", -b.owed);
         h.money += b.owed;
         book(h, "莊園還的債", b.owed);
         addOpinion(lord_, head.id, "trusty_lender", 5, 8);

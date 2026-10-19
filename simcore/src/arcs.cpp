@@ -44,7 +44,7 @@ int World::feudStage(Id personA, Id personB) const {
     return f ? f->stage : 0;
 }
 
-void World::feudHeat(Id dynA, Id dynB, double delta, Id deed) {
+void World::feudHeat(Id dynA, Id dynB, double delta, Id deed, bool truce) {
     if (dynA == kNone || dynB == kNone || dynA == dynB || delta == 0) return;
     auto [a, b] = ordered(dynA, dynB);
     Feud* f = nullptr;
@@ -56,8 +56,11 @@ void World::feudHeat(Id dynA, Id dynB, double delta, Id deed) {
         f = &feuds_.back();
     }
     if (f->stage == 0 && f->heat <= 0) {
+        // A quarrel begun afresh: its cause, whom it is with and who headed the family are this one's, not an old one's.
         f->since = day_;
         f->cause = deed;
+        f->face = f->ourFace = kNone;
+        f->told = false;
     }
     f->heat = std::max(0.0, f->heat + delta);
     if (delta > 0 && f->cause == kNone) f->cause = deed;  // heat with no deed behind it (a debt, an old quarrel) first
@@ -67,13 +70,12 @@ void World::feudHeat(Id dynA, Id dynB, double delta, Id deed) {
                         dynasties_[a == playerDynasty_ ? b : a].surname + " 家";
     std::string why = f->cause != kNone ? describeDeed(f->cause) : "積了多年的舊怨";
     if (f->last != f->cause && f->last != kNone) why += "，又有 " + describeDeed(f->last);
-    bool raised = false;
     while (f->stage < 3 && f->heat >= kStageHeat[f->stage + 1]) {
         ++f->stage;
-        raised = true;
         if (player && f->stage >= 2) {  // a coolness between houses is everyday life; a grudge is news
             std::string what = f->stage == 2 ? "結了怨" : "成了世仇";
             log(1, std::string(f->stage == 3 ? "【世仇】" : "【恩怨】") + names + what + "（" + why + "）。");
+            if (!f->told) f->ourFace = actingHead();  // the head it is told to is the one it began under
             f->told = true;
         }
         emit({"feud", f->last, a, b, false, static_cast<double>(f->stage)});
@@ -82,22 +84,35 @@ void World::feudHeat(Id dynA, Id dynB, double delta, Id deed) {
     // what can end it, so that its end can be told too.
     if (player && !f->told && f->stage >= 1 && delta > 0 && f->last != kNone && f->last != f->cause) {
         f->told = true;
+        f->ourFace = actingHead();
         log(1, "【恩怨】" + names + "有了嫌隙（" + why + "）。兩家的帳不會自己了結：神父調解、上門賠罪、兩家結親、上莊園法庭，"
                                                  "或是等到有人死了、換了一代。");
     }
-    if (player && raised && f->ourFace == kNone) f->ourFace = playerHead();
+    // Years with nothing new between them: it is over, and said so; and it is over, so a wrong after it starts a new
+    // quarrel with a cause of its own (not the old one back from the dead).
+    // Quiet since the priest's handshake (no wrong after it): said as the truce having held.
+    const int truceDay = f->truceUntil - 25 * kDaysPerYear;
+    const bool held = f->truceUntil > day_ && (f->last == kNone || deeds_[f->last].day <= truceDay);
+    auto fade = [&](bool afterTruce) {
+        noteThreadEnd("feud", "和" + dynasties_[a == playerDynasty_ ? b : a].surname + "家的恩怨：" +
+                                  (afterTruce ? "神父調解之後再沒起事，過去了" : "這些年沒再起事，淡了"));
+        log(1, "【恩怨了結】" + names + "從 " + (f->cause != kNone ? describeDeed(f->cause) : std::string("上一代")) + "起的嫌隙，" +
+                   (afterTruce ? "神父調解之後兩家再沒起事，這筆帳也就過去了。" : "這些年沒再添新帳，慢慢也就過去了。"));
+        f->told = false;
+        f->face = f->ourFace = kNone;
+        f->heat = 0;
+        f->stage = 0;
+    };
     while (f->stage > 0 && f->heat < kStageHeat[f->stage] * 0.6) {
         --f->stage;
+        // A truce says what it is itself (〔了結恩怨〕: 暫時休兵); the cooling it brings is not told as a fading too.
+        if (truce) continue;
         if (player && f->stage == 1) log(1, "【恩怨】" + names + "的怨氣慢慢淡了，見了面還是不說話。");
-        if (player && f->stage == 0 && f->told) {
-            // Years with nothing new between them: it is over, and said so.
-            noteThreadEnd("feud", "和" + dynasties_[a == playerDynasty_ ? b : a].surname + "家的恩怨：這些年沒再起事，淡了");
-            log(1, "【恩怨了結】" + names + "從 " + (f->cause != kNone ? describeDeed(f->cause) : std::string("上一代")) +
-                       "起的嫌隙，這些年沒再添新帳，慢慢也就過去了。");
-            f->told = false;
-            f->face = f->ourFace = kNone;
-        }
+        if (player && f->stage == 0 && f->told) fade(held);
     }
+    // A quarrel the priest cooled to nothing stays the family's (休兵, not 了結) until two quiet years have gone by.
+    if (!truce && player && f->stage == 0 && f->told && delta < 0 && f->truceUntil > day_ && day_ >= truceDay + 2 * kDaysPerYear)
+        fade(held);
 }
 
 // Called for a public deed (culprit = the doer) and, for a secret one, when the victims come to
@@ -122,7 +137,7 @@ void World::feudOnDeed(const Deed& d, const DeedDef& def, Id culprit) {
             if (f.a == a && f.b == b && f.heat > 0) {
                 bool fresh = f.truceUntil < day_;
                 f.truceUntil = day_ + 25 * kDaysPerYear;
-                feudHeat(dc, dv, fresh ? -f.heat * 0.6 : -8, d.id);
+                feudHeat(dc, dv, fresh ? -f.heat * 0.6 : -8, d.id, true);  // (truceUntil is set first: feudHeat reads it)
             }
         return;
     }
@@ -143,8 +158,7 @@ void World::feudOnDeed(const Deed& d, const DeedDef& def, Id culprit) {
                     if (face != kNone && ageYears(people_[face]) < 16 && people_[face].household != kNone &&
                         households_[people_[face].household].head != kNone)
                         face = households_[people_[face].household].head;
-                    f.face = face;
-                    if (f.ourFace == kNone) f.ourFace = playerHead();
+                    f.face = face;  // (who headed the family is set when the quarrel is told: feudHeat)
                 }
         }
     } else if (t > 0) {
@@ -197,6 +211,8 @@ void World::yearlyFeuds() {
         // Grudges cool, slower the deeper they run.
         double keep = f.stage >= 3 ? 0.94 : f.stage == 2 ? 0.9 : 0.85;
         feudHeat(f.a, f.b, -f.heat * (1 - keep), kNone);
+        // A coolness never told and long gone quiet is forgotten: a wrong after it is a quarrel of its own.
+        if (f.stage == 0 && !f.told && f.heat < 2) f.heat = 0;
     }
 }
 
@@ -208,21 +224,22 @@ void World::noteThreadEnd(const std::string& kind, const std::string& text) {
 
 void World::yearlyFeudTurns() {
     if (playerHousehold_ == kNone || actingHead() == kNone || handedOver_ > day_) return;
-    // One a year at most: the hottest quarrel whose turn it is.
+    // One a year at most: the hottest quarrel whose turn it is and that has something to ask (one with nothing new
+    // in it does not keep the others from their turn).
     size_t pick = feuds_.size();
     for (size_t i = 0; i < feuds_.size(); ++i) {
         const Feud& f = feuds_[i];
         if (!f.told || f.heat <= 0 || (f.a != playerDynasty_ && f.b != playerDynasty_) || f.nextTurn > year()) continue;
+        if (!feudTurnDue(f)) continue;
         if (pick == feuds_.size() || f.heat > feuds_[pick].heat) pick = i;
     }
     if (pick < feuds_.size()) feudTurn(pick);
 }
 
-void World::feudTurn(size_t i) {
-    const Id other = feuds_[i].a == playerDynasty_ ? feuds_[i].b : feuds_[i].a;
-    const Id ours = actingHead();
-    // Who speaks for the other side now: the house of the one it is with, else the biggest house of that name.
-    Id face = feuds_[i].face;
+// Who speaks for the other side now: the house of the one it is with, else the biggest house of that name.
+Id World::feudTheirHouse(const Feud& f) const {
+    const Id other = f.a == playerDynasty_ ? f.b : f.a;
+    const Id face = f.face;
     Id theirHouse = face != kNone && people_[face].alive() && people_[face].household != kNone &&
                             households_[people_[face].household].dynasty == other
                         ? people_[face].household
@@ -232,7 +249,28 @@ void World::feudTurn(size_t i) {
             if (!o.extinct && !o.members.empty() && o.head != kNone && o.dynasty == other &&
                 (theirHouse == kNone || o.acres > households_[theirHouse].acres))
                 theirHouse = o.id;
-    if (theirHouse == kNone) return;
+    return theirHouse;
+}
+
+// The turns feudTurn has, in its order: the one it was with died, a new head, or a wrong in the last three years.
+bool World::feudTurnDue(const Feud& f) const {
+    Id theirHouse = feudTheirHouse(f);
+    if (theirHouse == kNone) return false;
+    Id them = households_[theirHouse].head;
+    if (f.face != kNone && !people_[f.face].alive() && f.face != them) return true;
+    if (f.ourFace != kNone && f.ourFace != actingHead()) return true;
+    return f.last != kNone && day_ - deeds_[f.last].day <= 3 * kDaysPerYear;
+}
+
+void World::feudTurn(size_t i) {
+    const Id other = feuds_[i].a == playerDynasty_ ? feuds_[i].b : feuds_[i].a;
+    const Id ours = actingHead();
+    Id face = feuds_[i].face;
+    Id theirHouse = feudTheirHouse(feuds_[i]);
+    if (theirHouse == kNone) {
+        feuds_[i].nextTurn = year() + 1;
+        return;
+    }
     const Id them = households_[theirHouse].head;
     const std::string sur = dynasties_[other].surname, us = dynasties_[playerDynasty_].surname;
     const Person& op = people_[ours];
@@ -244,16 +282,21 @@ void World::feudTurn(size_t i) {
     // The one it was with is dead: does the quarrel go into the grave with them, or to their house?
     if (face != kNone && !people_[face].alive() && face != them) {
         feuds_[i].nextTurn = year() + 2;
-        std::string sit = fullName(face) + " 不在了（" + people_[face].deathCause + "）。" + us + " 家和 " + sur + " 家從 " + since() + "起的" + word +
-                          "，多半是跟" + (people_[face].sex == Sex::Male ? "他" : "她") + "結下的。如今 " + sur + " 家由 " + fullName(them) + " 當家。";
-        int r = askPlayer("人死帳了？", sit, {"去守靈，讓舊帳跟著下葬", "不去：這筆帳，" + sur + " 家的人一樣要還"});
+        // The wake is in the days after the death; later on, it is a visit to the grave.
+        const bool fresh = day_ - people_[face].deathDay <= 3 * kDaysPerMonth;
+        const std::string pron = people_[face].sex == Sex::Male ? "他" : "她";
+        const int diedIn = cfg_.startYear + people_[face].deathDay / kDaysPerYear;
+        std::string sit = fullName(face) + (fresh ? " 不在了（" : " " + std::to_string(diedIn) + " 年就不在了（") + people_[face].deathCause + "）。" + us + " 家和 " + sur +
+                          " 家從 " + since() + "起的" + word + "，多半是跟" + pron + "結下的。如今 " + sur + " 家由 " + fullName(them) + " 當家。";
+        int r = askPlayer("人死帳了？", sit,
+                          {fresh ? "去守靈，讓舊帳跟著下葬" : "到" + pron + "墳前上一回香，讓舊帳跟著入土", "不去：這筆帳，" + sur + " 家的人一樣要還"});
         if (r < 0) r = vengeful || opinion(ours, them) < -25 ? 1 : 0;
         if (r == 0) {
             addOpinion(them, ours, "came_to_wake", 10, 10);
-            endFeud(playerDynasty_, other, fullName(face) + " 死了，" + op.firstName + " 去守了靈，舊帳跟著下葬");
+            endFeud(playerDynasty_, other, fullName(face) + " 死了，" + op.firstName + (fresh ? " 去守了靈，舊帳跟著下葬" : " 到墳前上了香，舊帳跟著入土"));
         } else {
             feuds_[i].face = them;
-            log(1, "〔人死帳了？〕" + op.firstName + " 沒有去守靈。" + sur + " 家記住了：兩家的帳，往後記在 " + fullName(them) + " 身上。");
+            log(1, "〔人死帳了？〕" + op.firstName + (fresh ? " 沒有去守靈。" : " 沒有去上墳。") + sur + " 家記住了：兩家的帳，往後記在 " + fullName(them) + " 身上。");
             feudHeat(playerDynasty_, other, 6, kNone);
         }
         return;
@@ -276,7 +319,10 @@ void World::feudTurn(size_t i) {
         return;
     }
     // Still going (a wrong in the last three years): the family says what it will do about it.
-    if (feuds_[i].last == kNone || day_ - deeds_[feuds_[i].last].day > 3 * kDaysPerYear) return;
+    if (feuds_[i].last == kNone || day_ - deeds_[feuds_[i].last].day > 3 * kDaysPerYear) {
+        feuds_[i].nextTurn = year() + 1;  // nothing to ask this year
+        return;
+    }
     feuds_[i].nextTurn = year() + 3;
     Household& h = households_[playerHousehold_];
     Household& th = households_[theirHouse];
@@ -374,6 +420,7 @@ std::vector<World::Thread> World::threads() const {
         bool ours = (p.household == h.id && p.home == kNone) || p.home == h.id || (isAway(p) && p.awayFrom == h.id);
         if (!ours) continue;
         std::string t = p.firstName + " " + stationName(p) + "（" + std::to_string(yearOf(p.stationSince)) + " 年起";
+        const bool term = p.stationUntil >= 0 || p.serviceEnd >= 0;
         if (p.stationUntil >= 0) t += "，約 " + std::to_string(yearOf(p.stationUntil)) + " 年期滿";
         else if (p.serviceEnd >= 0) t += "，約 " + std::to_string(yearOf(p.serviceEnd)) + " 年期滿";
         t += "）";
@@ -382,7 +429,8 @@ std::vector<World::Thread> World::threads() const {
                            : p.station == "apprentice" ? "學滿出師，從此吃這門手藝"
                            : p.station == "clerk" ? "往後是受神職、留下替領主管帳，或還俗成家"
                            : p.station == "archer" ? "期滿回村、負傷回家，或死在外頭"
-                                                   : "期滿回家";
+                           : term                       ? "期滿回家"
+                                                        : "沒有說定做到哪一年：家裡叫回來、成了家，或一直做下去";
         out.push_back({"path", fullName(p.id), t, ends, yearOf(p.stationSince)});
     }
     if (owedAll(h.id) > 0.5) out.push_back({"debt", "欠債", debtText(h.id), "還清，或到期時拿地、牛、勞役抵", -1});  // -1: no start shown (a debt rolls over)

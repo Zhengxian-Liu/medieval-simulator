@@ -197,9 +197,12 @@ void World::inheritMemories(Id dead) {
         if (std::abs(v) < 8) continue;
         // An inherited memory is about the other family, not only the person.
         Id dyn = m.aboutDynasty != kNone ? m.aboutDynasty : people_[m.about].dynasty;
-        bool toPlayer = false;
+        std::vector<Id> told;  // the player's house's people who take it up
         for (Id h : heirs) {
             if (h == m.about || people_[h].dynasty == dyn) continue;
+            // One who has their own memory of the same deed (a widow wronged with her husband) keeps that, not a second.
+            if (m.deed != kNone && std::any_of(memories_[h].begin(), memories_[h].end(), [&](const Memory& x) { return x.deed == m.deed; }))
+                continue;
             Memory copy = m;
             // A deathbed charge changes how much of the old grudges the heir takes up.
             double share = 0.5;
@@ -210,11 +213,16 @@ void World::inheritMemories(Id dead) {
             copy.aboutDynasty = dyn;
             copy.inherited = true;
             addMemory(h, copy);
-            toPlayer = toPlayer || inPlayerHouse(people_[h].household);
+            if (inPlayerHouse(people_[h].household)) told.push_back(h);
         }
-        if (!toPlayer || dyn == kNone || dyn == playerDynasty_) continue;
-        std::string line = (p.sex == Sex::Male ? "孩子們記著父親和 " : "孩子們記著母親和 ") + dynasties_[dyn].surname +
-                           " 家的" + (v < 0 ? "仇" : "恩") + "（" + def->name + "）。";
+        if (told.empty() || dyn == kNone || dyn == playerDynasty_) continue;
+        // Said by who takes it up: the children, the widow, or the kinsman who has the house.
+        bool children = std::all_of(told.begin(), told.end(), [&](Id x) { return people_[x].father == dead || people_[x].mother == dead; });
+        std::string who = children ? (p.sex == Sex::Male ? "孩子們記著父親" : "孩子們記著母親")
+                          : told.size() == 1 && told[0] == p.spouse ? people_[told[0]].firstName + " 記著" + (p.sex == Sex::Male ? "亡夫" : "亡妻")
+                          : told.size() == 1 ? people_[told[0]].firstName + " 記著 " + p.firstName
+                                             : "家裡的人記著 " + p.firstName;
+        std::string line = who + "和 " + dynasties_[dyn].surname + " 家的" + (v < 0 ? "仇" : "恩") + "（" + def->name + "）。";
         if (v < worst) worst = v, worstLine = line;
         if (v > best) best = v, bestLine = line;
     }

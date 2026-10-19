@@ -47,6 +47,7 @@ private:
     // when it is not held back (signals, institutions, rules that fire whenever their state holds, villagers).
     std::pair<Id, std::string> storyKey(const EventDef& ev, const Person& p) const;
     void fire(const EventDef& ev, Person& p, Id target);
+    std::string choseLine(const Person& p, Id target, const std::string& option);
     const std::string& pickLog(const OptionDef& o, Id who);  // a variant this person was not told last time
     bool asked_ = false;   // the last chooseOption was the player's to make (the 「選擇」 is theirs)
     bool picked_ = false;  // ...and the player (not the AI standing in) picked it: a standing rule is set only then

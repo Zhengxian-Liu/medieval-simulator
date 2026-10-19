@@ -1,6 +1,7 @@
 // SimCore world state and the coarse (one game day) step.
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <functional>
@@ -181,6 +182,8 @@ struct Household {
     bool frugal = false;
     int styleAsked = -1;
     Id styleHead = kNone;
+    bool styleLapsed = false;  // the purse fell to 150 pence or under since it was last asked (so asking again means something)
+    double styleCap = 0;       // the monthly most when it was asked (the house's standing then)
     bool lean = false;     // last harvest fell short of the household's needs
     double lastYield = 0;  // last harvest, in days of the household's food
     double lastRent = 0, lastRentPaid = 0;
@@ -755,6 +758,9 @@ public:
     // How many days the barn falls short of the next harvest, as it stands today (bought grain, new mouths and all):
     // what 「缺糧」 means wherever it is shown, so a full barn is never called short.
     int breadShort(const Household& h) const;
+    int harvestYear() const { return (day_ + daysToHarvest()) / kDaysPerYear; }  // the harvest the bread in the barn has to last to
+    // The year a budget of cards is counted by: hunger by the harvest year (a lean year runs autumn to autumn).
+    int budgetYear(const std::string& budget) const { return budget == "hunger" ? harvestYear() : year(); }
     // "存錢 120 → 98 便士（進：賣餘糧 +18；出：交租 -40）。": every item, rounded so that start + items = end as shown.
     static std::string booksText(double start, double end, const std::map<std::string, double>& items);
     std::string seasonBooksText(const SeasonBooks& b) const;  // "1350 年冬末：存錢 …"
@@ -765,6 +771,11 @@ public:
     std::string debtText(Id household) const;
     double owedAll(Id household) const;  // the main debt and the one waiting behind it
     double dailyBread(Id household) const { return consumption(households_.at(household)); }  // the house's bread a day, in a grown man's days
+    double portion(const Person& p) const;        // one person's share of the house's bread (0.5 a little one … 1.0 a grown man)
+    double farmHands(const Household& h) const;   // grown, fit hands that work the land (a woman half)
+    double spareHands(const Household& h) const;  // of them, those the land does not need: hired out by the month (打短工)
+    // Days of bread in the barn, as every line and the header count them (one divisor everywhere).
+    double foodDays(const Household& h) const { return h.food / std::max(0.5, consumption(h)); }
     double lastHarvestWeather() const { return lastWeather_; }  // the last harvest against an ordinary year's (1)
     // 家裡的規矩 (fun-r6 C): standing rules the family lives by, set once and changed at any time.
     const std::string& occasionRule() const { return occasionRule_; }  // "" not set yet, else all | close | none | ask
@@ -1029,15 +1040,20 @@ private:
         std::string house;
         size_t items = 0;
         bool regent = false;  // the dead only held it for a child
+        // The player's house passed on: the hand-over scene (【接下的】) is told once the death duties are charged, so
+        // it says what the new head really has and owes (afterSuccession). sceneLead: whose it was, said in that line.
+        Id scene = kNone;
+        std::string sceneLead;
     };
     Estate onHeadDied(Household& h, Id deadHead);
+    void afterSuccession(Household& h, Id dead, const Estate& left);  // after onHeadDied (and the dues): the scene, the new head's ambition
     bool wardHeld(const Household& h) const;  // the ward is alive and still this house's: at home, in service, or away and coming back
     // Who would hold the house for `heir` (under 16) when `dead` dies: the widow at home, else the eldest grown of the
     // blood at home, else anyone grown at home (kNone: nobody, the child keeps it).
     Id regentFor(const Household& h, Id dead, Id heir) const;
     // The hand-over as one scene (design/fun-r6.md D): what the new head takes on (land, money, debts, feuds, the old
     // head's unfinished wish, the family's standing) and what they remember of the one before.
-    void takeOverScene(const Household& h, Id newHead, Id from, bool regencyEnded);
+    void takeOverScene(const Household& h, Id newHead, Id from, bool regencyEnded, const std::string& lead = "");
     void handOver(Household& h, Id to, const std::string& why);
     void obituary(Id id);
     void followSurvivingBranch(bool lineEnded = false);
@@ -1188,7 +1204,8 @@ private:
     void deathbedConfession(Id dying);
 
     // arcs.cpp: story arcs that run for years: family feuds and debts
-    void feudHeat(Id dynA, Id dynB, double delta, Id deed);
+    // truce: a priest's handshake cooling it (its own line says so: no 「淡了」 or 「過去了」 in the same breath)
+    void feudHeat(Id dynA, Id dynB, double delta, Id deed, bool truce = false);
     void feudOnDeed(const Deed& d, const DeedDef& def, Id culprit);
     void endFeud(Id dynA, Id dynB, const std::string& how);
     void yearlyFeuds();
@@ -1196,6 +1213,8 @@ private:
     // the family is asked what it will do about it (amends, the priest, the manor court, or bide its time).
     void yearlyFeudTurns();
     void feudTurn(size_t i);  // index into feuds_ (the calls it makes may add feuds)
+    Id feudTheirHouse(const Feud& f) const;  // who speaks for the other side now (kNone: nobody left)
+    bool feudTurnDue(const Feud& f) const;   // feudTurn would have something to ask about it
     std::vector<ThreadEnd> threadEnds_;
     Id heirOf(const Household& h, Id dead) const;
     void takeLover(Id a, Id b);

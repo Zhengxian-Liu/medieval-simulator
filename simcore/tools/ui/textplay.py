@@ -177,7 +177,10 @@ def render(v, full=False):
             out.append(line)
     out.append("―― 家人 ――")
     for p in s["family"]:
-        t = f"[{p['id']}] {p['full']}（{p['kin']}，{p['age']} 歲）心情 {p['mood']}{('：' + p['mood_cause']) if p.get('mood_cause') else ''}，健康 {p['health']}"
+        full = p["full"]
+        if p.get("kin") == "你" and full.endswith("（你）"):  # a namesake's byname already says so
+            full = full[: -len("（你）")]
+        t = f"[{p['id']}] {full}（{p['kin']}，{p['age']} 歲）心情 {p['mood']}{('：' + p['mood_cause']) if p.get('mood_cause') else ''}，健康 {p['health']}"
         if p.get("traits"):
             t += "，" + "、".join(p["traits"])
         if p.get("station"):

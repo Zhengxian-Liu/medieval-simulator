@@ -31,6 +31,7 @@ void World::chargeMerchet(Id woman, bool outsideManor) {
     h.money -= paid;
     book(h, "婚姻稅", -paid);
     households_[people_[lord_].household].money += paid;
+    book(households_[people_[lord_].household], "收婚姻稅", paid);
     if (h.head != kNone) addOpinion(h.head, lord_, "merchet", -3, 4);
     if (inPlayerHouse(h.id) && paid >= 1)
         log(1, "  照莊園的規矩，嫁 " + w.firstName + " 要先向領主繳 " + std::to_string(int(paid)) + " 便士婚姻稅" +
@@ -48,10 +49,12 @@ void World::chargeHeriot(Household& h, Id dead, double acres, double money) {
     h.money -= heriot;
     book(h, "死後稅", -heriot);
     households_[people_[lord_].household].money += heriot;
+    book(households_[people_[lord_].household], "收死後稅", heriot);
     double mortuary = std::min(h.money, beast * 0.5);
     h.money -= mortuary;
     book(h, "給神父的喪葬捐", -mortuary);
-    if (priest_ != kNone && people_[priest_].household != kNone) households_[people_[priest_].household].money += mortuary;
+    if (priest_ != kNone && people_[priest_].household != kNone)
+        households_[people_[priest_].household].money += mortuary, book(households_[people_[priest_].household], "收喪葬捐", mortuary);
     if (h.head != kNone) {
         addOpinion(h.head, lord_, "heriot", -5, 5);
         if (priest_ != kNone) addOpinion(h.head, priest_, "mortuary", -3, 5);
