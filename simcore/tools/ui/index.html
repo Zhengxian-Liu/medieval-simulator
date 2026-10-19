@@ -564,6 +564,12 @@ function renderContest(s) {
   $("tab-body").innerHTML = html;
 }
 
+// A plan's conditions, met or not.
+function gatesHtml(gates) {
+  if (!(gates || []).length) return "";
+  return `<div class="muted" style="font-size:12px;padding:2px 0 4px">條件：${gates.map((g) => g.ok ? `<span class="pos">✓ ${esc(g.label)}</span>` : `<span class="neg">✗ ${esc(g.detail)}</span>`).join("　")}</div>`;
+}
+
 function renderPlans(s) {
   let html = "";
   const going = s.plans_going || [];
@@ -584,11 +590,13 @@ function renderPlans(s) {
       <div class="top"><span class="name">${p.ambition ? "★ " : ""}${esc(p.name)}</span>${p.open ? `<button ${open ? "" : "disabled"} onclick="openPlan=openPlan==='${p.id}'?null:'${p.id}';renderTabs()">${expanded ? "收起" : "選對象"}</button>` : '<span class="muted">現在不行</span>'}</div>
       <div class="sub">${esc(p.desc)}</div>
       ${!p.open && (p.why || p.needs) ? `<div class="muted" style="font-size:12px">${esc(p.why || "要：" + p.needs)}</div>` : ""}
+      ${!p.open ? gatesHtml(p.gates) : ""}
       ${expanded ? `<div class="actions" style="flex-direction:column;align-items:stretch">${p.targets.map((t) => `<button style="text-align:left" onclick="openPlan=null;act({do:'plan',plan:'${p.id}',target:${t.target},subject:${t.subject}})">${esc(t.label)}</button>`).join("")}</div>` : ""}
     </div>`;
   }).join("");
-  if (shut.length) html += `<details class="card"><summary class="muted">現在不行的計畫（${shut.length}）</summary>${shut.map((p) =>
-    `<div style="font-size:12px;margin-top:4px"><b>${esc(p.name)}</b> <span class="muted">${esc(p.why || (p.needs ? "要：" + p.needs : ""))}</span></div>`).join("")}</details>`;
+  // Each one opens to every condition, met (✓) or not (✗): the same checks that decide (design/fun-r6.md A).
+  if (shut.length) html += `<details class="card"><summary class="muted">現在不行的計畫（${shut.length}）：點開每一個看差哪一條</summary>${shut.map((p) =>
+    `<details style="font-size:12px;margin-top:4px"><summary><b>${esc(p.name)}</b> <span class="muted">${esc(p.why || (p.needs ? "要：" + p.needs : ""))}</span></summary>${gatesHtml(p.gates)}</details>`).join("")}</details>`;
   if (plans.some((p) => p.ambition)) html = `<p class="muted" style="margin-top:0">★ 是能推動這一代志向的計畫。</p>` + html;
   $("tab-body").innerHTML = html;
 }

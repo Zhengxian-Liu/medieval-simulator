@@ -146,7 +146,7 @@
          {"text": "一起去教堂", "log": "{name} 和 {target} 一起去望彌撒。", "effects": [{"progress": 10}, {"need": {"spirit": 10}}], "ai": {"base": 6, "traits": {"pious": 8}}}]}
      ]},
 
-    {"id": "seek_patron", "name": "討好領主", "requires": "家主，還沒得到領主青睞", "desc": "讓領主把你當成自己人，地租和官司都好說話。",
+    {"id": "seek_patron", "name": "討好領主", "requires": "20 到 65 歲的家主，還沒得到領主青睞", "desc": "讓領主把你當成自己人，地租和官司都好說話。",
      "actor": {"is_head": true, "age": [20, 65], "no_flag": "lord_favour", "not": {"occupation": "lord"}},
      "target": {"pick": "lord", "conditions": {}},
      "max_months": 18, "retry_years": 2, "monthly_cost": 2,
@@ -240,7 +240,7 @@
          {"text": "不花這個錢", "log": "", "effects": [], "ai": {"base": 6, "traits": {"greedy": 8}}}]}
      ]},
 
-    {"id": "buy_freedom", "name": "贖身", "requires": "農奴身分的家主，存錢 140 便士以上，領主肯收", "notify_target": true,
+    {"id": "buy_freedom", "name": "贖身", "requires": "農奴身分、20 到 70 歲的家主，存錢 140 便士以上，領主肯收", "notify_target": true,
      "desc": "向領主買一紙自由的特許狀。從此不用繳婚姻稅和死後稅，子孫也都是自由人，但要花上一大筆錢。",
      "actor": {"is_head": true, "free": false, "money_ge": 140, "age": [20, 70]},
      "target": {"pick": "lord", "conditions": {}},
@@ -266,7 +266,7 @@
          {"text": "不必", "log": "", "effects": [], "ai": {"base": 6, "traits": {"pious": 4}}}]}
           ]},
 
-    {"id": "buy_freehold", "name": "買自由地", "requires": "自由身的家主，存錢 200 便士以上，手上有 6 畝以上佃來的地", "notify_target": true,
+    {"id": "buy_freehold", "name": "買自由地", "requires": "自由身、20 到 70 歲的家主，存錢 200 便士以上，手上有 6 畝以上佃來的地", "notify_target": true,
      "desc": "向領主把 6 畝佃來的地買成自由地。從此這幾畝只交一點象徵性的租，領主也收不回去。家族從自由佃農變成自耕農。",
      "actor": {"is_head": true, "free": true, "money_ge": 200, "customary_ge": 6, "age": [20, 70], "not": {"occupation": ["lord", "priest"]}},
      "target": {"pick": "lord", "conditions": {}},

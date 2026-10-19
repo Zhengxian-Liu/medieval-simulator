@@ -745,7 +745,14 @@ public:
     const ActivePlan* activePlan(Id actor) const;          // the first plan under way, if any
     std::vector<const ActivePlan*> plansOf(Id actor) const;
     bool planRoom(Id actor) const;
-    std::string planBlock(Id actor, const PlanDef& pd);  // why it cannot start now ("上回才辦過，還要 2 季…")  // the one keeping the player's house can have two plans going, anyone else one
+    std::string planBlock(Id actor, const PlanDef& pd);  // why it cannot start now: the first ✗ of planGates ("" when it can)
+    // Every condition of a plan for this actor, met or not (src/gates.cpp): the slots, the wait after the last try, each
+    // of the plan's own conditions, someone at home it could be for, someone to do it with; withTime adds the season's
+    // free day. The same checks availablePlans makes, so the list and the offer never disagree.
+    std::vector<OfficeGate> planGates(Id actor, const PlanDef& pd, bool withTime = true);
+    std::vector<Id> planPool(Id actor, const PlanDef& pd) const;                     // who a plan's subject may be
+    void planOptions(Id actor, const PlanDef& pd, std::vector<PlanOption>& out);  // its (subject, target) pairs now
+    std::string seasonOf(int day) const;  // 「1362 年春」
     const std::vector<Command>& commandLog() const { return commandLog_; }
     Id playerHead() const { return playerHousehold_ == kNone ? kNone : households_[playerHousehold_].head; }
     // Who decides for the family: the head, or while the head is a child, whoever keeps the house

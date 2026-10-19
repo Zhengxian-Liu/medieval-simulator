@@ -20,6 +20,11 @@ public:
     std::string format(const std::string& tmpl, const Person& p, Id target) const;
     std::string optionText(const OptionDef& o, const Person& p, Id target) const;
     double odds(const Json& o, const Person& p, Id target) const;
+    // A condition as gates, one per key, each decided by the same check as eval (src/gates.cpp); `all` keeps the
+    // quiet ones (not the lord, not the priest) even when met. describe: the met-or-not labels as one phrase.
+    std::vector<OfficeGate> explain(const Json& cond, const Person& p, Id target, bool all = false) const;
+    std::string describe(const Json& cond, const Person& p, Id target) const;
+    OfficeGate gate(const std::string& key, const Json& v, const Person& p, Id target, bool* quiet = nullptr) const;
 
     // Picks the option an AI (or the auto-played head) would choose.
     int chooseOption(const EventDef& ev, const Person& p, Id target = kNone);

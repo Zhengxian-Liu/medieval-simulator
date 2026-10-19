@@ -784,6 +784,49 @@ int main() {
         checkInvariants(w, "first house");
     }
 
+    // What blocks a plan is shown, condition by condition (design/fun-r6.md A): every plan's ✓/✗ list agrees with
+    // what availablePlans offers, for every grown villager; and a 19-year-old free head with the money and the land is
+    // told it is his age that keeps him from buying the freehold (seed 91, 1361: 「條件全達成卻開不了」).
+    {
+        Config c;
+        c.seed = 91;
+        World w(defs, c);
+        w.runYears(6);
+        int checked = 0, disagree = 0, silent = 0;
+        for (const auto& q : w.people()) {
+            if (!q.alive() || q.household == kNone || w.ageYears(q) < 14 || q.id % 3) continue;
+            std::set<std::string> offered;
+            for (const auto& op : w.availablePlans(q.id)) offered.insert(op.plan);
+            for (const auto& pd : w.defs().plans) {
+                bool ok = true;
+                for (const auto& g : w.planGates(q.id, pd, false)) {
+                    ok = ok && g.ok;
+                    if (!g.ok && g.detail.empty()) ++silent;
+                }
+                ++checked;
+                if (ok != (offered.count(pd.id) > 0) || ok != w.planBlock(q.id, pd).empty()) {
+                    if (disagree < 3) std::printf("  plan gates disagree: %s %s (%s)\n", w.fullName(q.id).c_str(), pd.id.c_str(), w.planBlock(q.id, pd).c_str());
+                    ++disagree;
+                }
+            }
+        }
+        CHECK(checked > 200, "too few plans checked");
+        CHECK(disagree == 0, "a plan's ✓/✗ list disagrees with whether it can start");
+        CHECK(silent == 0, "an unmet plan condition has no words");
+        Id head = w.playerHead();
+        Person& hp = WorldTest::person(w, head);
+        hp.birthDay = w.today() - 19 * kDaysPerYear - 60;
+        hp.free = true;
+        Household& h = WorldTest::house(w, w.playerHousehold());
+        h.money = 202;
+        if (h.acres - h.freehold >= 6 && w.actingHead() == head) {
+            std::string why = w.planBlock(head, *w.defs().plan("buy_freehold"));
+            CHECK(why.find("19 歲") != std::string::npos && why.find("20") != std::string::npos, "the freehold's age bar was not told");
+            CHECK(w.planBlock(head, *w.defs().plan("seek_patron")).find("19 歲") != std::string::npos, "seeking the lord's favour: the age bar was not told");
+        }
+        std::printf("plan gates: %d checked\n", checked);
+    }
+
     if (failures == 0) std::printf("all tests passed\n");
     return failures == 0 ? 0 : 1;
 }

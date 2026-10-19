@@ -550,9 +550,17 @@ public:
                     if (label.empty()) label = "就這麼辦";
                     targets.push_back(Obj().n("target", op.target).n("subject", op.subject).text("label", label).done());
                 }
-                std::string why = picks.empty() ? w_.planBlock(acting, pd) : w.timeLeft() > 0 ? "" : "這一季沒有空閒了";
+                // Each condition met or not (design/fun-r6.md A), the first unmet one as why.
+                std::vector<std::string> gates;
+                std::string why;
+                for (const auto& g : w_.planGates(acting, pd)) {
+                    gates.push_back(Obj().text("label", g.label).b("ok", g.ok).text("detail", g.detail).done());
+                    if (!g.ok && why.empty()) why = g.detail;
+                }
+                if (why.empty() && picks.empty()) why = "眼下找不到合適的對象";
                 plans.push_back(Obj().text("id", pd.id).text("name", pd.name).text("desc", pd.desc + "（用一段空閒）").text("needs", pd.needs).text("why", why)
-                                    .b("open", !picks.empty() && w.timeLeft() > 0).b("ambition", forAmb).raw("targets", arr(targets)).done());
+                                    .b("open", !picks.empty() && w.timeLeft() > 0).b("ambition", forAmb).raw("targets", arr(targets))
+                                    .raw("gates", arr(gates)).done());
             }
             o.raw("plans", arr(plans));
         }

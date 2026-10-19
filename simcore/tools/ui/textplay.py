@@ -6,6 +6,7 @@
     textplay.py --port 8820 act '<json>'    send an action (same JSON the page sends), then show the next view
     textplay.py --port 8820 look <id>       look at a person (the page's click on a name)
     textplay.py --port 8820 report          what the family knows (secrets, rumours)
+    textplay.py --port 8820 plans           every plan with each of its conditions ✓ / ✗ (look plan:<id> for one)
 
 Actions (the page's buttons):
   {"do":"choose","index":0}                         answer a question (options are numbered from 0)
@@ -183,7 +184,7 @@ def render(v, full=False):
         line = "；".join(f"★「{p['name']}」{p['why']}" for p in star)
         if rest:
             line += ("；" if line else "") + f"其他 {len(rest)} 個：" + "、".join(p["name"] for p in rest)
-        out.append("―― 現在開不了的計畫 ―― " + line)
+        out.append("―― 現在開不了的計畫 ―― " + line + "（每一個差哪一條：textplay.py plans，或 look plan:<id>）")
     ops = [p for p in s.get("plans", []) if p.get("open")]
     if ops:
         out.append("―― 能開始的計畫 ――")
@@ -292,9 +293,21 @@ elif cmd == "act":
         sys.exit(1)
     post("/api/act", obj)
     print(render(wait_ask(v0["seq"])))
+elif cmd == "plans" or (cmd == "look" and len(args) > 1 and args[1].startswith("plan:")):
+    # Every plan, each condition met (✓) or not (✗): the same checks the game makes before it lets one start.
+    s = get("/api/view?seq=-1&line=0").get("state") or {}
+    want = args[1][5:] if cmd == "look" else ""
+    shown = [p for p in s.get("plans", []) if not want or p["id"] == want]
+    if not shown:
+        print("沒有這個計畫（或這時候不能定計畫）。" if want else "這時候不能定計畫。")
+        sys.exit(1)
+    for p in shown:
+        state = "能開始" if p.get("open") else "現在不行：" + p.get("why", "")
+        print(f"{'★' if p.get('ambition') else ''}{p['id']}「{p['name']}」{state}")
+        print("    " + "　".join(("✓ " + g["label"]) if g.get("ok") else ("✗ " + g.get("detail", "")) for g in p.get("gates", [])))
 elif cmd == "look":
     if len(args) < 2 or not args[1].lstrip("-").isdigit():
-        print("用法：textplay.py look <人的編號>（編號是家人欄或名單裡 [ ] 中的數字）")
+        print("用法：textplay.py look <人的編號>（編號是家人欄或名單裡 [ ] 中的數字），或 look plan:<計畫 id>")
         sys.exit(1)
     r = post("/api/look", {"do": "inspect", "who": int(args[1])})
     print(r.get("text", json.dumps(r, ensure_ascii=False)))
