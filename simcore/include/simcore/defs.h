@@ -147,6 +147,11 @@ struct AmbitionDef {
         std::string name;
         Json goal;
         bool gate = false;  // a condition of the road (no debt over 20 for a reeve), not progress along it
+        // fun-r8 2: a sum saved to be spent on the goal (money_ge, unless "kept": false) stays reached once reached:
+        // the 360 pence spent on the land are not a step back. "skip_if": the goal itself has moved past the need for
+        // it (land bought another way), so it counts as reached.
+        bool kept = false;
+        Json skip;
     };
     std::vector<Milestone> milestones;  // steps on the way, reached in order; the goal is the last step
     std::vector<std::string> plans;     // plans that move it forward: listed first and wanted more

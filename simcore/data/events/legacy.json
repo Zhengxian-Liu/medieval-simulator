@@ -19,9 +19,9 @@
      ]},
 
     {"id": "star_crossed", "title": "仇家的孩子", "prompt": "{name} 愛上了仇家的 {target}，兩人偷偷在磨坊後面見面。", "scope": "player_family", "chance": 0.02, "cooldown_years": 6,
-     "conditions": {"age": [16, 26], "married": false, "widowed": false},
+     "conditions": {"age": [16, 26], "married": false, "widowed": false, "marriageable": true},
      "target": {"pick": "remembered", "remembers": {"holder": "self", "about": "other_family", "negative": true, "min": 8},
-                "conditions": {"opposite_sex": true, "not_kin": true, "married": false, "age": [16, 28], "same_class": true, "other_dynasty": true}},
+                "conditions": {"opposite_sex": true, "not_kin": true, "married": false, "age": [16, 28], "same_class": true, "other_dynasty": true, "marriageable": true, "feud_ge": 1}},
      "options": [
        {"text": "成全他們，兩家和解", "log": "{name} 愛上了仇家的 {target}。兩家長輩坐下來喝了一夜的酒，終於點頭，讓婚事化解多年的恩怨。",
         "effects": [{"deed": {"type": "reconciled"}}, {"deed": {"type": "reconciled", "doer": "target"}}, {"marry_target": true}, {"prestige": 2}],

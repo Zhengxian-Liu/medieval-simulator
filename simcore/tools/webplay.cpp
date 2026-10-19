@@ -15,7 +15,8 @@
 //       {"do":"focus","who":12,"focus":"letters"}   (年度重心; free, any time in the season)
 //       {"do":"agenda","id":"sell_grain"}            (這一季的事: one of the state's "agenda" items)
 //       {"do":"interact","who":12,"event":"keep_company"}   (陪家人: the company visit this person needs most)
-//       {"do":"rule","rule":"occasions","value":"close"}     (家裡的規矩: one of the state's "rules", set to one of its choices)
+//       {"do":"rule","rule":"occasions","value":"close"}     (家裡的規矩: one of the state's "rules", set to one of its choices;
+//                                                             occasions = all|close|none|ask, grain = harvest|monthly|ask)
 #include <algorithm>
 #include <cmath>
 #include <fstream>
@@ -459,7 +460,8 @@ public:
     }
     // A season's books as the clients show them: from → to, each item signed and rounded to add up (as booksText),
     // and the grain bought merged into one line.
-    std::string booksJson(int key, double start, double end, const std::map<std::string, double>& items) {
+    // food: the barn over the same days, in words (World::foodSince), for the season still running.
+    std::string booksJson(int key, double start, double end, const std::map<std::string, double>& items, const std::string& food = "") {
         long from = static_cast<long>(std::floor(start + 1e-9)), to = static_cast<long>(std::floor(end + 1e-9));
         std::vector<std::pair<std::string, std::pair<double, long>>> xs;
         long sum = 0;
@@ -484,6 +486,7 @@ public:
         o.n("skey", key).text("season", seasonLabel(key)).text("cls", "ledger").n("from", from).n("to", to).raw("ins", arr(ins)).raw("outs", arr(outs));
         if (auto g = grain_.find(key); g != grain_.end() && g->second.times > 0)
             o.raw("grain", Obj().n("times", g->second.times).n("days", std::lround(g->second.days)).n("pence", std::lround(g->second.pence)).done());
+        if (!food.empty()) o.text("food", food);
         return o.done();
     }
 
@@ -615,8 +618,11 @@ public:
                            .text("debt_text", w.debtText(hh))     // to whom, and when it falls due
                            .text("home", h.house)
                            .text("standing", rung >= 0 ? World::standingName(rung) : "領主家")
-                           .b("lean", w.breadShort(h) > 0)    // the barn against the days to the harvest, today
+                           // The barn against the days to the harvest, today, in the numbers the 買糧 card uses; 「！」
+                           // (lean) only when the purse cannot buy what is short.
+                           .n("to_harvest", w.harvestIn())
                            .n("short_days", w.breadShort(h))
+                           .b("lean", w.breadAtRisk(h))
                            .done());
         // What only the report used to say (design/fun-r6.md A): the family's name with what moved it and how to mend
         // it, the ladder with its next rung, the last generation's unfinished wish.
@@ -646,9 +652,16 @@ public:
             for (const char* v : {"close", "all", "none", "ask"})
                 choices.push_back(Obj().text("value", v).text("text", World::occasionRuleText(v)).done());
             const std::string& now = w.occasionRule();
+            std::vector<std::string> grain;
+            for (const char* v : {"harvest", "monthly", "ask"})
+                grain.push_back(Obj().text("value", v).text("text", World::grainRuleText(v)).done());
+            const std::string& g = w.grainRule();
             o.raw("rules", arr({Obj().text("id", "occasions").text("name", "紅白事").text("value", now)
                                     .text("text", now.empty() ? "還沒定（下次有人來請時問你；讓 AI 過一年時照常例：親近的人家才去）" : World::occasionRuleText(now))
-                                    .raw("choices", arr(choices)).done()}));
+                                    .raw("choices", arr(choices)).done(),
+                                Obj().text("id", "grain").text("name", "買糧").text("value", g)
+                                    .text("text", g.empty() ? "還沒定（頭一回缺糧時問你；讓 AI 過一年時每月買一個月的）" : World::grainRuleText(g))
+                                    .raw("choices", arr(grain)).done()}));
         }
         // Holding the house for a child: the head may hand the years to the steward and answer only what is asked.
         if (const Household& ph = w.households()[w.playerHousehold()]; ph.ward != kNone && w.people()[ph.ward].alive()) {
@@ -664,7 +677,7 @@ public:
                 steps.push_back(Obj().text("name", w.milestoneName(hp, i)).b("done", st[i] == 1).b("slipped", st[i] == 2)
                                     .b("gate", a->milestones[i].gate).done());
             steps.push_back(Obj().text("name", w.ambitionFinal(hp)).b("done", false).b("final", true).done());
-            int left = a->maxYears - (w.today() - hp.ambitionSince) / kDaysPerYear;
+            int left = w.ambitionDeadline(hp) - w.year() + 1;  // counting this year: 1 = the last year
             std::vector<std::string> helps;
             for (const auto& pid : a->plans)
                 if (const PlanDef* pd = w.defs().plan(pid)) helps.push_back(str(pd->name));
@@ -1069,7 +1082,8 @@ public:
                 double d = total - (it == seasonStart.ledger.end() ? 0 : it->second);
                 if (std::abs(d) >= 0.005) items[why] = d;
             }
-            o.raw("ledger_now", booksJson(seasonKey(w.today()), seasonStart.money, w.households()[hh].money, items));
+            // ...and the barn (fun-r8 4): between two questions neither the purse nor the bread moves without a line.
+            o.raw("ledger_now", booksJson(seasonKey(w.today()), seasonStart.money, w.households()[hh].money, items, w.foodSince(seasonStart)));
         }
         // What the last season came to, until the next one; and what has moved since, so the header's money adds up.
         std::string sum = summary;

@@ -95,7 +95,7 @@
     {"id": "more_land", "final": "家裡的地多出 {gain} 畝（到 {target} 畝）", "hint": "辦「謀地」，或去「開口」向急著用錢的人家買；村裡有空地時領主也會出租",
      "name": "多種幾畝地", "desc": "把家裡的地再擴 {gain} 畝（到 {target} 畝）。",
      "offer": {"occupation": ["peasant", "shepherd"], "acres_lt": 40}, "goal": {"acres_gain_ge": {"min": 5, "pct": 25}}, "tradition": "landholders", "max_years": 12,
-     "milestones": [{"name": "存到買地的錢（360 便士）", "goal": {"money_ge": 360}}],
+     "milestones": [{"name": "存到買地的錢（360 便士）", "goal": {"money_ge": 360}, "skip_if": {"acres_gain_ge": {"min": 1}}}],
      "plans": ["acquire_land", "hire_out"],
      "next": ["big_landholder"],
      "ai": {"base": 10, "traits": {"ambitious": 15, "greedy": 5, "content": -8}}},

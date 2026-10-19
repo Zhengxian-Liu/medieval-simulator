@@ -402,6 +402,8 @@ void World::electionNotice() {
             part += cands.size() == 1 ? "，沒有別人出來爭"
                     : ours > top ? "，" + who + "暫時領先，可是還沒投票，人心會變"
                     : ours == top ? "，" + who + "跟人同票；同票時現任的連任，不然由老爺點名"
+                    // The one holding the post stands again by right and cannot canvass (ask.cpp): no telling him to.
+                    : t.mine == old ? "，" + who + "落後 " + std::to_string(top - ours) + " 票；現任的到期自動出來連任，拉不了票，只能靠平日的交情"
                                   : "，" + who + "落後 " + std::to_string(top - ours) + " 票，去找各家家主「開口」拉票，答應了的人多半會投你家";
             if (!t.grudge.empty()) part += "；有 " + std::to_string(t.grudge.size()) + " 家記著和你家的舊仇，不會投你";
             if (cands.size() > 1) part += "（各家看樣子投誰、拉票要什麼，看「村裡在爭什麼」的" + of->name + "）";

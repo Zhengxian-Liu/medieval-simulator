@@ -181,6 +181,12 @@ OfficeGate EventRunner::gate(const std::string& k, const Json& v, const Person& 
         set("別家的人", "同一家的人");
     } else if (k == "feud_ge") {
         set(v.asNumber() >= 2 ? "跟你家結了怨" : "跟你家有嫌隙", "跟你家還沒到那一步");
+    } else if (k == "marriageable") {
+        set(yes(v) ? "能談婚事（不是神職、書記，不在外打仗）" : "不能談婚事",
+            yes(v) ? who + "是神職、書記或在外打仗，不談婚事" : who + "還能談婚事");
+    } else if (k == "family_offices_ge") {
+        int now = w.familyOffices(p.dynasty);
+        set("家裡有 " + num(v.asNumber()) + " 個人當著村裡的差事", "家裡眼下有 " + std::to_string(now) + " 個人當差（要 " + num(v.asNumber()) + " 個）");
     } else {
         set(k, k);
         hush();

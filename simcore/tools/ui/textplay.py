@@ -28,7 +28,8 @@ Actions (the page's buttons):
   {"do":"focus","who":12,"focus":"letters"}          年度重心 (free, during a season; see more)
   {"do":"pass"}   end this season          {"do":"year"}   let the AI play a whole year
   {"do":"regency"}   holding the house for a child: hand the years to the steward until they come of age
-  {"do":"rule","rule":"occasions","value":"close"}   家裡的規矩 (standing rules, e.g. wakes and weddings: all|close|none|ask)
+  {"do":"rule","rule":"occasions","value":"close"}   家裡的規矩 (standing rules: occasions = all|close|none|ask,
+                                                     grain = harvest|monthly|ask)
                      (big questions are still asked on the way)
 """
 import json
@@ -107,7 +108,7 @@ def ledger_text(l):
     parts = "；".join(x for x in (ins, "、".join(y for y in (outs, grain) if y)) if x)
     moved = bool(l.get("ins") or l.get("outs"))
     head = f"錢 {l['from']} → {l['to']} 便士" if l["from"] != l["to"] else f"錢 {l['from']} 便士，" + ("進出相抵" if moved else "沒有進出")
-    return head + (f"（{parts}）" if parts else "")
+    return head + (f"（{parts}）" if parts else "") + (f"；{l['food']}" if l.get("food") else "")
 
 
 def season_block(s, now=False, news_all=False):
@@ -165,7 +166,9 @@ def top_bar(s):
     d, h = s["date"], s["house"]
     rep = s.get("reputation") or {}
     debt = f"欠債 {h['debt']} 便士（{h['debt_text']}）" if h.get("debt") else "欠債：沒有"
-    food = f"存糧 {h['food_days']} 天" + (f"（！到秋收還差 {h['short_days']} 天）" if h.get("lean") else "")
+    short = h.get("short_days", 0)
+    food = (f"存糧 {h['food_days']} 天・離秋收 {h.get('to_harvest', '?')} 天"
+            + (f"（{'！' if h.get('lean') else ''}差 {short} 天，{'錢不夠買' if h.get('lean') else '手上的錢買得起'}）" if short > 0 else ""))
     line1 = (f"=== {h['surname']}家｜{d['year']} 年 {d['season']}｜{h['standing']}｜錢 {h['money']} 便士｜{food}｜地 {h['acres']} 畝"
              + (f"（自由地 {h['freehold']} 畝）" if h.get("freehold") else "") + f"｜{debt}"
              + (f"｜名聲 {signed(rep['value'])}（{rep.get('word', '')}）" if rep else ""))
@@ -173,7 +176,9 @@ def top_bar(s):
     amb = s.get("ambition")
     fine = (s.get("contest") or {}).get("fine")
     if amb:
-        left = f"到 {amb['deadline']} 年底，還剩 {amb.get('years_left', '?')} 年" if amb.get("deadline") else f"還剩 {amb.get('years_left', '?')} 年"
+        yl = amb.get("years_left", "?")
+        when = "今年是最後一年！" if isinstance(yl, (int, float)) and yl <= 1 else f"還剩 {yl} 年（含今年）"
+        left = f"到 {amb['deadline']} 年底，{when}" if amb.get("deadline") else when
         out.append(f"志向：{amb['name']}（{left}）｜下一步 {amb.get('blocker', '')}　（全部條件：more）")
     if fine:
         out.append(f"！入地費 {fine['amount']} 便士，{fine['year']} 年 {fine['month']} 月前交給領主{'（已寬限過）' if fine.get('extended') else ''}")

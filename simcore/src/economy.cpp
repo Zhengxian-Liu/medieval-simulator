@@ -11,6 +11,10 @@ namespace sim {
 
 namespace {
 constexpr double kFarmGate = 0.6;  // what the corn dealer pays at the farm, of the market price he sells at
+// A spare hand's month of day labour (fun-r8: it was 7, less than half the 15 pence of bread a grown man eats in a
+// month at market, so every grown son the holding did not need was a mouth the family could never feed; at 10 a hand
+// nearly earns his own bread, and the children are the land's to feed).
+constexpr double kDayLabour = 10;
 const std::set<std::string> kCrafts{"smith", "carpenter", "miller", "weaver", "alewife"};
 
 std::string num(double v) { return std::to_string(static_cast<long>(std::lround(v))); }
@@ -45,8 +49,8 @@ double World::farmHands(const Household& h) const {
     return hands;
 }
 
-// The village has work for two spare hands a house at most (a big household's grown sons do not each find a master).
-double World::spareHands(const Household& h) const { return std::clamp(farmHands(h) - h.acres / 12, 0.0, 2.0); }
+// The village has work for three spare hands a house at most (a big household's grown sons do not each find a master).
+double World::spareHands(const Household& h) const { return std::clamp(farmHands(h) - h.acres / 12, 0.0, 3.0); }
 
 double World::portion(const Person& p) const {
     const double age = ageYears(p);
@@ -126,12 +130,14 @@ void World::harvest() {
         if (priest_ != kNone && people_[priest_].household != kNone)
             households_[people_[priest_].household].food += tithe;
         h.food += yield;
+        bookFood(h, "收成（交了什一稅）", yield);
 
         // Kept back: a year's bread and two months more, so the family does not sell at harvest and buy back in July.
         double reserve = consumption(h) * (kDaysPerYear + 60);
         if (h.food > reserve) {
             double sold = (h.food - reserve) * 0.6;
             h.food -= sold;
+            bookFood(h, "賣餘糧", -sold);
             h.money += sold * param("grain_price", 0.5) * kFarmGate;  // the corn dealer takes his cut and the carting
             book(h, "賣餘糧", sold * param("grain_price", 0.5) * kFarmGate);
         }
@@ -167,6 +173,15 @@ std::string World::hungerWhy(Id house) const {
         why.push_back("家裡 " + std::to_string(h.members.size()) + " 口人，" +
                       (tilled < 0.5 ? std::string("沒有地，屋後的菜園") : num(tilled) + " 畝地") + "平常年景也只收得到" +
                       (months < 1 ? std::string("不到一個月") : " " + std::to_string(months) + " 個月") + "的口糧");
+        // The way out a big house has (fun-r8 1): a married younger son set up on his own takes his mouths with him.
+        for (Id m : h.members) {
+            const Person& q = people_[m];
+            if (q.alive() && h.head != kNone && q.father == h.head && q.sex == Sex::Male && q.spouse != kNone && people_[q.spouse].alive() &&
+                m != h.head && heirOf(h, h.head) != m && q.home == kNone && h.acres >= 10) {
+                why.push_back("成了家的 " + shortName(m) + " 可以分出去自立門戶（計畫「給小兒子分家置產」）");
+                break;
+            }
+        }
     }
     if (int more = static_cast<int>(h.members.size()) - h.harvestMembers; more > 0 && h.harvestMembers > 0)
         why.push_back("秋收以後家裡多了 " + std::to_string(more) + " 口人");
@@ -293,9 +308,10 @@ void World::settleRent(Household& h, double rent, bool respite, bool begged) {
         log(1, "〔米迦勒節〕今年的地租 " + num(rent) + " 便士照數交清，存錢還剩 " + num(h.money) + " 便士。");
     if (full) return;
     if (h.head != kNone) addReputation(h.head, -2, "地租沒交齊");
-    // The steward carries at most about a year's rent on the books; beyond that he stops counting.
+    // Every penny short goes on the books (fun-r8 2: the steward used to stop counting past a year's rent, so old
+    // arrears quietly vanished and 「欠莊園會到 N」 left them out); the arrears' years bring the steward harder.
     double before = owedLord(h);
-    addDebt(h, std::min(rent - paid, std::max(0.0, rent - before)), lord_);
+    addDebt(h, rent - paid, lord_);
     if (respite && h.creditor == lord_ && h.debt > 0.5) h.debtYears = -1;
     if (!inPlayerHouse(h.id)) return;
     // In whole pence as the header shows the purse and the debt (rounded down), so the card, this line and the
@@ -370,9 +386,8 @@ void World::reckonRent(Household& h, double rent, const std::string& why0) {
         if (!begged && !respite && lord_ != kNone && people_[lord_].alive())
             opts.push_back("去求管家寬限一年（成不成，要看老爺對你家的臉色）"), tag.push_back(4);
         // What the books lead to: the arrears keep their years, and each Michaelmas unpaid the steward comes harder.
-        // (the steward carries at most about a year's rent: as settleRent books it)
         // (settleRent takes whole pence when short: the fraction stays in the purse, so the sum is from the whole purse)
-        double books = owedNow + std::min(std::max(0.0, rent - std::floor(std::max(0.0, h.money) + 1e-9)), std::max(0.0, rent - owedNow));
+        double books = owedNow + std::max(0.0, rent - std::floor(std::max(0.0, h.money) + 1e-9));
         int next = (owedNow > 0.5 && h.creditor == lord_ ? std::max(0, h.debtYears) : 0) + 1;
         opts.push_back(respite ? "差的先欠著，寬限到後年米迦勒節（欠莊園會到 " + std::to_string(static_cast<long>(std::floor(books + 1e-9))) + " 便士）"
                                : "差的先記在莊園帳上（欠莊園會到 " + std::to_string(static_cast<long>(std::floor(books + 1e-9))) + " 便士；" +
@@ -392,6 +407,7 @@ void World::reckonRent(Household& h, double rent, const std::string& why0) {
             if (h.money < rent - 1 && h.food > daily * 300) {
                 double s = std::min(h.food - daily * 300, (rent - h.money) / price);
                 h.food -= s;
+                bookFood(h, "賣口糧湊租", -s);
                 h.money += s * price;
                 h.soldForRent += s;
                 book(h, "賣口糧湊租", s * price);
@@ -402,6 +418,7 @@ void World::reckonRent(Household& h, double rent, const std::string& why0) {
         int t = tag[r];
         if (t == 0) {
             h.food -= sell;
+            bookFood(h, "賣口糧湊租", -sell);
             h.money += sell * price;
             h.soldForRent += sell;
             book(h, "賣口糧湊租", sell * price);
@@ -583,6 +600,7 @@ void World::ensureFood(Household& h) {
         double want = daily * std::min(90, toHarvest + 15) - h.food;
         double buy = std::clamp(want, 0.0, h.money / price);
         h.food += buy;
+        bookFood(h, "買糧", buy);
         h.money -= buy * price;
         book(h, "買糧", -buy * price);
         if (inPlayerHouse(h.id) && buy * price >= 1)
@@ -596,12 +614,29 @@ void World::ensureFood(Household& h) {
     }
 }
 
-// The player's house running short of bread before the harvest: how to get through to the harvest is the family's to
-// say, and the card counts against the year's hunger budget like 米缸見底 and 斷糧. Every answer holds for that once:
-// a month bought is a month, and when it is eaten the family is asked again (while the year's budget lasts).
-// A small gap with coin enough is no crisis: the grain is bought without a card, and the line says so. Past the budget
-// nothing is bought until the barn is down to a fortnight, and then only a month, in words.
-// Returns false when no one was asked (the house then buys as every house does): no one to ask.
+// 買糧 is one standing rule (fun-r8 1), 家裡的規矩 like the wakes and weddings: buy to the harvest, a month at a time,
+// or "ask me" (asked once a harvest year, the answer holding until the harvest). Every grain bought is on the books;
+// the first buy of a harvest year by the rule is a line in the chronicle. Nothing is bought beyond what the rule (or
+// the card) says, and a rule the purse cannot keep is said once, then the hunger cards carry the other ways out.
+const char* World::grainRuleText(const std::string& rule) {
+    if (rule == "harvest") return "缺糧時一次買到收成";
+    if (rule == "monthly") return "缺糧時每月初買一個月的";
+    if (rule == "ask") return "每年頭一回缺糧時問我（一年最多問一次，選的辦法用到收成）";
+    return "還沒定（頭一回缺糧時問你）";
+}
+
+void World::setGrainRule(const std::string& rule, bool quiet) {
+    if (rule != "harvest" && rule != "monthly" && rule != "ask") return;
+    bool changed = rule != grainRule_;
+    grainRule_ = rule;
+    // A rule changed by hand takes over at once, also for the rest of this harvest year.
+    if (changed && !quiet && playerHousehold_ != kNone) households_[playerHousehold_].grainAsked = -1;
+    if (changed && !quiet && playerHousehold_ != kNone && actingHead() != kNone)
+        log(1, std::string("【家裡的規矩】往後買糧：") + grainRuleText(rule) + "。");
+}
+
+// The player's house running short of bread before the harvest (ensureFood: under two months' bread). Returns false
+// when no one keeps the house (it then buys as every house does).
 bool World::askGrain(Household& h) {
     if (h.head == kNone || actingHead() == kNone) return false;
     const double daily = std::max(0.5, consumption(h));
@@ -609,91 +644,115 @@ bool World::askGrain(Household& h) {
     const int toHarvest = daysToHarvest();
     const int season = harvestYear();  // the harvest the bread has to last to
     const double days = foodDays(h);
-    // This is asked on the first of the month and not again until the next: bread for less than that is an empty barn
-    // before the month is out, so nothing short of it is left as it is while there is coin to buy with.
+    // Checked on the first of the month: a month's bread and two days is enough to reach the next check.
     constexpr double kToNextCheck = kDaysPerMonth + 2;
     const double all = toHarvest + 15;
     const double costAll = std::max(0.0, daily * all - h.food) * price;
-    auto buy = [&](double upTo) {  // buys up to `upTo` days in the barn, as far as the purse goes; the days bought
-        double b = std::clamp(daily * upTo - h.food, 0.0, h.money / price);
+    auto buy = [&](double upTo) {  // buys up to `upTo` days in the barn, as far as the purse goes; the bread bought
+        double b = std::clamp(daily * upTo - h.food, 0.0, std::max(0.0, h.money) / price);
         h.food += b;
+        bookFood(h, "買糧", b);
         h.money = std::max(0.0, h.money - b * price);
         book(h, "買糧", -b * price);
         return b;
     };
-    const bool again = h.grainAsked == season;
-    // Asked already this harvest year and that answer still holds: nothing more while the barn lasts to next month.
-    if (again && days >= kToNextCheck) return true;
-    // A few weeks short with coin to spare (a quarter of the purse at most): bought at market, no card (the second
-    // time too: a small gap is no crisis).
-    if (all - days <= 45 && costAll <= h.money * 0.25) {
+    const bool thisYear = h.grainAsked == season;  // this harvest year's way is settled (the card, or the rule said)
+    // The way this year: what the card chose (borrowing and two meals a day were for once: then a month at a time),
+    // else the standing rule.
+    std::string rule = grainRule_;
+    if (thisYear && h.grainChoice >= 0) rule = h.grainChoice == 0 ? "harvest" : "monthly";
+    const bool ask = !thisYear && (rule.empty() || rule == "ask");
+    // A few weeks short with coin to spare (a quarter of the purse at most) is no question: bought at market.
+    if (ask && all - days <= 45 && costAll <= h.money * 0.25) {
         double b = buy(all);
         if (b * price >= 1)
             log(1, "存糧只夠 " + num(days) + " 天，離秋收 " + std::to_string(toHarvest) + " 天：家裡花 " + num(b * price) + " 便士買了 " + num(b / daily) +
                        " 天的糧，夠吃到收成（手上還有 " + num(h.money) + " 便士）。");
         return true;
     }
-    int& hungerCards = budgetUsed_[{h.id, "hunger", budgetYear("hunger")}];
-    if (h.money < daily * 15 * price || hungerCards >= 2) {
-        // No card (too little coin to choose with, or this year's hard choices are made): the hunger cards carry the
-        // other ways out; before the barn runs dry a month is bought, said with its price and why.
-        if (days >= kToNextCheck) return true;
-        double b = buy(std::min(days + 35, all));  // (a few days over the month, to reach next month's reckoning)
-        if (b >= daily * 5)
-            log(1, "存糧只剩 " + num(days) + " 天，" + (again && h.grainChoice == 3 ? std::string("勒緊褲帶也撐不下去了，") : std::string()) + "家裡拿 " +
-                       num(b * price) + " 便士買了 " + num(b / daily) + " 天的糧（手上剩 " + num(h.money) + " 便士，離秋收 " + std::to_string(toHarvest) + " 天）。");
+    // While a year is let run, an unset rule or "ask me" goes by custom: a month at a time.
+    if (ask && routineByRule_) {
+        rule = "monthly";
+    } else if (ask) {
+        const double monthDays = std::min(days + 30, all);
+        const double costMonth = std::min(h.money, std::max(0.0, daily * monthDays - h.food) * price);
+        const double borrowDays = std::min(90.0, all - days);
+        const double borrowOwed = grainLoanOwed(h, borrowDays);
+        std::vector<std::string> opts;
+        std::vector<int> tag;
+        const bool once = !grainRule_.empty();  // "ask me" chosen: the answer is for this year only
+        const std::string keep = once ? "，用到收成" : "；往後缺糧都這樣買";
+        if (h.money >= costAll) opts.push_back("買到收成（" + num(costAll) + " 便士" + keep + "）"), tag.push_back(0);
+        else if (all - days > 45 && h.money >= daily * 15 * price)
+            opts.push_back("把錢都拿去買糧（" + num(h.money) + " 便士，夠吃 " + num(h.money / price / daily) + " 天" + keep + "）"), tag.push_back(0);
+        if ((all - days > 45 || h.money < costAll) && costMonth >= daily * 25 * price)
+            opts.push_back("每月買一個月的（這個月 " + num(costMonth) + " 便士" + (once ? "，到收成為止" : "；往後缺糧都這樣買") + "）"), tag.push_back(1);
+        opts.push_back("向鄰居借 " + num(borrowDays) + " 天的糧（秋收後還 " + num(borrowOwed) + " 便士；吃完了每月買一個月的）"), tag.push_back(2);
+        opts.push_back("勒緊褲帶，一天只吃兩頓（省下半個月的糧；人會瘦，孩子最先撐不住；之後每月買一個月的）"), tag.push_back(3);
+        std::string sit = "家裡存糧還夠 " + num(days) + " 天，離秋收還有 " + std::to_string(toHarvest) + " 天。" + hungerWhy(h.id) + "市集上的糧，全家吃一個月要 " +
+                          num(daily * 30 * price) + " 便士；手上 " + num(h.money) + " 便士" + (owedAll(h.id) > 0.5 ? "，" + debtText(h.id) : "") + "。" +
+                          (once ? "（家裡的規矩是每年問一次：這回選的辦法用到收成，今年不再問。）"
+                                : "（選了買到收成或每月買，就成了家裡的規矩，往後不再問；可以在「家裡的規矩」改。）");
+        int r = askPlayer("買糧", sit, opts);
+        if (r < 0) {
+            rule = "monthly";  // no one to ask: as custom has it
+        } else {
+            ++budgetUsed_[{h.id, "hunger", budgetYear("hunger")}];
+            h.grainAsked = season;
+            h.grainChoice = tag[r];
+            if (!once) setGrainRule(tag[r] == 0 ? "harvest" : tag[r] == 1 ? "monthly" : "ask", true);
+            const std::string head = fullName(h.head);
+            if (tag[r] <= 1) {
+                double b = buy(tag[r] == 0 ? all : monthDays);
+                log(1, "〔買糧〕" + head + " 去市集買了 " + num(b / daily) + " 天的糧（" + num(b * price) + " 便士），存糧夠吃 " + num(h.food / daily) + " 天" +
+                           (tag[r] == 1 && h.food / daily < toHarvest ? "；往後每月初再買一個月的" : "") + "。" +
+                           (once ? "" : std::string("往後缺糧照這樣辦（家裡的規矩）。")));
+                return true;
+            }
+            if (tag[r] == 2) {
+                log(1, "〔買糧〕" + head + " 拉下臉，去向鄰居借糧。");
+                if (borrowGrain(h, h.head, borrowDays, kNone) != kNone) return true;
+            } else {
+                // Two meals a day: the barn lasts longer, the family grows thin, the children first.
+                h.food += daily * 15;
+                for (Id m : h.members) {
+                    Person& p = people_[m];
+                    p.health = std::clamp(p.health - (ageYears(p) < 10 ? 4 : 2), 0.0, 100.0);
+                    p.needs[Hunger] = std::clamp(p.needs[Hunger] - 30, 0.0, 100.0);
+                    p.needs[Spirit] = std::clamp(p.needs[Spirit] - 10, 0.0, 100.0);
+                }
+                addStress(h.head, 6, "勒緊褲帶過日子");
+                log(1, "〔買糧〕" + head + " 家勒緊褲帶，一天只吃兩頓，省著吃到收成。");
+                if (foodDays(h) >= kToNextCheck) return true;
+            }
+            // Nobody lent, or two meals a day will not reach the next month: a month is bought now, as the card said.
+            rule = "monthly";
+        }
+    }
+    // By the rule (or this year's answer); no rule yet, or "ask me" already answered for, is a month at a time.
+    if (rule != "harvest") rule = "monthly";
+    const bool first = h.grainAsked != season;
+    if (first) h.grainAsked = season, h.grainChoice = -1;
+    if (rule == "monthly" && foodDays(h) >= kToNextCheck) return true;  // the month is not eaten yet
+    const double have = foodDays(h);
+    const double upTo = rule == "harvest" && h.money >= costAll ? all : std::min(have + 35, all);  // (a month and a few days, to the next check)
+    const bool cut = rule == "harvest" && upTo < all;
+    // That the purse cannot keep the rule is said once a harvest year (then only the books show each month's grain);
+    // the hunger cards (米缸見底, 斷糧) carry the other ways out.
+    const bool said = h.grainBroke == season;
+    double b = buy(upTo);
+    if (b < daily * 3) {
+        if (!said && h.money < daily * 5 * price) {
+            h.grainBroke = season;
+            log(1, "存糧只夠 " + num(have) + " 天，手上只剩 " + num(h.money) + " 便士，照家裡的規矩也買不起糧了（離秋收 " + std::to_string(toHarvest) + " 天）。");
+        }
         return true;
     }
-    const double monthDays = std::min(days + 30, all);
-    const double costMonth = std::min(h.money, std::max(0.0, daily * monthDays - h.food) * price);
-    const double borrowDays = std::min(90.0, all - days);
-    const double borrowOwed = grainLoanOwed(h, borrowDays);
-    std::vector<std::string> opts;
-    std::vector<int> tag;
-    if (h.money >= costAll) opts.push_back("買到收成（" + num(costAll) + " 便士）"), tag.push_back(0);
-    else if (all - days > 45) opts.push_back("把錢都拿去買糧（" + num(h.money) + " 便士，夠吃 " + num(h.money / price / daily) + " 天）"), tag.push_back(0);
-    if ((all - days > 45 || h.money < costAll) && costMonth >= daily * 25 * price)
-        opts.push_back("先買一個月的（" + num(costMonth) + " 便士；吃完了再商量）"), tag.push_back(1);
-    opts.push_back("向鄰居借 " + num(borrowDays) + " 天的糧（秋收後還 " + num(borrowOwed) + " 便士）"), tag.push_back(2);
-    opts.push_back("勒緊褲帶，一天只吃兩頓（省下半個月的糧；人會瘦，孩子最先撐不住）"), tag.push_back(3);
-    const char* last = !again ? "" : h.grainChoice <= 1 ? "上回買的糧又快吃完了：" : h.grainChoice == 2 ? "借來的糧又快吃完了：" : "勒緊褲帶也只撐到這裡：";
-    std::string sit = std::string(last) + "家裡存糧還夠 " + num(days) + " 天，離秋收還有 " + std::to_string(toHarvest) +
-                      " 天。" + hungerWhy(h.id) + "市集上的糧，全家吃一個月要 " + num(daily * 30 * price) + " 便士；手上 " + num(h.money) + " 便士" +
-                      (owedAll(h.id) > 0.5 ? "，" + debtText(h.id) : "") + "。";
-    int r = askPlayer("買糧", sit, opts);
-    if (r < 0) return false;
-    ++hungerCards;
-    h.grainAsked = season;
-    h.grainChoice = tag[r];
-    const std::string head = fullName(h.head);
-    if (tag[r] <= 1) {
-        double b = buy(tag[r] == 0 ? all : monthDays);
-        log(1, "〔買糧〕" + head + " 去市集買了 " + num(b / daily) + " 天的糧（" + num(b * price) + " 便士），存糧夠吃 " + num(h.food / daily) + " 天" +
-                   (tag[r] == 1 && h.food / daily < toHarvest ? "；吃完了再商量。" : "。"));
-    } else if (tag[r] == 2) {
-        log(1, "〔買糧〕" + head + " 拉下臉，去向鄰居借糧。");
-        borrowGrain(h, h.head, borrowDays, kNone);
-    } else {
-        // Two meals a day: the barn lasts longer, the family grows thin, the children first.
-        h.food += daily * 15;
-        for (Id m : h.members) {
-            Person& p = people_[m];
-            p.health = std::clamp(p.health - (ageYears(p) < 10 ? 4 : 2), 0.0, 100.0);
-            p.needs[Hunger] = std::clamp(p.needs[Hunger] - 30, 0.0, 100.0);
-            p.needs[Spirit] = std::clamp(p.needs[Spirit] - 10, 0.0, 100.0);
-        }
-        addStress(h.head, 6, "勒緊褲帶過日子");
-        log(1, "〔買糧〕" + head + " 家勒緊褲帶，一天只吃兩頓，省著吃到收成。");
-    }
-    // Whatever was chosen, the barn is not left to run dry before the next reckoning while there is coin for bread
-    // (nobody lent, two meals a day still not enough).
-    if (foodDays(h) < kToNextCheck && toHarvest > foodDays(h)) {
-        const double had = foodDays(h);
-        double b = buy(std::min(had + 35, all));
-        if (b * price >= 1)
-            log(1, "  存糧只夠 " + num(had) + " 天，撐不到下個月：家裡還是拿 " + num(b * price) + " 便士買了 " + num(b / daily) + " 天的糧（手上剩 " +
-                       num(h.money) + " 便士）。");
-    }
+    if (cut) h.grainBroke = season;
+    if (first || (cut && !said))
+        log(1, std::string("照家裡的規矩（") + grainRuleText(rule) + "）" + (cut ? "，可是錢不夠買到收成，先" : "，") + "買了 " + num(b / daily) + " 天的糧（" +
+                   num(b * price) + " 便士），存糧夠吃 " + num(foodDays(h)) + " 天，離秋收 " + std::to_string(toHarvest) + " 天，手上剩 " + num(h.money) + " 便士" +
+                   (rule == "monthly" && foodDays(h) < toHarvest ? "；照這樣到收成大約還要 " + num(std::max(0.0, daily * all - h.food) * price) + " 便士" : "") + "。");
     return true;
 }
 
@@ -714,6 +773,7 @@ Id World::borrowGrain(Household& h, Id asker, double days, Id cause) {
         return kNone;
     }
     h.food += consumption(h) * days;
+    bookFood(h, "借來的糧", consumption(h) * days);
     // The grain is the lender's whatever is asked back for it (given outright, it still came out of his store).
     Household& lh = households_[people_[lender].household];
     double cost = std::round(consumption(h) * days * param("grain_price", 0.5) * kFarmGate);
@@ -813,6 +873,8 @@ void World::monthlyEconomy() {
             double board = std::min(n * 40.0, std::max(0.0, mh.food - consumption(mh) * 60));
             mh.food -= board;
             h.food += board;
+            bookFood(h, "長工在東家吃的", board);
+            bookFood(mh, "長工吃的", -board);
             double pay = std::min(n * 4 * wage, std::max(0.0, mh.money));
             mh.money -= pay;
             book(mh, "雇長工", -pay);
@@ -825,8 +887,8 @@ void World::monthlyEconomy() {
                 log(1, "長工做完了，" + fullName(h.head) + " 從" + (h.hiredBy != kNone && households_[h.hiredBy].head != kNone ? " " + fullName(households_[h.hiredBy].head) + " 家" : "莊園") + "回來了。");
             h.hiredBy = kNone;
         }
-        h.money += spare * 7 * wage;
-        book(h, "打短工", spare * 7 * wage);
+        h.money += spare * kDayLabour * wage;
+        book(h, "打短工", spare * kDayLabour * wage);
         // What a month's living takes from the purse, never more than is in it (an empty purse goes without).
         auto spend = [&](double want, const std::string& why) {
             double paid = std::clamp(want, 0.0, std::max(0.0, h.money));

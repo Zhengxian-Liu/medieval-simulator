@@ -181,6 +181,8 @@ struct WorldTest {
         return false;
     }
     static int toHarvest(World& w) { return w.daysToHarvest(); }
+    static void yearlyDebts(World& w) { w.yearlyDebts(); }
+    static void like(World& w, Id a, Id b, double v) { w.addOpinion(a, b, "test", v, 30); }
     static void yearlyFeuds(World& w) { w.yearlyFeuds(); }
     static void yearlyFeudTurns(World& w) { w.yearlyFeudTurns(); }
     static void takeOverScene(World& w, Id newHead, Id from) { w.takeOverScene(w.households_[w.playerHousehold_], newHead, from, false); }
@@ -412,18 +414,20 @@ int main() {
             CHECK(foodDays(w) > 70 && foodDays(w) < 77, "buying to the harvest did not buy to the harvest");
             CHECK(asked.back().situation.find("缺糧的緣故：") != std::string::npos, "the grain card does not say why the house is short");
         }
-        // fun-r6 C: an answer holds once. "A month" buys one month; when it is eaten the family is asked again (the
-        // year's hunger budget allowing), and past the budget a month is bought only near the bare barn, in words.
+        // fun-r8 1: buying grain is one standing rule. The first card's answer becomes the rule ("a month at a time"):
+        // a month is bought when the last is eaten, with no card, nothing more than the rule says, every grain on
+        // the books; the next harvest year asks nothing. "Ask me" asks once a harvest year and no more.
         {
             World w = base;
             int cards = 0;
             std::string lastSit;
+            std::string want = "每月買一個月的";
             w.setChooser([&](const World::ChoicePrompt& p) {
                 if (p.title != "買糧") return -1;
                 ++cards;
                 lastSit = p.situation;
                 for (size_t i = 0; i < p.options.size(); ++i)
-                    if (p.options[i].rfind("先買一個月的", 0) == 0) return static_cast<int>(i);
+                    if (p.options[i].rfind(want, 0) == 0) return static_cast<int>(i);
                 return -1;
             });
             auto cardAt = [&](int month, double food) {  // the barn set just before the month's reckoning
@@ -434,24 +438,29 @@ int main() {
                 w.stepDay();
                 return cards - before;
             };
-            // (What the card bought, from its line: a neighbour's sack the same day is not the card's doing.)
             auto lastGrainLine = [&] {
                 for (size_t i = w.chronicle().size(); i-- > 0;)
                     if (w.chronicle()[i].text.rfind("〔買糧〕", 0) == 0) return w.chronicle()[i].text;
                 return std::string();
             };
             CHECK(cardAt(3, 20) == 1 && lastGrainLine().find("買了 30 天的糧") != std::string::npos, "a month's grain was not bought on the card");
-            CHECK(cardAt(4, 40) == 0 && foodDays(w) < 41, "grain was bought again on the strength of last time's answer");
-            CHECK(cardAt(5, 10) == 1 && lastSit.find("上回買的糧又快吃完了") != std::string::npos, "the month eaten, the family was not asked again");
-            size_t lines = w.chronicle().size();
-            CHECK(cardAt(6, 10) == 0, "a third grain card in one year");
-            CHECK(foodDays(w) > 30 && foodDays(w) < 50, "past the year's cards, a month was not bought at the bare barn");
-            bool said = false, standing = false;
-            for (size_t i = lines; i < w.chronicle().size(); ++i) {
-                said = said || w.chronicle()[i].text.find("便士買了") != std::string::npos;
-                standing = standing || w.chronicle()[i].text.find("照今年說好的") != std::string::npos;
-            }
-            CHECK(said && !standing, "the grain bought past the cards was not told with its price, or was told as a standing order");
+            CHECK(w.grainRule() == "monthly", "the card's answer did not become the family's rule");
+            CHECK(lastSit.find("家裡的規矩") != std::string::npos, "the first grain card does not say its answer becomes the rule");
+            CHECK(cardAt(4, 40) == 0 && foodDays(w) < 41, "grain was bought while the month's bread was not eaten");
+            double booked = w.ledger().count("買糧") ? w.ledger().at("買糧") : 0;
+            CHECK(cardAt(5, 10) == 0 && foodDays(w) > 35 && foodDays(w) < 47, "the rule did not buy the next month, or bought more");
+            CHECK((w.ledger().count("買糧") ? w.ledger().at("買糧") : 0) < booked - 1, "the grain bought by the rule is not on the books");
+            CHECK(cardAt(6, 10) == 0, "a second grain card in one harvest year");
+            // The next harvest year: the rule holds, no card.
+            runTo(w, 9, 0);
+            CHECK(cardAt(3, 20) == 0 && foodDays(w) > 45, "the standing rule was asked again the next year");
+            // "Ask me": once in a harvest year.
+            w.issue({w.today(), "rule", w.actingHead(), "grain:ask", kNone, kNone});
+            w.runCommands();
+            CHECK(w.grainRule() == "ask", "the grain rule could not be set");
+            want = "向鄰居借";
+            CHECK(cardAt(4, 10) == 1, "ask-me did not ask");
+            CHECK(cardAt(5, 10) == 0 && foodDays(w) > 30, "ask-me asked twice in a harvest year, or left the barn bare after the loan was eaten");
             w.setChooser({});
         }
         // A few weeks short with coin to spare is no crisis: bought without a card, and said.
@@ -611,7 +620,7 @@ int main() {
     // r6 review (money/food): a house with coin never sits on an empty barn. The grain card is asked on the first of
     // the month: whatever is answered, the barn lasts to the next first while the purse can buy bread (seed 58, 1330s:
     // 22 days empty holding 405 pence).
-    for (const char* pick : {"先買一個月的", "勒緊褲帶"}) {
+    for (const char* pick : {"每月買一個月的", "勒緊褲帶"}) {
         Config c;
         c.seed = 58;
         c.prerun = 25;
@@ -945,7 +954,37 @@ int main() {
             }
         }
         CHECK(answers[3] + answers[4] > 0, "nobody ever said no to an ask");
-        CHECK(cards > 0, "no ask ever named terms to answer on the spot");
+        // Terms on the spot are rare in a free run (a seller in debt is what brings them), so they are staged: a house
+        // in debt that likes the family is asked for a parcel; somewhere it names its price and the card takes it.
+        int staged = 0;
+        for (int seed : {3, 5, 8, 11}) {
+            Config c;
+            c.seed = seed;
+            c.prerun = 25;
+            World w(defs, c);
+            bool card = false;
+            w.setChooser([&](const World::ChoicePrompt& p) {
+                if (p.title != "開口") return -1;
+                card = true;
+                return 0;
+            });
+            w.startSeason();
+            for (Id who : w.peopleToSee()) {
+                if (w.playerHead() == kNone || w.timeLeft() < 1) break;
+                for (const auto& o : w.asksFor(who)) {
+                    if (!o.open || o.ask != "sell_parcel") continue;
+                    WorldTest::house(w, w.person(who).household).debt = 60;
+                    WorldTest::like(w, who, w.playerHead(), 25);
+                    card = false;
+                    w.issue({w.today(), "ask", w.playerHead(), o.ask + "|||", who, o.object});
+                    w.runCommands();
+                    staged += card;
+                    CHECK(w.household(w.playerHousehold()).money > -0.01, "taking the terms left the family in the red");
+                    break;
+                }
+            }
+        }
+        CHECK(cards + staged > 0, "no ask ever named terms to answer on the spot");
         CHECK(agendaShown > 0 && agendaDone > 0, "the season's list was never there to act on");
         std::printf("season list: %d done (", agendaDone);
         for (const auto& [k, n] : kinds) std::printf(" %s %d", k.c_str(), n);
@@ -1609,7 +1648,8 @@ int main() {
             CHECK(w.person(heir).station == "scholar", "the heir at school was called home though his mother keeps the land for him");
             CHECK(w.household(hid).ward == heir, "the land is not held for the heir at school");
             size_t before = w.chronicle().size();
-            for (int d = 0; d < 5 * kDaysPerYear && w.person(heir).station == "scholar"; ++d) w.stepDay();
+            for (int d = 0; d < 5 * kDaysPerYear && w.person(heir).station == "scholar" && w.person(heir).alive(); ++d) w.stepDay();
+            if (!w.person(heir).alive()) continue;  // died at school (a fever takes a schoolboy too): the next seed
             bool ended = false;
             for (const auto& e : w.threadEnds()) ended = ended || (e.kind == "path" && e.day >= w.today() - 5 * kDaysPerYear && e.text.rfind(w.person(heir).firstName, 0) == 0);
             CHECK(w.person(heir).station != "scholar" && ended, "the school term did not end with an outcome kept for the family");
@@ -2228,6 +2268,75 @@ int main() {
             for (const auto& a : w.seasonAgenda(true)) dup = dup || !ids.insert(a.id).second;
         }
         CHECK(!dup, "agenda: the same item twice in a season's list");
+    }
+
+    // fun-r8 2: consequences stick. A neighbour's debt taken to court with coin in the purse is not let go: the court
+    // takes the purse (leaving 10 to live on), then land or the ox, and the rest runs another year.
+    {
+        Config c;
+        c.seed = 58;
+        c.prerun = 25;
+        World w(defs, c);
+        const Id hh = w.playerHousehold();
+        Id creditor = kNone;
+        for (const auto& h : w.households())
+            if (!h.extinct && h.id != hh && h.head != kNone && h.head != w.lordId() && !h.members.empty() && w.person(h.head).alive()) creditor = h.head;
+        CHECK(creditor != kNone, "no neighbour to owe");
+        if (creditor != kNone) {
+            Household& h = WorldTest::house(w, hh);
+            h.debt = 0, h.heldDebt = 0;
+            WorldTest::addDebt(w, hh, 2000, creditor);
+            h.debtYears = 2;
+            w.setMoneyForTest(hh, 108);
+            w.setChooser([&](const World::ChoicePrompt&) { return -1; });
+            size_t lines = w.chronicle().size();
+            WorldTest::yearlyDebts(w);
+            bool letGo = false, court = false, settled = false;
+            for (size_t i = lines; i < w.chronicle().size(); ++i) {
+                letGo = letGo || w.chronicle()[i].text.find("要不回來了") != std::string::npos;
+                court = court || w.chronicle()[i].text.find("法庭判") != std::string::npos;
+                settled = settled || w.chronicle()[i].text.find("這筆債了了") != std::string::npos;
+            }
+            CHECK(!letGo && court, "a debt taken to court was let go while the debtor had coin");
+            CHECK(w.household(hh).money <= 10.5, "the court did not take the purse");
+            // More than the purse, a quarter of the land and the ox can cover: the rest stands, with the same creditor.
+            CHECK(!settled && w.household(hh).debt > 0.5 && w.household(hh).creditor == creditor, "what the court could not take was forgiven");
+            w.setChooser({});
+        }
+    }
+    // fun-r8 2: a sum saved to spend on the goal stays reached once reached; land bought another way passes it.
+    {
+        Config c;
+        c.seed = 58;
+        c.prerun = 25;
+        World w(defs, c);
+        const Id hh = w.playerHousehold(), head = w.playerHead();
+        WorldTest::setAmbition(w, head, "more_land");
+        w.setMoneyForTest(hh, 400);
+        w.runCommands();
+        w.setMoneyForTest(hh, 0);
+        CHECK(!w.milestoneState(head).empty() && w.milestoneState(head)[0] == 1, "the savings spent on the land became a step back");
+        WorldTest::setAmbition(w, head, "more_land");
+        WorldTest::giveLand(w, hh, 2);
+        w.runCommands();
+        CHECK(!w.milestoneState(head).empty() && w.milestoneState(head)[0] == 1, "land bought before the savings left the savings as the next step");
+    }
+    // fun-r8 3: a clerk, or one the family is getting a church post for, is off the marriage market.
+    {
+        Config c;
+        c.seed = 58;
+        c.prerun = 25;
+        World w(defs, c);
+        Id who = kNone;
+        for (Id m : w.household(w.playerHousehold()).members)
+            if (m != w.playerHead() && w.ageYears(w.person(m)) >= 15 && w.marriageable(w.person(m))) who = m;
+        if (who != kNone) {
+            WorldTest::person(w, who).occupation = "clerk";
+            CHECK(!w.marriageable(w.person(who)), "a clerk is still on the marriage market");
+        }
+        // May Day is in May.
+        for (const auto& ev : defs.events)
+            if (ev.id == "courtship_m") CHECK(ev.conditions.has("month"), "the May Day courtship has no month");
     }
 
     if (failures == 0) std::printf("all tests passed\n");

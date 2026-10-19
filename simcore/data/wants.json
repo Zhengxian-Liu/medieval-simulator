@@ -22,7 +22,7 @@
      "neglect_note": "{first}等不到你一句話，心裡更怨了。"},
 
     {"id": "match", "text": "盼你去{about:longing}家提親",
-     "when": {"concern": {"kind": "longing", "min": 15}, "married": false},
+     "when": {"concern": {"kind": "longing", "min": 15}, "married": false, "marriageable": true},
      "answered_by": ["plan:arrange_match"], "patience": 4,
      "fulfil": [{"opinion": {"value": 6, "mod": "heeded", "years": 10}}],
      "fulfil_note": "你答應替{first}去說親，{pron}高興得一夜沒睡。",
@@ -82,8 +82,16 @@
      "fulfil_note": "{first}跟著你下田，學會了怎麼看天、怎麼下種。",
      "neglect": []},
 
+    {"id": "own_house", "one_at_a_time": true, "text": "家裡人多，盼你給{pron}分家，帶著妻兒自立門戶",
+     "when": {"child_of_target": true, "sex": "male", "married": true, "heir_apparent": false, "is_head": false, "in_service": false, "household_size_ge": 9, "age": [20, 45]},
+     "answered_by": ["plan:settle_son"], "patience": 6, "chance": 0.2,
+     "fulfil": [{"opinion": {"value": 6, "mod": "heeded", "years": 10}}],
+     "fulfil_note": "你答應給{first}分家，{pron}跟媳婦商量了一整夜要種什麼。",
+     "neglect": [{"opinion": {"value": -4, "mod": "put_off", "years": 6}}],
+     "neglect_note": "{first}等了一年多，你始終沒提分家的事。"},
+
     {"id": "settle", "one_at_a_time": true, "text": "到了成家的年紀，盼你替{pron}留意人家",
-     "when": {"child_of_target": true, "age": [17, 30], "married": false, "no_concern": {"kind": "longing"}},
+     "when": {"child_of_target": true, "age": [17, 30], "married": false, "marriageable": true, "no_concern": {"kind": "longing"}},
      "answered_by": ["plan:arrange_match"], "patience": 6, "chance": 0.25,
      "fulfil": [{"opinion": {"value": 5, "mod": "heeded", "years": 10}}],
      "fulfil_note": "你開始替{first}張羅親事，{pron}嘴上不說，臉卻紅了。",

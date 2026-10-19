@@ -191,7 +191,8 @@ struct Household {
     double lastRentMult = 0; // the times' rent multiplier (war, plague) and the free/villein rate at last Michaelmas,
     int lastRentFree = -1;   // so a change in the rent can be explained to the family
     int grainAsked = -1;     // the harvest (day / year) the family was last asked to get its bread through to, and what it chose
-    int grainChoice = -1;
+    int grainChoice = -1;    // ...this year's card: 0 to the harvest, 1 a month at a time, 2 borrowed, 3 two meals a day (-1: by the rule)
+    int grainBroke = -1;     // the harvest year the purse could no longer keep the grain rule (said once)
     int harvestMembers = 0;  // who there was to feed when the last harvest came in, and how much of it went for the rent:
     double soldForRent = 0;  // the reasons a hunger card gives (World::hungerWhy)
     double harvestBread = 0; // ...and what that harvest brought in, in a grown man's days
@@ -748,6 +749,8 @@ public:
         double money = 0, food = 0, acres = 0;
         Id head = kNone;
         std::map<std::string, double> ledger;
+        std::map<std::string, double> foodLedger;  // the barn's books, in a grown man's days (bookFood)
+        double bread = 0;                          // the barn itself, in a grown man's days
         int day = 0;
     };
     FamilySnapshot snapshot() const;
@@ -763,6 +766,9 @@ public:
     // How many days the barn falls short of the next harvest, as it stands today (bought grain, new mouths and all):
     // what 「缺糧」 means wherever it is shown, so a full barn is never called short.
     int breadShort(const Household& h) const;
+    int harvestIn() const { return daysToHarvest(); }  // the days to the next harvest, as every card counts them
+    // Short of bread and the purse cannot buy what is short at market (fun-r8 4: the top bar's 「！」, nothing else).
+    bool breadAtRisk(const Household& h) const { return breadShort(h) > 0 && h.money < breadShort(h) * consumption(h) * param("grain_price", 0.5); }
     int harvestYear() const { return (day_ + daysToHarvest()) / kDaysPerYear; }  // the harvest the bread in the barn has to last to
     // The year a budget of cards is counted by: hunger by the harvest year (a lean year runs autumn to autumn).
     int budgetYear(const std::string& budget) const { return budget == "hunger" ? harvestYear() : year(); }
@@ -772,6 +778,8 @@ public:
 
     std::string seasonChanges(const FamilySnapshot& before) const;
     std::string moneySince(const FamilySnapshot& before) const;
+    // The barn since then, the same way (fun-r8 4): 「存糧 82 → 51 天：吃掉 −31、買糧 +…」, "" when it barely moved.
+    std::string foodSince(const FamilySnapshot& before) const;
     // What the house owes, to whom, and when it falls due ("欠莊園 62（拖了一年）、欠 艾倫·米勒 30（明年米迦勒節）").
     std::string debtText(Id household) const;
     double owedAll(Id household) const;  // the main debt and the one waiting behind it
@@ -786,6 +794,11 @@ public:
     const std::string& occasionRule() const { return occasionRule_; }  // "" not set yet, else all | close | none | ask
     static const char* occasionRuleText(const std::string& rule);
     void setOccasionRule(const std::string& rule);
+    // 買糧 (fun-r8 1): how the family gets its bread to the harvest when the barn runs short. "" not set yet (asked the
+    // first time), harvest = buy all of it at once, monthly = a month at a time, ask = asked once a harvest year.
+    const std::string& grainRule() const { return grainRule_; }
+    static const char* grainRuleText(const std::string& rule);
+    void setGrainRule(const std::string& rule, bool quiet = false);
     // While the year is let run (play's year mode), routine questions go by the family's rules, or by custom where
     // none is set: no card for each wake and wedding.
     void setRoutineByRule(bool on) { routineByRule_ = on; }
@@ -799,6 +812,11 @@ public:
     bool familyTold(Id id) const;
     bool closeKin(Id a, Id b) const;
     bool gentry(Id id) const;  // the lord's family: they do not marry tenants
+    // On the marriage market at all (fun-r8 3): unwed or widowed, not vowed or in the Church's service (priest, monk,
+    // nun, a clerk on the road to orders, one the family is getting a church post for), not away at the wars.
+    bool marriageable(const Person& p) const;
+    // This person wants this match (a longing for them or their house, or a real liking): no tears over it.
+    bool wantsMatch(Id who, Id with) const;
     // Whether a and b may marry: the same class, or a small landholder's child the lord thinks well of
     // (「和德·阿什科姆家結親」).
     bool mayWed(Id a, Id b) const;
@@ -1209,6 +1227,7 @@ private:
     // 紅白事: the family's standing rule (all / close / none / ask), set on the first invitation or at any time on the
     // page (家裡的規矩); wakes and weddings then follow it without a card, unless it is "ask".
     std::string occasionRule_;
+    std::string grainRule_;
     bool routineByRule_ = false;
     bool occasionByPolicy(const std::string& invite, Id subject, double link);
     std::vector<double> houseLinks(Id hh) const;  // link of every household to this one
@@ -1365,6 +1384,13 @@ private:
     void book(Household& h, const std::string& why, double amount) {
         if (h.id == playerHousehold_ && amount != 0) ledger_[why] += amount;
     }
+    // The barn's books (fun-r8 4): every big flow in or out of the player's barn by what it was, in a grown man's
+    // days; whatever else moved it is settled each day under 其他 (gifts, events, a share at a wedding).
+    void bookFood(Household& h, const std::string& why, double amount) {
+        if (h.id == playerHousehold_ && amount != 0) foodLedger_[why] += amount;
+    }
+    std::map<std::string, double> foodLedger_;
+    double foodOpen_ = 0;
     // Whatever the purse holds that the books do not account for, booked under `why` (a branch of the family taken
     // over with its money). Returns the gap.
     double settleBooks(const std::string& why);

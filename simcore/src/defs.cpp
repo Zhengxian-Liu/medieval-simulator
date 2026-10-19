@@ -233,7 +233,12 @@ Defs Defs::loadFromDir(const std::string& dir) {
         ad.maxYears = static_cast<int>(a.numberOr("max_years", 25));
         if (a["milestones"].isArray())
             for (const auto& m : a["milestones"].asArray())
-                ad.milestones.push_back({m["name"].asString(), m["goal"], m["gate"].isBool() && m["gate"].asBool()});
+            {
+                // (savings to be spent on the goal, and a post held once: reached is reached)
+                bool money = m["goal"].isObject() && (m["goal"].has("money_ge") || m["goal"].has("money_ge_chantry") || m["goal"].has("family_offices_ge"));
+                ad.milestones.push_back({m["name"].asString(), m["goal"], m["gate"].isBool() && m["gate"].asBool(),
+                                         m["kept"].isBool() ? m["kept"].asBool() : money, m["skip_if"]});
+            }
         if (a["plans"].isArray())
             for (const auto& pl : a["plans"].asArray()) ad.plans.push_back(pl.asString());
         ad.next = readStrings(a["next"]);

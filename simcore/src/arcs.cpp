@@ -747,26 +747,41 @@ void World::yearlyDebts() {
             runEventById("debt_reckoning", h.head, lord_);
             continue;
         }
-        // Owed to a neighbour: the manor court gives them land, or the family defaults and the
-        // neighbour's house never forgets it.
-        // The player's family hears the claim in court and answers it.
+        // Owed to a neighbour, three Michaelmases on: the manor court (fun-r8 2: a debt never just goes away while
+        // there is something to take). The purse first, all but 10 pence to live on; then land, from a holding big
+        // enough to spare it; then the plough ox. What is still owed runs another year, and the creditor's house
+        // remembers the court. Only a house with nothing at all to take is let off, and that is a default the
+        // creditor never forgets. The player's family hears the claim and answers it.
+        Household& ch = households_[people_[h.creditor].household];
+        const bool ours = inPlayerHouse(ch.id);
+        const double cash = std::floor(std::max(0.0, h.money - 10) + 1e-9);
+        auto payCash = [&](double amount) {
+            amount = std::min(amount, std::max(0.0, h.money));
+            h.money -= amount;
+            book(h, "還債", -amount);
+            ch.money += amount;
+            book(ch, "收回借款", amount);
+            h.debt = std::max(0.0, h.debt - amount);
+            return amount;
+        };
         if (home) {
             double could = std::min({std::ceil(h.debt / 40), std::floor(h.acres * 0.25), std::max(0.0, h.acres - 3)});
             bool canPay = h.money >= h.debt;
             std::vector<std::string> opts;
             if (could >= 1 && h.acres >= 12) opts.push_back("交出 " + std::to_string(int(could)) + " 畝地抵債");
             if (canPay) opts.push_back("咬牙把 " + std::to_string(int(h.debt)) + " 便士一次還清");
+            else if (cash >= 1)
+                opts.push_back("先還 " + std::to_string(int(cash)) + " 便士，剩下的 " + std::to_string(int(h.debt - cash)) + " 便士明年米迦勒節還（法庭照這樣判）");
             opts.push_back("在法庭上咬定還過了（賴帳）");
-            int r = askPlayer("莊園法庭", fullName(h.creditor) + " 把欠了三年的 " + std::to_string(int(h.debt)) +
-                                             " 便士告上莊園法庭，要 " + fullName(h.head) + " 家今天給個了斷。",
+            int r = askPlayer("莊園法庭", fullName(h.creditor) + " 把欠了三年的 " + std::to_string(int(h.debt)) + " 便士告上莊園法庭，要 " + fullName(h.head) +
+                                             " 家今天給個了斷。手上 " + std::to_string(int(std::floor(h.money))) + " 便士" +
+                                             (h.noOxUntil <= day_ ? "，家裡還有一頭耕牛" : "") + "。",
                               opts);
             if (r >= 0 && opts[r].rfind("咬牙", 0) == 0) {
-                h.money -= h.debt;
-                book(h, "還債", -h.debt);
-                households_[people_[h.creditor].household].money += h.debt;
-                book(households_[people_[h.creditor].household], "收回借款", h.debt);
-                log(1, "【欠債】" + fullName(h.head) + " 在莊園法庭上把欠 " + fullName(h.creditor) + " 的 " + std::to_string(int(h.debt)) +
-                           " 便士一次還清了" + (h.debtSince >= 0 ? "（" + seasonLabel(h.debtSince) + "借的）" : "") + "。");
+                double was = h.debt;
+                payCash(h.debt);
+                log(1, "【欠債】" + fullName(h.head) + " 在莊園法庭上把欠 " + fullName(h.creditor) + " 的 " + std::to_string(int(was)) + " 便士一次還清了" +
+                           (h.debtSince >= 0 ? "（" + seasonLabel(h.debtSince) + "借的）" : "") + "。");
                 clearDebt(h);
                 continue;
             }
@@ -778,19 +793,52 @@ void World::yearlyDebts() {
                 clearDebt(h);
                 continue;
             }
+            if (r >= 0 && opts[r].rfind("交出", 0) == 0) {
+                double acres = forfeitLand(h, false);
+                h.debt = std::max(0.0, h.debt - acres * 40);
+                log(1, "【欠債】" + fullName(h.head) + " 在莊園法庭上把 " + std::to_string(int(acres)) + " 畝地交給 " + fullName(h.creditor) + " 抵債" +
+                           (h.debt > 0.5 ? "，還差 " + std::to_string(int(h.debt)) + " 便士，明年米迦勒節再還。" : "，這筆債了了。"));
+                if (acres > 0) addStress(h.head, 30, "抵債失去的地");
+                if (h.debt <= 0.5) clearDebt(h);
+                else h.debtYears = 0, addOpinion(h.creditor, h.head, "dragged_to_court", -6, 6);
+                continue;
+            }
+            // "先還 X" or no one to answer: the court's own order, below.
         }
-        double acres = forfeitLand(h, false);
-        if (acres > 0) {
-            if (home)
-                log(1, "【欠債】" + fullName(h.creditor) + " 告上莊園法庭，法庭判把 " + std::to_string(int(acres)) + " 畝地抵給對方。");
-            addStress(h.head, 30, "抵債失去的地");
-        } else {
+        const double was = h.debt;
+        const double paid = payCash(cash);
+        double acres = h.debt > 0.5 ? forfeitLand(h, false) : 0;
+        h.debt = std::max(0.0, h.debt - acres * 40);
+        bool ox = false;
+        if (h.debt > 0.5 && h.noOxUntil <= day_ && h.acres >= 0.5) {
+            ox = true;
+            h.noOxUntil = day_ + 40 * kDaysPerYear;  // until they can buy another
+            h.debt = std::max(0.0, h.debt - 40);
+        }
+        if (acres > 0) addStress(h.head, 30, "抵債失去的地");
+        std::vector<std::string> took;
+        if (paid >= 1) took.push_back(std::to_string(int(paid)) + " 便士");
+        if (acres > 0) took.push_back(std::to_string(int(acres)) + " 畝地");
+        if (ox) took.push_back("耕牛");
+        if (took.empty()) {
             recordDeed("defaulted", h.head, h.creditor);
-            if (home || isPlayerFamily(people_[h.creditor]))
-                log(1, "【欠債】" + fullName(h.head) + " 家實在還不出 " + std::to_string(int(h.debt)) + " 便士，" + fullName(h.creditor) +
-                           " 家這筆錢算是要不回來了。");
+            if (home || ours)
+                log(1, "【欠債】" + fullName(h.creditor) + " 把 " + fullName(h.head) + " 家告上莊園法庭。那家人手上沒錢、沒有牛，地也少得分不出來，" +
+                           std::to_string(int(was)) + " 便士的債算是要不回來了。");
+            clearDebt(h);
+            continue;
         }
-        clearDebt(h);
+        std::string t;
+        for (const auto& x : took) t += (t.empty() ? "" : "、") + x;
+        if (home || ours)
+            log(1, "【欠債】" + fullName(h.creditor) + " 把欠了三年的 " + std::to_string(int(was)) + " 便士告上莊園法庭：法庭判 " + fullName(h.head) + " 家先拿出 " + t +
+                       (h.debt > 0.5 ? "，還差 " + std::to_string(int(h.debt)) + " 便士，明年米迦勒節再還。" : "，這筆債了了。"));
+        if (h.debt <= 0.5) {
+            clearDebt(h);
+        } else {
+            h.debtYears = 0;  // due at the next Michaelmas, as the court ordered
+            addOpinion(h.creditor, h.head, "dragged_to_court", -6, 6);
+        }
     }
     for (const auto& [id, owed] : owedBefore)
         if (owedLord(households_[id]) <= 0.5) lordCleared_.insert(id);

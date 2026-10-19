@@ -207,7 +207,11 @@ std::string World::houseMark(Id id, int* youngerOut) const {
         if (yo) *yo = younger;
         return older > 0 ? (younger == 0 ? std::string("小") : std::string(nth[std::min(older, 9) - 1])) : std::string();
     };
-    if (!p.alive()) return rule(id, youngerOut);
+    if (!p.alive()) {
+        // The dead are told by the mark they went by: 小菲利普 is not buried as 二菲利普 (fun-r8 3).
+        if (auto it = marks_.find(id); it != marks_.end() && markHouse_.count(id) && markHouse_.at(id) == p.household) return it->second;
+        return rule(id, youngerOut);
+    }
     // The living namesakes of the house, eldest first, each given its mark: its old one if it still has one to keep and
     // nobody older kept it first, else the rule's, else the next one free.
     std::vector<Id> group;

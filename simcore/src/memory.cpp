@@ -138,7 +138,8 @@ Id World::recordDeed(const std::string& type, Id actor, Id target, double scale,
     std::vector<Id> told{actor, target};
     if (target != kNone && people_[target].household != kNone)
         for (Id m : households_[people_[target].household].members)
-            if (m != target && m != actor) {
+            // (a child of the doer's serving in the wronged house is still the doer's child, fun-r8 3)
+            if (m != target && m != actor && (actor == kNone || people_[m].home == kNone || people_[m].home != people_[actor].household)) {
                 remember(m, actor, role("target_family"));
                 told.push_back(m);
             }
@@ -148,7 +149,8 @@ Id World::recordDeed(const std::string& type, Id actor, Id target, double scale,
     bool travels = defs_.newsKind(newsKind) != nullptr;
     if (def->visibility == "public" && role("witness") != 0 && !travels)
         for (const auto& p : people_)
-            if (p.alive() && p.household != kNone && ageYears(p) >= 10 &&
+            // (not the doer's own household: a son does not hold his father's unpaid debt against him, fun-r8 3)
+            if (p.alive() && p.household != kNone && ageYears(p) >= 10 && (actor == kNone || p.household != people_[actor].household) &&
                 std::find(told.begin(), told.end(), p.id) == told.end())
                 remember(p.id, actor, role("witness"));
     // Choices show their weight at once: when the family does something to another house, say how it landed.

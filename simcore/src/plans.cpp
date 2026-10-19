@@ -99,10 +99,11 @@ void World::processCommands() {
         } else if (c.type == "agenda") {
             doAgenda(c.plan);  // 這一季的事: plan = the item's id
         } else if (c.type == "rule") {
-            // 家裡的規矩: plan = "occasions:<all|close|none|ask>", or "routine:1"/"routine:0" while a year is let run.
+            // 家裡的規矩: plan = "occasions:<all|close|none|ask>", "grain:<harvest|monthly|ask>", or "routine:1"/"routine:0" while a year is let run.
             size_t at = c.plan.find(':');
             std::string what = c.plan.substr(0, at), value = at == std::string::npos ? "" : c.plan.substr(at + 1);
             if (what == "occasions") setOccasionRule(value);
+            else if (what == "grain") setGrainRule(value);
             else if (what == "routine") setRoutineByRule(value == "1");
         } else if (c.type == "interact") {
             // 陪家人 (keep_company): whichever of the company visits this person needs most now.
@@ -564,6 +565,8 @@ void World::monthlyPlans() {
                 const std::string houseBeat = "beat:" + pd->id + ":" + beat.id;
                 if (actorHome && metLately(actor.household, houseBeat)) continue;
                 if (!ev.eval(beat.conditions, actor, plan.target)) continue;
+                // Tears over a match are for one the child does not want (fun-r8 3): not one they asked for.
+                if (beat.id == "child_objects" && wantsMatch(plan.subject, plan.target)) continue;
                 if (!rngPlans_.chance(beat.chance)) continue;
                 copy.beatsSeen.push_back(beat.id);
                 cooldowns_[{actor.id, beatKey}] = day_ + 6 * kDaysPerYear;

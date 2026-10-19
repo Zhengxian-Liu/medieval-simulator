@@ -44,6 +44,7 @@ void World::dailyNeeds() {
         if (h.extinct || h.members.empty()) continue;
         double need = consumption(h);
         bool fed = h.food >= need;
+        bookFood(h, "吃掉", -std::min(need, h.food));
         h.food = fed ? h.food - need : 0;
         bool warm = !winter;
         if (winter && h.firewood >= 1) {
@@ -226,11 +227,13 @@ void World::monthlyHealth() {
                 else if (r < 0.62) cause = "痢疾";
                 else if (r < 0.80) cause = "咳疾";
                 else if (r < 0.88 && p.health < 60) cause = "傷口感染";
-                else if (r < 0.88) cause = "熱病";
+                else if (r < 0.88 || age < 3) cause = "熱病";  // (a baby has no accidents of the work, fun-r8 3)
                 else {
                     static const char* kMan[] = {"從乾草垛上摔了下來", "被受驚的牛車壓了", "砍樹時被倒下的樹壓住", "過河時被水沖走", "被馬踢中了胸口"};
                     static const char* kWoman[] = {"打水時掉進了井裡", "灶火燒著了衣裳", "過河時被水沖走", "從閣樓的梯子上摔了下來", "被受驚的牛撞倒"};
-                    cause = std::string("意外（") + (p.sex == Sex::Male ? kMan : kWoman)[rngLife_.range(0, 4)] + "）";
+                    // A child's accidents are a child's (fun-r8 3: no three-year-old felling trees).
+                    static const char* kChild[] = {"掉進了池塘", "爬到灶邊燒著了衣裳", "被受驚的牛車撞倒", "從草垛上摔了下來", "在河邊玩水被沖走"};
+                    cause = std::string("意外（") + (age < 12 ? kChild : p.sex == Sex::Male ? kMan : kWoman)[rngLife_.range(0, 4)] + "）";
                 }
             }
             if (grown && sickCause(cause)) {
@@ -1436,11 +1439,26 @@ int World::askPlayer(const std::string& title, const std::string& situation, con
     return r >= 0 && r < static_cast<int>(options.size()) ? r : -1;
 }
 
+bool World::marriageable(const Person& p) const {
+    if (!p.alive() || (p.spouse != kNone && people_[p.spouse].alive()) || p.flags.count("celibate")) return false;
+    static const std::set<std::string> kChurch{"priest", "monk", "nun", "clerk"};
+    if (kChurch.count(p.occupation) || p.station == "archer" || isAway(p)) return false;
+    for (const auto& ap : plans_)
+        if (ap.subject == p.id && ap.plan == "church_post") return false;
+    return true;
+}
+
+bool World::wantsMatch(Id who, Id with) const {
+    if (who == kNone || with == kNone) return false;
+    const Person& p = people_[who];
+    const Id house = people_[with].household;
+    for (const auto& c : p.concerns)
+        if (c.kind == "longing" && (c.about == with || (c.about != kNone && house != kNone && people_[c.about].household == house))) return true;
+    return opinion(who, with) >= 20;
+}
+
 void World::yearlyMarriages() {
-    auto available = [&](const Person& p) {
-        return p.alive() && p.household != kNone && (p.spouse == kNone || !people_[p.spouse].alive()) &&
-               !p.flags.count("celibate") && p.occupation != "priest";
-    };
+    auto available = [&](const Person& p) { return p.household != kNone && marriageable(p); };
     std::vector<Id> men;
     for (const auto& p : people_)
         if (available(p) && p.sex == Sex::Male && ageYears(p) >= 18 && ageYears(p) <= 50) men.push_back(p.id);

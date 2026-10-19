@@ -152,8 +152,8 @@ std::string World::ambitionDesc(const Person& head) const {
     return a ? ambitionText(head, a->desc, a->goal) : "";
 }
 
-// It is put down at the first turn of the year after max_years have gone by (reviewAmbition): the year before
-// that is the last one it can still be done in.
+// The last year it can still be done in. The player's is put down on the last day of that year (ambitionNow: so the
+// next season opens with the news, fun-r8 2), a villager's at the turn of the year after it (yearlyAmbitions).
 int World::ambitionDeadline(const Person& head) const {
     const AmbitionDef* a = defs_.ambition(head.ambition);
     if (!a) return 0;
@@ -289,7 +289,15 @@ void World::checkMilestones(Person& head, bool quiet) {
     bool player = inPlayerHouse(head.household) && head.id == playerHead();
     // Steps count whenever they are reached, in any order: 35 acres held before the freehold is still 35 acres.
     for (size_t i = 0; i < a->milestones.size() && i < 32; ++i) {
-        if (head.ambitionDone & (1u << i) || !ev.eval(a->milestones[i].goal, head, kNone)) continue;
+        if (head.ambitionDone & (1u << i)) continue;
+        // Made moot by the goal's own progress (fun-r8 2): counted, without a line of its own.
+        const Json& skip = a->milestones[i].skip;
+        if (!skip.isNull() && ev.eval(skip, head, kNone)) {
+            head.ambitionDone |= 1u << i;
+            ++head.ambitionStep;
+            continue;
+        }
+        if (!ev.eval(a->milestones[i].goal, head, kNone)) continue;
         head.ambitionDone |= 1u << i;
         ++head.ambitionStep;
         if (quiet) continue;
@@ -320,8 +328,9 @@ std::vector<int> World::milestoneState(Id headId) const {
     if (!a) return out;
     EventRunner ev(const_cast<World&>(*this));  // conditions only read the world
     for (size_t i = 0; i < a->milestones.size(); ++i) {
-        bool now = ev.eval(a->milestones[i].goal, head, kNone);
         bool was = i < 32 && (head.ambitionDone & (1u << i));
+        const Json& skip = a->milestones[i].skip;
+        bool now = ev.eval(a->milestones[i].goal, head, kNone) || (was && a->milestones[i].kept) || (!skip.isNull() && ev.eval(skip, head, kNone));
         out.push_back(now ? 1 : was ? 2 : 0);
     }
     return out;
@@ -360,6 +369,11 @@ void World::monthlyAmbition() {
         return;
     }
     checkMilestones(head, false);
+    // The last year opens with a line saying so, and what is still missing (fun-r8 2).
+    if (const AmbitionDef* a = defs_.ambition(head.ambition); a && month() == 0 && year() == ambitionDeadline(head)) {
+        int nx = nextMilestone(head);
+        log(1, "【志向】「" + a->name + "」今年年底到期：還差" + (nx >= 0 ? milestoneName(head, nx) + "，再來是" : std::string()) + ambitionFinal(head) + "。");
+    }
     reviewAmbition(h, month() == 0);
     if (h.head == head.id && !head.ambition.empty()) lateGameMonth(head);
 }
@@ -374,6 +388,8 @@ void World::ambitionNow() {
     EventRunner ev(*this);
     checkMilestones(head, false);
     if (ev.eval(a->goal, head, kNone) || (!a->keep.isNull() && !ev.eval(a->keep, head, kNone))) reviewAmbition(h, false);
+    // The deadline's last day: put down now, not after the next season has opened with it still on the bar.
+    else if (month() == 11 && dayOfMonth() == kDaysPerMonth - 1 && year() >= ambitionDeadline(head)) reviewAmbition(h, true);
 }
 
 Id World::houseLine(const Person& head) const {
@@ -427,9 +443,15 @@ void World::reviewAmbition(Household& h, bool yearTurn) {
             if (player) noteThreadEnd("ambition", "志向「" + a->name + "」落了空" + (a->lost.empty() ? "" : "：" + a->lost));
             head.ambition.clear();
             chooseAmbition(head, "的心願落了空");
-        } else if (yearTurn && (day_ - head.ambitionSince) / kDaysPerYear >= a->maxYears) {
+        } else if (yearTurn && year() >= ambitionDeadline(head) + (month() == 11 ? 0 : 1)) {
             ++counters_[std::string(player ? "ambition_family:" : "ambition:") + a->id + ":dropped"];
-            if (player) log(1, fullName(h.head) + " 放下了「" + a->name + "」的志向：期限過了，還沒做成。這成了家裡一樁沒了的心願。");
+            if (player) {
+                int nx = nextMilestone(head);
+                log(1, "【志向落空】「" + a->name + "」到 " + std::to_string(ambitionDeadline(head)) + " 年底還沒做成（走到第 " + std::to_string(head.ambitionStep) + " 步，共 " +
+                           std::to_string(a->milestones.size() + 1) + " 步；還差" + (nx >= 0 ? milestoneName(head, nx) + "、" : std::string()) + ambitionFinal(head) + "）。" +
+                           fullName(h.head) + " 只好放下，這成了家裡一樁沒了的心願，留給下一代。");
+                addStress(head.id, 10, "志向落空");
+            }
             if (dyn) dyn->regret = a->id;
             if (player) noteThreadEnd("ambition", "志向「" + a->name + "」過了期限沒做成，留給下一代");
             head.ambition.clear();

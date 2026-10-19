@@ -409,6 +409,8 @@ World::FamilySnapshot World::snapshot() const {
     s.food = h.food / std::max(0.5, consumption(h));
     s.acres = h.acres;
     s.ledger = ledger_;
+    s.foodLedger = foodLedger_;
+    s.bread = h.food;
     return s;
 }
 
@@ -417,6 +419,8 @@ void World::openBooks() {
     seasonLedger_.clear();
     seasonBooks_.clear();
     unbooked_ = 0;
+    foodLedger_.clear();
+    foodOpen_ = playerHousehold_ != kNone ? households_[playerHousehold_].food : 0;
     ledgerOpen_ = seasonMoney_ = playerHousehold_ != kNone ? households_[playerHousehold_].money : 0;
     seasonFrom_ = day_;
 }
@@ -426,6 +430,10 @@ double World::settleBooks(const std::string& why) {
     double booked = ledgerOpen_;
     for (const auto& [k, v] : ledger_) booked += v;
     double gap = households_[playerHousehold_].money - booked;
+    // The barn too: what moved it without a line of its own is 其他.
+    double food = foodOpen_;
+    for (const auto& [k, v] : foodLedger_) food += v;
+    if (double fgap = households_[playerHousehold_].food - food; std::abs(fgap) > 0.01) foodLedger_["其他（送來送去、事件裡的）"] += fgap;
     if (std::abs(gap) < 0.005) return 0;
     ledger_[why] += gap;
     return gap;
@@ -508,6 +516,30 @@ std::string World::moneySince(const FamilySnapshot& before) const {
         if (std::abs(d) >= 0.005) items[why] = d;
     }
     return booksText(before.money, households_[playerHousehold_].money, items);
+}
+
+std::string World::foodSince(const FamilySnapshot& before) const {
+    if (playerHousehold_ == kNone || before.head == kNone) return "";
+    const Household& h = households_[playerHousehold_];
+    const double daily = std::max(0.5, consumption(h));
+    // In the house's days as it is now (the header's number), the items rounded the way the purse's are.
+    const double from = before.bread / daily, to = h.food / daily;
+    if (std::abs(std::floor(to) - std::floor(from)) < 1) return "";
+    std::vector<std::pair<double, std::string>> items;
+    for (const auto& [why, total] : foodLedger_) {
+        auto it = before.foodLedger.find(why);
+        double d = (total - (it == before.foodLedger.end() ? 0 : it->second)) / daily;
+        if (std::abs(d) >= 0.5) items.push_back({d, why});
+    }
+    std::sort(items.begin(), items.end(), [](const auto& a, const auto& b) { return std::abs(a.first) > std::abs(b.first); });
+    std::string o = "存糧 " + std::to_string(static_cast<long>(std::floor(from + 1e-9))) + " → " + std::to_string(static_cast<long>(std::floor(to + 1e-9))) + " 天";
+    std::string parts;
+    for (const auto& [d, why] : items) {
+        long v = std::lround(d);
+        if (v == 0) continue;
+        parts += (parts.empty() ? "：" : "、") + why + " " + (v > 0 ? "+" : "−") + std::to_string(std::labs(v));
+    }
+    return o + parts;
 }
 
 std::string World::seasonChanges(const FamilySnapshot& before) const {

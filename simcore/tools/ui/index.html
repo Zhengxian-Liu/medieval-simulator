@@ -260,13 +260,13 @@ function renderTop() {
     <span class="stat"><b>${s.date.year}</b> 年 ${esc(s.date.season)}</span>
     <span class="stat">地位 <b>${esc(h.standing)}</b></span>
     <span class="stat">錢 <b>${h.money}</b> 便士</span>
-    <span class="stat${h.lean ? " lean" : ""}">存糧 <b>${h.food_days}</b> 天${h.lean ? `（到秋收還差 ${h.short_days} 天）` : ""}</span>
+    <span class="stat${h.lean ? " lean" : ""}">存糧 <b>${h.food_days}</b> 天・離秋收 ${h.to_harvest} 天${h.short_days > 0 ? `（${h.lean ? "！" : ""}差 ${h.short_days} 天${h.lean ? "，錢不夠買" : "，手上的錢買得起"}）` : ""}</span>
     <span class="stat">地 <b>${h.acres}</b> 畝${h.freehold > 0 ? `（自由地 ${h.freehold} 畝）` : ""}</span>
     ${h.debt > 0 ? `<span class="stat lean">欠債 ${h.debt} 便士${h.debt_text ? `（${esc(h.debt_text)}）` : ""}</span>` : `<span class="stat">欠債：沒有</span>`}
     ${rep ? `<span class="stat${rep.value <= -10 ? " lean" : ""}">名聲 <b>${signed(rep.value)}</b>（${esc(rep.word)}）</span>` : ""}
     ${fine ? `<span class="stat lean">入地費 ${fine.amount} 便士，${fine.year} 年 ${fine.month} 月前${fine.extended ? "（已寬限過）" : ""}</span>` : ""}
     ${s.notice ? `<span class="stat lean">不行：${esc(s.notice)}</span>` : ""}</div>`;
-  const line2 = `<div class="row">${amb ? `<span>志向 <b>${esc(amb.name)}</b>（到 ${amb.deadline || "?"} 年底，還剩 ${amb.years_left} 年）</span>
+  const line2 = `<div class="row">${amb ? `<span>志向 <b>${esc(amb.name)}</b>（到 ${amb.deadline || "?"} 年底，${amb.years_left <= 1 ? "<b class=\"lean\">今年是最後一年</b>" : `還剩 ${amb.years_left} 年（含今年）`}）</span>
       <span>下一步 <span class="blocker">${esc(amb.blocker || "")}</span></span>` : `<span class="muted">還沒立志</span>`}
     <button class="link" onclick="topOpen=!topOpen;renderTop()">${topOpen ? "收起 ▴" : "全部條件、名聲、地位 ▾"}</button></div>`;
   let more = "";
@@ -330,7 +330,7 @@ function agendaBlock(s) {
       <span class="desc">${esc(it.desc)}${it.open ? "" : `（✗ ${esc(it.why)}）`}</span></div>`).join("")}</div>`;
 }
 
-// 家裡的規矩: standing rules (wakes and weddings), set once, changed here at any time; a year let run follows them.
+// 家裡的規矩: standing rules (wakes and weddings, buying grain), set once, changed here at any time; a year let run follows them.
 function rulesBlock(s) {
   const rules = s.rules || [];
   if (!rules.length) return "";
@@ -477,8 +477,9 @@ function ledgerHtml(l) {
   const outs = (l.outs || []).filter((x) => x[0] !== "買糧").map(([w, v]) => `${esc(w)} ${signed(v)}`).concat(grain ? [grain] : []);
   const head = l.from !== l.to ? `錢 ${l.from} → ${l.to} 便士` : (l.ins || []).length || (l.outs || []).length ? `錢 ${l.from} 便士，進出相抵` : `錢 ${l.from} 便士，沒有進出`;
   const top = [...(l.ins || []), ...(l.outs || [])].sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0];
-  if (!ins.length && !outs.length) return `<div class="blk"><span class="blk-t">這一季的帳</span>　${head}</div>`;
-  return `<div class="blk"><details><summary><span class="blk-t">這一季的帳</span>　${head}${top ? `（${esc(top[0] === "買糧" && grain ? grain : top[0] + " " + signed(top[1]))}${ins.length + outs.length > 1 ? "…" : ""}）` : ""} ▸</summary>
+  const food = l.food ? `；${esc(l.food)}` : "";  // the barn over the season so far (ledger_now only)
+  if (!ins.length && !outs.length) return `<div class="blk"><span class="blk-t">這一季的帳</span>　${head}${food}</div>`;
+  return `<div class="blk"><details><summary><span class="blk-t">這一季的帳</span>　${head}${top ? `（${esc(top[0] === "買糧" && grain ? grain : top[0] + " " + signed(top[1]))}${ins.length + outs.length > 1 ? "…" : ""}）` : ""}${food} ▸</summary>
     ${ins.length ? `<div class="item">進：${ins.join("、")}</div>` : ""}${outs.length ? `<div class="item">出：${outs.join("、")}</div>` : ""}</details></div>`;
 }
 function seasonHtml(s, now, expanded) {

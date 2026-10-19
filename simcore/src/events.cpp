@@ -173,7 +173,8 @@ Id EventRunner::serviceMaster(const Household& h) const {
     return master;
 }
 
-// The child a household would send out to work off a debt: the eldest at home who is free to go.
+// The child a household would send out to work off a debt: the eldest at home who is free to go. Not one with a road
+// of their own already (fun-r8 3): a clerk, an apprentice, a child the family is getting a church post or a match for.
 Id EventRunner::serviceChild(const Household& h) const {
     Id best = kNone;
     for (Id m : h.members) {
@@ -181,6 +182,11 @@ Id EventRunner::serviceChild(const Household& h) const {
         double age = w_.ageYears(c);
         if (m == h.head || age < 10 || age > 18 || c.home != kNone || w_.gentry(m)) continue;
         if (c.spouse != kNone && w_.people_[c.spouse].alive()) continue;
+        if (c.occupation == "clerk" || c.occupation == "priest" || (!c.station.empty() && c.station != "home")) continue;
+        bool planned = false;
+        for (const auto& ap : w_.plans_)
+            if (ap.subject == m) planned = true;
+        if (planned) continue;
         if (best == kNone || c.birthDay < w_.people_[best].birthDay) best = m;
     }
     return best;
@@ -989,6 +995,7 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
         return target != kNone && (p.dynasty == kNone || p.dynasty != w.people_[target].dynasty) == v.asBool();
     if (k == "sworn_friends_lt") return w.swornFriends(p.id) < v.asNumber();
     if (k == "has_plan") return (w.activePlan(p.id) != nullptr) == v.asBool();
+    if (k == "marriageable") return w.marriageable(p) == v.asBool();
     if (k == "match_pending") {
         // Someone is already arranging this person's marriage.
         bool pending = false;
@@ -1746,8 +1753,9 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 if (lordHouse != kNone) w.households_[lordHouse].money += fine, w.book(w.households_[lordHouse], "收包磨坊的押金", fine);
                 h->millUntil = w.day_ + static_cast<int>(v.numberOr("years", 5)) * kDaysPerYear;
             } else if (k == "settle_subject") {
-                // {"settle_subject": {"acres": 8, "money": 40}}: the married son of the plan set up in a house of his
-                // own, on land rented from the lord if any lies empty, the rest out of the family's (it keeps 15).
+                // {"settle_subject": {"acres": 8, "money": 30}}: the married son of the plan set up in a house of his
+                // own, on land rented from the lord if any lies empty, the rest out of the family's (it keeps 8: a
+                // half-yardland split between sons is how holdings came to be small; fun-r8 1).
                 if (!plan_ || plan_->subject == kNone || hid == kNone) continue;
                 Person& sub = w.people_[plan_->subject];
                 if (sub.household != hid || w.households_[hid].head == sub.id) {
@@ -1756,12 +1764,12 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 }
                 double want = v.numberOr("acres", 8);
                 double vac = std::min(w.vacantAcres(), want);
-                double own = std::clamp(want - vac, 0.0, std::max(0.0, w.households_[hid].acres - 15));
+                double own = std::clamp(want - vac, 0.0, std::max(0.0, w.households_[hid].acres - 8));
                 if (vac + own < 2) {
                     if (w.inPlayerHouse(hid)) w.log(1, "  可是村裡沒有空地，自家的地也分不出來了，" + sub.firstName + " 只好還住在家裡。");
                     continue;
                 }
-                double gift = std::min(v.numberOr("money", 40), std::max(0.0, w.households_[hid].money));
+                double gift = std::min(v.numberOr("money", 30), std::max(0.0, w.households_[hid].money));
                 Id nh = w.addHousehold(sub.dynasty, 0, gift);  // households_ may move: by index from here on
                 w.households_[hid].money -= gift;
                 w.book(w.households_[hid], "給" + sub.firstName + "分家的錢", -gift);

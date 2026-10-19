@@ -23,15 +23,15 @@
      "conditions": {"age": [10, 16], "flag": "schooled", "skill_ge": {"learning": 2.5}},
      "options": [{"text": "好", "log": "{name} 跟神父學會了讀寫拉丁文的禱詞，往後能替家裡念契約、記帳了。", "effects": [{"add_trait": "literate"}, {"reputation": 3}]}]},
     {"id": "courtship_m", "repeat": "person", "parent_decides": true, "title": "心上人", "prompt": "五朔節的舞會上，{name} 一直看著 {target}。", "scope": "player_family", "chance": 0.03, "cooldown_years": 2,
-     "conditions": {"sex": "male", "age": [18, 30], "married": false, "widowed": false, "match_pending": false},
-     "target": {"pick": "random_villager", "conditions": {"sex": "female", "age": [16, 26], "married": false, "same_class": true, "match_pending": false, "not_kin": true}},
+     "conditions": {"sex": "male", "age": [18, 30], "married": false, "widowed": false, "match_pending": false, "marriageable": true, "month": 4},
+     "target": {"pick": "random_villager", "conditions": {"sex": "female", "age": [16, 26], "married": false, "same_class": true, "match_pending": false, "not_kin": true, "marriageable": true}},
      "options": [
        {"text": "去提親", "log": "{name} 在五朔節的舞會上看上了 {target}，第二天就上門提親。", "effects": [{"marry_target": true}], "ai": {"base": 10, "traits": {"gregarious": 8, "lustful": 8, "shy": -6}}},
        {"text": "再等等", "log": "{name} 把心事藏著，想再等等看。", "effects": [{"opinion": {"value": 10, "mod": "crush", "years": 3}}], "ai": {"base": 10, "traits": {"shy": 10}}}
      ]},
     {"id": "courtship_f", "repeat": "person", "parent_decides": true, "title": "求親的人", "prompt": "{target} 託人來說媒，想娶 {name}。", "scope": "player_family", "chance": 0.03, "cooldown_years": 2,
-     "conditions": {"sex": "female", "age": [16, 26], "married": false, "widowed": false, "match_pending": false},
-     "target": {"pick": "random_villager", "conditions": {"sex": "male", "age": [18, 32], "married": false, "same_class": true, "match_pending": false, "not_kin": true}},
+     "conditions": {"sex": "female", "age": [16, 26], "married": false, "widowed": false, "match_pending": false, "marriageable": true},
+     "target": {"pick": "random_villager", "conditions": {"sex": "male", "age": [18, 32], "married": false, "same_class": true, "match_pending": false, "not_kin": true, "marriageable": true}},
      "options": [
        {"text": "答應", "log": "{target} 託人來說媒，{name} 答應嫁給{target_pron}。", "effects": [{"marry_target": true}], "ai": {"base": 10, "if": [{"cond": {"opinion_of_target_ge": 20}, "add": 15}]}},
        {"text": "拒絕", "log": "{target} 來說媒，被 {name} 一口回絕。", "effects": [{"deed": {"type": "refused_proposal"}}], "ai": {"base": 8, "if": [{"cond": {"opinion_of_target_lt": 0}, "add": 15}]}}

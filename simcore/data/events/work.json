@@ -45,7 +45,7 @@
      "conditions": {"is_head": true, "occupation": "smith", "skill_ge": {"craft": 13}},
      "options": [{"text": "好", "log": "{name} 打了一把好斧頭，說要留給子孫用。", "effects": [{"add_item": "fine_axe"}, {"reputation": 1}]}]},
     {"id": "heirloom_carpenter", "title": "得意之作", "prompt": "冬天活少，{name} 想做一件能傳下去的東西。", "scope": "player_family", "chance": 0.006, "cooldown_years": 15,
-     "conditions": {"is_head": true, "occupation": "carpenter", "skill_ge": {"craft": 12}},
+     "conditions": {"is_head": true, "occupation": "carpenter", "skill_ge": {"craft": 12}, "winter": true},
      "options": [
        {"text": "做一張雕花木桌", "log": "{name} 花了一整個冬天，做了一張雕花木桌。", "effects": [{"add_item": "carved_table"}], "ai": {"base": 10}},
        {"text": "做一個搖籃", "log": "{name} 給家裡的孩子做了一個雕花搖籃。", "effects": [{"add_item": "carved_cradle"}], "ai": {"base": 10, "traits": {"kind": 8}}}
