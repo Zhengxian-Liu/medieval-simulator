@@ -879,7 +879,7 @@ int main() {
         CHECK(World::booksText(40.2, 40.9, {}) == "存錢 40 便士，沒有進出。", "a season with no money moving is not said so");
 
         Config c;
-        c.seed = 58;  // a house with someone married in, kin in other houses, and land enough to hire a hand
+        c.seed = 58;  // a house with land, money and children: the cases below are set up on it by hand
         c.prerun = 25;
         World base(defs, c);
         const Id hh = base.playerHousehold();
@@ -918,23 +918,33 @@ int main() {
             std::printf("family news: %d deaths, %d births told\n", deaths, births);
             CHECK(untold == 0, "a birth or death in the family went untold");
         }
+        // (in the first of a few villages with someone married in and near kin in another house)
         {
-            World w = base;
-            Id stranger = kNone, kinAway = kNone;
-            for (Id m : w.household(hh).members)
-                if (m != head && w.person(m).dynasty != w.playerDynasty() && w.ageYears(w.person(m)) >= 14) stranger = m;
-            for (const auto& p : w.people())
-                if (p.alive() && p.household != kNone && p.household != hh && w.headsNearKin(p.id) && w.ageYears(p) >= 14) kinAway = p.id;
-            CHECK(stranger != kNone && kinAway != kNone, "no one married in and no near kin elsewhere to test with");
-            for (Id who : {stranger, kinAway}) {
-                if (who == kNone) continue;
-                std::string name = w.fullName(who), first = w.person(who).firstName;
-                std::string kin = who == kinAway ? w.kinWord(head, who) + " " : "";
-                size_t from = w.chronicle().size();
-                WorldTest::kill(w, who, "熱病");
-                CHECK(saidSince(w, from, kin + name, "因熱病去世"), "a death in the family has no line with its cause");
-                CHECK(saidSince(w, from, first + "這一生："), "a grown life in the family is not summed up");
+            int tested = 0;
+            for (int seed : {58, 3, 5, 7, 72, 91, 64}) {
+                Config vc;
+                vc.seed = seed;
+                vc.prerun = 25;
+                World w(defs, vc);
+                const Id vh = w.playerHousehold(), vhead = w.playerHead();
+                Id stranger = kNone, kinAway = kNone;
+                for (Id m : w.household(vh).members)
+                    if (m != vhead && w.person(m).dynasty != w.playerDynasty() && w.ageYears(w.person(m)) >= 14) stranger = m;
+                for (const auto& p : w.people())
+                    if (p.alive() && p.household != kNone && p.household != vh && w.headsNearKin(p.id) && w.ageYears(p) >= 14) kinAway = p.id;
+                if (stranger == kNone || kinAway == kNone) continue;
+                for (Id who : {stranger, kinAway}) {
+                    std::string name = w.fullName(who), first = w.person(who).firstName;
+                    std::string kin = who == kinAway ? w.kinWord(vhead, who) + " " : "";
+                    size_t from = w.chronicle().size();
+                    WorldTest::kill(w, who, "熱病");
+                    CHECK(saidSince(w, from, kin + name, "因熱病去世"), "a death in the family has no line with its cause");
+                    CHECK(saidSince(w, from, first + "這一生："), "a grown life in the family is not summed up");
+                }
+                ++tested;
+                break;
             }
+            CHECK(tested == 1, "no village with someone married in and near kin elsewhere to test with");
         }
 
         // 後繼無人 is not said while a son of the blood lives, at home or in a house of his own.
@@ -1094,25 +1104,42 @@ int main() {
             s.setChooser({});
             CHECK(adds, "the reckoning card's numbers do not add up");
             CHECK(smallSale && s.owedAll(hh) < 1, "a few pence short, the card offered no grain to sell");
+            // Let go on the books: the steward takes whole pennies, so paid + owed = the rent, in whole numbers.
+            World b = base;
+            toRentDay(b);
+            double due = std::round(WorldTest::rent(b, hh));
+            b.setMoneyForTest(hh, 2.9);
+            b.setFoodForTest(hh, 600);
+            WorldTest::house(b, hh).debt = WorldTest::house(b, hh).heldDebt = 0;
+            b.setChooser([&](const World::ChoicePrompt& p) { return p.title == "米迦勒節算帳" ? static_cast<int>(p.options.size()) - 1 : -1; });
+            b.stepDay();
+            b.setChooser({});
+            CHECK(std::abs(b.owedAll(hh) - (due - 2)) < 0.01 && std::abs(b.household(hh).money - 0.9) < 0.01,
+                  "a rent short is not paid and owed in whole pence");
         }
 
         // The hand on the season's list is the hand hired; taking someone in says what it does to the barn.
         {
-            World w = base;
-            int hires = 0;
-            int takes = 0;
-            for (int d = 0; d < 3 * kDaysPerYear && !w.gameOver(); ++d) {
-                if (w.dayOfMonth() == 0)
-                    for (const auto& a : w.seasonAgenda())
-                        if (a.id.rfind("hire_hand:", 0) == 0) {
-                            ++hires;
-                            CHECK(a.id == "hire_hand:" + std::to_string(a.target) && a.title.find(w.fullName(a.target)) != std::string::npos,
-                                  "the hand on the list is not the hand hired");
-                        } else if (a.id.rfind("help_take:", 0) == 0) {
-                            ++takes;
-                            CHECK(a.desc.find("存糧從夠吃") != std::string::npos, "taking someone in does not say what it does to the stores");
-                        }
-                w.stepDay();
+            int hires = 0, takes = 0;
+            for (int seed : {58, 72, 3, 5}) {
+                if (hires > 0 && takes > 0) break;
+                Config vc;
+                vc.seed = seed;
+                vc.prerun = 25;
+                World w(defs, vc);
+                for (int d = 0; d < 3 * kDaysPerYear && !w.gameOver(); ++d) {
+                    if (w.dayOfMonth() == 0)
+                        for (const auto& a : w.seasonAgenda())
+                            if (a.id.rfind("hire_hand:", 0) == 0) {
+                                ++hires;
+                                CHECK(a.id == "hire_hand:" + std::to_string(a.target) && a.title.find(w.fullName(a.target)) != std::string::npos,
+                                      "the hand on the list is not the hand hired");
+                            } else if (a.id.rfind("help_take:", 0) == 0) {
+                                ++takes;
+                                CHECK(a.desc.find("存糧從夠吃") != std::string::npos, "taking someone in does not say what it does to the stores");
+                            }
+                    w.stepDay();
+                }
             }
             std::printf("agenda: %d hire and %d take-in items checked\n", hires, takes);
             CHECK(hires > 0 && takes > 0, "no hand to hire and no one to take in on the season's list");

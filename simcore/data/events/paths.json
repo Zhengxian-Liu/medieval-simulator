@@ -157,7 +157,7 @@
      "options": [
        {"text": "咬牙再做一年，把本錢賺回來", "log": "{name} 不服氣，咬著牙又挑起了擔子。", "effects": [{"clear_flag": "chapman_lost"}, {"stress": 8}],
         "ai": {"base": 5, "traits": {"ambitious": 6, "wrathful": 4, "greedy": 4, "content": -4}}},
-       {"text": "收手，回去好好種地", "log": "{name} 把剩下的貨折價賣了，收了擔子，從此不再做買賣。", "effects": [{"clear_flag": "chapman_lost"}, {"money": 20}, {"station": {"id": "home", "note": "買賣賠了錢，收手回去種地"}}],
+       {"text": "收手，回去好好種地", "log": "{name} 把剩下的貨折價賣了，收了擔子，從此不再做買賣。", "effects": [{"clear_flag": "chapman_lost"}, {"book_as": "收擔子折價賣貨"}, {"money": 20}, {"station": {"id": "home", "note": "買賣賠了錢，收手回去種地"}}],
         "ai": {"base": 8, "traits": {"content": 6, "craven": 4}}}
      ]},
 

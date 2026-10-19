@@ -214,10 +214,12 @@ void World::explainRent(Household& h, double rent) {
 void World::settleRent(Household& h, double rent, bool respite, bool begged) {
     Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
     h.lastRent = rent;
-    h.lastRentPaid = std::min(rent, std::max(0.0, h.money));
     bool full = h.money >= rent - 1;  // a penny short is paid in eggs
-    double paid = std::min(std::max(0.0, h.money), rent);
-    h.money = full ? std::max(0.0, h.money - rent) : 0;
+    // Short, the steward takes whole pennies: the fraction stays in the purse, so what was paid, what is owed and
+    // the header's purse are the same whole numbers.
+    double paid = full ? std::min(std::max(0.0, h.money), rent) : std::floor(std::max(0.0, h.money) + 1e-9);
+    h.lastRentPaid = paid;
+    h.money = full ? std::max(0.0, h.money - rent) : h.money - paid;
     book(h, "交租", -paid);
     if (lordHouse != kNone && lordHouse >= 0) households_[lordHouse].money += full ? rent : paid;
     // Paid in full there is nothing to reckon (no card): the chronicle still says the rent was met, and what it was.
@@ -230,11 +232,14 @@ void World::settleRent(Household& h, double rent, bool respite, bool begged) {
     addDebt(h, std::min(rent - paid, std::max(0.0, rent - before)), lord_);
     if (respite && h.creditor == lord_ && h.debt > 0.5) h.debtYears = -1;
     if (!inPlayerHouse(h.id)) return;
+    // In whole pence as the header shows the purse and the debt (rounded down), so the card, this line and the
+    // header tell one sum.
+    auto whole = [](double v) { return std::to_string(static_cast<long>(std::floor(v + 1e-9))); };
     if (respite)
-        log(1, "地租 " + num(rent) + " 便士只交得出 " + num(paid) + "。" + (begged ? "管家答應了，" : "舊帳才剛了清，管家說") + "差的 " +
-                   num(rent - paid) + " 便士" + (begged && before > 0.5 ? "連同舊帳" : "") + "寬限一年，後年米迦勒節再算（欠莊園共 " + num(owedLord(h)) + " 便士）。");
+        log(1, "地租 " + num(rent) + " 便士只交得出 " + whole(paid) + "。" + (begged ? "管家答應了，" : "舊帳才剛了清，管家說") + "差的 " +
+                   whole(rent - paid) + " 便士" + (begged && before > 0.5 ? "連同舊帳" : "") + "寬限一年，後年米迦勒節再算（欠莊園共 " + whole(owedLord(h)) + " 便士）。");
     else if (before <= 0.5 || owedLord(h) - before >= 20)
-        log(1, "地租 " + num(rent) + " 便士只交得出 " + num(paid) + "，差的記在莊園的帳上（欠莊園共 " + num(owedLord(h)) + " 便士）。");
+        log(1, "地租 " + num(rent) + " 便士只交得出 " + whole(paid) + "，差的記在莊園的帳上（欠莊園共 " + whole(owedLord(h)) + " 便士）。");
 }
 
 // The player's house cannot pay at Michaelmas: one card with the whole reckoning (this year's rent and how it is made
@@ -433,7 +438,7 @@ void World::payRent() {
             h.millFree = false;
         }
         std::string why;
-        double rent = rentOf(h, &why);
+        double rent = std::round(rentOf(h, &why));  // charged in whole pence
         if (inPlayerHouse(h.id)) explainRent(h, rent);
         // The player's house short of coin (or with old arrears left for this day): the family reckons it up.
         if (inPlayerHouse(h.id) && h.head != kNone && (h.money < rent - 1 || stewardOnCard_.count(h.id))) {

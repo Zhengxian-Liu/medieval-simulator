@@ -1019,6 +1019,8 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                     Json one = Json::parse("[{\"add_trait\":\"" + v["trait"].asString() + "\"}]");
                     apply(one, p, target);
                 }
+            } else if (k == "book_as") {
+                bookAs_ = v.asString();  // {"book_as": "折價賣貨"}: what the money after it is booked under
             } else if (k == "money") {
                 if (h) {
                     double before = h->money;
@@ -1977,6 +1979,7 @@ std::string EventRunner::format(const std::string& tmpl, const Person& p, Id tar
                 // The family of the house they live (or lived) in: a wife married in is mourned as one of that house.
                 Id th = target != kNone ? w_.people_[target].household : kNone;
                 Id dyn = th != kNone ? w_.households_[th].dynasty : kNone;
+                if (dyn == kNone && target != kNone) dyn = w_.people_[target].dynasty;  // the dead are out of every house: their own name
                 val = dyn != kNone ? w_.dynasties_[dyn].surname : "";
             } else if (key.rfind("about:", 0) == 0) {
                 // {about:grief}: who this person's grief (or other concern) is about. A remarried widow speaks of
