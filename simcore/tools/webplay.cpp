@@ -98,6 +98,7 @@ std::string badAction(const std::map<std::string, std::string>& m) {
         {"agenda", {{"id"}, {}}},
         {"plan", {{"plan"}, {"target", "subject"}}},
         {"cancel", {{}, {"plan"}}},
+        {"rule", {{"rule", "value"}, {}}},
         {"pass", {{}, {}}}, {"year", {{}, {}}}, {"regency", {{}, {}}}, {"quit", {{}, {}}}};
     auto it = m.find("do");
     if (it == m.end()) return "動作沒有 \"do\"（例：{\"do\":\"pass\"}）";

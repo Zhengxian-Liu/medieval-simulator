@@ -54,7 +54,7 @@ def main():
         PORT = int(first.split("127.0.0.1:")[1].split("/")[0])
         page = call("/")
         assert "<html" in page and "/api/view" in page, "page missing"
-        seq, line, asked, looked, looked_bad = -1, 0, 0, False, False
+        seq, line, asked, looked, looked_bad, set_rule = -1, 0, 0, False, False, False
         deadline = time.time() + 120
         while time.time() < deadline:
             v = call(f"/api/view?seq={seq}&line={line}")
@@ -90,6 +90,22 @@ def main():
                 assert all(p.get("gates") is not None for p in v2["state"].get("plans", [])), "a plan without its conditions"
                 assert "reputation" in v2["state"] and "ladder" in v2["state"], "reputation or the ladder missing from the main screen"
                 check_layout(v2)
+                continue
+            if ask["kind"] == "season" and not set_rule:
+                # Every house rule the page offers can be changed from the season (the page's select sends this).
+                set_rule = True
+                for r in st.get("rules") or []:
+                    other = next((c["value"] for c in r.get("choices", []) if c["value"] != r.get("value")), None)
+                    if other is None:
+                        continue
+                    call("/api/act", {"do": "rule", "rule": r["id"], "value": other})
+                    v2 = call(f"/api/view?seq={seq}&line={line}")
+                    while not v2["ask"] and not v2["ended"]:
+                        v2 = call(f"/api/view?seq={v2['seq']}&line={line}")
+                    seq = v2["seq"]
+                    now = next((x for x in v2["state"].get("rules", []) if x["id"] == r["id"]), {})
+                    assert now.get("value") == other, f"rule {r['id']} not changed: {(v2['state'] or {}).get('notice', '')!r}"
+                    assert v2["ask"]["kind"] == "season", "changing a rule ended the season"
                 continue
             if ask["kind"] == "season":
                 call("/api/act", {"do": "pass"})
