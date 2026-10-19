@@ -6,6 +6,7 @@
     textplay.py --port 8820 act '<json>'    send an action (same JSON the page sends), then show the next view
     textplay.py --port 8820 look <id>       look at a person (the page's click on a name)
     textplay.py --port 8820 report          what the family knows (secrets, rumours)
+    textplay.py --port 8820 plans           every plan with each of its conditions ✓ / ✗ (look plan:<id> for one)
 
 Actions (the page's buttons):
   {"do":"choose","index":0}                         answer a question (options are numbered from 0)
@@ -111,6 +112,19 @@ def render(v, full=False):
                f"地 {h['acres']} 畝（自有 {h['freehold']}）｜ 欠債 {h['debt']}" + (f"（{h['debt_text']}）" if h.get("debt_text") else "")
                + (f"｜ 到秋收還差 {h.get('short_days')} 天糧" if h.get("lean") else "")
                + (f" ｜ 這一季還有 {s.get('time_left')} 段空閒" if season else ""))
+    if s.get("notice"):
+        out.append("不行：" + s["notice"])
+    rep = s.get("reputation")
+    if rep:
+        out.append(f"名聲 {rep['value']}（{rep['word']}；-50 到 +50）：{rep.get('effect', '')}")
+        if rep.get("recent"):
+            out.append("  最近：" + "；".join(rep["recent"]))
+        if rep.get("mend") and rep["value"] <= -10:
+            out.append("  " + rep["mend"])
+    if s.get("ladder"):
+        out.append(f"家族地位：{s['ladder']}")
+    if s.get("regret"):
+        out.append(f"上一代沒做完的心願：「{s['regret']}」")
     if season and s.get("regency"):
         r = s["regency"]
         out.append(f"（你在替 {r['ward']} 持家，還有約 {r['years_left']} 年。可以 act '{{\"do\":\"regency\"}}' 交給管家，直到{r['ward']}成年，路上有大事還是會問你。）")
@@ -197,7 +211,7 @@ def render(v, full=False):
         line = "；".join(f"★「{p['name']}」{p['why']}" for p in star)
         if rest:
             line += ("；" if line else "") + f"其他 {len(rest)} 個：" + "、".join(p["name"] for p in rest)
-        out.append("―― 現在開不了的計畫 ―― " + line)
+        out.append("―― 現在開不了的計畫 ―― " + line + "（每一個差哪一條：textplay.py plans，或 look plan:<id>）")
     ops = [p for p in s.get("plans", []) if p.get("open")]
     if ops:
         out.append("―― 能開始的計畫 ――")
@@ -249,6 +263,19 @@ def render(v, full=False):
                 tail = "（你家的，到期自動出來連任）" + tail
             gates = "　".join(("✓ " + g["label"]) if g.get("ok") else ("✗ " + g.get("detail", "")) for g in o.get("gates", []))
             out.append(f"  {o['name']}：{who}{tail}" + (f"\n    條件：{gates}" if gates and not o.get("mine") else ""))
+            if o.get("voters"):
+                ours = sum(1 for x in o["voters"] if x.get("ours"))
+                out.append(f"    各家家主（照現在看，{ours}/{len(o['voters'])} 家會投你家；開口拉票要一段空閒）：")
+                for x in o["voters"]:
+                    t = f"      [{x['id']}] {x['name']}：看樣子投 {x.get('lean') or '?'}"
+                    if x.get("promised"):
+                        t += f"（答應了 {x['promised']}）"
+                    t += f"；{x.get('note', '')}"
+                    a = x.get("ask")
+                    if a:
+                        press = {"do": "ask", "who": x["id"], "ask": a["ask"], "object": a["object"], "subject": a["subject"], "office": a.get("office", ""), "lever": ""}
+                        t += f" → act '{json.dumps(press, ensure_ascii=False)}'" if a.get("open") else f"［不行：{a.get('why', '')}］"
+                    out.append(t)
         for pst in c.get("past", [])[:4]:
             out.append(f"  {pst['year']} {pst['thing']}：{pst['outcome']}")
     heard = [x for x in s.get("heard", []) if x.get("recent")]
@@ -281,6 +308,7 @@ def wait_ask(prev_seq):
     return v
 
 
+SEASON_DO = ("agenda", "interact", "ask", "plan", "cancel", "want", "focus", "rule", "pass", "year", "regency", "quit")
 cmd = args[0] if args else "view"
 if cmd == "view":
     v = get("/api/view?seq=-1&line=0")
@@ -298,17 +326,33 @@ elif cmd == "act":
         bad = "現在沒有在問你（遊戲還在跑或已結束），先 view。"
     elif a.get("kind") == "choice" and not (do == "ai" or (do == "choose" and 0 <= int(obj.get("index", -1)) < len(a.get("options", [])))):
         bad = "現在是在問一個問題：只能 choose（index 在選項範圍內）或 ai。"
-    elif a.get("kind") == "season" and do not in ("agenda", "interact", "ask", "plan", "cancel", "want", "focus", "rule", "pass", "year", "regency", "quit"):
+    elif a.get("kind") == "season" and do in ("choose", "ai"):
         bad = "現在是一季的空閒：choose / ai 只能用在問題上。"
+    elif a.get("kind") == "season" and do not in SEASON_DO:
+        bad = f"不認得「{do}」這個動作（這一季能用的：{'、'.join(SEASON_DO)}）。"
     if bad:
+        if v0.get("state"):
+            v0["state"].pop("notice", None)  # what the game refused before is not this refusal
         print("不行：" + bad + "\n")
         print(render(v0))
         sys.exit(1)
     post("/api/act", obj)
     print(render(wait_ask(v0["seq"])))
+elif cmd == "plans" or (cmd == "look" and len(args) > 1 and args[1].startswith("plan:")):
+    # Every plan, each condition met (✓) or not (✗): the same checks the game makes before it lets one start.
+    s = get("/api/view?seq=-1&line=0").get("state") or {}
+    want = args[1][5:] if cmd == "look" else ""
+    shown = [p for p in s.get("plans", []) if not want or p["id"] == want]
+    if not shown:
+        print("沒有這個計畫（或這時候不能定計畫）。" if want else "這時候不能定計畫。")
+        sys.exit(1)
+    for p in shown:
+        state = "能開始" if p.get("open") else "現在不行：" + p.get("why", "")
+        print(f"{'★' if p.get('ambition') else ''}{p['id']}「{p['name']}」{state}")
+        print("    " + "　".join(("✓ " + g["label"]) if g.get("ok") else ("✗ " + g.get("detail", "")) for g in p.get("gates", [])))
 elif cmd == "look":
     if len(args) < 2 or not args[1].lstrip("-").isdigit():
-        print("用法：textplay.py look <人的編號>（編號是家人欄或名單裡 [ ] 中的數字）")
+        print("用法：textplay.py look <人的編號>（編號是家人欄或名單裡 [ ] 中的數字），或 look plan:<計畫 id>")
         sys.exit(1)
     r = post("/api/look", {"do": "inspect", "who": int(args[1])})
     print(r.get("text", json.dumps(r, ensure_ascii=False)))

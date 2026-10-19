@@ -107,7 +107,19 @@ void World::processCommands() {
         } else if (c.type == "interact") {
             // 陪家人 (keep_company): whichever of the company visits this person needs most now.
             std::string id = c.plan == "keep_company" && c.target != kNone ? companyEvent(c.target) : c.plan;
-            if (id.empty()) log(1, "〔陪家人〕眼下沒法陪" + shortName(c.target) + "：" + (timeLeft() < 1 ? "這一季沒有空了。" : "這陣子不方便（最近才陪過，或手頭、時局不許）。"));
+            if (c.target == kNone || c.target >= static_cast<Id>(people_.size())) {
+                log(1, "〔陪家人〕沒說要陪誰。");
+                continue;
+            }
+            if (id.empty()) {
+                // Each way of keeping them company says why it is shut; the first such reason is the one told.
+                std::string why;
+                for (const auto& in : interactionsWith(c.target))
+                    if (why.empty() && !in.open && !in.why.empty() &&
+                        (in.ev->id == "talk_heart" || in.ev->id == "talk_church" || in.ev->id == "talk_praise" || in.ev->id == "talk_market"))
+                        why = in.why;
+                log(1, "〔陪家人〕眼下沒法陪" + shortName(c.target) + "：" + (timeLeft() < 1 ? "這一季沒有空了" : why.empty() ? "最近才陪過" : why) + "。");
+            }
             for (const auto& ev : defs_.events)
                 if (ev.id == id && ev.scope == "interaction" && c.target != kNone) {
                     EventRunner er(*this);
@@ -152,44 +164,73 @@ void World::processCommands() {
     }
 }
 
-// Why a plan cannot be started now, in the player's words ("" when it can, or when nothing better is known).
-std::string World::planBlock(Id actorId, const PlanDef& pd) {
-    if (actorId == kNone) return "";
-    auto seasonsTo = [&](int until) { return std::to_string(std::max(1, static_cast<int>(std::ceil((until - day_) / (kDaysPerYear / 4.0))))); };
-    auto cd = cooldowns_.find({actorId, "plan:" + pd.id});
-    if (cd != cooldowns_.end() && cd->second > day_) return "上回才辦過，還要 " + seasonsTo(cd->second) + " 季才能再辦";
-    for (const auto& p : plans_)
-        if (p.actor == actorId && p.plan == pd.id) return "正在辦";
-    if (!planRoom(actorId)) return actorId == actingHead() ? "手上已經有兩件事在辦（放棄一件才能開新的）" : "手上已經有一件事在辦";
+// Who a plan with a subject could be for: the actor's children, and for "kin_at_home" also the others living under the
+// actor's roof (a brother, a niece), not servants.
+std::vector<Id> World::planPool(Id actorId, const PlanDef& pd) const {
+    const Person& actor = people_[actorId];
+    std::vector<Id> pool = actor.children;
+    if (pd.subject.stringOr("pick", "any_child") == "kin_at_home" && actor.household != kNone)
+        for (Id m : households_[actor.household].members)
+            if (m != actorId && m != actor.spouse && people_[m].home == kNone && std::find(pool.begin(), pool.end(), m) == pool.end())
+                pool.push_back(m);
+    return pool;
+}
+
+// The (subject, target) pairs this plan could be started on now, its actor's own conditions aside (planGates and
+// availablePlans check those): the one list both the offer and the ✓/✗ come from.
+void World::planOptions(Id actorId, const PlanDef& pd, std::vector<PlanOption>& out) {
     Person& actor = people_[actorId];
     EventRunner ev(*this);
-    if (!ev.eval(pd.actor, actor, kNone)) return pd.needs.empty() ? "眼下不合條件" : "要：" + pd.needs;
+    double w = ev.weight(pd.aiWeight, actor);
+    if (const AmbitionDef* amb = defs_.ambition(actor.ambition))
+        if (std::find(amb->plans.begin(), amb->plans.end(), pd.id) != amb->plans.end()) w += 25;
+
+    std::vector<Id> subjects{kNone};
     if (!pd.subject.isNull()) {
-        std::vector<Id> pool = actor.children;
-        if (pd.subject.stringOr("pick", "any_child") == "kin_at_home")
-            for (Id m : households_[actor.household].members)
-                if (m != actorId && m != actor.spouse && people_[m].home == kNone && std::find(pool.begin(), pool.end(), m) == pool.end())
-                    pool.push_back(m);
-        Id waiting = kNone;
-        int until = 0;
-        bool any = false;
-        for (Id c : pool) {
+        subjects.clear();
+        for (Id c : planPool(actorId, pd)) {
             const Person& cp = people_[c];
-            if (!cp.alive() || cp.household == kNone || !ev.eval(pd.subject["conditions"], cp, actorId)) continue;
-            any = true;
-            auto scd = cooldowns_.find({c, "plan:" + pd.id});
-            if (scd != cooldowns_.end() && scd->second > day_) {
-                if (waiting == kNone) waiting = c, until = scd->second;
-            } else {
-                waiting = kNone;
-                break;
-            }
+            if (cp.alive() && cp.household != kNone && ev.eval(pd.subject["conditions"], cp, actorId)) subjects.push_back(c);
         }
-        if (!any) return "家裡沒有合適的人";
-        if (waiting != kNone) return people_[waiting].firstName + " 上回的事才落空，還要 " + seasonsTo(until) + " 季才好再辦";
     }
-    if (pd.id == "arrange_match" || pd.id == "court") return "村裡眼下沒有年紀相當、身分相配、還沒成親的人";
-    return "眼下找不到合適的對象";
+    for (Id sub : subjects) {
+        if (sub != kNone) {
+            auto scd = cooldowns_.find({sub, "plan:" + pd.id});
+            if (scd != cooldowns_.end() && scd->second > day_) continue;
+        }
+        if (pd.target.isNull()) {
+            out.push_back({pd.id, kNone, sub, w, 1});
+            continue;
+        }
+        std::string pick = pd.target.stringOr("pick", "villager");
+        Id other = sub != kNone ? sub : actorId;
+        const Json& cond = pd.target["conditions"];
+        auto ok = [&](Id t) {
+            if (t == kNone || t == actorId || t == sub) return false;
+            const Person& tp = people_[t];
+            if ((pd.id == "arrange_match" || pd.id == "court") && inPlayerHouse(tp.household)) {
+                auto q = matchQuietUntil_.find(t);
+                if (q != matchQuietUntil_.end() && q->second > day_) return false;
+            }
+            return tp.alive() && tp.household != kNone && ev.eval(cond, tp, other);
+        };
+        if (pick == "lord") {
+            if (ok(lord_)) out.push_back({pd.id, lord_, sub, w, 1});
+            continue;
+        }
+        for (const auto& tp : people_) {
+            if (!ok(tp.id) || tp.household == actor.household) continue;
+            double op = opinion(actorId, tp.id);
+            int feud = feudStage(actorId, tp.id);
+            if (pick == "rival" && op > -30 && feud < 2) continue;
+            if (pick == "friend" && op < 30) continue;
+            // Prefer targets the person feels strongly about; a family feud makes anyone of that house a target.
+            double tw = pick == "rival" ? 1 + std::max(0.0, -op - 30) / 40 + feud * 0.5 : 1 + std::max(0.0, op) / 50;
+            // The one the subject has set their heart on comes first.
+            if (sub != kNone && concernOf(people_[sub], "longing", tp.id)) tw += 6;
+            out.push_back({pd.id, tp.id, sub, w, tw});
+        }
+    }
 }
 
 std::vector<PlanOption> World::availablePlans(Id actorId) {
@@ -203,64 +244,7 @@ std::vector<PlanOption> World::availablePlans(Id actorId) {
         auto cd = cooldowns_.find({actorId, "plan:" + pd.id});
         if (cd != cooldowns_.end() && cd->second > day_) continue;
         if (!ev.eval(pd.actor, actor, kNone)) continue;
-        double w = ev.weight(pd.aiWeight, actor);
-        if (const AmbitionDef* amb = defs_.ambition(actor.ambition))
-            if (std::find(amb->plans.begin(), amb->plans.end(), pd.id) != amb->plans.end()) w += 25;
-
-        std::vector<Id> subjects{kNone};
-        if (!pd.subject.isNull()) {
-            subjects.clear();
-            std::vector<Id> pool = actor.children;
-            // "kin_at_home": also the others living under the actor's roof (a brother, a niece), not servants.
-            if (pd.subject.stringOr("pick", "any_child") == "kin_at_home")
-                for (Id m : households_[actor.household].members)
-                    if (m != actorId && m != actor.spouse && people_[m].home == kNone &&
-                        std::find(pool.begin(), pool.end(), m) == pool.end())
-                        pool.push_back(m);
-            for (Id c : pool) {
-                const Person& cp = people_[c];
-                if (cp.alive() && cp.household != kNone && ev.eval(pd.subject["conditions"], cp, actorId))
-                    subjects.push_back(c);
-            }
-        }
-        for (Id sub : subjects) {
-            if (sub != kNone) {
-                auto scd = cooldowns_.find({sub, "plan:" + pd.id});
-                if (scd != cooldowns_.end() && scd->second > day_) continue;
-            }
-            if (pd.target.isNull()) {
-                out.push_back({pd.id, kNone, sub, w, 1});
-                continue;
-            }
-            std::string pick = pd.target.stringOr("pick", "villager");
-            Id other = sub != kNone ? sub : actorId;
-            const Json& cond = pd.target["conditions"];
-            auto ok = [&](Id t) {
-                if (t == kNone || t == actorId || t == sub) return false;
-                const Person& tp = people_[t];
-                if ((pd.id == "arrange_match" || pd.id == "court") && inPlayerHouse(tp.household)) {
-                    auto q = matchQuietUntil_.find(t);
-                    if (q != matchQuietUntil_.end() && q->second > day_) return false;
-                }
-                return tp.alive() && tp.household != kNone && ev.eval(cond, tp, other);
-            };
-            if (pick == "lord") {
-                if (ok(lord_)) out.push_back({pd.id, lord_, sub, w, 1});
-                continue;
-            }
-            for (const auto& tp : people_) {
-                if (!ok(tp.id) || tp.household == actor.household) continue;
-                double op = opinion(actorId, tp.id);
-                int feud = feudStage(actorId, tp.id);
-                if (pick == "rival" && op > -30 && feud < 2) continue;
-                if (pick == "friend" && op < 30) continue;
-                // Prefer targets the person feels strongly about; a family feud makes anyone of that house a target.
-                double tw = pick == "rival" ? 1 + std::max(0.0, -op - 30) / 40 + feud * 0.5 : 1 + std::max(0.0, op) / 50;
-                // The one the subject has set their heart on comes first.
-                if (sub != kNone && concernOf(people_[sub], "longing", tp.id)) tw += 6;
-                out.push_back({pd.id, tp.id, sub, w, tw});
-            }
-        }
+        planOptions(actorId, pd, out);
     }
     return out;
 }

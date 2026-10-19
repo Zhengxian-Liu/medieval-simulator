@@ -82,7 +82,7 @@ void World::monthlyFocus() {
         }
         // Hands in the family's own fields, against what they would be doing anyway (a servant works another's).
         if (p.home == kNone && def) households_[p.household].focusYield += f->work - def->work;
-        if (p.reputation < 30) p.reputation += f->reputation;
+        if (p.reputation < 30) addReputation(id, f->reputation, "一年到頭" + f->desc.substr(0, f->desc.find("，")));
         p.stress = std::max(0.0, p.stress + f->stress);
         p.health = std::min(100.0, p.health + f->health);
         // Getting to know people: of about their own age, or anyone in the village.

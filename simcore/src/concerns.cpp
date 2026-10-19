@@ -166,6 +166,7 @@ void World::rollSeason() {
     h.timeSeason = key;
     h.timeLeft = seasonBudget(month());
     // What the head did last season waits for the summary (which the text game prints and clears).
+    settleAsk();
     lastSeasonNotes_.insert(lastSeasonNotes_.end(), seasonNotes_.begin(), seasonNotes_.end());
     seasonNotes_.clear();
     seasonWants();
@@ -897,7 +898,8 @@ void World::spareWork(Household& h, Id worker, const Json& what, Id target) {
     }
 }
 
-std::vector<World::AgendaItem> World::seasonAgenda() {
+std::vector<World::AgendaItem> World::seasonAgenda(bool all) {
+
     std::vector<AgendaItem> items;
     Id head = actingHead();
     if (head == kNone || playerHousehold_ == kNone) return items;
@@ -1049,6 +1051,34 @@ std::vector<World::AgendaItem> World::seasonAgenda() {
             a.kind = "effects", a.effects = "[{\"sell_grain\": " + std::to_string(int(days)) + "}]";
             a.done = fullName(head) + " 套上車，把多出來的糧拉到鎮上的市集賣了。";
             a.rank = 55;
+            items.push_back(a);
+        }
+    }
+
+    // The lord's waste land for rent (design/fun-r6.md A): a family whose acres do not feed it is told of the strips
+    // nobody holds, and can ask for one from the list (開口 the lord: the entry fine, then rent like any holding).
+    if (!hiding && lord_ != kNone && people_[lord_].alive() && head != lord_) {
+        double need = consumption(ph) * kDaysPerYear;
+        bool short_ = ph.lean || ph.acres * 100 + 220 < need * 1.05;
+        int vacant = 0;
+        const AskOption* best = nullptr;
+        std::vector<AskOption> asks = short_ ? asksFor(lord_) : std::vector<AskOption>{};
+        for (const auto& o : asks) {
+            if (o.ask != "rent_vacant") continue;
+            ++vacant;
+            const Parcel& pc = parcels_[o.object];
+            if (!best || (o.open && !best->open) || (o.open == best->open && pc.acres > parcels_[best->object].acres)) best = &o;
+        }
+        if (best) {
+            const Parcel& pc = parcels_[best->object];
+            AgendaItem a;
+            a.id = "rent_land:" + std::to_string(pc.id);
+            a.title = best->label.substr(0, best->label.find("（")) + "（" + std::to_string(int(pc.acres)) + " 畝）";
+            a.desc = "領主手上有 " + std::to_string(vacant) + " 塊空著沒人種的地。你家 " + std::to_string(int(ph.acres)) + " 畝地養 " +
+                     std::to_string(ph.members.size()) + " 口人不太夠。" + best->label.substr(best->label.find("（")) + "，往後跟別的佃地一樣交租。";
+            a.kind = "ask", a.who = lord_, a.event = "rent_vacant", a.target = pc.id;
+            a.rank = 85;
+            if (!best->open) a.open = false, a.why = best->why;
             items.push_back(a);
         }
     }
@@ -1210,7 +1240,7 @@ std::vector<World::AgendaItem> World::seasonAgenda() {
                     return x.kind == "plan" && !plansNamed.insert({x.event, x.target, x.subject}).second;
                 }), items.end());
     // At most four, and the company kept among them when there is room: the season's list, not the village's.
-    if (items.size() > 4) {
+    if (items.size() > 4 && !all) {
         auto company = std::find_if(items.begin(), items.end(), [](const AgendaItem& x) { return x.id.rfind("company:", 0) == 0; });
         AgendaItem keep;
         bool had = company != items.end() && company - items.begin() >= 4;
@@ -1226,24 +1256,108 @@ std::vector<World::AgendaItem> World::seasonAgenda() {
         if (left < 1) a.open = false, a.why = "這一季沒有空了";
         else if (money > ph.money + 0.5) a.open = false, a.why = "錢不夠";
     }
+    if (!all) {
+        // Everything shown this season, not only the last list: a button pressed after its item was done or
+        // dropped off is still known, and told why.
+        int key = year() * 4 + month() / 3;
+        if (key != lastAgendaSeason_) lastAgenda_.clear(), agendaDone_.clear(), lastAgendaSeason_ = key;
+        for (const auto& a : items) {
+            auto old = std::find_if(lastAgenda_.begin(), lastAgenda_.end(), [&](const AgendaItem& x) { return x.id == a.id; });
+            if (old != lastAgenda_.end()) *old = a;
+            else lastAgenda_.push_back(a);
+        }
+    }
     return items;
+}
+
+// Why a thing that was on the season's list can no longer be done: it was offered for a reason, and the reason that
+// went away is said (a visit's own check, the grain gone below what must be kept, the hungry house fed again).
+std::string World::agendaGoneWhy(const AgendaItem& a) {
+    Id head = actingHead();
+    const Household& ph = households_[playerHousehold_];
+    auto houseOf = [&](Id who) { return who != kNone && people_[who].household != kNone ? fullName(households_[people_[who].household].head) + " 家" : std::string("那一家"); };
+    if (a.kind == "interact") {
+        if (a.who == kNone || !people_[a.who].alive()) return "人已經不在了";
+        for (const auto& in : interactionsWith(a.who))
+            if (in.ev->id == a.event && !in.open) return in.why.empty() ? "最近才去過" : in.why;
+        return "最近才陪過" + shortName(a.who);
+    }
+    const std::string kind = a.id.substr(0, a.id.find(':'));
+    if (kind == "sell_grain") {
+        double c = std::max(1.0, consumption(ph));
+        return "存糧只剩 " + std::to_string(int(ph.food / c)) + " 天，要留到收成後三個月（" + std::to_string(daysToHarvest() + 90) + " 天），沒有多的可賣了";
+    }
+    if (kind == "hire_hand") return a.target != kNone && people_[a.target].household != kNone && households_[people_[a.target].household].hiredUntil > day_
+                                       ? shortName(a.target) + "已經被別家雇走了" : ph.money < 54 ? "錢不夠了（雇工錢之外還得留 30 便士）" : "今年已經雇過幫手了";
+    if (kind == "help_hire" || kind == "help_land" || kind == "help_take") {
+        Id hid = a.target != kNone ? people_[a.target].household : kNone;
+        if (hid == kNone) return "那一家已經不在了";
+        const Household& h = households_[hid];
+        double days = h.food / std::max(1.0, consumption(h));
+        if (days >= 45 && !(h.lean && days < 120)) return houseOf(a.target) + "的糧接上了（有 " + std::to_string(int(days)) + " 天）";
+        if (kind == "help_take") return "你家的糧撐不起多一張嘴了（要 120 天以上、今年不缺糧）";
+        if (kind == "help_land") return "你家沒有分得出去、自己又吃得飽的那幾畝地了";
+        return "他家的人眼下雇不了";
+    }
+    if (kind == "spare") {
+        double c = std::max(0.5, consumption(ph));
+        return "手頭和存糧都不算緊了（手上 " + pence(ph.money) + "，存糧夠 " + std::to_string(int(ph.food / c)) + " 天），或這一季已經做過";
+    }
+    (void)head;
+    return "情形變了";
 }
 
 void World::doAgenda(const std::string& id) {
     Id head = actingHead();
     if (head == kNone) return;
-    std::vector<AgendaItem> items = seasonAgenda();
+    // The whole list as it stands now (not cut to four), then the one shown: a visit or a plan that was offered is
+    // still done if its own check holds; anything else that dropped off says what changed.
+    std::vector<AgendaItem> items = seasonAgenda(true);
     auto it = std::find_if(items.begin(), items.end(), [&](const AgendaItem& a) { return a.id == id; });
-    if (it == items.end()) {
-        log(1, "〔這一季的事〕情形變了，這件事眼下辦不成了。");
-        return;
+    AgendaItem a;
+    if (it != items.end()) {
+        a = *it;
+    } else {
+        auto done = agendaDone_.find(id);
+        if (done != agendaDone_.end() && lastAgendaSeason_ == year() * 4 + month() / 3) {
+            log(1, "〔這一季的事〕" + done->second + "：這一季已經辦過了。");
+            return;
+        }
+        auto shown = std::find_if(lastAgenda_.begin(), lastAgenda_.end(), [&](const AgendaItem& x) { return x.id == id; });
+        if (shown == lastAgenda_.end()) {
+            log(1, "〔這一季的事〕這一季的單子上沒有這件事（" + id + "）。");
+            return;
+        }
+        a = *shown;
+        bool still = false;
+        if (a.kind == "interact" && a.who != kNone && people_[a.who].alive()) {
+            if (a.id.rfind("company:", 0) == 0) a.event = companyEvent(a.who);  // the visit they need most now
+            for (const auto& in : interactionsWith(a.who))
+                if (in.ev->id == a.event && in.open) still = true;
+        }
+        if (a.kind == "plan" || a.kind == "ask") still = true;  // startPlan / ask check it and say why not
+        if (!still) {
+            log(1, "〔這一季的事〕" + a.title + "辦不成了：" + agendaGoneWhy(a) + "。");
+            return;
+        }
+        a.open = timeLeft() >= 1;
+        a.why = a.open ? "" : "這一季沒有空了";
     }
-    AgendaItem a = *it;
     if (!a.open) {
         log(1, "〔這一季的事〕" + a.title + "：" + a.why + "。");
         return;
     }
     ++counters_["agenda:" + a.id.substr(0, a.id.find(':'))];
+    // Done once it took the time it costs (a plan or an ask that was refused stays on the list, with its reason).
+    const int before = timeLeft();
+    struct MarkDone {
+        World& w;
+        const AgendaItem& a;
+        int before;
+        ~MarkDone() {
+            if (w.timeLeft() < before) w.agendaDone_[a.id] = a.title;
+        }
+    } mark{*this, a, before};
     if (a.kind == "interact") {
         for (const auto& ev : defs_.events)
             if (ev.id == a.event && ev.scope == "interaction") {
@@ -1256,6 +1370,8 @@ void World::doAgenda(const std::string& id) {
         std::string why = startPlan(head, a.event, a.target, a.subject);
         if (why.empty()) spendTime(1);
         else log(1, "〔計畫〕「" + (pd ? pd->name : a.event) + "」眼下辦不成：" + why + "。");
+    } else if (a.kind == "ask") {
+        ask(a.who, a.event, a.target, kNone, "", "");  // takes the day itself, and says why not when it cannot
     } else if (a.kind == "effects") {
         if (!spendTime(1)) return;
         log(1, "〔這一季的事〕" + a.done);

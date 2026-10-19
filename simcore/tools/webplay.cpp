@@ -87,6 +87,40 @@ int toInt(const std::map<std::string, std::string>& m, const std::string& k, int
     return it == m.end() ? fallback : parseIndex(it->second);
 }
 
+// What a season action must and may carry; "" when it is well formed, else what is wrong with it, in words.
+std::string badAction(const std::map<std::string, std::string>& m) {
+    static const std::map<std::string, std::pair<std::vector<std::string>, std::vector<std::string>>> keys{
+        {"interact", {{"who", "event"}, {}}},
+        {"ask", {{"who", "ask"}, {"object", "subject", "office", "lever"}}},
+        {"want", {{"what"}, {"object"}}},
+        {"focus", {{"who", "focus"}, {}}},
+        {"agenda", {{"id"}, {}}},
+        {"plan", {{"plan"}, {"target", "subject"}}},
+        {"cancel", {{}, {"plan"}}},
+        {"pass", {{}, {}}}, {"year", {{}, {}}}, {"regency", {{}, {}}}, {"quit", {{}, {}}}};
+    auto it = m.find("do");
+    if (it == m.end()) return "動作沒有 \"do\"（例：{\"do\":\"pass\"}）";
+    auto k = keys.find(it->second);
+    if (k == keys.end()) {
+        std::string all;
+        for (const auto& [d, _] : keys) all += (all.empty() ? "" : "、") + d;
+        return "不認得的動作 \"" + it->second + "\"（能用的：" + all + "）";
+    }
+    const auto& [need, may] = k->second;
+    std::string missing, unknown;
+    for (const auto& n : need)
+        if (!m.count(n)) missing += (missing.empty() ? "" : "、") + ("\"" + n + "\"");
+    for (const auto& [key, _] : m)
+        if (key != "do" && std::find(need.begin(), need.end(), key) == need.end() && std::find(may.begin(), may.end(), key) == may.end())
+            unknown += (unknown.empty() ? "" : "、") + ("\"" + key + "\"");
+    if (missing.empty() && unknown.empty()) return "";
+    std::string usage;
+    for (const auto& n : need) usage += (usage.empty() ? "" : "、") + n;
+    for (const auto& n : may) usage += (usage.empty() ? "" : "、") + n + "（可省）";
+    return "\"" + it->second + "\" 動作" + (missing.empty() ? "" : "少了 " + missing) + (missing.empty() || unknown.empty() ? "" : "，") +
+           (unknown.empty() ? "" : "不認得 " + unknown) + "（要寫的是：" + usage + "）。這一下什麼都沒做。";
+}
+
 const char* familiarity(double c) {
     return c >= 60 ? "很熟" : c >= 30 ? "熟識" : c >= 10 ? "認識" : "點頭之交";
 }
@@ -99,6 +133,7 @@ public:
     std::string summary;        // what the last season came to, shown through this season
     World::FamilySnapshot seasonStart;  // the family at the start of this season, for "這一季到現在"
     bool quit = false;
+    std::string notice;         // an action refused as malformed: sent once with the next state
 
     void send(const std::string& line) { std::cout << line << "\n" << std::flush; }
 
@@ -211,6 +246,16 @@ public:
                            .b("lean", w.breadShort(h) > 0)    // the barn against the days to the harvest, today
                            .n("short_days", w.breadShort(h))
                            .done());
+        // What only the report used to say (design/fun-r6.md A): the family's name with what moved it and how to mend
+        // it, the ladder with its next rung, the last generation's unfinished wish.
+        {
+            World::RepView rv = w.reputationView(head);
+            std::vector<std::string> recent;
+            for (const auto& r : rv.recent) recent.push_back(str(r));
+            o.raw("reputation", Obj().n("value", rv.value).text("word", rv.word).text("effect", rv.effect).raw("recent", arr(recent))
+                                    .text("mend", rv.mend).done());
+            o.text("ladder", w.ladderText()).text("regret", w.regretText());
+        }
         o.n("time_left", w.timeLeft());
         // 這一季的事: the few things worth a free day now, each a button ({"do":"agenda","id":...}).
         if (withActions) {
@@ -496,7 +541,26 @@ public:
                                                if (w.officeBar(m, of.id).empty()) v.push_back(Obj().n("id", m).text("name", w.shortName(m)).b("head", m == head).done());
                                        return arr(v); }())
                                    .b("wanted", w.wants().end() != std::find_if(w.wants().begin(), w.wants().end(), [&](const Want& x) {
-                                       return x.open && x.house == hh && x.kind == "office" && x.office == of.id; })).done());
+                                       return x.open && x.house == hh && x.kind == "office" && x.office == of.id; }))
+                                   .raw("voters", [&] {
+                                       // While the family is after it: each voting head's lean and what stands in the way,
+                                       // with the 開口 for his vote (design/fun-r6.md A 選舉).
+                                       std::vector<std::string> v;
+                                       bool wanted = false;
+                                       for (const auto& x : w.wants()) wanted = wanted || (x.open && x.house == hh && x.kind == "office" && x.office == of.id);
+                                       if (!wanted || !withActions) return arr(v);
+                                       for (const auto& vv : w_.electionView(of.id)) {
+                                           Obj q;
+                                           q.n("id", vv.voter).text("name", w.fullName(vv.voter)).text("lean", vv.lean != kNone ? (vv.lean == head ? "你" : w.inPlayerHouse(w.person(vv.lean).household) ? w.shortName(vv.lean) : w.fullName(vv.lean)) : "")
+                                               .b("ours", vv.lean != kNone && w.people()[vv.lean].household == hh)
+                                               .text("promised", vv.promised != kNone ? w.shortName(vv.promised) : "").text("note", vv.note);
+                                           if (!vv.ask.ask.empty())
+                                               q.raw("ask", Obj().text("ask", vv.ask.ask).text("label", vv.ask.label).n("object", vv.ask.object).n("subject", vv.ask.subject)
+                                                                .text("office", vv.ask.office).b("open", vv.ask.open).text("why", vv.ask.why).done());
+                                           v.push_back(q.done());
+                                       }
+                                       return arr(v); }())
+                                   .done());
             Obj c;
             c.raw("items", arr(items)).raw("past", arr(past)).raw("offices", arr(offs));
             for (const auto& f : w.entryFines())
@@ -573,9 +637,17 @@ public:
                     if (label.empty()) label = "就這麼辦";
                     targets.push_back(Obj().n("target", op.target).n("subject", op.subject).text("label", label).done());
                 }
-                std::string why = picks.empty() ? w_.planBlock(acting, pd) : w.timeLeft() > 0 ? "" : "這一季沒有空閒了";
+                // Each condition met or not (design/fun-r6.md A), the first unmet one as why.
+                std::vector<std::string> gates;
+                std::string why;
+                for (const auto& g : w_.planGates(acting, pd)) {
+                    gates.push_back(Obj().text("label", g.label).b("ok", g.ok).text("detail", g.detail).done());
+                    if (!g.ok && why.empty()) why = g.detail;
+                }
+                if (why.empty() && picks.empty()) why = "眼下找不到合適的對象";
                 plans.push_back(Obj().text("id", pd.id).text("name", pd.name).text("desc", pd.desc + "（用一段空閒）").text("needs", pd.needs).text("why", why)
-                                    .b("open", !picks.empty() && w.timeLeft() > 0).b("ambition", forAmb).raw("targets", arr(targets)).done());
+                                    .b("open", !picks.empty() && w.timeLeft() > 0).b("ambition", forAmb).raw("targets", arr(targets))
+                                    .raw("gates", arr(gates)).done());
             }
             o.raw("plans", arr(plans));
         }
@@ -602,6 +674,7 @@ public:
             std::floor(w.households()[w.playerHousehold()].money) != std::floor(seasonStart.money))
             sum += "【這一季到現在】" + w.moneySince(seasonStart) + "\n";
         o.text("summary", sum);
+        if (!notice.empty()) o.text("notice", notice), notice.clear();
         return o.done();
     }
 
@@ -727,6 +800,12 @@ int main(int argc, char** argv) {
                 auto m = web.next();
                 std::string what = m["do"];
                 Id head = w.actingHead();  // the one keeping the house, a widow or stepfather for a child head
+                // An action that does not say what it means is refused with what it lacks, not taken as something
+                // else (a mistyped key was a visit to nobody, an unknown action passed the season).
+                if (std::string bad = badAction(m); !bad.empty()) {
+                    web.notice = bad;
+                    continue;
+                }
                 if (what == "interact") {
                     w.issue({w.today(), "interact", head, m["event"], toInt(m, "who"), kNone});
                     w.runCommands();

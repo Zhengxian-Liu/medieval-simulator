@@ -145,6 +145,7 @@ void World::electReeve() {
     } else if (playerRuns) {
         log(1, "【選莊頭】" + tallyText(cands, tally, false) + "。" + tie + voteWhy(tally, winner) + how +
                    (winner == head ? fullName(head) + (old == head ? " 連任莊頭，再做三年。" : " 當上了莊頭，這一任三年。") : fullName(winner) + " 當選。"));
+        log(1, "  開票時各家當眾說了投誰：" + ballotText(tally) + "。");
         if (winner != head) addStress(head, 6, "落選的難堪");
     } else if (old != kNone && winner != old && people_[old].alive() && inPlayerHouse(people_[old].household)) {
         std::string bar = officeBar(old, "reeve");
@@ -154,7 +155,7 @@ void World::electReeve() {
     } else if (imposed) {
         log(2, how);
     }
-    if (winner != old) r.reputation += 5;
+    if (winner != old) addReputation(winner, 5, "當選莊頭");
     // Terms on end of one blood: a son after his father carries the count on (「十年莊頭」 is the family's).
     const bool sameBlood = old != kNone && winner != old && r.dynasty != kNone && people_[old].dynasty == r.dynasty;
     reeveTerms_[winner] = winner == old ? reeveTerms_[winner] + 1 : sameBlood ? reeveTerms_[old] + 1 : 1;
