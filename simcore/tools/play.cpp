@@ -370,11 +370,13 @@ int main(int argc, char** argv) {
             }
     };
     int skipUntil = 0;
+    bool routine = false;  // a year let run: wakes and weddings go by the family's rule (World::setRoutineByRule)
     World::FamilySnapshot before = w.snapshot();
     bool stopped = false;
     try {
     for (int d = 0; d < years * kDaysPerYear && !w.gameOver(); ++d) {
         if (d > 0 && w.dayOfMonth() == 0 && w.month() % 3 == 0 && w.today() >= skipUntil) {
+            if (routine) w.issue({w.today(), "rule", w.actingHead(), "routine:0", kNone, kNone}), routine = false;
             flush();
             // A season is a turn: what changed, who is at home and how they are, then what to spend the free days on.
             w.startSeason();
@@ -402,6 +404,8 @@ int main(int argc, char** argv) {
                     w.issue({w.today(), "cancel_plan", w.actingHead(), "", kNone, kNone});
                 } else if (a == "y") {
                     skipUntil = w.today() + kDaysPerYear;
+                    w.issue({w.today(), "rule", w.actingHead(), "routine:1", kNone, kNone});
+                    routine = true;
                     break;
                 } else if (a == "q") {
                     d = years * kDaysPerYear;

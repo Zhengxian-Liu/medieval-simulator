@@ -493,8 +493,10 @@ int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
     // Someone the head goes to see answers for themselves, child or not.
     bool asks = ev.scope != "interaction" && (p.id == acting || (p.household == w_.playerHousehold_ && w_.ageYears(p) < 14) ||
                 (ev.parentDecides && ofHouse && (p.spouse == kNone || p.household == w_.playerHousehold_)));
-    asked_ = ev.ask && asks;
-    if (w_.chooser_ && ev.ask && asks) {
+    asked_ = ev.ask && asks && !(ev.routine && w_.routineByRule_);
+    picked_ = false;
+    // While a year is let run, an everyday moment is not a stop: the AI answers it as the family would.
+    if (w_.chooser_ && ev.ask && asks && !(ev.routine && w_.routineByRule_)) {
         std::vector<int> open;
         World::ChoicePrompt prompt;
         std::vector<std::string> lines;
@@ -543,7 +545,10 @@ int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
         }
         if (open.size() > 1 || (!open.empty() && !prompt.unavailable.empty())) {
             int r = w_.chooser_(prompt);
-            if (r >= 0 && r < static_cast<int>(open.size())) return open[r];
+            if (r >= 0 && r < static_cast<int>(open.size())) {
+                picked_ = true;
+                return open[r];
+            }
         }
     }
     // A villager in scope (by default, the spotlight) may have a model decide among the options the rules allow.
@@ -1695,6 +1700,9 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 if (!h) continue;
                 double got = w.sellGrainAtMarket(*h, v.asNumber());
                 if (w.inPlayerHouse(h->id)) w.log(1, got > 0 ? "  賣了 " + std::to_string(static_cast<long>(got)) + " 便士。" : "  到了市集才發現，家裡的糧其實不夠賣。");
+            } else if (k == "spare_work") {
+                // {"spare_work": {"kind": "day", "pay": 6, "meals": 6}} (glean/craft/alms): a poor season's free day, paid at once.
+                if (h) w.spareWork(*h, p.id, v, target);
             } else if (k == "hire_hand") {
                 // {"hire_hand": {"pay": 24, "bonus": 0.05}}: the target works the house's harvest for a season's wage.
                 if (!h || target == kNone) continue;
@@ -1830,9 +1838,9 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 if (plan_ && plan_->subject != kNone && target != kNone)
                     w.sendToService(plan_->subject, target, static_cast<int>(v.numberOr("years", 5)));
             } else if (k == "occasion_policy") {
-                // The head's answer holds for the rest of the season's wakes and weddings.
-                w.occasionSeason_ = w.year() * 4 + w.month() / 3;
-                w.occasionPolicy_ = v.asString();
+                // The head's answer becomes the family's rule for wakes and weddings (World::occasionByPolicy).
+                // Only the player's own answer: the AI standing in for one card does not make the family's rules.
+                if (picked_ && w.isPlayerFamily(p)) w.setOccasionRule(v.asString());
             } else if (k == "occasion") {
                 // {"came": true, "value": 6, "mod": "came_to_wake"}: at (or missing) the wake or wedding of the target's house.
                 w.attendOccasion(p.id, target, !v["came"].isBool() || v["came"].asBool(), v.numberOr("value", 0), v.stringOr("mod", "event"));
@@ -1961,6 +1969,7 @@ std::string EventRunner::format(const std::string& tmpl, const Person& p, Id tar
             else if (key == "sell_reason")
                 val = target != kNone && w_.people_[target].household != kNone ? w_.sellReason(w_.households_[w_.people_[target].household]) : "";
             else if (key == "stress_cause") val = p.stressCause.empty() ? "說不出的心事" : p.stressCause;
+            else if (key == "hunger_why") val = w_.hungerWhy(p.household);  // why the house is short this year (economy.cpp)
             else if (key == "deed_actor" || key == "deed_victim") {
                 Id a = deed_ == kNone ? kNone : key == "deed_actor" ? w_.deeds_[deed_].actor : w_.deeds_[deed_].target;
                 val = a == kNone ? "" : w_.isPlayerFamily(w_.people_[a]) ? w_.shortName(a) : w_.fullName(a);

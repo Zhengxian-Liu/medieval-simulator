@@ -174,6 +174,9 @@ struct Household {
     int lastRentFree = -1;   // so a change in the rent can be explained to the family
     int grainAsked = -1;     // the harvest (day / year) the family was last asked to get its bread through to, and what it chose
     int grainChoice = -1;
+    int harvestMembers = 0;  // who there was to feed when the last harvest came in, and how much of it went for the rent:
+    double soldForRent = 0;  // the reasons a hunger card gives (World::hungerWhy)
+    double harvestBread = 0; // ...and what that harvest brought in, in a grown man's days
     // The head's time this season (design/season-loop.md): spent on people and plans, or else on the work.
     std::map<std::string, double> ledger;  // the player's money, by what it came from or went on (running totals)
     int timeSeason = -1;   // year * 4 + season the budget belongs to
@@ -642,6 +645,10 @@ public:
     };
     std::vector<AgendaItem> seasonAgenda();
     void doAgenda(const std::string& id);
+    // A poor season's free days (fun-r6 C): a day's work for a neighbour short of hands, gleaning after the harvest, a
+    // craft piece for the market, alms at the church, each paid at once (the spare_work effect runs World::spareWork).
+    std::vector<AgendaItem> spareWorkItems();
+    void spareWork(Household& h, Id worker, const Json& what, Id target);
     // 陪家人: of 談心, 一起上教堂, 誇獎 and 帶去市集, the one this person wants or needs most now ("" when none is open).
     std::string companyEvent(Id who);
     // Lasting help for a house that cannot feed itself (season agenda, 〔親友挨餓〕): a parcel the family can spare
@@ -681,6 +688,15 @@ public:
     // What the house owes, to whom, and when it falls due ("欠莊園 62（拖了一年）、欠 艾倫·米勒 30（明年米迦勒節）").
     std::string debtText(Id household) const;
     double owedAll(Id household) const;  // the main debt and the one waiting behind it
+    double dailyBread(Id household) const { return consumption(households_.at(household)); }  // the house's bread a day, in a grown man's days
+    double lastHarvestWeather() const { return lastWeather_; }  // the last harvest against an ordinary year's (1)
+    // 家裡的規矩 (fun-r6 C): standing rules the family lives by, set once and changed at any time.
+    const std::string& occasionRule() const { return occasionRule_; }  // "" not set yet, else all | close | none | ask
+    static const char* occasionRuleText(const std::string& rule);
+    void setOccasionRule(const std::string& rule);
+    // While the year is let run (play's year mode), routine questions go by the family's rules, or by custom where
+    // none is set: no card for each wake and wedding.
+    void setRoutineByRule(bool on) { routineByRule_ = on; }
     bool isPlayerFamily(const Person& p) const;
     bool closeKin(Id a, Id b) const;
     bool gentry(Id id) const;  // the lord's family: they do not marry tenants
@@ -947,6 +963,12 @@ private:
     void ensureFood(Household& h);
     int daysToHarvest() const;  // days until the next harvest day (month 8, day 0)
     bool askGrain(Household& h);  // the player's house short of bread: the family says how much to buy; false if no one was asked
+    double lastWeather_ = 1;  // the last harvest against an ordinary one (the summer and the times together)
+public:
+    // Why the house is short of bread this year, in a sentence for the hunger cards ("" when it is not short): a bad
+    // summer, too little land for its mouths, grain sold for the rent, mouths come since the harvest, no ox.
+    std::string hungerWhy(Id household) const;
+private:
     // The Michaelmas rent: what it is and why (the breakdown the reckoning card shows), with `lessAcres` given back.
     double rentOf(const Household& h, std::string* why = nullptr, double lessAcres = 0) const;
     void explainRent(Household& h, double rent);  // the rent changed since last year for a reason not the family's: say why
@@ -1014,10 +1036,10 @@ private:
     void learnNews(News& n, Id household, Id teller, double link);
     void whisper(Id holder, Id deed, Id culprit, Id source);
     void attendOccasion(Id person, Id about, bool came, double opinionValue, const std::string& mod);
-    // 紅白事: the head answers the season's first invitation once, for the season (all / close / none); the
-    // rest that season follow that answer without asking again.
-    int occasionSeason_ = -1;
-    std::string occasionPolicy_;
+    // 紅白事: the family's standing rule (all / close / none / ask), set on the first invitation or at any time on the
+    // page (家裡的規矩); wakes and weddings then follow it without a card, unless it is "ask".
+    std::string occasionRule_;
+    bool routineByRule_ = false;
     bool occasionByPolicy(const std::string& invite, Id subject, double link);
     std::vector<double> houseLinks(Id hh) const;  // link of every household to this one
     std::string formatNews(const std::string& tmpl, const News& n) const;

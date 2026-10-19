@@ -681,6 +681,139 @@ void World::hireKin(Id house, Id master) {
     ++feedHelped_[house];
 }
 
+std::vector<World::AgendaItem> World::spareWorkItems() {
+    std::vector<AgendaItem> items;
+    Id head = actingHead();
+    if (head == kNone || playerHousehold_ == kNone) return items;
+    Household& ph = households_[playerHousehold_];
+    const Person& hp = people_[head];
+    if (hp.flags.count("plague_shelter") || ageYears(hp) < 14 || hp.health < 40 || hp.occupation == "priest" || gentry(head)) return items;
+    const double daily = std::max(0.5, consumption(ph));
+    const double days = ph.food / daily;
+    const bool shortCoin = ph.money < 40 || owedAll(ph.id) > ph.money + 0.5;
+    const bool shortBread = days < daysToHarvest() + 20;
+    if (!shortCoin && !shortBread) return items;
+    const int season = month() / 3;  // 0 winter's end, 1 spring, 2 harvest, 3 autumn
+    const double wage = param("wage_mult", 1);
+    auto ready = [&](const std::string& kind) {
+        auto cd = cooldowns_.find({ph.id, "spare_" + kind});
+        return cd == cooldowns_.end() || cd->second <= day_;
+    };
+    const std::string me = fullName(head);
+    // A day's work for whoever is shortest of hands for their land and can pay (the manor last).
+    {
+        const double pay = std::round((season == 2 ? 9 : 6) * wage);
+        Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
+        Id best = kNone;
+        double bestNeed = -1e9;
+        for (const auto& o : households_) {
+            if (o.extinct || o.head == kNone || inPlayerHouse(o.id) || o.id == lordHouse || o.acres < 10 || o.money < pay + 10) continue;
+            if (people_[o.head].occupation == "priest" || feudStage(head, o.head) >= 2) continue;
+            double hands = 0;
+            for (Id m : o.members)
+                if (ageYears(people_[m]) >= 14 && people_[m].health >= 40) hands += people_[m].sex == Sex::Male ? 1.0 : 0.5;
+            double need = o.acres / 12 - hands;
+            if (need > bestNeed) bestNeed = need, best = o.id;
+        }
+        if (best == kNone && lordHouse != kNone && households_[lordHouse].money >= pay + 10) best = lordHouse;
+        if (best != kNone) {
+            const Household& o = households_[best];
+            const bool manor = best == lordHouse;
+            static const char* const kWork[4] = {"打穀、劈柴", "鋤地、趕羊", "割麥", "犁冬麥地"};
+            const std::string where = manor ? std::string("莊園") : fullName(o.head) + " 家";
+            AgendaItem a;
+            a.id = "spare:day";
+            a.title = "去" + where + "打零工（" + kWork[season] + "，" + pence(pay) + "）";
+            std::string state = !shortCoin                         ? "存糧只夠 " + std::to_string(int(days)) + " 天"
+                                : owedAll(ph.id) > ph.money + 0.5 ? "欠著 " + pence(owedAll(ph.id)) + "的債，手上只有 " + pence(ph.money)
+                                                                   : "手上只有 " + pence(ph.money);
+            a.desc = state + "。" +
+                     (manor ? "莊園的管家在找人手" : where + "地多人少，正缺人手") + "：幹幾天活，當場拿工錢，還管飯。（用一段空閒）";
+            a.kind = "effects", a.target = manor ? lord_ : o.head;
+            a.effects = "[{\"spare_work\": {\"kind\": \"day\", \"pay\": " + std::to_string(int(pay)) + ", \"meals\": 6}}]";
+            a.done = me + " 去" + where + kWork[season] + "，幹了六天，拿到 " + pence(pay) + "，晌午還在那邊吃了飯。";
+            a.rank = 78;
+            items.push_back(a);
+        }
+    }
+    // After the harvest, the stubble is the poor's: the women and children glean (once a year).
+    if (season == 3 && ready("glean")) {
+        int gleaners = 0;
+        for (Id m : ph.members)
+            if (ageYears(people_[m]) >= 6 && people_[m].health >= 30) ++gleaners;
+        const double food = std::min(60.0, 12.0 * gleaners);
+        if (food >= 12) {
+            AgendaItem a;
+            a.id = "spare:glean";
+            a.title = "帶家裡人去麥茬地撿麥穗（約 " + std::to_string(int(food / daily)) + " 天的糧）";
+            a.desc = "麥子收完了，地還沒翻。照規矩，麥茬地裡掉的穗子是窮人家的。（用一段空閒，一年一回）";
+            a.kind = "effects";
+            a.effects = "[{\"spare_work\": {\"kind\": \"glean\", \"food\": " + std::to_string(int(food)) + "}}]";
+            a.done = me + " 帶著家裡人在麥茬地裡彎腰撿了幾天麥穗，揹回來約 " + std::to_string(int(food / daily)) + " 天的糧。";
+            a.rank = 77;
+            items.push_back(a);
+        }
+    }
+    // A craft piece for the market on long evenings: baskets, rope, hurdles.
+    if ((season == 0 || season == 3) && shortCoin && ready("craft")) {
+        const double pay = std::round(5 * (1 + 0.5 * (wage - 1)));
+        AgendaItem a;
+        a.id = "spare:craft";
+        a.title = std::string(season == 0 ? "編籃子、搓繩子" : "紮柵欄") + "拿去市集賣（約 " + pence(pay) + "）";
+        a.desc = "晚上在灶邊做點手上的活，趕下一個市集賣掉。（用一段空閒，一季一回）";
+        a.kind = "effects";
+        a.effects = "[{\"spare_work\": {\"kind\": \"craft\", \"pay\": " + std::to_string(int(pay)) + "}}]";
+        a.done = me + (season == 0 ? " 編了幾個籃子、搓了兩捆繩子" : " 紮了幾片柵欄") + "，在市集上賣了 " + pence(pay) + "。";
+        a.rank = 76;
+        items.push_back(a);
+    }
+    // The parish's alms, for a house nearly out of bread: a sack of beans, and the neighbours see you in the line.
+    if (days < 30 && priest_ != kNone && people_[priest_].alive() && ready("alms")) {
+        AgendaItem a;
+        a.id = "spare:alms";
+        a.title = "去教堂領救濟（約 15 天的糧，名聲會差一點）";
+        a.desc = "存糧只夠 " + std::to_string(int(days)) + " 天。神父的濟貧箱是給揭不開鍋的人家的；排在寡婦和乞丐後面，村裡的人都看得見。（用一段空閒，一季一回）";
+        a.kind = "effects", a.target = priest_;
+        a.effects = "[{\"spare_work\": {\"kind\": \"alms\", \"days\": 15}}, {\"reputation\": -1}, {\"stress\": 3}]";
+        a.done = me + " 排在教堂門口領了救濟：一袋豆子和兩條黑麵包，夠全家吃半個月。";
+        a.rank = 77;
+        items.push_back(a);
+    }
+    // Two at most: the season's list has other things on it.
+    std::stable_sort(items.begin(), items.end(), [](const AgendaItem& x, const AgendaItem& y) { return x.rank > y.rank; });
+    if (items.size() > 2) items.resize(2);
+    return items;
+}
+
+void World::spareWork(Household& h, Id worker, const Json& what, Id target) {
+    const std::string kind = what.stringOr("kind", "");
+    // Until the next season (gleaning: the next harvest), the same piece of work is not offered again.
+    const int nextSeason = (day_ / (kDaysPerMonth * 3) + 1) * kDaysPerMonth * 3;
+    if (kind == "day") {
+        Id payer = target != kNone ? people_[target].household : kNone;
+        if (payer == kNone) return;
+        Household& o = households_[payer];
+        double pay = std::min(what.numberOr("pay", 6), std::max(0.0, o.money));
+        o.money -= pay;
+        book(o, "雇人打零工", -pay);
+        h.money += pay;
+        book(h, "打零工（" + (o.head != kNone && o.house != "manor" ? shortName(o.head) + "家" : std::string("莊園")) + "）", pay);
+        h.food += what.numberOr("meals", 0);  // the worker ate at the master's table those days
+        if (target != kNone && worker != kNone) addOpinion(target, worker, "good_work", 3, 3);
+    } else if (kind == "glean") {
+        h.food += what.numberOr("food", 0);
+        cooldowns_[{h.id, "spare_glean"}] = day_ + daysToHarvest() + 1;
+    } else if (kind == "craft") {
+        double pay = what.numberOr("pay", 5);
+        h.money += pay;
+        book(h, "做手藝賣錢", pay);
+        cooldowns_[{h.id, "spare_craft"}] = nextSeason;
+    } else if (kind == "alms") {
+        h.food += consumption(h) * what.numberOr("days", 15);
+        cooldowns_[{h.id, "spare_alms"}] = nextSeason;
+    }
+}
+
 std::vector<World::AgendaItem> World::seasonAgenda() {
     std::vector<AgendaItem> items;
     Id head = actingHead();
@@ -851,6 +984,9 @@ std::vector<World::AgendaItem> World::seasonAgenda() {
             items.push_back(a);
         }
     }
+
+    // Short of coin or of bread to the harvest: a free day turned into pay at once, not a plan to start (fun-r6 C).
+    for (auto& a : spareWorkItems()) items.push_back(a);
 
     // The next step of this generation's ambition, and wage work when the purse is empty and money is owed.
     {

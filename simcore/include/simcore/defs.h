@@ -66,6 +66,7 @@ struct EventDef {
     std::string quietLog;  // said instead when it comes again while still on cooldown (a second child buried)
     bool ask = true;     // false: routine, the AI chooses even for a human player
     bool parentDecides = false;  // the head chooses for their unmarried children living at home
+    bool routine = false;        // an everyday moment: while a year is let run (World::setRoutineByRule) the AI answers it
     std::string pulse;  // monthly | yearly
     double chance = 0;  // per pulse, after conditions pass
     std::string scope;  // anyone | player_family | village_head
