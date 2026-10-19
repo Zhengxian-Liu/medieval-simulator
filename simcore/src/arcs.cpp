@@ -765,7 +765,8 @@ void World::yearlyDebts() {
             return amount;
         };
         if (home) {
-            double could = std::min({std::ceil(h.debt / 40), std::floor(h.acres * 0.25), std::max(0.0, h.acres - 3)});
+            // Whole acres only as far as the debt covers them (40 pence an acre): no acre for a 20-pence remainder.
+            double could = std::min({std::floor(h.debt / 40 + 1e-9), std::floor(h.acres * 0.25), std::max(0.0, h.acres - 3)});
             bool canPay = h.money >= h.debt;
             std::vector<std::string> opts;
             if (could >= 1 && h.acres >= 12) opts.push_back("交出 " + std::to_string(int(could)) + " 畝地抵債");
@@ -793,6 +794,16 @@ void World::yearlyDebts() {
                 clearDebt(h);
                 continue;
             }
+            if (r >= 0 && opts[r].rfind("先還", 0) == 0) {
+                // As the option says: the purse now, the rest at the next Michaelmas; no land, no ox.
+                const double was = h.debt;
+                const double paid = payCash(cash);
+                log(1, "【欠債】莊園法庭照 " + fullName(h.head) + " 家說的判：欠 " + fullName(h.creditor) + " 的 " + std::to_string(int(was)) +
+                           " 便士，先還 " + std::to_string(int(paid)) + " 便士，剩下的 " + std::to_string(int(h.debt)) + " 便士明年米迦勒節還。");
+                if (h.debt <= 0.5) clearDebt(h);
+                else h.debtYears = 0, addOpinion(h.creditor, h.head, "dragged_to_court", -6, 6);
+                continue;
+            }
             if (r >= 0 && opts[r].rfind("交出", 0) == 0) {
                 double acres = forfeitLand(h, false);
                 h.debt = std::max(0.0, h.debt - acres * 40);
@@ -810,10 +821,16 @@ void World::yearlyDebts() {
         double acres = h.debt > 0.5 ? forfeitLand(h, false) : 0;
         h.debt = std::max(0.0, h.debt - acres * 40);
         bool ox = false;
-        if (h.debt > 0.5 && h.noOxUntil <= day_ && h.acres >= 0.5) {
+        // The ox goes for a remainder worth it (20 pence or more; less is dunned month by month). The court sells it for
+        // 40: the creditor takes what is owed, the change goes back to the debtor, both on the books.
+        if (h.debt >= 20 && h.noOxUntil <= day_ && h.acres >= 0.5) {
             ox = true;
             h.noOxUntil = day_ + 40 * kDaysPerYear;  // until they can buy another
-            h.debt = std::max(0.0, h.debt - 40);
+            const double worth = std::min(40.0, h.debt);
+            h.debt = std::max(0.0, h.debt - worth);
+            ch.money += worth;
+            book(ch, "法庭判來的耕牛錢", worth);
+            if (40 - worth >= 0.5) h.money += 40 - worth, book(h, "法庭賣耕牛找回的錢", 40 - worth);
         }
         if (acres > 0) addStress(h.head, 30, "抵債失去的地");
         std::vector<std::string> took;
@@ -854,7 +871,9 @@ void World::clearDebt(Household& h) {
 // Forfeiture: land goes to whoever is owed. A lord wants tenants more than land, so the family
 // keeps at least three quarters of its holding and its croft.
 double World::forfeitLand(Household& h, bool lordIsCreditor) {
-    double acres = std::min({std::ceil(h.debt / 40), std::floor(h.acres * 0.25), std::max(0.0, h.acres - 3)});
+    // A neighbour's court takes whole acres only as far as the debt covers them (no change is given for land).
+    double acres = std::min({lordIsCreditor ? std::ceil(h.debt / 40) : std::floor(h.debt / 40 + 1e-9), std::floor(h.acres * 0.25),
+                             std::max(0.0, h.acres - 3)});
     // The lord's court cannot take back what he has granted by charter.
     if (lordIsCreditor) acres = std::min(acres, std::floor(h.acres - h.freehold));
     if (acres < 1 || h.acres < 12) return 0;

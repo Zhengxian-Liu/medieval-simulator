@@ -214,12 +214,16 @@ void World::seasonWants() {
             continue;
         }
         if (const WantDef* w = defs_.want(p.want)) {
-            // A match nobody could make yet (no one suitable, or the last one just fell through) is not the head's neglect.
+            // A want only a plan answers, and that plan cannot be started for them yet (no one suitable for a match, too
+            // little land or coin to set a son up), is not the head's neglect: the clock waits.
             bool matchBlocked = false;
-            if (std::find(w->answeredBy.begin(), w->answeredBy.end(), "plan:arrange_match") != w->answeredBy.end()) {
+            std::vector<std::string> byPlan;
+            for (const auto& by : w->answeredBy)
+                if (by.rfind("plan:", 0) == 0) byPlan.push_back(by.substr(5));
+            if (!byPlan.empty() && byPlan.size() == w->answeredBy.size()) {
                 matchBlocked = true;
                 for (const auto& op : availablePlans(head))
-                    if (op.plan == "arrange_match" && op.subject == m) matchBlocked = false;
+                    if (std::find(byPlan.begin(), byPlan.end(), op.plan) != byPlan.end() && op.subject == m) matchBlocked = false;
             }
             if (!er.eval(w->when, p, head)) {
                 p.want.clear();  // it passed of itself
@@ -411,6 +415,7 @@ World::FamilySnapshot World::snapshot() const {
     s.ledger = ledger_;
     s.foodLedger = foodLedger_;
     s.bread = h.food;
+    s.grainTimes = grainTimes_, s.grainDays = grainDays_;
     return s;
 }
 
@@ -450,6 +455,8 @@ void World::closeSeasonBooks() {
         double d = v - (it == seasonLedger_.end() ? 0 : it->second);
         if (std::abs(d) >= 0.005) b.items[k] = d;
     }
+    b.grainTimes = grainTimes_ - seasonGrainTimes_, b.grainDays = grainDays_ - seasonGrainDays_;
+    seasonGrainTimes_ = grainTimes_, seasonGrainDays_ = grainDays_;
     seasonBooks_.push_back(b);
     if (seasonBooks_.size() > 16) seasonBooks_.erase(seasonBooks_.begin());
     seasonMoney_ = b.end;

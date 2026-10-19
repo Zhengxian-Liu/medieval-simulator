@@ -44,7 +44,8 @@
     {"id": "heirloom_smith", "title": "得意之作", "scope": "player_family", "chance": 0.006, "cooldown_years": 15,
      "conditions": {"is_head": true, "occupation": "smith", "skill_ge": {"craft": 13}},
      "options": [{"text": "好", "log": "{name} 打了一把好斧頭，說要留給子孫用。", "effects": [{"add_item": "fine_axe"}, {"reputation": 1}]}]},
-    {"id": "heirloom_carpenter", "title": "得意之作", "prompt": "冬天活少，{name} 想做一件能傳下去的東西。", "scope": "player_family", "chance": 0.006, "cooldown_years": 15,
+    // Winter only (fun-r8 4): 0.024 a winter month keeps the old yearly odds (0.006 a month, about 7% a year).
+    {"id": "heirloom_carpenter", "title": "得意之作", "prompt": "冬天活少，{name} 想做一件能傳下去的東西。", "scope": "player_family", "chance": 0.024, "cooldown_years": 15,
      "conditions": {"is_head": true, "occupation": "carpenter", "skill_ge": {"craft": 12}, "winter": true},
      "options": [
        {"text": "做一張雕花木桌", "log": "{name} 花了一整個冬天，做了一張雕花木桌。", "effects": [{"add_item": "carved_table"}], "ai": {"base": 10}},

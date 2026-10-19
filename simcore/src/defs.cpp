@@ -234,10 +234,19 @@ Defs Defs::loadFromDir(const std::string& dir) {
         if (a["milestones"].isArray())
             for (const auto& m : a["milestones"].asArray())
             {
-                // (savings to be spent on the goal, and a post held once: reached is reached)
-                bool money = m["goal"].isObject() && (m["goal"].has("money_ge") || m["goal"].has("money_ge_chantry") || m["goal"].has("family_offices_ge"));
+                // A thing reached once (land got, an office held, a child schooled) stays reached; money never does:
+                // a sum the plan still needs is shown as still needed once it is spent (looked for inside any/all/not too).
+                std::function<bool(const Json&)> once = [&](const Json& g) {
+                    if (g.isArray()) return std::any_of(g.asArray().begin(), g.asArray().end(), once);
+                    if (!g.isObject()) return false;
+                    for (const char* k : {"family_offices_ge", "reeve_terms_ge", "acres_ge", "acres_gain_ge", "freehold_ge", "any_descendant"})
+                        if (g.has(k)) return true;
+                    for (const char* k : {"any", "all"})
+                        if (g.has(k) && once(g[k])) return true;
+                    return false;
+                };
                 ad.milestones.push_back({m["name"].asString(), m["goal"], m["gate"].isBool() && m["gate"].asBool(),
-                                         m["kept"].isBool() ? m["kept"].asBool() : money, m["skip_if"]});
+                                         m["kept"].isBool() ? m["kept"].asBool() : once(m["goal"]), m["skip_if"]});
             }
         if (a["plans"].isArray())
             for (const auto& pl : a["plans"].asArray()) ad.plans.push_back(pl.asString());

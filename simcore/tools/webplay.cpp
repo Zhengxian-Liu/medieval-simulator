@@ -346,9 +346,6 @@ public:
             if (!n.empty() && t.find(n) != std::string::npos) return true;
         return false;
     }
-    // Grain bought in a season, merged into one line of its books: times, days, pence.
-    struct Grain { int times = 0; double days = 0, pence = 0; };
-    std::map<int, Grain> grain_;
     // The card the player just answered, so the line it leaves becomes 〔卡名〕選擇 → 結果 even when the sim
     // writes the outcome without a （選擇：…） mark.
     std::string answeredTitle, answeredChoice;
@@ -397,10 +394,7 @@ public:
         std::string cls = sub ? "sub" : "fam";
         bool near = false;
         if (t.rfind("家裡買了 ", 0) == 0 && t.find("天的糧") != std::string::npos) {
-            Grain& g = grain_[key];
-            ++g.times;
-            g.days += numberBefore(t, "天的糧");
-            g.pence += numberBefore(t, "便士）");
+            // (merged into the season's books: World counts every buy, by card, rule or custom)
             if (!indented) dropSubs_ = true;
             return;
         }
@@ -461,7 +455,9 @@ public:
     // A season's books as the clients show them: from → to, each item signed and rounded to add up (as booksText),
     // and the grain bought merged into one line.
     // food: the barn over the same days, in words (World::foodSince), for the season still running.
-    std::string booksJson(int key, double start, double end, const std::map<std::string, double>& items, const std::string& food = "") {
+    // gTimes/gDays: the grain bought in the season (World counts every buy); its pence are the books' 買糧.
+    std::string booksJson(int key, double start, double end, const std::map<std::string, double>& items, const std::string& food = "",
+                          int gTimes = 0, double gDays = 0) {
         long from = static_cast<long>(std::floor(start + 1e-9)), to = static_cast<long>(std::floor(end + 1e-9));
         std::vector<std::pair<std::string, std::pair<double, long>>> xs;
         long sum = 0;
@@ -484,8 +480,10 @@ public:
             if (v.second != 0) (v.second > 0 ? ins : outs).push_back("[" + str(why) + "," + std::to_string(v.second) + "]");
         Obj o;
         o.n("skey", key).text("season", seasonLabel(key)).text("cls", "ledger").n("from", from).n("to", to).raw("ins", arr(ins)).raw("outs", arr(outs));
-        if (auto g = grain_.find(key); g != grain_.end() && g->second.times > 0)
-            o.raw("grain", Obj().n("times", g->second.times).n("days", std::lround(g->second.days)).n("pence", std::lround(g->second.pence)).done());
+        if (gTimes > 0) {
+            auto bought = items.find("買糧");
+            o.raw("grain", Obj().n("times", gTimes).n("days", std::lround(gDays)).n("pence", bought == items.end() ? 0 : std::lround(-bought->second)).done());
+        }
         if (!food.empty()) o.text("food", food);
         return o.done();
     }
@@ -588,7 +586,7 @@ public:
         for (const auto& b : w.seasonBooks())
             if (b.day > lastBooksDay_) {
                 lastBooksDay_ = b.day;
-                if (b.day >= w.handedOver()) entries_.push_back(booksJson(seasonKey(b.day), b.start, b.end, b.items));
+                if (b.day >= w.handedOver()) entries_.push_back(booksJson(seasonKey(b.day), b.start, b.end, b.items, "", b.grainTimes, b.grainDays));
             }
         o.raw("entries", arr(entries_));
         entries_.clear();
@@ -1083,7 +1081,8 @@ public:
                 if (std::abs(d) >= 0.005) items[why] = d;
             }
             // ...and the barn (fun-r8 4): between two questions neither the purse nor the bread moves without a line.
-            o.raw("ledger_now", booksJson(seasonKey(w.today()), seasonStart.money, w.households()[hh].money, items, w.foodSince(seasonStart)));
+            o.raw("ledger_now", booksJson(seasonKey(w.today()), seasonStart.money, w.households()[hh].money, items, w.foodSince(seasonStart),
+                                                   w.grainTimes() - seasonStart.grainTimes, w.grainDays() - seasonStart.grainDays));
         }
         // What the last season came to, until the next one; and what has moved since, so the header's money adds up.
         std::string sum = summary;

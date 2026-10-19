@@ -192,7 +192,8 @@ struct Household {
     int lastRentFree = -1;   // so a change in the rent can be explained to the family
     int grainAsked = -1;     // the harvest (day / year) the family was last asked to get its bread through to, and what it chose
     int grainChoice = -1;    // ...this year's card: 0 to the harvest, 1 a month at a time, 2 borrowed, 3 two meals a day (-1: by the rule)
-    int grainBroke = -1;     // the harvest year the purse could no longer keep the grain rule (said once)
+    int grainBroke = -1;
+    int grainCard = -1;   // the harvest year the 買糧 card was last answered: once a harvest year, whatever the rule since     // the harvest year the purse could no longer keep the grain rule (said once)
     int harvestMembers = 0;  // who there was to feed when the last harvest came in, and how much of it went for the rent:
     double soldForRent = 0;  // the reasons a hunger card gives (World::hungerWhy)
     double harvestBread = 0; // ...and what that harvest brought in, in a grown man's days
@@ -751,6 +752,8 @@ public:
         std::map<std::string, double> ledger;
         std::map<std::string, double> foodLedger;  // the barn's books, in a grown man's days (bookFood)
         double bread = 0;                          // the barn itself, in a grown man's days
+        int grainTimes = 0;                        // grain bought so far this game (bookFood 買糧), times and days
+        double grainDays = 0;
         int day = 0;
     };
     FamilySnapshot snapshot() const;
@@ -759,6 +762,8 @@ public:
         int day = 0;  // the season's first day
         double start = 0, end = 0;
         std::map<std::string, double> items;
+        int grainTimes = 0;     // grain bought in the season (by card, rule or custom): times, and days of the house's bread
+        double grainDays = 0;
     };
     const std::vector<SeasonBooks>& seasonBooks() const { return seasonBooks_; }
     const std::map<std::string, double>& ledger() const { return ledger_; }
@@ -768,7 +773,15 @@ public:
     int breadShort(const Household& h) const;
     int harvestIn() const { return daysToHarvest(); }  // the days to the next harvest, as every card counts them
     // Short of bread and the purse cannot buy what is short at market (fun-r8 4: the top bar's 「！」, nothing else).
-    bool breadAtRisk(const Household& h) const { return breadShort(h) > 0 && h.money < breadShort(h) * consumption(h) * param("grain_price", 0.5); }
+    // Priced as the 買糧 card and the rule price it (costToHarvest), so the bar and the card never disagree.
+    bool breadAtRisk(const Household& h) const { return breadShort(h) > 0 && h.money < costToHarvest(h); }
+    // What bread to the harvest and a fortnight past it costs at market now: the 買糧 card's 「買到收成」, the harvest
+    // rule's test, and the top bar's 「買得起」.
+    double costToHarvest(const Household& h) const {
+        return std::max(0.0, std::max(0.5, consumption(h)) * (daysToHarvest() + 15) - h.food) * param("grain_price", 0.5);
+    }
+    int grainTimes() const { return grainTimes_; }
+    double grainDays() const { return grainDays_; }
     int harvestYear() const { return (day_ + daysToHarvest()) / kDaysPerYear; }  // the harvest the bread in the barn has to last to
     // The year a budget of cards is counted by: hunger by the harvest year (a lean year runs autumn to autumn).
     int budgetYear(const std::string& budget) const { return budget == "hunger" ? harvestYear() : year(); }
@@ -1387,9 +1400,13 @@ private:
     // The barn's books (fun-r8 4): every big flow in or out of the player's barn by what it was, in a grown man's
     // days; whatever else moved it is settled each day under 其他 (gifts, events, a share at a wedding).
     void bookFood(Household& h, const std::string& why, double amount) {
-        if (h.id == playerHousehold_ && amount != 0) foodLedger_[why] += amount;
+        if (h.id != playerHousehold_ || amount == 0) return;
+        foodLedger_[why] += amount;
+        if (why == "買糧" && amount > 0) ++grainTimes_, grainDays_ += amount / std::max(0.5, consumption(h));
     }
     std::map<std::string, double> foodLedger_;
+    int grainTimes_ = 0, seasonGrainTimes_ = 0;
+    double grainDays_ = 0, seasonGrainDays_ = 0;
     double foodOpen_ = 0;
     // Whatever the purse holds that the books do not account for, booked under `why` (a branch of the family taken
     // over with its money). Returns the gap.

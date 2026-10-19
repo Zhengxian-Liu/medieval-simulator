@@ -167,6 +167,11 @@ struct WorldTest {
     static void giveLand(World& w, Id hid, double acres) {
         w.moveLand(w.people_[w.lord_].household, hid, acres, LandPick::CustomaryFirst, "test");
     }
+    static void setAcres(World& w, Id hid, double acres) {  // to or from the lord's own
+        const double now = w.households_[hid].acres;
+        if (now < acres) giveLand(w, hid, acres - now);
+        if (now > acres) w.moveLand(hid, w.people_[w.lord_].household, now - acres, LandPick::CustomaryFirst, "test");
+    }
 
     static void moveTo(World& w, Id id, Id house) { w.moveTo(id, house); }
     static double rent(World& w, Id house) { return w.rentOf(w.households_[house]); }
@@ -412,7 +417,9 @@ int main() {
                 if (p.title == "買糧" && p.situation.find("離秋收還有 60 天") != std::string::npos) card = true;
             CHECK(card, "the family was not asked about buying grain");
             CHECK(foodDays(w) > 70 && foodDays(w) < 77, "buying to the harvest did not buy to the harvest");
-            CHECK(asked.back().situation.find("缺糧的緣故：") != std::string::npos, "the grain card does not say why the house is short");
+            bool why = false;  // (the 買糧 card itself: other cards may come the same day)
+            for (const auto& p : asked) why = why || (p.title == "買糧" && p.situation.find("缺糧的緣故：") != std::string::npos);
+            CHECK(why, "the grain card does not say why the house is short");
         }
         // fun-r8 1: buying grain is one standing rule. The first card's answer becomes the rule ("a month at a time"):
         // a month is bought when the last is eaten, with no card, nothing more than the rule says, every grain on
@@ -984,7 +991,7 @@ int main() {
                 }
             }
         }
-        CHECK(cards + staged > 0, "no ask ever named terms to answer on the spot");
+        CHECK(staged > 0, "a seller in debt who likes the family never named terms to answer on the spot");
         CHECK(agendaShown > 0 && agendaDone > 0, "the season's list was never there to act on");
         std::printf("season list: %d done (", agendaDone);
         for (const auto& [k, n] : kinds) std::printf(" %s %d", k.c_str(), n);
@@ -1629,6 +1636,7 @@ int main() {
     // A boy at school whose land is held for him stays at his books when the one holding it dies; the term ends with a line.
     {
         bool tried = false;
+        int finished = 0, diedAtSchool = 0;
         for (uint64_t seed : {64ull, 72ull, 7ull, 91ull, 58ull}) {
             Config c;
             c.seed = seed;
@@ -1649,15 +1657,26 @@ int main() {
             CHECK(w.household(hid).ward == heir, "the land is not held for the heir at school");
             size_t before = w.chronicle().size();
             for (int d = 0; d < 5 * kDaysPerYear && w.person(heir).station == "scholar" && w.person(heir).alive(); ++d) w.stepDay();
-            if (!w.person(heir).alive()) continue;  // died at school (a fever takes a schoolboy too): the next seed
+            if (!w.person(heir).alive()) {
+                // Died at school (a fever takes a schoolboy too): told, and the house passed on; then the next seed.
+                bool told = false;
+                for (size_t i = before; i < w.chronicle().size(); ++i)
+                    told = told || (w.chronicle()[i].text.find(w.person(heir).firstName) != std::string::npos && w.chronicle()[i].text.find("去世") != std::string::npos);
+                CHECK(told, "the heir who died at school was not told");
+                CHECK(w.household(hid).ward != heir, "the land is still held for an heir who died at school");
+                ++diedAtSchool;
+                continue;
+            }
+            ++finished;
             bool ended = false;
             for (const auto& e : w.threadEnds()) ended = ended || (e.kind == "path" && e.day >= w.today() - 5 * kDaysPerYear && e.text.rfind(w.person(heir).firstName, 0) == 0);
             CHECK(w.person(heir).station != "scholar" && ended, "the school term did not end with an outcome kept for the family");
-            (void)before;
             checkInvariants(w, "heir at school");
             break;
         }
         CHECK(tried, "no seed had a head with a wife and an heir at home");
+        CHECK(finished == 1, "no seed's heir lived to the end of the school term");
+        std::printf("heir at school: %d died there first\n", diedAtSchool);
     }
 
     // Round 6 B (design/fun-r6.md B): no silent outcomes, one ledger, no contradictions.
@@ -2271,40 +2290,81 @@ int main() {
     }
 
     // fun-r8 2: consequences stick. A neighbour's debt taken to court with coin in the purse is not let go: the court
-    // takes the purse (leaving 10 to live on), then land or the ox, and the rest runs another year.
+    // takes the purse (leaving 10 to live on), then whole acres the debt covers, then the ox (sold for 40, the change
+    // back); what is taken is the creditor's, no more than is owed, and the rest runs another year. The card's
+    // 「先還」 does what it says: the purse now, the rest next year, no land and no ox.
     {
-        Config c;
-        c.seed = 58;
-        c.prerun = 25;
-        World w(defs, c);
-        const Id hh = w.playerHousehold();
-        Id creditor = kNone;
-        for (const auto& h : w.households())
-            if (!h.extinct && h.id != hh && h.head != kNone && h.head != w.lordId() && !h.members.empty() && w.person(h.head).alive()) creditor = h.head;
-        CHECK(creditor != kNone, "no neighbour to owe");
-        if (creditor != kNone) {
-            Household& h = WorldTest::house(w, hh);
-            h.debt = 0, h.heldDebt = 0;
-            WorldTest::addDebt(w, hh, 2000, creditor);
-            h.debtYears = 2;
-            w.setMoneyForTest(hh, 108);
-            w.setChooser([&](const World::ChoicePrompt&) { return -1; });
-            size_t lines = w.chronicle().size();
-            WorldTest::yearlyDebts(w);
+        struct Court {
             bool letGo = false, court = false, settled = false;
+            double paidIn = 0, landIn = 0, debtWas = 0, debtNow = 0, moneyNow = 0, acresLost = 0;
+            bool oxLost = false;
+            Id creditor = kNone, creditorNow = kNone;
+        };
+        // debt owed to a neighbour, purse, acres: answered with the card option starting `pick` ("" = no answer).
+        auto run = [&](double debt, double money, double acres, const std::string& pick) {
+            Court r;
+            Config c;
+            c.seed = 58;
+            c.prerun = 25;
+            World w(defs, c);
+            const Id hh = w.playerHousehold();
+            for (const auto& h : w.households())
+                if (!h.extinct && h.id != hh && h.head != kNone && h.head != w.lordId() && !h.members.empty() && w.person(h.head).alive()) r.creditor = h.head;
+            if (r.creditor == kNone) return r;
+            Household& h = WorldTest::house(w, hh);
+            WorldTest::setAcres(w, hh, acres);
+            h.debt = 0, h.heldDebt = 0;
+            WorldTest::addDebt(w, hh, debt, r.creditor);
+            h.debtYears = 2;
+            h.noOxUntil = 0;
+            w.setMoneyForTest(hh, money);
+            const Id ch = w.person(r.creditor).household;
+            const double chMoney = w.household(ch).money, chAcres = w.household(ch).acres, myAcres = w.household(hh).acres;
+            w.setChooser([&](const World::ChoicePrompt& p) {
+                if (p.title != "莊園法庭" || pick.empty()) return -1;
+                for (size_t i = 0; i < p.options.size(); ++i)
+                    if (p.options[i].rfind(pick, 0) == 0) return static_cast<int>(i);
+                return -1;
+            });
+            size_t lines = w.chronicle().size();
+            r.debtWas = w.household(hh).debt;
+            WorldTest::yearlyDebts(w);
             for (size_t i = lines; i < w.chronicle().size(); ++i) {
-                letGo = letGo || w.chronicle()[i].text.find("要不回來了") != std::string::npos;
-                court = court || w.chronicle()[i].text.find("法庭判") != std::string::npos;
-                settled = settled || w.chronicle()[i].text.find("這筆債了了") != std::string::npos;
+                const std::string& t = w.chronicle()[i].text;
+                r.letGo = r.letGo || t.find("要不回來了") != std::string::npos;
+                r.court = r.court || t.find("法庭判") != std::string::npos || t.find("法庭照") != std::string::npos;
+                r.settled = r.settled || t.find("這筆債了了") != std::string::npos;
             }
-            CHECK(!letGo && court, "a debt taken to court was let go while the debtor had coin");
-            CHECK(w.household(hh).money <= 10.5, "the court did not take the purse");
-            // More than the purse, a quarter of the land and the ox can cover: the rest stands, with the same creditor.
-            CHECK(!settled && w.household(hh).debt > 0.5 && w.household(hh).creditor == creditor, "what the court could not take was forgiven");
+            r.paidIn = w.household(ch).money - chMoney;
+            r.landIn = w.household(ch).acres - chAcres;
+            r.acresLost = myAcres - w.household(hh).acres;
+            r.oxLost = w.household(hh).noOxUntil > w.today();
+            r.debtNow = w.household(hh).debt;
+            r.moneyNow = w.household(hh).money;
+            r.creditorNow = w.household(hh).creditor;
             w.setChooser({});
-        }
+            return r;
+        };
+        // A big debt by the court's own order: purse, a quarter of the land, the ox; the rest stands.
+        Court a = run(2000, 108, 20, "");
+        CHECK(a.creditor != kNone, "no neighbour to owe");
+        CHECK(!a.letGo && a.court, "a debt taken to court was let go while the debtor had coin");
+        CHECK(a.moneyNow <= 10.5, "the court did not take the purse");
+        CHECK(!a.settled && a.debtNow > 0.5 && a.creditorNow == a.creditor, "what the court could not take was forgiven");
+        CHECK(a.oxLost && a.acresLost >= 1 && std::abs(a.landIn - a.acresLost) < 0.01, "the court did not take land and the ox for a big debt");
+        CHECK(std::abs(a.paidIn + a.acresLost * 40 + (a.debtNow - a.debtWas)) < 0.01, "what the court took did not go to the creditor");
+        // A small remainder: no acre for it; the ox sold for 40, the change back; the creditor gets exactly the debt.
+        Court b = run(60, 50, 20, "");
+        CHECK(b.acresLost < 0.01, "an acre was taken for a remainder smaller than its worth");
+        CHECK(b.oxLost && std::abs(b.paidIn - 60) < 0.01 && b.debtNow < 0.5, "the ox for a small remainder did not pay exactly what was owed");
+        CHECK(std::abs(b.moneyNow - 30) < 0.01, "the change from the ox did not come back");
+        // 「先還」 on the card: the purse now, the rest next year; nothing else taken.
+        Court d = run(100, 50, 20, "先還");
+        CHECK(d.acresLost < 0.01 && !d.oxLost, "「先還」 took land or the ox");
+        CHECK(std::abs(d.paidIn - 40) < 0.01 && std::abs(d.debtNow - 60) < 0.01 && d.creditorNow == d.creditor, "「先還」 did not leave the rest owed for next year");
     }
-    // fun-r8 2: a sum saved to spend on the goal stays reached once reached; land bought another way passes it.
+    // fun-r8 2: money is never kept once spent (a sum a plan still needs shows as needed again); land bought passes
+    // the savings step; a thing reached once (an office, inside an "any" too) stays reached.
     {
         Config c;
         c.seed = 58;
@@ -2314,12 +2374,22 @@ int main() {
         WorldTest::setAmbition(w, head, "more_land");
         w.setMoneyForTest(hh, 400);
         w.runCommands();
+        CHECK(!w.milestoneState(head).empty() && w.milestoneState(head)[0] == 1, "the savings were not seen as reached");
         w.setMoneyForTest(hh, 0);
-        CHECK(!w.milestoneState(head).empty() && w.milestoneState(head)[0] == 1, "the savings spent on the land became a step back");
+        CHECK(w.milestoneState(head)[0] != 1, "money spent on something else still showed as saved");
         WorldTest::setAmbition(w, head, "more_land");
         WorldTest::giveLand(w, hh, 2);
         w.runCommands();
         CHECK(!w.milestoneState(head).empty() && w.milestoneState(head)[0] == 1, "land bought before the savings left the savings as the next step");
+        // A money gate a plan still needs (the gentry match's 400 pence) is not kept.
+        for (const auto& a : defs.ambitions) {
+            for (const auto& m : a.milestones) {
+                const bool money = m.goal.has("money_ge") || m.goal.has("money_ge_chantry");
+                CHECK(!(money && m.kept), ("a money step is kept once reached: " + a.id).c_str());
+            }
+            if (a.id == "village_offices")
+                CHECK(a.milestones.size() > 1 && a.milestones[0].kept && a.milestones[1].kept, "an office reached (inside any) is not kept");
+        }
     }
     // fun-r8 3: a clerk, or one the family is getting a church post for, is off the marriage market.
     {

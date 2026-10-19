@@ -147,9 +147,9 @@ struct AmbitionDef {
         std::string name;
         Json goal;
         bool gate = false;  // a condition of the road (no debt over 20 for a reeve), not progress along it
-        // fun-r8 2: a sum saved to be spent on the goal (money_ge, unless "kept": false) stays reached once reached:
-        // the 360 pence spent on the land are not a step back. "skip_if": the goal itself has moved past the need for
-        // it (land bought another way), so it counts as reached.
+        // fun-r8 2: a thing reached once (land, an office, a schooled child; unless "kept": false) stays reached.
+        // Money never does by default: a sum a plan still needs shows as needed again once spent. "skip_if": the goal
+        // itself has moved past the need for it (the 360 pence spent on land bought), so it counts as reached.
         bool kept = false;
         Json skip;
     };

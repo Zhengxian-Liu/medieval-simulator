@@ -83,7 +83,7 @@
      "neglect": []},
 
     {"id": "own_house", "one_at_a_time": true, "text": "家裡人多，盼你給{pron}分家，帶著妻兒自立門戶",
-     "when": {"child_of_target": true, "sex": "male", "married": true, "heir_apparent": false, "is_head": false, "in_service": false, "household_size_ge": 9, "age": [20, 45]},
+     "when": {"child_of_target": true, "sex": "male", "married": true, "heir_apparent": false, "is_head": false, "in_service": false, "household_size_ge": 9, "age": [20, 45], "acres_ge": 10, "money_ge": 30},
      "answered_by": ["plan:settle_son"], "patience": 6, "chance": 0.2,
      "fulfil": [{"opinion": {"value": 6, "mod": "heeded", "years": 10}}],
      "fulfil_note": "你答應給{first}分家，{pron}跟媳婦商量了一整夜要種什麼。",

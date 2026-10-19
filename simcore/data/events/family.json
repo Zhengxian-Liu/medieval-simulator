@@ -22,7 +22,8 @@
     {"id": "becomes_literate", "repeat": "person", "title": "識字了", "scope": "anyone", "chance": 0.12, "once": true,
      "conditions": {"age": [10, 16], "flag": "schooled", "skill_ge": {"learning": 2.5}},
      "options": [{"text": "好", "log": "{name} 跟神父學會了讀寫拉丁文的禱詞，往後能替家裡念契約、記帳了。", "effects": [{"add_trait": "literate"}, {"reputation": 3}]}]},
-    {"id": "courtship_m", "repeat": "person", "parent_decides": true, "title": "心上人", "prompt": "五朔節的舞會上，{name} 一直看著 {target}。", "scope": "player_family", "chance": 0.03, "cooldown_years": 2,
+    // May Day only (fun-r8 4): 0.3 in May keeps the old yearly odds (0.03 a month, about 30% a year).
+    {"id": "courtship_m", "repeat": "person", "parent_decides": true, "title": "心上人", "prompt": "五朔節的舞會上，{name} 一直看著 {target}。", "scope": "player_family", "chance": 0.3, "cooldown_years": 2,
      "conditions": {"sex": "male", "age": [18, 30], "married": false, "widowed": false, "match_pending": false, "marriageable": true, "month": 4},
      "target": {"pick": "random_villager", "conditions": {"sex": "female", "age": [16, 26], "married": false, "same_class": true, "match_pending": false, "not_kin": true, "marriageable": true}},
      "options": [

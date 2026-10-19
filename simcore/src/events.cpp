@@ -1765,10 +1765,9 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 double want = v.numberOr("acres", 8);
                 double vac = std::min(w.vacantAcres(), want);
                 double own = std::clamp(want - vac, 0.0, std::max(0.0, w.households_[hid].acres - 8));
-                if (vac + own < 2) {
-                    if (w.inPlayerHouse(hid)) w.log(1, "  可是村裡沒有空地，自家的地也分不出來了，" + sub.firstName + " 只好還住在家裡。");
-                    continue;
-                }
+                // No land to rent or spare: the son still goes, to a cottage and its garden, and lives by day labour.
+                const bool croft = vac + own < 2;
+                if (croft) vac = own = 0;
                 double gift = std::min(v.numberOr("money", 30), std::max(0.0, w.households_[hid].money));
                 Id nh = w.addHousehold(sub.dynasty, 0, gift);  // households_ may move: by index from here on
                 w.households_[hid].money -= gift;
@@ -1797,7 +1796,7 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 fresh.firewood = 20;
                 w.noteLife(sub.id, "分家自立門戶");
                 if (w.inPlayerHouse(hid))
-                    w.log(1, "  " + w.fullName(sub.id) + (wife && kids ? " 帶著妻兒" : wife ? " 帶著妻子" : kids ? " 帶著孩子" : " 一個人") + "搬出去，自立門戶：" + std::to_string(int(fresh.acres)) + " 畝地、" +
+                    w.log(1, "  " + w.fullName(sub.id) + (wife && kids ? " 帶著妻兒" : wife ? " 帶著妻子" : kids ? " 帶著孩子" : " 一個人") + "搬出去，自立門戶：" + (croft ? std::string("村裡沒有空地，自家的地也分不出來，只有屋後一塊菜園，靠做工過活；") : std::to_string(int(fresh.acres)) + " 畝地、") +
                                  std::to_string(int(gift)) + " 便士。往後他家是另一戶，可還是你家的血脈。");
             } else if (k == "lease_demesne") {
                 // Take the lord's own fields on a lease of so many years.
