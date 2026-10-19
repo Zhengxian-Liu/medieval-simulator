@@ -2,7 +2,10 @@
 
 Unreal Engine 5 C++ life-sim. Realistic 3D; camera zooms continuously from an isometric overview to third-person over-the-shoulder.
 
-## Current engine: Godot 4.7 (`godot/`) — decided 2026-10-16
+## Current front end: the browser text game — decided 2026-10-19
+The user decided to make the game text-first: the browser version (`simcore/tools/ui/`, run `cd simcore && bash scripts/ui.sh`) is the real game. Work now goes into how text information is laid out and shown; images come later. Godot/3D art is paused (kept in git below for reference).
+
+## Engine attempt: Godot 4.7 (`godot/`) — decided 2026-10-16, paused 2026-10-19
 UE (`Source/`, `Content/`, `Config/`) and three.js (`web/`) attempts are kept in git for reference; new work goes in `godot/`. The playtest sim is `simcore/` (run: `cd simcore && bash scripts/ui.sh`).
 - Forward+, Jolt physics. GDScript, statically typed. Logic that can be pure (e.g. `scripts/camera_zoom.gd`) stays free of nodes and is tested headless.
 - **Art follows `docs/art-pipeline.md`.** Every look parameter lives in `godot/art/look.json` (with its reason); assets are built by `godot/tools/blender/build_asset.py`; `godot/tools/art_check.py` is the pass/fail gate.
