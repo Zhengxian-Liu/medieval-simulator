@@ -2081,6 +2081,120 @@ int main() {
         w.addReputation(h, 200, "大功");
         CHECK(w.reputationView(h).value == 50, "reputation: not held to the stated scale");
     }
+    // Round 7 (design/ui-text.md, part 1): at most two cards before the first season page; the rest wait.
+    {
+        Config c;
+        c.seed = 64;
+        c.prerun = 25;  // as the game starts (tools/webplay.cpp)
+        World w(defs, c);
+        int firstSeason = (w.handedOver() / 90 + 1) * 90, early = 0;
+        w.setChooser([&](const World::ChoicePrompt&) {
+            if (w.today() < firstSeason) ++early;
+            return -1;
+        });
+        while (w.today() < firstSeason) w.stepDay();
+        std::printf("opening: %d cards before the first season\n", early);
+        CHECK(early >= 1 && early <= 2, "opening: more than two cards before the first season (or none)");
+    }
+    // 〔親友挨餓〕: at most two a harvest year for the whole family, however many kin houses run short (the family kept
+    // rich so it is always worth asking), and every gift said in days of bread.
+    {
+        int total = 0, most = 0;
+        bool sane = true;
+        for (int seed : {64, 58, 61}) {
+            Config c;
+            c.seed = seed;
+            c.prerun = 25;
+            World w(defs, c);
+            const Id hh = w.playerHousehold();
+            std::map<int, int> perYear;
+            w.setChooser([&](const World::ChoicePrompt& p) {
+                if (p.title != "親友挨餓") return -1;
+                ++perYear[(w.today() + kDaysPerYear - 8 * kDaysPerMonth) / kDaysPerYear];
+                for (const auto& o : p.options)
+                    if ((o.rfind("從自家糧倉送去", 0) == 0 || o.rfind("送 ", 0) == 0) && o.find("天") == std::string::npos) sane = false;
+                return 0;
+            });
+            for (int d = 0; d < 4 * kDaysPerYear; ++d) {
+                if (w.dayOfMonth() == 0) w.setMoneyForTest(hh, 2000), w.setFoodForTest(hh, 400);
+                w.stepDay();
+            }
+            for (auto [y, n] : perYear) total += n, most = std::max(most, n);
+        }
+        std::printf("feed cards: %d in 12 years of play, at most %d in a harvest year\n", total, most);
+        CHECK(total >= 1 && most <= 2, "feed: more than two 〔親友挨餓〕 cards in a harvest year (or none at all)");
+        CHECK(sane, "feed: a gift option without the days it feeds");
+    }
+    // Kin labels: a married daughter in her husband's house is 「女兒（嫁到X家）」; congenital fecundity waits for 16.
+    {
+        int married = 0, labelled = 0, early = 0;
+        for (int seed = 40; seed < 80; ++seed) {
+            Config c;
+            c.seed = seed;
+            c.prerun = 25;
+            World w(defs, c);
+            Id head = w.playerHead();
+            for (const auto& p : w.people()) {
+                if (!p.alive()) continue;
+                if (w.hasTrait(p, "fecund") && w.ageYears(p) < 16) ++early;
+                std::string k = p.sex == Sex::Female ? w.kinWord(head, p.id) : "";
+                bool blood = !k.empty() && k.find("妻") == std::string::npos && k.find("媳") == std::string::npos && k.find("繼") == std::string::npos;
+                if (blood && p.spouse != kNone && p.household != kNone && p.household != w.playerHousehold() &&
+                    w.person(p.spouse).household == p.household && w.household(p.household).head != p.id &&
+                    w.household(p.household).dynasty == w.person(p.spouse).dynasty &&
+                    w.household(p.household).dynasty != w.household(w.playerHousehold()).dynasty) {
+                    ++married;
+                    if (w.kinLabel(head, p.id).find("嫁到") != std::string::npos) ++labelled;
+                }
+            }
+        }
+        std::printf("kin labels: %d of %d married-out kinswomen say 嫁到; %d under-16s fecund\n", labelled, married, early);
+        CHECK(labelled == married, "kin label: a kinswoman married into another house not shown as 嫁到X家");
+        CHECK(early == 0, "a child already shows 多子 before 16");
+    }
+    // The priest: with none in the village no card offers him; the bishop sends another within half a year.
+    {
+        Config c;
+        c.seed = 64;
+        c.prerun = 25;  // as the game starts (tools/webplay.cpp)
+        World w(defs, c);
+        auto priest = [&]() {
+            for (const auto& p : w.people())
+                if (p.alive() && p.occupation == "priest" && p.household != kNone) return p.id;
+            return kNone;
+        };
+        Id old = priest();
+        CHECK(old != kNone, "priest: the village starts without one");
+        w.killForTest(old);
+        bool offered = false, back = false;
+        w.setChooser([&](const World::ChoicePrompt& p) {
+            if (priest() == kNone)
+                for (const auto& o : p.options)
+                    if (o.find("神父") != std::string::npos) offered = true;
+            return -1;
+        });
+        for (int d = 0; d < 180 && !back; ++d) {
+            w.stepDay();
+            back = priest() != kNone && priest() != old;
+        }
+        CHECK(!offered, "priest: a card offered the priest while there was none");
+        CHECK(back, "priest: no new priest within half a year");
+    }
+    // The season's list never shows the same item twice.
+    {
+        Config c;
+        c.seed = 64;
+        c.prerun = 25;  // as the game starts (tools/webplay.cpp)
+        World w(defs, c);
+        w.setChooser([&](const World::ChoicePrompt&) { return -1; });
+        bool dup = false;
+        for (int s = 0; s < 8; ++s) {
+            for (int d = 0; d < 90; ++d) w.stepDay();
+            std::set<std::string> ids;
+            for (const auto& a : w.seasonAgenda(true)) dup = dup || !ids.insert(a.id).second;
+        }
+        CHECK(!dup, "agenda: the same item twice in a season's list");
+    }
 
     if (failures == 0) std::printf("all tests passed\n");
     return failures == 0 ? 0 : 1;

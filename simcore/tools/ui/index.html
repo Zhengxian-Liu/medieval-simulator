@@ -21,8 +21,14 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.55 -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif; }
-header { position: sticky; top: 0; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line); padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; }
+header { position: sticky; top: 0; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line); padding: 8px 16px; }
+header .row { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; }
+header .row + .row { margin-top: 3px; font-size: 13px; }
 header h1 { font-size: 18px; margin: 0; }
+header .more { max-height: 46vh; overflow: auto; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); font-size: 13px; display: none; }
+header.open .more { display: block; }
+header .more > div { margin: 3px 0; }
+.blocker { font-weight: 600; }
 .stat { color: var(--muted); }
 .stat b { color: var(--ink); font-weight: 600; }
 .lean { color: var(--bad); font-weight: 600; }
@@ -74,7 +80,27 @@ button.link { background: none; border: none; color: var(--accent); padding: 0 2
 .agenda .desc { font-size: 13px; color: var(--muted); }
 .turnbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .summary { white-space: pre-wrap; font-size: 13px; }
-.feed { max-height: 560px; overflow: auto; }
+.feed { max-height: 640px; overflow: auto; }
+.season { border-top: 1px solid var(--line); padding: 6px 0 4px; }
+.season:first-child { border-top: none; }
+.season > .lab { font-weight: 700; font-size: 14px; color: var(--accent); }
+.season > .lab small { font-weight: normal; color: var(--muted); }
+.season .blk { margin: 3px 0 0 4px; }
+.season .blk-t { color: var(--muted); font-size: 12px; }
+.season .big { font-weight: 600; padding: 1px 0; }
+.season .fam { padding: 1px 0; font-size: 13px; }
+.season .sub { color: var(--muted); font-size: 12px; padding-left: 14px; font-weight: normal; }
+.season .late { color: var(--good); font-size: 12px; padding-left: 14px; }
+.season details summary { cursor: pointer; font-size: 13px; }
+.season details .item { font-size: 12px; color: var(--muted); padding-left: 12px; }
+.season.old > .body { display: none; } .season.old.open > .body { display: block; } .season.old > .lab { cursor: pointer; }
+.tag { display: inline-block; font-size: 11px; padding: 0 5px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); margin-left: 4px; }
+.tag.bad { background: transparent; color: var(--bad); border: 1px solid var(--bad); }
+.card .l2 { font-size: 13px; color: var(--muted); margin-top: 1px; }
+.card .l2 .want { display: inline; }
+.card .detail { display: none; margin-top: 6px; } .card.open .detail { display: block; }
+.card .top { cursor: pointer; }
+.kids { font-size: 13px; color: var(--muted); padding: 4px 2px 8px; }
 .feed .yr { color: var(--muted); font-size: 12px; margin-top: 8px; border-top: 1px dashed var(--line); padding-top: 4px; }
 .feed .ln { padding: 2px 0; }
 .feed .ln.news { color: var(--news); } .feed .ln.wide { color: var(--warn); } .feed .ln.history { color: var(--history); font-weight: 600; }
@@ -134,15 +160,14 @@ svg text.mpoin { font-size: 7.5px; font-weight: 600; pointer-events: none; paint
 </style>
 </head>
 <body>
-<header id="top"><h1>載入中…</h1></header>
+<header id="top"><div class="row"><h1>載入中…</h1></div></header>
 <main>
   <div id="col-left">
     <section class="panel"><h2>家裡 <small id="timeleft"></small></h2><div id="family"></div></section>
   </div>
   <div id="col-mid">
     <section class="panel" id="turn"></section>
-    <section class="panel" id="summary-panel" style="display:none"><h2>近況</h2><div class="summary" id="summary"></div></section>
-    <section class="panel"><h2>發生的事 <small>最新的在上面</small></h2><div class="feed" id="feed"></div></section>
+    <section class="panel"><h2>編年記錄 <small>照季分段，新的季在上面</small></h2><div class="feed" id="feed"></div></section>
   </div>
   <div id="col-right">
     <section class="panel">
@@ -154,22 +179,25 @@ svg text.mpoin { font-size: 7.5px; font-weight: 600; pointer-events: none; paint
 <div class="drawer" id="drawer"><div style="display:flex;justify-content:space-between;align-items:center"><b id="drawer-title"></b><button class="link" onclick="closeDrawer()">關閉</button></div><pre id="drawer-text"></pre></div>
 <script>
 const NEEDS = ["吃飽", "歇息", "暖和", "人情", "心靈"];
-let seq = -1, lineCount = 0, view = null, lines = [], tab = "talk", selectedHouse = null, openPlan = null, freshFrom = 0;
+let seq = -1, lineCount = 0, entryCount = 0, view = null, lines = [], entries = [], tab = "talk", selectedHouse = null, openPlan = null, freshFrom = 0;
+let topOpen = false, openCards = new Set(), moreActs = new Set(), openSeasons = new Set(), talkAll = false;
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const signed = (v) => (v > 0 ? "+" : "") + v;
+const signed = (v) => (v > 0 ? "+" + v : v < 0 ? "−" + (-v) : "0");
 const cls = (v) => (v >= 10 ? "pos" : v <= -10 ? "neg" : "");
 const opWord = (op) => op >= 60 ? "非常親近" : op >= 30 ? "有好感" : op >= 10 ? "還算友善" : op > -10 ? "沒什麼感覺" : op > -30 ? "不太喜歡" : op > -60 ? "厭惡" : "恨之入骨";
 
 async function poll() {
   for (;;) {
     try {
-      const r = await fetch(`/api/view?seq=${seq}&line=${lineCount}`);
+      const r = await fetch(`/api/view?seq=${seq}&line=${lineCount}&entry=${entryCount}`);
       const v = await r.json();
       if (v.seq !== seq) {
         freshFrom = lines.length;
         lines = lines.concat(v.lines || []);
+        entries = entries.concat(v.entries || []);
         lineCount = v.line_count;
+        entryCount = v.entry_count ?? entries.length;
         seq = v.seq;
         view = v;
         render();
@@ -211,39 +239,50 @@ function threadsHtml(s) {
   const live = (s.threads || []).filter((t) => t.kind !== "ambition");
   const ended = s.threads_ended || [];
   if (!live.length && !ended.length) return "";
-  const rows = live.map((t) => `<div title="${esc(t.ends || "")}">· <b>${esc(t.title)}</b>${t.since >= 0 ? `（${t.since} 起）` : ""}：${esc(t.text)}${t.ends ? `<span class="muted" style="font-size:12px">　${esc(t.ends)}</span>` : ""}</div>`)
+  const rows = live.map((t) => `<div>· <b>${esc(t.title)}</b>${t.since >= 0 ? `（${t.since} 起）` : ""}：${esc(t.text)}${t.ends ? `<span class="muted">　→ ${esc(t.ends)}</span>` : ""}</div>`)
     .concat(ended.map((e) => `<div class="muted">✓ ${e.year} ${esc(e.text)}</div>`));
-  return `<div class="stat" style="display:block;font-size:13px;margin-top:4px">這一代的線${rows.join("")}</div>`;
+  return `<div><b>這一代的線</b>${rows.join("")}</div>`;
 }
 
+// The top bar (design/ui-text.md): two lines always; the rest (every condition, the name, the ladder, the
+// generation's lines, the house rules) only when opened.
 function renderTop() {
   const s = view.state;
-  if (!s || !s.house) { $("top").innerHTML = "<h1>載入中…</h1>"; return; }
-  const h = s.house;
-  let amb = "";
-  if (s.ambition) {
-    const mark = (x) => x.done ? "✓" : x.slipped ? "△" : x.final ? "◎" : x.gate ? "✗" : "○";
-    const steps = s.ambition.steps.map((x) => `<span class="${x.done ? "done" : ""}" title="${x.slipped ? "做到過，現在又不夠了" : x.final ? "最後一步" : x.gate ? "這條路的條件" : ""}">${mark(x)} ${esc(x.name)}</span>`).join(" → ");
-    const left = s.ambition.deadline ? `限到 ${s.ambition.deadline} 年底（還剩 ${s.ambition.years_left} 年；過了期限沒做成，就成了留給下一代的心願）` : `還剩 ${s.ambition.years_left} 年`;
-    const extra = ["gates", "rival", "note"].map((k) => s.ambition[k]).filter((x) => x);
-    const tip = `${s.ambition.desc}\n怎麼推進：${s.ambition.hint || ""}${(s.ambition.plans || []).length ? "（★ 計畫：" + s.ambition.plans.join("、") + "）" : ""}\n${left}${extra.length ? "\n" + extra.join("\n") : ""}`;
-    amb = `<span class="stat" title="${esc(tip)}">志向 <b>${esc(s.ambition.name)}</b> <span class="steps">${steps}</span> <span class="muted" style="font-size:12px">${esc(s.ambition.hint || "")}　限到 ${s.ambition.deadline || "?"} 年底</span>${extra.map((x) => `<br><span class="muted" style="font-size:12px">${esc(x)}</span>`).join("")}</span>`;
-  }
-  $("top").innerHTML = `<h1>${esc(h.surname)}家</h1>
+  if (!s || !s.house) { $("top").innerHTML = `<div class="row"><h1>載入中…</h1></div>`; return; }
+  const h = s.house, rep = s.reputation, amb = s.ambition, fine = s.contest && s.contest.fine;
+  const line1 = `<div class="row"><h1>${esc(h.surname)}家</h1>
     <span class="stat"><b>${s.date.year}</b> 年 ${esc(s.date.season)}</span>
-    <span class="stat" title="${esc(s.ladder || "")}">地位 <b>${esc(h.standing)}</b>${s.ladder ? `<br><span class="muted" style="font-size:12px">${esc(s.ladder)}</span>` : ""}</span>
-    ${s.reputation ? `<span class="stat${s.reputation.value <= -10 ? " lean" : ""}" title="${esc([s.reputation.effect, ...(s.reputation.recent || []), s.reputation.mend].join("\n"))}">名聲 <b>${s.reputation.value}</b>（${esc(s.reputation.word)}）<br><span class="muted" style="font-size:12px">${esc((s.reputation.recent || []).join("；") || "最近沒什麼事")}</span>${s.reputation.value <= -10 ? `<br><span class="muted" style="font-size:12px">${esc(s.reputation.mend)}</span>` : ""}</span>` : ""}
-    ${s.regret ? `<span class="stat">上一代沒做完的心願 <b>${esc(s.regret)}</b></span>` : ""}
-    ${s.notice ? `<span class="stat lean">不行：${esc(s.notice)}</span>` : ""}
+    <span class="stat">地位 <b>${esc(h.standing)}</b></span>
     <span class="stat">錢 <b>${h.money}</b> 便士</span>
-    <span class="stat">存糧 <b>${h.food_days}</b> 天${h.lean ? ` <span class="lean">到秋收還差 ${h.short_days} 天糧</span>` : ""}</span>
-    <span class="stat">地 <b>${h.acres}</b> 畝${h.freehold > 0 ? `（自由地 ${h.freehold}）` : ""}</span>
-    ${h.debt > 0 ? `<span class="stat lean" title="${esc(h.debt_text || "")}">欠債 ${h.debt} 便士${h.debt_text ? `<span class="muted" style="font-size:12px">（${esc(h.debt_text)}）</span>` : ""}</span>` : ""}
-    ${s.contest && s.contest.fine ? `<span class="stat lean" title="家主過世，繼承要付給領主的入地費">入地費 ${s.contest.fine.amount} 便士，${s.contest.fine.year} 年 ${s.contest.fine.month} 月前${s.contest.fine.extended ? "（已寬限過）" : ""}</span>` : ""}
-    ${amb}${threadsHtml(s)}`;
+    <span class="stat${h.lean ? " lean" : ""}">存糧 <b>${h.food_days}</b> 天${h.lean ? `（到秋收還差 ${h.short_days} 天）` : ""}</span>
+    <span class="stat">地 <b>${h.acres}</b> 畝${h.freehold > 0 ? `（自由地 ${h.freehold} 畝）` : ""}</span>
+    ${h.debt > 0 ? `<span class="stat lean">欠債 ${h.debt} 便士${h.debt_text ? `（${esc(h.debt_text)}）` : ""}</span>` : `<span class="stat">欠債：沒有</span>`}
+    ${rep ? `<span class="stat${rep.value <= -10 ? " lean" : ""}">名聲 <b>${signed(rep.value)}</b>（${esc(rep.word)}）</span>` : ""}
+    ${fine ? `<span class="stat lean">入地費 ${fine.amount} 便士，${fine.year} 年 ${fine.month} 月前${fine.extended ? "（已寬限過）" : ""}</span>` : ""}
+    ${s.notice ? `<span class="stat lean">不行：${esc(s.notice)}</span>` : ""}</div>`;
+  const line2 = `<div class="row">${amb ? `<span>志向 <b>${esc(amb.name)}</b>（到 ${amb.deadline || "?"} 年底，還剩 ${amb.years_left} 年）</span>
+      <span>下一步 <span class="blocker">${esc(amb.blocker || "")}</span></span>` : `<span class="muted">還沒立志</span>`}
+    <button class="link" onclick="topOpen=!topOpen;renderTop()">${topOpen ? "收起 ▴" : "全部條件、名聲、地位 ▾"}</button></div>`;
+  let more = "";
+  if (topOpen) {
+    const mark = (x) => x.done ? "✓" : x.slipped ? "△" : x.final ? "◎" : x.gate ? "✗" : "○";
+    if (amb) more += `<div><b>志向：${esc(amb.name)}</b>　${esc(amb.desc || "")}<br>路：${amb.steps.map((x) => `<span class="${x.done ? "pos" : ""}">${mark(x)} ${esc(x.name)}</span>`).join(" → ")}
+      <span class="muted">（△ 做到過，現在又不夠了；◎ 最後一步）</span>
+      ${amb.hint ? `<br>怎麼推進：${esc(amb.hint)}${(amb.plans || []).length ? "（★ 計畫：" + amb.plans.map(esc).join("、") + "）" : ""}` : ""}
+      ${["gates", "rival", "note"].filter((k) => amb[k]).map((k) => `<br>${esc(amb[k])}`).join("")}</div>`;
+    if (rep) more += `<div><b>名聲 ${signed(rep.value)}</b>（${esc(rep.word)}；−50 到 +50）：${esc(rep.effect)}<br><span class="muted">最近：${esc((rep.recent || []).join("；") || "沒什麼事")}</span>${rep.value <= -10 ? `<br>怎麼修：${esc(rep.mend)}` : ""}</div>`;
+    if (s.ladder) more += `<div><b>家族地位</b>：${esc(s.ladder)}</div>`;
+    if (s.regret) more += `<div><b>上一代沒做完的心願</b>：${esc(s.regret)}</div>`;
+    more += threadsHtml(s);
+    for (const g of s.plans_going || []) more += `<div>進行中的計畫：<b>${esc(g.name)}</b>${g.target ? "（對象 " + esc(g.target) + "）" : ""} 進度 ${g.progress}/100</div>`;
+    more += rulesBlock(s);
+  }
+  $("top").className = topOpen ? "open" : "";
+  $("top").innerHTML = line1 + line2 + `<div class="more">${more}</div>`;
   $("timeleft").textContent = seasonOpen() ? `這一季還有 ${s.time_left} 段空閒` : "";
 }
 
+// The middle: only the decision in front of the player (a card, or the season's list with the free days and pass).
 function renderTurn() {
   const s = view.state, a = view.ask;
   let html = "";
@@ -255,19 +294,18 @@ function renderTurn() {
     html = `<h2>〔${esc(a.title)}〕<small>${s ? `${s.date.year} 年 ${s.date.month} 月` : ""}</small></h2>
       <div class="situation">${esc(a.situation)}</div>
       <div class="opts">${a.options.map((o, i) => `<button onclick="act({do:'choose',index:${i}})">${i + 1}. ${esc(o)}</button>`).join("")}</div>
-      ${a.unavailable.length ? `<div class="closed">${a.unavailable.map(esc).join("<br>")}</div>` : ""}
+      ${a.unavailable.length ? `<div class="closed">${a.unavailable.map((u) => esc(u.startsWith("✗") ? u : "✗ " + u)).join("<br>")}</div>` : ""}
       <div style="margin-top:8px"><button class="link" onclick="act({do:'ai'})">讓 AI 替你決定</button></div>`;
   } else if (a && a.kind === "season") {
     $("turn").className = "panel ask";
     html = `<h2>${s.date.year} 年 ${esc(s.date.season)} <small>還有 ${s.time_left} 段空閒</small></h2>
       ${agendaBlock(s)}
-      ${rulesBlock(s)}
-      <p class="muted" style="margin:0 0 8px">也可以找家人或村民（左邊、右邊的按鈕），各用一段空閒，定計畫也用一段；沒用完的拿去下田，收成會好一點。</p>
+      <p class="muted" style="margin:0 0 8px;font-size:13px">每件事用一段空閒；也可以找家人（★）或去「村民」開口、「計畫」定計畫。沒用完的拿去下田，收成會好一點。</p>
       <div class="turnbar">
         <button class="primary" onclick="act({do:'pass'})">過這一季</button>
         <button onclick="act({do:'year'})">一口氣過一年</button>
         ${s.regency ? `<button onclick="act({do:'regency'})" title="家業交給管家打理，只在有大事要你拿主意時停下來">交給管家，直到${esc(s.regency.ward)}成年（約 ${s.regency.years_left} 年）</button>` : ""}
-        <button onclick="look({do:'report'}, '家裡知道的事')">家裡知道什麼</button>
+        <button class="link" onclick="look({do:'report'}, '家裡知道的事')">家裡知道什麼</button>
         <button class="link" onclick="if(confirm('結束這一局？'))act({do:'quit'})">結束這一局</button>
       </div>${answerCard(s)}`;
   } else {
@@ -275,41 +313,54 @@ function renderTurn() {
     html = `<p class="running">日子在過……</p>`;
   }
   $("turn").innerHTML = html;
-  const sum = s && s.summary ? s.summary.trim() : "";
-  $("summary-panel").style.display = sum ? "" : "none";
-  $("summary").textContent = sum;
 }
 
-// 這一季的事: the season's few purposeful things, each a button that spends one free day.
+// 這一季的事: at most five, what pushes the ambition first (★), each a button that spends one free day.
 function agendaBlock(s) {
-  const items = s.agenda || [];
+  const items = (s.agenda || []).slice(0, 5);
   if (!items.length) return "";
   return `<div class="agenda"><div class="lab">這一季的事</div>${items.map((it) =>
-    `<div class="item"><button ${it.open ? "" : "disabled"} title="${esc(it.open ? "用一段空閒" : it.why)}" onclick='act(${JSON.stringify({ do: "agenda", id: it.id }).replace(/'/g, "&#39;")})'>${esc(it.title)}</button>
-      <span class="desc">${esc(it.desc)}${it.open ? "" : `（${esc(it.why)}）`}</span></div>`).join("")}</div>`;
+    `<div class="item"><button ${it.open ? "" : "disabled"} title="${esc(it.open ? "用一段空閒" : it.why)}" onclick='act(${JSON.stringify({ do: "agenda", id: it.id }).replace(/'/g, "&#39;")})'>${it.amb ? "★ " : ""}${esc(it.title)}</button>
+      <span class="desc">${esc(it.desc)}${it.open ? "" : `（✗ ${esc(it.why)}）`}</span></div>`).join("")}</div>`;
 }
 
 // 家裡的規矩: standing rules (wakes and weddings), set once, changed here at any time; a year let run follows them.
 function rulesBlock(s) {
   const rules = s.rules || [];
   if (!rules.length) return "";
-  return `<div class="agenda"><div class="lab">家裡的規矩</div>${rules.map((r) =>
-    `<div class="item"><span>${esc(r.name)}：${esc(r.text)}</span>
-      <select onchange='if(this.value)act({do:"rule",rule:${JSON.stringify(r.id)},value:this.value})'>
+  const can = seasonOpen();
+  return `<div><b>家裡的規矩</b>${rules.map((r) =>
+    `<div>${esc(r.name)}：${esc(r.text)}
+      <select ${can ? "" : "disabled"} onchange='if(this.value)act({do:"rule",rule:${JSON.stringify(r.id)},value:this.value})'>
         <option value="">改成……</option>${(r.choices || []).filter((c) => c.value !== r.value).map((c) => `<option value="${esc(c.value)}">${esc(c.text)}</option>`).join("")}
       </select></div>`).join("")}</div>`;
 }
 
 function needBars(needs) {
-  return `<div class="needs">${needs.map((v, i) => `<div class="need">${NEEDS[i]}<div class="bar"><i class="${v < 30 ? "low" : v < 55 ? "mid" : ""}" style="width:${v}%"></i></div></div>`).join("")}</div>`;
+  return `<div class="needs">${needs.map((v, i) => `<div class="need">${NEEDS[i]} ${v}<div class="bar"><i class="${v < 30 ? "low" : v < 55 ? "mid" : ""}" style="width:${v}%"></i></div></div>`).join("")}</div>`;
+}
+function actButton(p, x) {
+  const can = seasonOpen();
+  const tip = x.open ? (x.desc || "") + (x.money ? `（${x.money} 便士）` : "") : x.why;
+  return `<button ${x.open && can ? "" : "disabled"} class="${x.wanted ? "wanted" : ""}" title="${esc(tip)}" onclick="event.stopPropagation();act({do:'interact',who:${p.id},event:'${x.event}'})">${x.wanted ? "★ " : ""}${esc(x.title)}</button>`;
 }
 function actionButtons(p) {
   if (!p.actions || !p.actions.length) return "";
-  const can = seasonOpen();
-  return `<div class="actions">${p.actions.map((x) => {
-    const tip = x.open ? (x.desc || "") + (x.money ? `（${x.money} 便士）` : "") : x.why;
-    return `<button ${x.open && can ? "" : "disabled"} class="${x.wanted ? "wanted" : ""}" title="${esc(tip)}" onclick="act({do:'interact',who:${p.id},event:'${x.event}'})">${x.wanted ? "★ " : ""}${esc(x.title)}</button>`;
-  }).join("")}</div>`;
+  return `<div class="actions">${p.actions.map((x) => actButton(p, x)).join("")}</div>`;
+}
+// The one button a name tag offers (★): what they hope for, else company when they want something of you or a need
+// has run low; the rest behind 更多…
+function recommended(p) {
+  const acts = (p.actions || []).filter((x) => x.open);
+  let rec = acts.find((x) => x.wanted);
+  if (!rec && (p.want || (p.need_low && p.need_low.value < 30))) rec = acts.find((x) => x.event === "keep_company");
+  return rec;
+}
+function twoButtons(p) {
+  if (!p.actions || !p.actions.length) return "";
+  const rec = recommended(p);
+  if (moreActs.has(p.id)) return `<div class="actions">${p.actions.map((x) => actButton(p, x)).join("")}<button class="link" onclick="event.stopPropagation();moreActs.delete(${p.id});renderFamily()">收起</button></div>`;
+  return `<div class="actions">${rec ? actButton(p, { ...rec, wanted: true }) : ""}<button class="link" onclick="event.stopPropagation();moreActs.add(${p.id});renderFamily()">更多…</button></div>`;
 }
 // 年度重心: where the person's days go. Changing it is free; it stays until changed.
 function focusLine(p) {
@@ -317,7 +368,7 @@ function focusLine(p) {
   const desc = (p.foci || []).find((f) => f.id === p.focus);
   if (!p.foci || p.foci.length < 2 || !seasonOpen())
     return `<div class="focus">重心：${esc(p.focus_name)}</div>`;
-  return `<div class="focus">重心：<select title="${esc(desc ? desc.desc : "")}" onchange="act({do:'focus',who:${p.id},focus:this.value})">${p.foci.map((f) =>
+  return `<div class="focus">重心：<select onclick="event.stopPropagation()" title="${esc(desc ? desc.desc : "")}" onchange="act({do:'focus',who:${p.id},focus:this.value})">${p.foci.map((f) =>
     `<option value="${esc(f.id)}" title="${esc(f.desc)}" ${f.id === p.focus ? "selected" : ""}>${esc(f.name)}</option>`).join("")}</select></div>`;
 }
 // 開口: ask someone for a thing. Same buttons for a follow-up, with a lever on top.
@@ -352,53 +403,107 @@ function reasonsLine(rs) {
 }
 function toggle(el) { el.classList.toggle("open"); }
 
+// The family (design/ui-text.md): two lines each (name, role, age, mood; what they most want and their feeling for
+// you); the rest when the card is opened; children under five on one line; at most two buttons (★ and 更多…).
 function renderFamily() {
   const s = view.state;
   if (!s || !s.family) return;
-  $("family").innerHTML = s.family.map((p) => {
+  const small = s.family.filter((p) => p.id !== s.head && p.age < 5);
+  const cards = s.family.filter((p) => !small.includes(p)).map((p) => {
     const me = p.id === s.head;
-    return `<div class="card ${p.want ? "wants" : ""}">
-      <div class="top"><span class="name">${me ? "你　" : ""}${esc(p.name)}</span><span class="sub">${esc(me ? "" : p.kin)} ${p.age} 歲${p.health < 40 ? ' <span class="neg">身體很差</span>' : ""}</span></div>
-      ${p.station ? `<div class="station">${esc(p.station)}</div>` : ""}
-      <div class="mood">${esc(p.mood)}${p.mood_cause ? "：" + esc(p.mood_cause) : ""}</div>
-      ${p.want ? `<div class="want">${esc(p.want)}</div>` : ""}
-      ${me ? "" : `<div class="op" onclick="toggle(this)">對你 <b class="${cls(p.opinion)}">${esc(p.opinion_word)} ${signed(p.opinion)}</b> <span class="muted">▾</span><div class="reasons">${reasonsLine(p.reasons)}</div></div>`}
-      ${needBars(p.needs)}
-      ${p.traits.length ? `<div class="traits">${p.traits.map(esc).join("、")}</div>` : ""}
-      ${focusLine(p)}
-      ${roadLine(p.road)}
-      ${actionButtons(p)}
+    const mood = `${esc(p.mood)}${p.mood_was && p.mood_was !== p.mood ? `<span class="muted">（原本${esc(p.mood_was)}）</span>` : ""}`;
+    const op = me ? "" : `對你 <b class="${cls(p.opinion)}">${signed(p.opinion)}</b>（${esc(p.opinion_word)}）${p.opinion_was != null && p.opinion_was !== p.opinion ? `<span class="muted">，上季 ${signed(p.opinion_was)}</span>` : ""}`;
+    const need = p.need_low ? `<span class="tag ${p.need_low.value < 30 ? "bad" : ""}">缺${esc(p.need_low.name)} ${p.need_low.value}</span>` : "";
+    const open = openCards.has(p.id);
+    return `<div class="card ${p.want ? "wants" : ""} ${open ? "open" : ""}" >
+      <div class="top" onclick="openCards.has(${p.id})?openCards.delete(${p.id}):openCards.add(${p.id});renderFamily()"><span class="name">${me ? "你　" : ""}${esc(p.name)}</span><span class="sub">${esc(me ? "" : p.kin)} ${p.age} 歲・${mood}${p.health < 40 ? ' <span class="neg">身體很差</span>' : ""} <span class="muted">${open ? "▴" : "▾"}</span></span></div>
+      <div class="l2">${[p.want ? `<span class="want">${esc(p.want)}</span>` : "", op + need, p.station ? esc(p.station) : ""].filter(Boolean).join("；")}</div>
+      <div class="detail">
+        ${p.mood_cause ? `<div class="mood">心情：${esc(p.mood)}：${esc(p.mood_cause)}</div>` : ""}
+        ${me ? "" : `<div class="op">對你的原因：${reasonsLine(p.reasons)}</div>`}
+        ${needBars(p.needs)}
+        ${p.traits.length ? `<div class="traits">${p.traits.map(esc).join("、")}</div>` : ""}
+        ${focusLine(p)}
+        ${roadLine(p.road)}
+      </div>
+      ${twoButtons(p)}
     </div>`;
-  }).join("") + (s.away || []).map((p) => `<div class="card away">
+  }).join("");
+  const kids = small.length ? `<div class="kids">孩子（5 歲以下）：${small.map((p) => `<button class="link" onclick="look({do:'inspect',who:${p.id}}, '${esc(p.name)}')">${esc(p.name)}</button> ${p.age} 歲`).join("、")}</div>` : "";
+  const away = (s.away || []).map((p) => `<div class="card away">
       <div class="top"><span class="name">${esc(p.name)}</span><span class="sub">${esc(p.kin)} ${p.age} 歲</span></div>
-      <div class="station">${esc(p.station)}</div>
-      ${roadLine(p.road)}
+      <div class="l2">${esc(p.station)}</div>
     </div>`).join("");
+  $("family").innerHTML = cards + kids + away;
 }
 
-// 人生路: the turns a life has taken, oldest first, folded away until clicked.
+// 人生路: the turns a life has taken, oldest first.
 function roadLine(road) {
   if (!road || !road.length) return "";
-  return `<div class="op" onclick="toggle(this)">人生路 <span class="muted">${road.length} 段 ▾</span><div class="reasons">${road.map((r) => `${r.year}　${esc(r.text)}`).join("<br>")}</div></div>`;
+  return `<div class="focus">人生路：${road.map((r) => `${r.year} ${esc(r.text)}`).join("；")}</div>`;
 }
 
-function lineClass(l) {
-  if (l.kind === 3) return "history";
-  if (l.text.startsWith("【消息】")) return "news";
-  if (l.text.startsWith("【風聲】")) return "wide";
-  if (l.text.startsWith("〔")) return "event";
-  return "";
+// The chronicle by season (design/ui-text.md), the same grouping as textplay.py's seasons(): 大事 (the family's turning
+// points in bold, smaller news under them, a late outcome also under the season it came from), 這一季的帳 as one line
+// that opens, and the village's news folded unless it touches the family.
+function seasons(list) {
+  const out = new Map();
+  let last = null;
+  for (const e of list) {
+    if (!out.has(e.skey)) out.set(e.skey, { key: e.skey, label: e.season, big: [], fam: [], news: [], ledger: null, late: [] });
+    const s = out.get(e.skey);
+    if (e.cls === "ledger") { s.ledger = e; continue; }
+    if (e.cls === "sub") { if (last && last.skey === e.skey) last.subs.push(e.text); continue; }
+    const item = { skey: e.skey, text: e.text, subs: [], near: !!e.near };
+    if (e.cls === "news" && !item.near) s.news.push(item);
+    else (e.cls === "big" || e.cls === "news" ? s.big : s.fam).push(item);
+    last = item;
+    if (e.origin) for (const o of out.values()) if (o.label === e.origin && o.key !== e.skey) o.late.push(`${e.season}：${e.text}`);
+  }
+  return out;
+}
+function ledgerHtml(l) {
+  if (!l) return "";
+  const buy = (l.outs || []).find((x) => x[0] === "買糧");
+  const g = l.grain;
+  const grain = g ? `買糧 ${g.times} 次，${g.days} 天，${buy ? -buy[1] : g.pence} 便士` : buy ? `買糧 ${signed(buy[1])}` : "";
+  const ins = (l.ins || []).map(([w, v]) => `${esc(w)} ${signed(v)}`);
+  const outs = (l.outs || []).filter((x) => x[0] !== "買糧").map(([w, v]) => `${esc(w)} ${signed(v)}`).concat(grain ? [grain] : []);
+  const head = l.from === l.to ? `錢 ${l.from} 便士，沒有進出` : `錢 ${l.from} → ${l.to} 便士`;
+  const top = [...(l.ins || []), ...(l.outs || [])].sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0];
+  if (!ins.length && !outs.length) return `<div class="blk"><span class="blk-t">這一季的帳</span>　${head}</div>`;
+  return `<div class="blk"><details><summary><span class="blk-t">這一季的帳</span>　${head}${top ? `（${esc(top[0] === "買糧" && grain ? grain : top[0] + " " + signed(top[1]))}${ins.length + outs.length > 1 ? "…" : ""}）` : ""} ▸</summary>
+    ${ins.length ? `<div class="item">進：${ins.join("、")}</div>` : ""}${outs.length ? `<div class="item">出：${outs.join("、")}</div>` : ""}</details></div>`;
+}
+function seasonHtml(s, now, expanded) {
+  const fam = s.fam.slice(0, 3), famMore = s.fam.slice(3);
+  const subs = (it) => it.subs.map((x) => `<div class="sub">└ ${esc(x)}</div>`).join("");
+  const body = `${s.big.length || s.fam.length || s.late.length ? `<div class="blk"><div class="blk-t">大事</div>
+      ${s.big.map((it) => `<div class="big">${esc(it.text)}${subs(it)}</div>`).join("")}
+      ${fam.map((it) => `<div class="fam">${esc(it.text)}${subs(it)}</div>`).join("")}
+      ${famMore.length ? `<details><summary class="muted">還有 ${famMore.length} 件家裡的小事 ▸</summary>${famMore.map((it) => `<div class="fam">${esc(it.text)}${subs(it)}</div>`).join("")}</details>` : ""}
+      ${s.late.map((x) => `<div class="late">↳ 後來：${esc(x)}</div>`).join("")}</div>` : ""}
+    ${ledgerHtml(s.ledger)}
+    ${s.news.length ? `<div class="blk"><details><summary class="muted">還有 ${s.news.length} 則村裡的消息 ▸</summary>${s.news.map((it) => `<div class="item">${esc(it.text)}</div>`).join("")}</details></div>` : ""}`;
+  const count = s.big.length + s.fam.length;
+  return `<div class="season ${expanded ? "" : "old"} ${openSeasons.has(s.key) ? "open" : ""}">
+    <div class="lab" ${expanded ? "" : `onclick="openSeasons.has(${s.key})?openSeasons.delete(${s.key}):openSeasons.add(${s.key});renderFeed()"`}>${esc(s.label)}${now ? " <small>這一季到現在</small>" : ""}${expanded ? "" : ` <small>${count} 件事 ▸</small>`}</div>
+    <div class="body">${body}</div></div>`;
 }
 function renderFeed() {
-  const show = lines.slice(-400);
-  const start = lines.length - show.length;
-  let html = "", year = null;
-  for (let i = show.length - 1; i >= 0; --i) {
-    const l = show[i];
-    if (l.year !== year) { html += `<div class="yr">${l.year} 年</div>`; year = l.year; }
-    html += `<div class="ln ${lineClass(l)} ${start + i >= freshFrom ? "fresh" : ""}">${esc(l.text)}</div>`;
+  const s = view.state;
+  const all = seasons(entries);
+  let nowKey = null;
+  if (s && s.date) {
+    nowKey = s.date.year * 4 + Math.floor((s.date.month - 1) / 3);
+    if (s.ledger_now) {
+      if (!all.has(nowKey)) all.set(nowKey, { key: nowKey, label: s.ledger_now.season, big: [], fam: [], news: [], ledger: null, late: [] });
+      if (!all.get(nowKey).ledger) all.get(nowKey).ledger = s.ledger_now;
+    }
   }
-  $("feed").innerHTML = html || '<p class="muted">還沒有事。</p>';
+  const keys = [...all.keys()].sort((a, b) => b - a);
+  // The season now and the one before it open; older ones fold to their name.
+  $("feed").innerHTML = keys.map((k, i) => seasonHtml(all.get(k), k === nowKey, i < 2)).join("") || '<p class="muted">還沒有事。</p>';
 }
 
 const TABS = [["talk", "村裡在說"], ["contest", "在爭什麼"], ["map", "地圖"], ["net", "關係網"], ["people", "村民"], ["plans", "計畫"]];
@@ -414,11 +519,23 @@ function renderTabs() {
   else renderPlans(s);
 }
 
+// 村裡在說 (design/ui-text.md): one line per thing houses are after, what touches the family first (◆), strangers'
+// births and weddings folded by year, the last three years unless asked for more.
 function renderTalk(s) {
-  const items = s.heard || [];
-  $("tab-body").innerHTML = items.length ? `<div class="talk">${items.map((h) => `<div class="item ${h.whisper ? "whisper" : ""} ${h.recent ? "" : "old"}">
-      <div class="who">${h.year} 年　${h.whisper ? (h.teller ? esc(h.teller) + "悄悄說（不知真假）" : "有人悄悄說") : h.teller ? "聽" + esc(h.teller) + "說" : ""}</div>
-      ${esc(h.text)}</div>`).join("")}</div>` : '<p class="muted">還沒聽到什麼。</p>';
+  const items = s.talk || [];
+  const year = s.date.year;
+  const recent = items.filter((x) => (x.year ?? year) >= year - 2);
+  const shown = talkAll ? items : recent;
+  const near = (x) => x.near || x.kind === "near";
+  const sorted = [...shown.filter(near), ...shown.filter((x) => !near(x))];
+  const row = (x) => {
+    if (x.kind === "fold") return `<div class="item"><details><summary>${esc(x.text)} ▸</summary>${(x.items || []).map((t) => `<div class="who">${esc(t)}</div>`).join("")}</details></div>`;
+    const who = x.kind === "thing" ? "" : `<div class="who">${x.year} 年　${x.whisper ? (x.teller ? esc(x.teller) + "悄悄說（不知真假）" : "有人悄悄說") : x.teller ? "聽" + esc(x.teller) + "說" : ""}</div>`;
+    return `<div class="item ${x.whisper ? "whisper" : ""}">${who}${near(x) ? "◆ " : ""}${esc(x.text)}</div>`;
+  };
+  $("tab-body").innerHTML = items.length ? `<div class="talk">${sorted.map(row).join("")}</div>
+    ${items.length > recent.length ? `<button class="link" onclick="talkAll=!talkAll;renderTabs()">${talkAll ? "只看最近三年" : `更早的 ${items.length - recent.length} 條 ▸`}</button>` : ""}
+    <p class="legend">◆ 跟你家有關：親戚、好感 40 以上的人、對頭、你家想要的東西。</p>` : '<p class="muted">還沒聽到什麼。</p>';
 }
 
 function houseDetail(sel) {
@@ -583,7 +700,7 @@ function renderContest(s) {
             ? o.men.map((m) => `<button ${can ? "" : "disabled"} onclick="act({do:'want',what:'office:${o.id}',object:${m.id}})">讓${esc(m.name)}選</button>`).join(" ")
             : `<button ${can ? "" : "disabled"} onclick="act({do:'want',what:'office:${o.id}',object:-1})">${o.mine ? "想連任，去拉票" : "想當"}</button>`}</span>`
         : !o.mine && o.why ? `<span class="muted" style="font-size:12px">爭不了：${esc(o.why)}</span>` : ""}</div>
-      ${!o.mine && (o.gates || []).length ? `<div class="muted" style="font-size:12px;padding:0 0 4px">條件：${o.gates.map((g) => g.ok ? `<span class="pos" title="${esc(g.detail)}">✓ ${esc(g.label)}</span>` : `<span class="neg">✗ ${esc(g.detail)}</span>`).join("　")}</div>` : ""}
+      ${!o.mine && (o.gates || []).length ? `<div class="muted" style="font-size:12px;padding:0 0 4px">條件：${o.gates.map((g) => g.ok ? `<span class="pos" >✓ ${esc(g.detail || g.label)}</span>` : `<span class="neg">✗ ${esc(g.detail)}</span>`).join("　")}</div>` : ""}
       ${(o.voters || []).length ? `<div style="font-size:12px;padding:0 0 6px"><span class="muted">各家家主照現在看（${o.voters.filter((x) => x.ours).length}/${o.voters.length} 家會投你家）：</span>${o.voters.map((x) =>
         `<div>${esc(x.name)}：看樣子投 <b class="${x.ours ? "pos" : ""}">${esc(x.lean || "?")}</b>${x.promised ? `（答應了${esc(x.promised)}）` : ""}<span class="muted">；${esc(x.note)}</span>
          ${x.ask ? `<button ${x.ask.open && can ? "" : "disabled"} title="${esc(x.ask.open ? "用一段空閒去問" : x.ask.why)}" onclick="${askCall(x.id, x.ask, "")}">拉票</button>` : ""}</div>`).join("")}</div>` : ""}`).join("");
@@ -595,7 +712,7 @@ function renderContest(s) {
 // A plan's conditions, met or not.
 function gatesHtml(gates) {
   if (!(gates || []).length) return "";
-  return `<div class="muted" style="font-size:12px;padding:2px 0 4px">條件：${gates.map((g) => g.ok ? `<span class="pos">✓ ${esc(g.label)}</span>` : `<span class="neg">✗ ${esc(g.detail)}</span>`).join("　")}</div>`;
+  return `<div class="muted" style="font-size:12px;padding:2px 0 4px">條件：${gates.map((g) => g.ok ? `<span class="pos">✓ ${esc(g.detail || g.label)}</span>` : `<span class="neg">✗ ${esc(g.detail)}</span>`).join("　")}</div>`;
 }
 
 function renderPlans(s) {

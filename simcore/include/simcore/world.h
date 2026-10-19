@@ -732,6 +732,7 @@ public:
     void setMoneyForTest(Id house, double money) { households_[house].money = money; }  // tests only
     void setFoodForTest(Id house, double days) { households_[house].food = consumption(households_[house]) * days; }  // tests only
     void setHealthForTest(Id person, double health) { people_[person].health = health; }  // tests only
+    void killForTest(Id person) { kill(person, "test"); }                                    // tests only
     void startSeason() { rollSeason(); }  // on a season's first day, before it runs: free time and the family's wants  // carry out what the player just asked for, before the day runs
     // The season at a glance, and what changed since a snapshot taken at its start.
     std::string familyGlance() const;

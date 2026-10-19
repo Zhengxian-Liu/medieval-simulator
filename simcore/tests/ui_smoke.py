@@ -21,6 +21,28 @@ def call(path, body=None):
         return json.loads(r.read().decode() or "{}") if "api" in path else r.read().decode()
 
 
+def check_layout(v):
+    """The fields both clients lay the screen out from (design/ui-text.md), and the text client showing the same layers."""
+    st = v["state"]
+    e = call("/api/view?seq=-1&line=0&entry=0")
+    ents = e.get("entries") or []
+    assert ents and e.get("entry_count") == len(ents), "no chronicle entries by season"
+    assert all("skey" in x and x.get("cls") in ("big", "fam", "news", "sub", "ledger") for x in ents), f"an entry without its season or kind: {ents[:3]}"
+    assert any(x["cls"] == "ledger" for x in ents), "no season's books among the entries"
+    tail = call(f"/api/view?seq=-1&line=0&entry={len(ents)}")
+    assert tail.get("entries") == [], "the entry cursor does not skip what was read"
+    assert isinstance(st.get("talk"), list), "the village's talk missing"
+    assert "from" in (st.get("ledger_now") or {}), "this season's books missing"
+    if st.get("ambition"):
+        assert st["ambition"].get("blocker"), "the ambition's next step missing from the top bar"
+    tp =subprocess.run([sys.executable, os.path.join(ROOT, "tools/ui/textplay.py"), "--port", str(PORT), "view"], capture_output=True, text=True, timeout=60).stdout
+    for head in ("―― 現在要你決定 ――", "―― 家裡 ――", "―― 編年記錄"):
+        assert head in tp, f"textplay view lacks {head}"
+    lines = tp.splitlines()
+    # Two lines of top bar, then a blank line (or the notice of the action just refused).
+    assert lines[0].startswith("=== ") and (lines[2].strip() == "" or lines[2].startswith("不行")), f"textplay top bar not two lines: {lines[:4]}"
+
+
 def main():
     global PORT
     out = sys.argv[1]
@@ -67,6 +89,7 @@ def main():
                 assert v2["ask"] and v2["ask"]["kind"] == "season", "a malformed action ended the season"
                 assert all(p.get("gates") is not None for p in v2["state"].get("plans", [])), "a plan without its conditions"
                 assert "reputation" in v2["state"] and "ladder" in v2["state"], "reputation or the ladder missing from the main screen"
+                check_layout(v2)
                 continue
             if ask["kind"] == "season":
                 call("/api/act", {"do": "pass"})

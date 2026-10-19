@@ -330,6 +330,9 @@ public:
     // Grain bought in a season, merged into one line of its books: times, days, pence.
     struct Grain { int times = 0; double days = 0, pence = 0; };
     std::map<int, Grain> grain_;
+    // The card the player just answered, so the line it leaves becomes 〔卡名〕選擇 → 結果 even when the sim
+    // writes the outcome without a （選擇：…） mark.
+    std::string answeredTitle, answeredChoice;
     static double numberBefore(const std::string& t, const std::string& mark) {
         size_t at = t.find(mark);
         if (at == std::string::npos) return 0;
@@ -378,13 +381,29 @@ public:
             size_t close = t.find("〕");
             std::string title = close == std::string::npos ? "" : t.substr(3, close - 3);
             std::string rest = close == std::string::npos ? t : t.substr(close + 3);
-            size_t ch = rest.rfind("（選擇：");
-            if (ch != std::string::npos && rest.size() >= 3 && rest.compare(rest.size() - 3, 3, "）") == 0) {
-                // The choice and what came of it, one entry: 〔卡名〕選擇 → 結果.
-                std::string choice = rest.substr(ch + std::string("（選擇：").size(), rest.size() - 3 - ch - std::string("（選擇：").size());
-                std::string outcome = rest.substr(0, ch);
+            const std::string mark = "（選擇：";
+            size_t ch = rest.rfind(mark);
+            size_t chEnd = std::string::npos;  // the 「）」 that closes the mark (the choice may hold its own （…）)
+            for (size_t i = ch == std::string::npos ? rest.size() : ch + mark.size(), depth = 1; i + 3 <= rest.size(); ++i) {
+                if (rest.compare(i, 3, "（") == 0) ++depth;
+                else if (rest.compare(i, 3, "）") == 0 && --depth == 0) {
+                    chEnd = i;
+                    break;
+                }
+            }
+            bool mine = !title.empty() && title == answeredTitle;
+            if (chEnd != std::string::npos || mine) {
+                // The choice and what came of it, one entry: 〔卡名〕選擇 → 結果. The mark may close the line (the
+                // outcome before it) or sit in the middle (the situation before it, the outcome after).
+                std::string choice = answeredChoice, outcome = rest;
+                if (chEnd != std::string::npos) {
+                    choice = rest.substr(ch + mark.size(), chEnd - ch - mark.size());
+                    std::string after = rest.substr(chEnd + 3);
+                    outcome = after.empty() ? rest.substr(0, ch) : after;
+                }
                 t = "〔" + title + "〕" + choice + " → " + outcome;
                 cls = "big";
+                if (mine) answeredTitle.clear();
             } else {
                 // Not the player's answer: the card's name is a plain label, not a 〔〕.
                 t = title.empty() ? rest : title + "：" + rest;
@@ -607,7 +626,7 @@ public:
                         std::string why;
                         EventRunner er(w_);
                         for (const auto& g : er.explain(a->milestones[i].goal, hp, kNone))
-                            if (!g.ok && why.empty()) why = g.detail;
+                            if (!g.ok && why.empty() && g.detail != "不合條件") why = g.detail;  // (a bare 「不合條件」 says less than the step name)
                         std::string name = w.milestoneName(hp, i);
                         if (size_t cut = name.find("（"); cut != std::string::npos && !why.empty()) name = name.substr(0, cut);
                         blocker = std::string(st[i] == 2 ? "△ " : "○ ") + name + (why.empty() ? "" : "：" + why);
@@ -615,7 +634,7 @@ public:
                 }
             if (blocker.empty()) blocker = "◎ " + w.ambitionFinal(hp);
             o.raw("ambition", Obj().text("name", a->name).text("desc", w.ambitionDesc(hp)).raw("steps", arr(steps)).text("hint", a->hint)
-                                   .text("blocker", blocker)
+                                   .text("blocker", houseStyle(blocker))
                                    .raw("plans", arr(helps)).n("years_left", std::max(0, left)).n("deadline", w.ambitionDeadline(hp))
                                    .text("gates", gates).text("rival", w.rivalLine(hp)).text("note", note).done());
         }
@@ -1114,7 +1133,14 @@ int main(int argc, char** argv) {
             }
             if (what == "ai") return -1;
             int k = toInt(m, "index", -1);
-            if (what == "choose" && k >= 0 && k < static_cast<int>(c.options.size())) return k;
+            if (what == "choose" && k >= 0 && k < static_cast<int>(c.options.size())) {
+                // Remembered for the chronicle (Web::takeLine); a long option keeps only what comes before its （…）.
+                std::string o = tidyText(c.options[k]);
+                size_t paren = o.find("（");
+                web.answeredTitle = c.title;
+                web.answeredChoice = paren != std::string::npos && paren > 18 ? o.substr(0, paren) : o;
+                return k;
+            }
         }
     });
     NpcBridge npc;

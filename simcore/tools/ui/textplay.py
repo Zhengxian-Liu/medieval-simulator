@@ -148,8 +148,8 @@ def chronicle_lines(v, count=None, since=None):
             ss[now_key]["ledger"] = ss[now_key]["ledger"] or ln
     keys = sorted(ss, reverse=True)
     if since is not None:
-        keys = [k for k in keys if k >= since] or keys[:2]
-        keys = keys[:max(2, min(len(keys), 6))]
+        fresh = sum(1 for k in keys if k >= since)  # the seasons since the last view, at least two, at most six
+        keys = keys[:max(2, min(fresh, 6))]
     elif count is not None:
         keys = keys[:count]
     out = []

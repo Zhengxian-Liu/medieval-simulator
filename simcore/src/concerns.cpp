@@ -1230,7 +1230,7 @@ std::vector<World::AgendaItem> World::seasonAgenda(bool all) {
             a.title = "陪家人：" + (ev ? ev->title : bestEv) + "（" + shortName(best) + "）";
             std::string want = wantText(people_[best]);
             MoodView mv = moodView(people_[best]);
-            a.desc = shortName(best) + "（" + kinWord(head, best) + "）" +
+            a.desc = shortName(best) + "（" + (kinWord(head, best).empty() ? std::string("家裡人") : kinWord(head, best)) + "）" +
                      (!want.empty() ? want : !mv.cause.empty() ? mv.cause : "對你" + std::string(opinionWord(opinion(best, head)))) + "。";
             a.kind = "interact", a.who = best, a.event = bestEv;
             a.rank = 40;
