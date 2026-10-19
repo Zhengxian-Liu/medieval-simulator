@@ -346,10 +346,10 @@
              "else": [{"log": "  老爺的臉沉了下來。"}, {"progress": -25}, {"lord_opinion": {"value": -5, "mod": "talked_back", "years": 5}}]}}], "ai": {"base": 6, "traits": {"brave": 8, "wrathful": 6}}}]}
      ]},
 
-    {"id": "school_child", "name": "送孩子讀書", "requires": "家主，存錢 20 便士以上，家裡有 7 到 14 歲還沒讀書的孩子",
+    {"id": "school_child", "name": "送孩子讀書", "requires": "家主，存錢 20 便士以上，家裡有 7 到 14 歲還沒讀書的孩子（自己的或住在家裡的）",
      "desc": "每月送神父兩便士和一些雞蛋，請他教孩子認字。識了字，才進得了教會、當得了書記。",
      "actor": {"is_head": true, "money_ge": 20},
-     "subject": {"pick": "any_child", "conditions": {"age": [7, 14], "no_flag": "schooled", "no_trait": "literate", "not": {"trait": "dull"}}},
+     "subject": {"pick": "kin_at_home", "conditions": {"age": [7, 14], "no_flag": "schooled", "no_trait": "literate", "not": {"trait": "dull"}}},
      "target": {"pick": "villager", "conditions": {"occupation": "priest"}},
      "max_months": 8, "retry_years": 1, "monthly_cost": 2,
      "progress": {"base": 14, "opinion": 3, "traits": {"pious": 2}},
@@ -359,16 +359,16 @@
      "fail_log": "{target} 說孩子坐不住，不肯再教。", "fail": [],
      "ai": {"base": 1.5, "traits": {"pious": 4, "clever": 3}}},
 
-    {"id": "church_post", "name": "謀神職", "personal": true, "requires": "家主，存錢 40 便士以上，家裡有識字、未婚的 14 到 25 歲兒子", "notify_target": true,
+    {"id": "church_post", "name": "謀神職", "personal": true, "requires": "家主，存錢 40 便士以上，家裡有識字、未婚的 14 到 25 歲男孩（不是繼承人）", "notify_target": true,
      "desc": "託神父替識字的兒子在修道院謀個書記的差事。家裡少一雙手，但多了一個在修士和領主面前說得上話的人。",
      "actor": {"is_head": true, "money_ge": 40},
-     "subject": {"pick": "any_child", "conditions": {"sex": "male", "trait": "literate", "age": [14, 25], "married": false, "not": {"occupation": ["clerk", "priest"]}}},
+     "subject": {"pick": "kin_at_home", "conditions": {"sex": "male", "trait": "literate", "age": [14, 25], "married": false, "heir_apparent": false, "not": {"occupation": ["clerk", "priest"]}}},
      "target": {"pick": "villager", "conditions": {"occupation": "priest"}},
      "max_months": 12, "retry_years": 2,
      "progress": {"base": 8, "opinion": 4, "reputation": 0.4},
      "start_log": "{name} 託 {target} 替 {subject} 在修道院謀個差事。",
      "success_log": "修道院收下了 {subject} 當書記。{name} 家出了一個神職人員。",
-     "success": [{"money": -20}, {"subject": [{"set_occupation": "clerk"}]}, {"prestige": 6}],
+     "success": [{"money": -20}, {"subject": [{"set_occupation": "clerk"}, {"station": {"id": "clerk", "note": "進修道院當書記"}}]}, {"prestige": 6}],
      "fail_log": "修道院回話說今年不缺人。", "fail": [],
      "ai": {"base": 1.5, "traits": {"pious": 6, "ambitious": 4}}},
 

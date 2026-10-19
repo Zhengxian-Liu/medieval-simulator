@@ -125,6 +125,22 @@
        {"text": "叮囑 {target} 記住誰欠了這個家", "log": "{name} 撐著坐起來，對 {target} 說：「那幾家做過什麼，你給我記著。」",
         "effects": [{"target": [{"set_flag": "father_grudges"}]}, {"stress": -10}],
         "ai": {"base": 3, "traits": {"vengeful": 8, "wrathful": 4, "forgiving": -6}}}
+     ]},
+    // The heir is a small child (design/fun-r6.md D): the last words are still the heir's, said to a child who will
+    // keep them, while someone else holds the house for a few years.
+    {"id": "deathbed_wishes_child", "title": "床前", "prompt": "{name} 病得起不了床，神父已經來過了。家業往後是 {target} 的，可{target_pron}還小，被大人抱到床前，睜大眼睛等著聽最後的話。",
+     "scope": "player_head", "chance": 1, "once": true,
+     "on": {"signal": "manual"},
+     "options": [
+       {"text": "請神父年年為自己做彌撒（40 便士）", "log": "{name} 把 40 便士交給神父，請他往後每年忌日為自己做一臺彌撒。小小的 {target} 在床邊看著。",
+        "effects": [{"money": -40}, {"prestige": 4}, {"stress": -20}, {"need": {"spirit": 30}}],
+        "ai": {"base": 6, "traits": {"pious": 8, "greedy": -4}}},
+       {"text": "摸著 {target} 的頭，叮囑{target_pron}長大了守住這份地，別跟人結仇", "log": "{name} 摸著 {target} 的頭說：「地是命根子，仇是包袱。長大了，別讓這個家散了。」",
+        "effects": [{"target": [{"set_flag": "father_counsel"}]}, {"stress": -10}],
+        "ai": {"base": 6, "traits": {"calm": 4, "forgiving": 4, "vengeful": -4}}},
+       {"text": "拉著 {target} 的手，叮囑{target_pron}記住誰欠了這個家", "log": "{name} 拉著 {target} 的小手說：「那幾家做過什麼，你長大了要記著。」",
+        "effects": [{"target": [{"set_flag": "father_grudges"}]}, {"stress": -10}],
+        "ai": {"base": 3, "traits": {"vengeful": 8, "wrathful": 4, "forgiving": -6}}}
      ]}
   ]
 }

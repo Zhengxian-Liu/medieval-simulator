@@ -249,6 +249,18 @@ public:
                                    .text("gates", gates).text("rival", w.rivalLine(hp)).text("note", note).done());
         }
 
+        // 這一代的線 (design/fun-r6.md D): what this generation is living through, and what of it has come to an end.
+        {
+            std::vector<std::string> live, ended;
+            for (const auto& t : w.threads())
+                live.push_back(Obj().text("kind", t.kind).text("title", t.title).text("text", t.text).text("ends", t.ends).n("since", t.since).done());
+            const auto& ends = w.threadEnds();
+            int since = w.dynasties()[w.playerDynasty()].headSince.empty() ? 0 : w.dynasties()[w.playerDynasty()].headSince.back();
+            for (auto it = ends.rbegin(); it != ends.rend() && ended.size() < 6; ++it)
+                if (it->day >= since) ended.push_back(Obj().text("kind", it->kind).text("text", it->text).n("year", w.config().startYear + it->day / kDaysPerYear).done());
+            o.raw("threads", arr(live)).raw("threads_ended", arr(ended));
+        }
+
         // The family at home.
         std::vector<std::string> fam;
         std::vector<Id> order{head};

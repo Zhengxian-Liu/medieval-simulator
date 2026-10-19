@@ -220,6 +220,7 @@ Defs Defs::loadFromDir(const std::string& dir) {
         ad.final = a.stringOr("final", ad.name);
         ad.hint = a.stringOr("hint", "");
         ad.keep = a["keep"];
+        ad.lost = a.stringOr("lost", "");
         ad.office = a.stringOr("office", "");
         d.ambitions.push_back(ad);
     }

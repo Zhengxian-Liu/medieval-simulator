@@ -363,6 +363,18 @@ void World::monthlyAmbition() {
     if (h.head == head.id && !head.ambition.empty()) lateGameMonth(head);
 }
 
+void World::ambitionNow() {
+    if (playerHousehold_ == kNone) return;
+    Household& h = households_[playerHousehold_];
+    if (h.extinct || h.head == kNone) return;
+    Person& head = people_[h.head];
+    const AmbitionDef* a = defs_.ambition(head.ambition);
+    if (!head.alive() || ageYears(head) < 16 || !a) return;
+    EventRunner ev(*this);
+    checkMilestones(head, false);
+    if (ev.eval(a->goal, head, kNone) || (!a->keep.isNull() && !ev.eval(a->keep, head, kNone))) reviewAmbition(h, false);
+}
+
 void World::reviewAmbition(Household& h, bool yearTurn) {
     EventRunner ev(*this);
     {
@@ -381,6 +393,7 @@ void World::reviewAmbition(Household& h, bool yearTurn) {
             bool regret = dyn && dyn->regret == a->id;
             ++counters_[std::string(player ? "ambition_family:" : "ambition:") + a->id + ":done"];
             if (player) log(1, "【達成】" + fullName(h.head) + " 完成了志向「" + a->name + "」。" + (regret ? "這也是上一代的心願。" : ""));
+            if (player) noteThreadEnd("ambition", "志向「" + a->name + "」做成了" + (regret ? "（也了了上一代的心願）" : ""));
             else if (!a->milestones.empty()) log(2, fullName(h.head) + " 完成了「" + a->name + "」。");
             if (dyn) {
                 dyn->prestige += regret ? 20 : 10;
@@ -400,13 +413,17 @@ void World::reviewAmbition(Household& h, bool yearTurn) {
         } else if (!a->keep.isNull() && !ev.eval(a->keep, head, kNone)) {
             // The road has closed under them (the last son gone, the lord's fields let to another): no point waiting out the years.
             ++counters_[std::string(player ? "ambition_family:" : "ambition:") + a->id + ":thwarted"];
-            if (player) log(1, "【志向受挫】「" + a->name + "」做不成了：" + ambitionFinal(head) + "這條路，眼下已經走不通。");
+            if (player)
+                log(1, "【志向受挫】「" + a->name + "」做不成了：" + (a->lost.empty() ? ambitionFinal(head) + "這條路，眼下已經走不通" : a->lost) + "。");
+            noteLife(head.id, "「" + a->name + "」落了空");
+            if (player) noteThreadEnd("ambition", "志向「" + a->name + "」落了空" + (a->lost.empty() ? "" : "：" + a->lost));
             head.ambition.clear();
             chooseAmbition(head, "的心願落了空");
         } else if (yearTurn && (day_ - head.ambitionSince) / kDaysPerYear >= a->maxYears) {
             ++counters_[std::string(player ? "ambition_family:" : "ambition:") + a->id + ":dropped"];
             if (player) log(1, fullName(h.head) + " 放下了「" + a->name + "」的志向：期限過了，還沒做成。這成了家裡一樁沒了的心願。");
             if (dyn) dyn->regret = a->id;
+            if (player) noteThreadEnd("ambition", "志向「" + a->name + "」過了期限沒做成，留給下一代");
             head.ambition.clear();
             chooseAmbition(head, "放下了一樁做不成的心願");
         }

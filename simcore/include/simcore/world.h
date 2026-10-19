@@ -194,6 +194,21 @@ struct Feud {
     Id cause = kNone;         // the deed that started it
     Id last = kNone;          // the latest deed that fed it
     int truceUntil = -1;      // a priest's peace holds once a generation; a second one means less
+    // A story of the family's own (design/fun-r6.md D): once it has a second wrong in it the family is told, and from
+    // then on how it ends is told too (made up, handed on, judged, or faded).
+    bool told = false;
+    Id face = kNone;          // the one on the other side the quarrel is with (the doer or the victim of the latest wrong)
+    Id ourFace = kNone;       // who headed the family then: a new head is asked whether to take it on
+    int nextTurn = 0;         // the year the family is next asked what to do about it
+};
+
+// A thread of a generation that came to its end (a feud made up, a son who took orders), for the hand-over scene
+// and the 「這一代的線」 list.
+struct ThreadEnd {
+    int day = 0;
+    Id head = kNone;   // whose generation it was
+    std::string kind;  // feud | path | ambition
+    std::string text;  // 「和里夫家的恩怨：兩家結了親」
 };
 
 struct Dynasty {
@@ -202,6 +217,7 @@ struct Dynasty {
     std::vector<std::string> traditions;
     std::vector<Id> heads;  // for the player dynasty: every head in order
     std::vector<int> headSince;  // day each of them became head
+    std::vector<std::pair<double, double>> headStart;  // acres and money the house had when each of them took it up
     std::map<size_t, Id> heldFor;  // by index into heads: the child that head only held the house for (a regent, not a generation)
     double prestige = 0;
     std::string regret;          // the ambition the last head died without reaching; the next one may take it up
@@ -599,6 +615,16 @@ public:
     const std::vector<Belief>& beliefsOf(Id id) const { return beliefs_.at(id); }
     const Belief* beliefAbout(Id holder, Id deed) const;
     const std::vector<Feud>& feuds() const { return feuds_; }
+    // 這一代的線 (design/fun-r6.md D): what the acting head's generation is living through across the years (a feud, the
+    // ambition, a child on a road, a debt, the last head's wish), each with how it stands and how it can end.
+    struct Thread {
+        std::string kind, title, text, ends;
+        int since = 0;  // year it began
+    };
+    std::vector<Thread> threads() const;
+    const std::vector<ThreadEnd>& threadEnds() const { return threadEnds_; }
+    // How one line on the road ends for the family (a path station left), kept for the hand-over and the list.
+    void noteThreadEnd(const std::string& kind, const std::string& text);
     const Feud* feudBetween(Id dynA, Id dynB) const;
     int feudStage(Id personA, Id personB) const;  // between the two people's families
     std::string describeDeed(Id deed) const;      // "1414 年的「拒婚之辱」"
@@ -651,12 +677,14 @@ public:
     bool canHireKin(Id house) const;
     // 處境 and 人生路 (design/life-paths.md).
     std::string stationName(const Person& p) const;
+    // A road that ends somewhere (school, a master, service, the wars, a clerk's desk): its end is told and kept.
+    static bool onRoad(const std::string& station);
     std::string occupationName(const Person& p) const;  // "主婦", or "閨女" for a girl not yet married
     bool isAway(const Person& p) const { return p.alive() && p.awayFrom != kNone && p.household == kNone; }
     std::vector<Id> livingAway() const;  // alive and living outside the village, in id order
     std::string lifeLine(Id id) const;   // the road walked, as one line: "拜…為師，出師當鐵匠，娶了…，當了家"
     std::vector<Id> peopleToSee() const;  // family first, then those the head knows
-    void runCommands() { processCommands(); }
+    void runCommands() { processCommands(); ambitionNow(); }
     void setMoneyForTest(Id house, double money) { households_[house].money = money; }  // tests only
     void setFoodForTest(Id house, double days) { households_[house].food = consumption(households_[house]) * days; }  // tests only
     void startSeason() { rollSeason(); }  // on a season's first day, before it runs: free time and the family's wants  // carry out what the player just asked for, before the day runs
@@ -910,6 +938,12 @@ private:
     };
     Estate onHeadDied(Household& h, Id deadHead);
     bool wardHeld(const Household& h) const;  // the ward is alive and still this house's: at home, in service, or away and coming back
+    // Who would hold the house for `heir` (under 16) when `dead` dies: the widow at home, else the eldest grown of the
+    // blood at home, else anyone grown at home (kNone: nobody, the child keeps it).
+    Id regentFor(const Household& h, Id dead, Id heir) const;
+    // The hand-over as one scene (design/fun-r6.md D): what the new head takes on (land, money, debts, feuds, the old
+    // head's unfinished wish, the family's standing) and what they remember of the one before.
+    void takeOverScene(const Household& h, Id newHead, Id from, bool regencyEnded);
     void handOver(Household& h, Id to, const std::string& why);
     void obituary(Id id);
     void followSurvivingBranch(bool lineEnded = false);
@@ -1058,6 +1092,11 @@ private:
     void feudOnDeed(const Deed& d, const DeedDef& def, Id culprit);
     void endFeud(Id dynA, Id dynB, const std::string& how);
     void yearlyFeuds();
+    // Once a year, a feud the family was told of comes to a turn: the man it was with died, a new head took over, or
+    // the family is asked what it will do about it (amends, the priest, the manor court, or bide its time).
+    void yearlyFeudTurns();
+    void feudTurn(size_t i);  // index into feuds_ (the calls it makes may add feuds)
+    std::vector<ThreadEnd> threadEnds_;
     Id heirOf(const Household& h, Id dead) const;
     void takeLover(Id a, Id b);
     void endLiaison(Id a);
@@ -1158,6 +1197,8 @@ private:
     void yearlyAmbitions();
     void monthlyAmbition();
     void reviewAmbition(Household& h, bool yearTurn);
+    // The player's goal reached (or its road closed) is said the day it happens, not at the next month's review.
+    void ambitionNow();
     void checkMilestones(Person& head, bool quiet);
     void checkStandings();
     void yearlyTown();

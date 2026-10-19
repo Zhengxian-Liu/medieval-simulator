@@ -2,6 +2,7 @@
 // The forks themselves are ordinary events (data/events/paths.json); this file moves people between stations,
 // sends them out of the village and brings them back, and follows the ones away with a yearly reckoning.
 #include <algorithm>
+#include <set>
 #include <stdexcept>
 
 #include "simcore/world.h"
@@ -29,9 +30,18 @@ std::vector<Id> World::livingAway() const {
     return v;
 }
 
+bool World::onRoad(const std::string& station) {
+    static const std::set<std::string> roads = {"scholar", "town_apprentice", "town_journeyman", "apprentice", "servant", "town_servant",
+                                                "archer", "labourer", "town_labourer", "clerk", "chapman", "retainer", "fled"};
+    return roads.count(station) > 0;
+}
+
 void World::setStation(Id who, const std::string& station, int years, const std::string& note) {
     Person& p = people_[who];
     if (!p.alive()) return;
+    // The family's own leaving a road: how it ended is kept for the generation's account (design/fun-r6.md D).
+    if (onRoad(p.station) && p.station != station && !note.empty() && isPlayerFamily(p) && note.rfind("接著", 0) != 0)
+        noteThreadEnd("path", p.firstName + "：" + note);
     const StationDef* sd = defs_.station(station);
     if (!sd) throw std::runtime_error("unknown station " + station);
     bool wasAway = isAway(p);

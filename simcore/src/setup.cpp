@@ -109,6 +109,7 @@ void World::setupVillage() {
         people_[head].occupation = occ;
         dynasties_[dyn].heads.push_back(head);
         dynasties_[dyn].headSince.push_back(day_);
+        dynasties_[dyn].headStart.push_back({households_[h].acres, households_[h].money});
 
         Id wife = kNone;
         bool married = !t["married"].isBool() || t["married"].asBool();

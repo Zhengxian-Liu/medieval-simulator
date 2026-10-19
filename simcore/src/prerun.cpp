@@ -54,6 +54,7 @@ void World::handOver(Id house, Id dynasty, int playYear) {
     if (d.heads.empty() || d.heads.back() != h.head) {
         d.heads.push_back(h.head);
         d.headSince.push_back(day_);
+        d.headStart.push_back({h.acres, h.money});
     }
     log(1, "【開局】" + std::to_string(playYear) + " 年，" + villageName_ + "。" + fullName(head.id) + "（" +
                std::to_string(int(ageYears(head))) + " 歲" +
@@ -67,9 +68,11 @@ void World::handOver(Id house, Id dynasty, int playYear) {
             log(1, "【前情】" + std::string(kin == head.spouse ? "" : kin == head.father ? "父親" : "母親") + fullName(kin) + " " +
                        std::to_string(cfg_.startYear + people_[kin].deathDay / kDaysPerYear) + " 年因" + people_[kin].deathCause + "去世。");
     static const char* kStage[] = {"", "有嫌隙", "結了怨", "是世仇"};
-    for (const auto& f : feuds_) {
+    for (auto& f : feuds_) {
         if (f.stage <= 0 || (f.a != dynasty && f.b != dynasty)) continue;
         Id other = f.a == dynasty ? f.b : f.a;
+        f.told = true;  // the family's thread from the first day: its end will be told (arcs.cpp)
+        f.ourFace = head.id;
         log(1, "【前情】" + d.surname + " 家跟 " + dynasties_[other].surname + " 家" + kStage[std::min(3, f.stage)] +
                    (f.cause != kNone ? "，從" + describeDeed(f.cause) + "起。" : "。"));
     }

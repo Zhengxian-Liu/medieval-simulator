@@ -667,7 +667,9 @@ void World::yearlyWants() {
             dropWant(wt, "家沒了");
             continue;
         }
-        bool stale = day_ - wt.since > 6 * kDaysPerYear;
+        // A villager's want goes stale after six years; the family's own is the family's to give up (村裡在爭什麼), however
+        // old (one carried over from before the hand-over was dropped on the first day, design/fun-r6.md D).
+        bool stale = !inPlayerHouse(wt.house) && day_ - wt.since > 6 * kDaysPerYear;
         if (wt.kind == "parcel") {
             const Parcel& pc = parcels_[wt.object];
             if (pc.gone || pc.holder == wt.house) stale = true;

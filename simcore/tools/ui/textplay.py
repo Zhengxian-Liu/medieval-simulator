@@ -124,6 +124,14 @@ def render(v, full=False):
         for k in ("gates", "rival", "note"):
             if amb.get(k):
                 out.append(f"  {amb[k]}")
+    # 這一代的線: the generation's lines across the years (feud, ambition, children on a road, debt), and what has ended.
+    th = [t for t in s.get("threads", []) if t.get("kind") != "ambition"]
+    if th or s.get("threads_ended"):
+        out.append("這一代的線：")
+        for t in th:
+            out.append(f"  · {t['title']}" + (f"（{t['since']} 起）" if t.get("since", -1) >= 0 else "") + f"：{t['text']}" + (f"　→ {t['ends']}" if t.get("ends") else ""))
+        for e in s.get("threads_ended", []):
+            out.append(f"  ✓ {e['year']} {e['text']}")
     fine = (s.get("contest") or {}).get("fine")
     if fine:
         out.append(f"入地費 {fine['amount']} 便士，{fine['year']} 年 {fine['month']} 月前要交給領主{'（已寬限過）' if fine.get('extended') else ''}。"

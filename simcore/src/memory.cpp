@@ -178,6 +178,13 @@ void World::inheritMemories(Id dead) {
     std::vector<Id> heirs;
     for (Id c : p.children)
         if (people_[c].alive() && people_[c].household != kNone) heirs.push_back(c);
+    // The one taking up the house carries its quarrels and debts of gratitude too, child of the dead or not (a niece
+    // named heir): the house's story goes on with them (design/fun-r6.md D).
+    if (p.household != kNone && households_[p.household].head == dead) {
+        Id heir = heirOf(households_[p.household], dead);
+        if (heir != kNone && people_[heir].alive() && people_[heir].household != kNone && std::find(heirs.begin(), heirs.end(), heir) == heirs.end())
+            heirs.push_back(heir);
+    }
     // Strongest grudge and strongest debt of gratitude passed on, for the chronicle.
     double worst = 0, best = 0;
     std::string worstLine, bestLine;

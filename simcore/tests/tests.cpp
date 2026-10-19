@@ -147,6 +147,23 @@ struct WorldTest {
         w.addOpinion(w.lord_, h.head, "test", 60, 30);
     }
     static void rivalForLand(World& w) { w.rivalForLand(w.people_[w.playerHead()]); }
+    static void kill(World& w, Id id, const std::string& cause) { w.kill(id, cause); }
+    static void marry(World& w, Id a, Id b) { w.marry(a, b); }
+    static void yearlyWants(World& w) { w.yearlyWants(); }
+    static std::vector<Want>& wants(World& w) { return w.wants_; }
+    static std::vector<Feud>& feuds(World& w) { return w.feuds_; }
+    static void feudTurn(World& w, size_t i) { w.feudTurn(i); }
+    static void setStation(World& w, Id id, const std::string& st, int years, const std::string& note) { w.setStation(id, st, years, note); }
+    static Id heirOf(World& w, Id hid) { return w.heirOf(w.households_[hid], w.households_[hid].head); }
+    static ManorBond& bond(World& w) { return w.manorBond_; }
+    static void sendToService(World& w, Id who, Id master) {
+        w.moveTo(who, master);
+        w.people_[who].home = w.playerHousehold();
+        w.people_[who].flags.insert("in_service");
+    }
+    static void giveLand(World& w, Id hid, double acres) {
+        w.moveLand(w.people_[w.lord_].household, hid, acres, LandPick::CustomaryFirst, "test");
+    }
 };
 }  // namespace sim
 
@@ -757,7 +774,10 @@ int main() {
         WorldTest::house(w, hid).money = 3000;
         WorldTest::setAmbition(w, w.playerHead(), "manor_creditor");
         auto n = [&](const std::string& k) { return w.counters().count(k) ? w.counters().at(k) : 0; };
-        for (int d = 0; d < 12 * kDaysPerYear && !w.gameOver() && n("manor_loan:land") + n("manor_loan:mill") == 0; ++d) {
+        // The manor pays at term about half the time, when it has the coin: here what it owes is more than its chest
+        // could hold, so the term comes to a pledge however the dice fall (the odds are not what this test is about).
+        for (int d = 0; d < 20 * kDaysPerYear && !w.gameOver() && n("manor_loan:land") + n("manor_loan:mill") == 0; ++d) {
+            if (WorldTest::bond(w).house != kNone) WorldTest::bond(w).owed = 1e7;
             w.stepDay();
             if (w.person(w.playerHead()).ambition != "manor_creditor" && w.manorBond().house == kNone) {
                 WorldTest::house(w, w.playerHousehold()).money += 1000;
@@ -782,6 +802,280 @@ int main() {
         CHECK(bid, "no rival came for the family's land");
         CHECK(pressed, "a rival refused his bid did not go after the land");
         checkInvariants(w, "first house");
+    }
+
+    // ---- Round 6 D: every generation has a thread, and threads end (design/fun-r6.md D) ----
+    auto said = [](const World& w, size_t from, const std::string& what) {
+        for (size_t i = from; i < w.chronicle().size(); ++i)
+            if (w.chronicle()[i].text.find(what) != std::string::npos) return true;
+        return false;
+    };
+    // The family's own want, carried over from before the hand-over, is not dropped as stale on the first day.
+    {
+        Config c;
+        c.seed = 91;
+        c.prerun = 25;
+        World w(defs, c);
+        Id hid = w.playerHousehold();
+        Id parcel = kNone;
+        for (const auto& pc : w.parcels())
+            if (!pc.gone && pc.holder != hid && pc.holder != kNone) parcel = pc.id;
+        auto& ws = WorldTest::wants(w);
+        Want old;
+        old.id = static_cast<Id>(ws.size());
+        old.house = hid, old.kind = "parcel", old.object = parcel, old.why = "test", old.since = w.today() - 10 * kDaysPerYear;
+        ws.push_back(old);
+        WorldTest::yearlyWants(w);
+        CHECK(WorldTest::wants(w)[old.id].open, "the family's own want was dropped for being old");
+    }
+    // An ambition reached is said the same day, not at the next month's review.
+    {
+        Config c;
+        c.seed = 64;
+        World w(defs, c);
+        w.runYears(2);
+        while (w.dayOfMonth() != 10) w.stepDay();  // mid-month: the monthly review is not what tells it
+        Id hid = w.playerHousehold();
+        WorldTest::setAmbition(w, w.playerHead(), "more_land");
+        size_t before = w.chronicle().size();
+        WorldTest::giveLand(w, hid, std::max(5.0, std::ceil(w.household(hid).acres * 0.25)) + 1);
+        w.stepDay();
+        CHECK(said(w, before, "完成了志向「多種幾畝地」"), "a goal reached in the middle of a month was not told that day");
+    }
+    // Never offer an ambition its own check rejects: whatever a head is offered, its road is open at that moment.
+    {
+        for (uint64_t seed : {7ull, 64ull}) {
+            Config c;
+            c.seed = seed;
+            World w(defs, c);
+            EventRunner ev(const_cast<World&>(w));
+            int bad = 0;
+            for (int y = 0; y < 30 && !w.gameOver(); ++y) {
+                w.runYears(1);
+                for (const auto& h : w.households()) {
+                    if (h.extinct || h.head == kNone) continue;
+                    const Person& hp = w.person(h.head);
+                    for (const auto& a : defs.ambitions)
+                        if (!a.keep.isNull() && ev.eval(a.offer, hp, kNone) && !ev.eval(a.keep, hp, kNone)) {
+                            if (bad++ < 3) std::printf("  offered but closed: %s for %s\n", a.id.c_str(), w.fullName(hp.id).c_str());
+                        }
+                }
+            }
+            CHECK(bad == 0, "an ambition was offered whose own check would close it");
+        }
+    }
+    // 送一個兒子進教會 counts the house's boys, not only the head's own; the heir is not one of them; and when the road
+    // closes the line says why.
+    {
+        Config c;
+        c.seed = 72;
+        World w(defs, c);
+        w.runYears(3);
+        Id hid = w.playerHousehold();
+        Id head = w.playerHead();
+        Id heir = WorldTest::heirOf(w, hid);
+        EventRunner ev(w);
+        Json boy = Json::parse(R"({"house_boy": {}})");
+        if (heir != kNone) {
+            bool others = false;
+            for (Id m : w.household(hid).members)
+                others = others || (m != head && m != heir && w.person(m).sex == Sex::Male && w.person(m).dynasty == w.household(hid).dynasty &&
+                                    w.person(m).home == kNone);
+            CHECK(ev.eval(boy, w.person(head), kNone) == others, "house_boy does not match the boys at home other than the heir");
+        }
+        // Take every boy but the heir out of the house: the church road closes, and the line says why.
+        for (Id m : std::vector<Id>(w.household(hid).members))
+            if (m != head && m != heir && w.person(m).sex == Sex::Male) WorldTest::kill(w, m, "意外");
+        WorldTest::setAmbition(w, w.playerHead(), "son_to_church");
+        size_t before = w.chronicle().size();
+        w.runCommands();
+        if (!w.kinInChurch(w.playerDynasty()))
+            CHECK(said(w, before, "家裡已經沒有能送進教會的男孩了"), "the church ambition closed without saying why (or did not close)");
+    }
+    // A feud with a second wrong in it is told as the family's thread, shows in 這一代的線, and a wedding ends it, said so.
+    {
+        Config c;
+        c.seed = 64;
+        World w(defs, c);
+        w.runYears(2);
+        Id head = w.playerHead();
+        Id hid = w.playerHousehold();
+        Id foe = kNone, bride = kNone, groom = kNone;
+        Id lordDyn = w.person(w.lordId()).dynasty;
+        for (const auto& h : w.households()) {
+            if (h.extinct || h.head == kNone || h.id == hid || h.dynasty == w.playerDynasty() || h.dynasty == lordDyn) continue;
+            if (w.person(h.head).occupation == "priest") continue;
+            foe = h.head;
+            break;
+        }
+        CHECK(foe != kNone, "no other house to quarrel with");
+        if (foe != kNone) {
+            size_t before = w.chronicle().size();
+            w.recordDeed("public_insult", foe, head);
+            w.recordDeed("public_insult", foe, head);
+            CHECK(said(w, before, "有了嫌隙"), "a quarrel with two wrongs in it was not told as a thread");
+            bool listed = false;
+            for (const auto& t : w.threads()) listed = listed || t.kind == "feud";
+            CHECK(listed, "the feud is not in 這一代的線");
+            // The new head is asked whether to take on the old quarrel; with a yes to peace it ends, and is said to.
+            auto& fs = WorldTest::feuds(w);
+            size_t fi = fs.size();
+            for (size_t i = 0; i < fs.size(); ++i)
+                if (fs[i].told && (fs[i].a == w.playerDynasty() || fs[i].b == w.playerDynasty())) fi = i;
+            CHECK(fi < fs.size(), "no told feud");
+            if (fi < fs.size()) {
+                fs[fi].ourFace = foe;  // as if another had headed the family when it began
+                w.setChooser([](const World::ChoicePrompt& p) { return p.title == "上一代的帳" ? 0 : -1; });
+                before = w.chronicle().size();
+                WorldTest::feudTurn(w, fi);
+                CHECK(said(w, before, "【恩怨了結】"), "the new head's peace with the other house was not told as an end");
+                CHECK(!fs[fi].told && fs[fi].stage == 0, "the feud did not end on the new head's peace");
+                // Again, and this time to the manor court: either way the verdict ends it.
+                w.recordDeed("public_insult", foe, head);
+                w.recordDeed("public_insult", foe, head);
+                w.setChooser([](const World::ChoicePrompt& p) {
+                    for (size_t k = 0; k < p.options.size(); ++k)
+                        if (p.options[k].find("莊園法庭") != std::string::npos) return static_cast<int>(k);
+                    return -1;
+                });
+                fs[fi].nextTurn = 0;
+                before = w.chronicle().size();
+                WorldTest::feudTurn(w, fi);
+                CHECK(said(w, before, "【莊園法庭】") && said(w, before, "【恩怨了結】"), "the manor court's verdict did not end the feud");
+                w.setChooser(nullptr);
+                // A third time, and a wedding between the two houses ends it.
+                w.recordDeed("public_insult", foe, head);
+                w.recordDeed("public_insult", foe, head);
+                Id fh = w.person(foe).household;
+                for (Id m : w.household(fh).members)
+                    if (w.person(m).spouse == kNone && w.person(m).sex == Sex::Female && bride == kNone) bride = m;
+                for (Id m : w.household(hid).members)
+                    if (w.person(m).spouse == kNone && w.person(m).sex == Sex::Male && groom == kNone) groom = m;
+                if (bride != kNone && groom != kNone) {
+                    before = w.chronicle().size();
+                    WorldTest::marry(w, groom, bride);
+                    CHECK(said(w, before, "兩家結了親"), "a wedding between feuding houses did not end the feud");
+                }
+                bool kept = false;
+                for (const auto& e : w.threadEnds()) kept = kept || e.kind == "feud";
+                CHECK(kept, "the feud's end was not kept for the generation's account");
+            }
+            checkInvariants(w, "feud thread");
+        }
+    }
+    // The deathbed speaks to the real heir, and the hand-over says in one place what the new head takes on.
+    {
+        bool tried = false;
+        for (uint64_t seed : {64ull, 72ull, 7ull, 91ull}) {
+            Config c;
+            c.seed = seed;
+            World w(defs, c);
+            w.runYears(4);
+            Id hid = w.playerHousehold();
+            Id head = w.playerHead();
+            Id heir = WorldTest::heirOf(w, hid);
+            if (heir == kNone || w.person(heir).household == kNone || w.ageYears(w.person(heir)) < 12) continue;
+            tried = true;
+            std::string heirName = w.fullName(heir);
+            w.setChooser([](const World::ChoicePrompt& p) {
+                if (p.title != "床前") return -1;
+                for (size_t k = 0; k < p.options.size(); ++k)
+                    if (p.options[k].find("叮囑") != std::string::npos) return static_cast<int>(k);
+                return -1;
+            });
+            size_t before = w.chronicle().size();
+            WorldTest::kill(w, head, "熱病");
+            w.setChooser(nullptr);
+            bool toHeir = false;
+            for (size_t i = before; i < w.chronicle().size(); ++i)
+                toHeir = toHeir || (w.chronicle()[i].text.find("對 " + heirName) != std::string::npos);
+            CHECK(toHeir, "the deathbed words were not said to the heir");
+            CHECK(said(w, before, "【接下的】"), "the hand-over did not say what the new head takes on");
+            CHECK(said(w, before, "記得的"), "the hand-over did not say what the new head remembers of the old");
+            checkInvariants(w, "deathbed");
+            break;
+        }
+        CHECK(tried, "no seed had a grown heir to test the deathbed with");
+    }
+    // One out in service who will have the house (seed 72, 1347: the words went to a neighbour while the heir was at a
+    // master's): the servant is sent for before the last words, and those words and the house go to the same person.
+    {
+        bool tried = false;
+        for (uint64_t seed : {72ull, 64ull, 7ull, 91ull, 58ull}) {
+            Config c;
+            c.seed = seed;
+            World w(defs, c);
+            w.runYears(4);
+            Id hid = w.playerHousehold();
+            Id head = w.playerHead();
+            if (w.person(head).sex != Sex::Male) continue;
+            Id son = kNone;
+            for (Id k : w.person(head).children)
+                if (w.person(k).alive() && w.person(k).household == hid && w.ageYears(w.person(k)) >= 12) son = k;
+            Id master = kNone;
+            for (const auto& oh : w.households())
+                if (!oh.extinct && oh.id != hid && oh.head != kNone && oh.house != "manor") master = oh.id;
+            if (son == kNone || master == kNone) continue;
+            tried = true;
+            // No child of his own takes it by blood: the son he named, now away at a master's, does.
+            for (Id k : w.person(head).children) WorldTest::person(w, k).flags.insert("disowned");
+            WorldTest::person(w, son).flags.insert("designated_heir");
+            WorldTest::sendToService(w, son, master);
+            std::string sonName = w.fullName(son);
+            w.setChooser([](const World::ChoicePrompt& p) {
+                if (p.title != "床前") return -1;
+                for (size_t k = 0; k < p.options.size(); ++k)
+                    if (p.options[k].find("叮囑") != std::string::npos) return static_cast<int>(k);
+                return -1;
+            });
+            size_t before = w.chronicle().size();
+            WorldTest::kill(w, head, "熱病");
+            w.setChooser(nullptr);
+            bool toSon = false, toOther = false;
+            for (size_t i = before; i < w.chronicle().size(); ++i) {
+                const std::string& t = w.chronicle()[i].text;
+                if (t.find("〔床前〕") == std::string::npos) continue;
+                (t.find("對 " + sonName) != std::string::npos ? toSon : toOther) = true;
+            }
+            const Household& h = w.household(hid);
+            CHECK(h.head == son || h.ward == son, "the son the head named did not get the house");
+            CHECK(toSon && !toOther, "the last words went to someone other than the one who got the house");
+            checkInvariants(w, "deathbed servant heir");
+            break;
+        }
+        CHECK(tried, "no seed had a son to send into service for the deathbed test");
+    }
+    // A boy at school whose land is held for him stays at his books when the one holding it dies; the term ends with a line.
+    {
+        bool tried = false;
+        for (uint64_t seed : {64ull, 72ull, 7ull, 91ull, 58ull}) {
+            Config c;
+            c.seed = seed;
+            World w(defs, c);
+            w.runYears(3);
+            Id hid = w.playerHousehold();
+            Id head = w.playerHead();
+            const Person& hp = w.person(head);
+            Id heir = WorldTest::heirOf(w, hid);
+            if (heir == kNone || hp.spouse == kNone || !w.person(hp.spouse).alive() || w.person(hp.spouse).household != hid ||
+                w.person(heir).household != hid || heir == hp.spouse)
+                continue;
+            tried = true;
+            WorldTest::person(w, heir).birthDay = w.today() - 12 * kDaysPerYear;
+            WorldTest::setStation(w, heir, "scholar", 3, "進了文法學校");
+            WorldTest::kill(w, head, "熱病");
+            CHECK(w.person(heir).station == "scholar", "the heir at school was called home though his mother keeps the land for him");
+            CHECK(w.household(hid).ward == heir, "the land is not held for the heir at school");
+            size_t before = w.chronicle().size();
+            for (int d = 0; d < 5 * kDaysPerYear && w.person(heir).station == "scholar"; ++d) w.stepDay();
+            bool ended = false;
+            for (const auto& e : w.threadEnds()) ended = ended || (e.kind == "path" && e.day >= w.today() - 5 * kDaysPerYear && e.text.rfind(w.person(heir).firstName, 0) == 0);
+            CHECK(w.person(heir).station != "scholar" && ended, "the school term did not end with an outcome kept for the family");
+            (void)before;
+            checkInvariants(w, "heir at school");
+            break;
+        }
+        CHECK(tried, "no seed had a head with a wife and an heir at home");
     }
 
     if (failures == 0) std::printf("all tests passed\n");

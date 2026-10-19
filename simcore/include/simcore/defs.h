@@ -152,6 +152,7 @@ struct AmbitionDef {
     std::string final;                  // the last step in words (the goal itself)
     std::string hint;                   // how the player moves it on
     Json keep;                          // conditions it can still be done under; false: 【志向受挫】 (null: always)
+    std::string lost;                   // why, when keep fails: said on the 【志向受挫】 line
     std::string office;                 // the post it is about: its conditions are shown with it, each ✓ or ✗
 };
 

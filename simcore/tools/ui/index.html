@@ -206,6 +206,16 @@ function render() {
   renderTabs();
 }
 
+// 這一代的線 (design/fun-r6.md D): the generation's lines across the years, how each can end, and what has ended.
+function threadsHtml(s) {
+  const live = (s.threads || []).filter((t) => t.kind !== "ambition");
+  const ended = s.threads_ended || [];
+  if (!live.length && !ended.length) return "";
+  const rows = live.map((t) => `<div title="${esc(t.ends || "")}">· <b>${esc(t.title)}</b>${t.since >= 0 ? `（${t.since} 起）` : ""}：${esc(t.text)}${t.ends ? `<span class="muted" style="font-size:12px">　${esc(t.ends)}</span>` : ""}</div>`)
+    .concat(ended.map((e) => `<div class="muted">✓ ${e.year} ${esc(e.text)}</div>`));
+  return `<div class="stat" style="display:block;font-size:13px;margin-top:4px">這一代的線${rows.join("")}</div>`;
+}
+
 function renderTop() {
   const s = view.state;
   if (!s || !s.house) { $("top").innerHTML = "<h1>載入中…</h1>"; return; }
@@ -227,7 +237,7 @@ function renderTop() {
     <span class="stat">地 <b>${h.acres}</b> 畝${h.freehold > 0 ? `（自由地 ${h.freehold}）` : ""}</span>
     ${h.debt > 0 ? `<span class="stat lean" title="${esc(h.debt_text || "")}">欠債 ${h.debt} 便士${h.debt_text ? `<span class="muted" style="font-size:12px">（${esc(h.debt_text)}）</span>` : ""}</span>` : ""}
     ${s.contest && s.contest.fine ? `<span class="stat lean" title="家主過世，繼承要付給領主的入地費">入地費 ${s.contest.fine.amount} 便士，${s.contest.fine.year} 年 ${s.contest.fine.month} 月前${s.contest.fine.extended ? "（已寬限過）" : ""}</span>` : ""}
-    ${amb}`;
+    ${amb}${threadsHtml(s)}`;
   $("timeleft").textContent = seasonOpen() ? `這一季還有 ${s.time_left} 段空閒` : "";
 }
 

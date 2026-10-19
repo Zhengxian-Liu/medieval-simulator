@@ -717,6 +717,22 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
             if (w.people_[c].alive() && w.people_[c].household != kNone && eval(v, w.people_[c], p.id)) return true;
         return false;
     }
+    if (k == "house_boy") {
+        // A boy the house could send down a road (design/fun-r6.md D): the head's own sons, or the house's blood under its
+        // roof (a stepson, a younger brother), never the heir, who stays for the land; at home, in service, or away and
+        // coming back. The same boys the plans that serve it can pick (kin_at_home).
+        if (p.household == kNone) return false;
+        const Household& hh = w.households_[p.household];
+        Id heir = hh.head != kNone ? w.heirOf(hh, hh.head) : kNone;
+        for (const auto& q : w.people_) {
+            if (!q.alive() || q.sex != Sex::Male || q.id == p.id || q.id == heir || q.id == hh.ward) continue;
+            bool mine = std::find(p.children.begin(), p.children.end(), q.id) != p.children.end();
+            if (!mine && (hh.dynasty == kNone || q.dynasty != hh.dynasty)) continue;
+            bool here = (q.household == hh.id && q.home == kNone) || q.home == hh.id || (w.isAway(q) && q.awayFrom == hh.id);
+            if (here && eval(v, q, p.id)) return true;
+        }
+        return false;
+    }
     if (k == "any_descendant") {
         // A living child or grandchild, under the roof or away (in service, at the monastery, in town).
         for (Id c : p.children) {

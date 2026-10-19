@@ -109,6 +109,7 @@ void World::stepDay() {
             yearlyService();
             yearlyAway();
             yearlyFeuds();
+            yearlyFeudTurns();
             yearlyLiaisons();
             events.pulse("yearly");
             pruneOpinions();
@@ -161,6 +162,7 @@ void World::stepDay() {
             if (people_[i].household == kNone) people_[i].pregnantDue = -1;
             else giveBirth(people_[i]);
         }
+    ambitionNow();
 
     ++day_;
 }
