@@ -248,7 +248,13 @@ function threadsHtml(s) {
 // generation's lines, the house rules) only when opened.
 function renderTop() {
   const s = view.state;
-  if (!s || !s.house) { $("top").innerHTML = `<div class="row"><h1>載入中…</h1></div>`; return; }
+  if (!s || !s.house) {
+    // After the line has ended the last state has only the date: say so, and clear the family's cards.
+    const done = view && view.ended;
+    $("top").innerHTML = `<div class="row"><h1>${done ? "遊戲結束" : "載入中…"}</h1>${done && s && s.date ? `<span class="stat"><b>${s.date.year}</b> 年 ${esc(s.date.season)}</span>` : ""}</div>`;
+    if (done && $("family")) $("family").innerHTML = "";
+    return;
+  }
   const h = s.house, rep = s.reputation, amb = s.ambition, fine = s.contest && s.contest.fine;
   const line1 = `<div class="row"><h1>${esc(h.surname)}家</h1>
     <span class="stat"><b>${s.date.year}</b> 年 ${esc(s.date.season)}</span>
@@ -469,7 +475,7 @@ function ledgerHtml(l) {
   const grain = g ? `買糧 ${g.times} 次，${g.days} 天，${buy ? -buy[1] : g.pence} 便士` : buy ? `買糧 ${signed(buy[1])}` : "";
   const ins = (l.ins || []).map(([w, v]) => `${esc(w)} ${signed(v)}`);
   const outs = (l.outs || []).filter((x) => x[0] !== "買糧").map(([w, v]) => `${esc(w)} ${signed(v)}`).concat(grain ? [grain] : []);
-  const head = l.from === l.to ? `錢 ${l.from} 便士，沒有進出` : `錢 ${l.from} → ${l.to} 便士`;
+  const head = l.from !== l.to ? `錢 ${l.from} → ${l.to} 便士` : (l.ins || []).length || (l.outs || []).length ? `錢 ${l.from} 便士，進出相抵` : `錢 ${l.from} 便士，沒有進出`;
   const top = [...(l.ins || []), ...(l.outs || [])].sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0];
   if (!ins.length && !outs.length) return `<div class="blk"><span class="blk-t">這一季的帳</span>　${head}</div>`;
   return `<div class="blk"><details><summary><span class="blk-t">這一季的帳</span>　${head}${top ? `（${esc(top[0] === "買糧" && grain ? grain : top[0] + " " + signed(top[1]))}${ins.length + outs.length > 1 ? "…" : ""}）` : ""} ▸</summary>

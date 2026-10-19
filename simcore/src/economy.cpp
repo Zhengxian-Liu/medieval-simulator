@@ -1058,15 +1058,17 @@ void World::askToFeed(Household& h) {
     what.push_back(3);
     feedAskedUntil_[h.id] = day_ + (again ? kDaysPerYear : kDaysPerYear / 2);  // the same house not every season
     feedAskedUntil_[kAnyHouse] = day_ + kDaysPerMonth;
-    ++feedCardsThisYear_;
+    if (chooser_ && day_ >= handedOver_) ++feedCardsThisYear_;  // (the years before the hand-over are not the player's)
     int children = 0;
     for (Id m : h.members)
         if (ageYears(people_[m]) < 12) ++children;
     // Whose house it is, said so the player can place it: a son who married into his wife's house is 「入贅」 there.
     const bool sheHeads = people_[h.head].sex == Sex::Female;
-    const bool marriedIn = kin != kNone && people_[kin].spouse == h.head;
+    // (Only a man marries in: a daughter or sister married to the head is 「嫁到」 his house.)
+    const bool marriedIn = kin != kNone && people_[kin].spouse == h.head && people_[kin].sex == Sex::Male;
+    const bool marriedTo = kin != kNone && people_[kin].spouse == h.head && people_[kin].sex == Sex::Female;
     std::string who = kin == h.head ? kinLabel(ours, kin) + " " + fullName(h.head) + " 家"
-                      : kin != kNone ? fullName(h.head) + " 家（你家的" + kinWord(ours, kin) + " " + shortName(kin) + (marriedIn ? " 入贅在" : " 在") +
+                      : kin != kNone ? fullName(h.head) + " 家（你家的" + kinWord(ours, kin) + " " + shortName(kin) + (marriedIn ? " 入贅在" : marriedTo ? " 嫁到" : " 在") +
                                            (sheHeads ? "她" : "他") + "家）"
                                      : "好朋友 " + fullName(h.head) + " 家";
     int days = static_cast<int>(h.food / std::max(1.0, daily));

@@ -286,17 +286,27 @@ public:
     }
     std::string shortenNames(std::string t, int key) {
         auto& seen = namesSeen_[key];
+        // Longest names first, each mention swapped for a marker as it is found, so 「奧斯伯特·阿特伍德」 is never
+        // found inside 「小奧斯伯特·阿特伍德」 (whole names only).
+        std::vector<std::string> said;
         for (const auto& n : names_) {
             size_t at = t.find(n.full);
             if (at == std::string::npos) continue;
-            bool first = !seen.count(n.full);
+            bool first = !seen.count(n.full);  // the first mention in the season stays whole; later ones the given name
             seen.insert(n.full);
-            // The first mention in the season stays whole; every later one is the given name.
-            size_t from = first ? at + n.full.size() : at;
-            while ((at = t.find(n.full, from)) != std::string::npos) {
-                t.replace(at, n.full.size(), n.given);
-                from = at + n.given.size();
+            for (; at != std::string::npos; at = t.find(n.full, at)) {
+                std::string mark = "\x01" + std::to_string(said.size()) + "\x02";
+                said.push_back(first ? n.full : n.given);
+                first = false;
+                t.replace(at, n.full.size(), mark);
+                at += mark.size();
             }
+        }
+        for (size_t a = t.find('\x01'); a != std::string::npos; a = t.find('\x01', a)) {
+            size_t b = t.find('\x02', a);
+            const std::string& name = said[std::stoul(t.substr(a + 1, b - a - 1))];
+            t.replace(a, b - a + 1, name);
+            a += name.size();
         }
         return t;
     }
@@ -321,8 +331,16 @@ public:
             if (wt.open && wt.house == hh) nearThings_.push_back(w.wantThing(wt));
     }
     bool touches(const std::string& t) const {
+        // A whole name: not the tail of a longer one (「小威廉·庫柏」 is not 「威廉·庫柏」).
+        auto whole = [&](const std::string& n) {
+            for (size_t at = t.find(n); at != std::string::npos; at = t.find(n, at + 1)) {
+                std::string before = at >= 3 ? t.substr(at - 3, 3) : "";
+                if (before != "小" && before != "二" && before != "三" && before != "老" && before != "大") return true;
+            }
+            return false;
+        };
         for (const auto& n : nearNames_)
-            if (t.find(n) != std::string::npos) return true;
+            if (whole(n)) return true;
         for (const auto& n : nearThings_)
             if (!n.empty() && t.find(n) != std::string::npos) return true;
         return false;
@@ -333,6 +351,11 @@ public:
     // The card the player just answered, so the line it leaves becomes 〔卡名〕選擇 → 結果 even when the sim
     // writes the outcome without a （選擇：…） mark.
     std::string answeredTitle, answeredChoice;
+    int answeredDay = -1;
+    // A sub-line (indented) belongs to the entry before it: none when that line was dropped or folded (the road's
+    // conditions, a grain buy), and it stands alone when that entry is in another season.
+    bool dropSubs_ = false;
+    int parentKey_ = -1;
     static double numberBefore(const std::string& t, const std::string& mark) {
         size_t at = t.find(mark);
         if (at == std::string::npos) return 0;
@@ -359,10 +382,17 @@ public:
         t.erase(0, t.find_first_not_of(' '));
         if (t.empty()) return;
         // The road's conditions are the top bar's to show (its expanded part), never the chronicle's.
-        if (t.rfind("路怎麼走", 0) == 0 || (t.find("的條件：") != std::string::npos && (t.find("✓") != std::string::npos || t.find("✗") != std::string::npos)))
+        if (t.rfind("路怎麼走", 0) == 0 || (t.find("的條件：") != std::string::npos && (t.find("✓") != std::string::npos || t.find("✗") != std::string::npos))) {
+            if (!indented) dropSubs_ = true;
             return;
+        }
         int key = seasonKey(e.day);
-        bool sub = indented || t.rfind("→", 0) == 0 || t.rfind("（", 0) == 0;
+        // Only an indented line is another's sub-line: a bare 「→ …」 or 「（…）」 is logged on its own (sometimes before
+        // the line it follows from) and stands as its own entry.
+        bool sub = indented;
+        if (sub && dropSubs_) return;
+        if (sub && parentKey_ != key) sub = false;
+        if (!sub) dropSubs_ = false;
         std::string cls = sub ? "sub" : "fam";
         bool near = false;
         if (t.rfind("家裡買了 ", 0) == 0 && t.find("天的糧") != std::string::npos) {
@@ -370,6 +400,7 @@ public:
             ++g.times;
             g.days += numberBefore(t, "天的糧");
             g.pence += numberBefore(t, "便士）");
+            if (!indented) dropSubs_ = true;
             return;
         }
         if (!sub && (t.rfind("【消息】", 0) == 0 || t.rfind("【風聲】", 0) == 0 || t.rfind("【傳聞】", 0) == 0)) {
@@ -391,7 +422,7 @@ public:
                     break;
                 }
             }
-            bool mine = !title.empty() && title == answeredTitle;
+            bool mine = !title.empty() && title == answeredTitle && e.day == answeredDay;
             if (chEnd != std::string::npos || mine) {
                 // The choice and what came of it, one entry: 〔卡名〕選擇 → 結果. The mark may close the line (the
                 // outcome before it) or sit in the middle (the situation before it, the outcome after).
@@ -418,6 +449,7 @@ public:
             size_t open = t.rfind("（", at);
             if (open != std::string::npos) origin = t.substr(open + 3, at - open - 3);
         }
+        if (!sub) parentKey_ = key;
         t = shortenNames(houseStyle(t), key);
         Obj o;
         o.n("skey", key).text("season", seasonLabel(key)).n("year", key / 4).text("cls", cls).text("text", t);
@@ -531,6 +563,34 @@ public:
         return arr(out);
     }
 
+    // What happened since the last state, as the chronicle tells it (also on the last state, after the line ends).
+    void chronicleInto(Obj& o) {
+        const World& w = w_;
+        std::vector<std::string> lines;
+        const auto& log = w.chronicle();
+        if (shown < log.size()) {
+            refreshNames();
+            refreshNear();
+        }
+        for (; shown < log.size(); ++shown) {
+            if (log[shown].importance == 2) continue;
+            std::string t = log[shown].text;
+            t.erase(0, t.find_first_not_of(' '));
+            lines.push_back(Obj().n("year", w.config().startYear + log[shown].day / kDaysPerYear).n("kind", log[shown].importance).text("text", t).done());
+            takeLine(log[shown]);
+        }
+        answeredTitle.clear();  // its outcome, if any, has been told by now
+        o.raw("chronicle", arr(lines));  // (the old flat list, kept until every client reads "entries")
+        // Each season's books once it has closed, as an entry of that season (design/ui-text.md 這一季的帳).
+        for (const auto& b : w.seasonBooks())
+            if (b.day > lastBooksDay_) {
+                lastBooksDay_ = b.day;
+                if (b.day >= w.handedOver()) entries_.push_back(booksJson(seasonKey(b.day), b.start, b.end, b.items));
+            }
+        o.raw("entries", arr(entries_));
+        entries_.clear();
+    }
+
     std::string state(bool withActions) {
         const World& w = w_;
         Id head = w.playerHead();
@@ -538,7 +598,10 @@ public:
         Obj o;
         o.text("type", "state");
         o.raw("date", Obj().n("year", w.year()).n("month", w.month() + 1).text("season", seasonName(w.month())).done());
-        if (head == kNone || hh == kNone) return o.done();
+        if (head == kNone || hh == kNone) {
+            chronicleInto(o);  // the death that ends the line is told too
+            return o.done();
+        }
         const Household& h = w.households()[hh];
         const Person& hp = w.people()[head];
         int rung = w.standing(hh);
@@ -997,29 +1060,7 @@ public:
             o.raw("plans", arr(plans));
         }
 
-        // What happened since the last state, as the chronicle tells it.
-        std::vector<std::string> lines;
-        const auto& log = w.chronicle();
-        if (shown < log.size()) {
-            refreshNames();
-            refreshNear();
-        }
-        for (; shown < log.size(); ++shown) {
-            if (log[shown].importance == 2) continue;
-            std::string t = log[shown].text;
-            t.erase(0, t.find_first_not_of(' '));
-            lines.push_back(Obj().n("year", w.config().startYear + log[shown].day / kDaysPerYear).n("kind", log[shown].importance).text("text", t).done());
-            takeLine(log[shown]);
-        }
-        o.raw("chronicle", arr(lines));  // (the old flat list, kept until every client reads "entries")
-        // Each season's books once it has closed, as an entry of that season (design/ui-text.md 這一季的帳).
-        for (const auto& b : w.seasonBooks())
-            if (b.day > lastBooksDay_) {
-                lastBooksDay_ = b.day;
-                if (b.day >= w.handedOver()) entries_.push_back(booksJson(seasonKey(b.day), b.start, b.end, b.items));
-            }
-        o.raw("entries", arr(entries_));
-        entries_.clear();
+        chronicleInto(o);
         // The season so far, the same way.
         if (seasonStart.head != kNone && hh != kNone) {
             std::map<std::string, double> items;
@@ -1131,13 +1172,17 @@ int main(int argc, char** argv) {
                 aiPlays = true;
                 return -1;
             }
-            if (what == "ai") return -1;
+            if (what == "ai") {
+                web.answeredTitle.clear();  // the AI's answer is not shown as the player's
+                return -1;
+            }
             int k = toInt(m, "index", -1);
             if (what == "choose" && k >= 0 && k < static_cast<int>(c.options.size())) {
                 // Remembered for the chronicle (Web::takeLine); a long option keeps only what comes before its （…）.
                 std::string o = tidyText(c.options[k]);
                 size_t paren = o.find("（");
                 web.answeredTitle = c.title;
+                web.answeredDay = w.today();
                 web.answeredChoice = paren != std::string::npos && paren > 18 ? o.substr(0, paren) : o;
                 return k;
             }

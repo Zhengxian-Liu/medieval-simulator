@@ -38,17 +38,21 @@ void EventRunner::pulse(const std::string& kind) {
                 target = pickTarget(ev, p);
                 if (target == kNone) continue;
             }
+            pulsing_ = true;
             fire(ev, p, target);
+            pulsing_ = false;
             if (w_.gameOver_) return;
         }
     }
 }
 
-// One card held back at the opening, if it still fits (the person about, the target too, its conditions still holding).
+// One card held back at the opening, if it still fits (the person about, the target too, its conditions still holding,
+// and not met since); one held more than a season is let go, its moment past.
 void World::releaseDeferredCard() {
     while (!deferredCards_.empty() && !gameOver_) {
         DeferredCard d = deferredCards_.front();
         deferredCards_.erase(deferredCards_.begin());
+        if (day_ - d.day > 3 * kDaysPerMonth) continue;
         const EventDef* ev = nullptr;
         for (const auto& e : defs_.events)
             if (e.id == d.event) ev = &e;
@@ -59,9 +63,16 @@ void World::releaseDeferredCard() {
     }
 }
 
+std::vector<std::pair<std::string, Id>> World::deferredForTest() const {
+    std::vector<std::pair<std::string, Id>> out;
+    for (const auto& d : deferredCards_) out.push_back({d.event, d.who});
+    return out;
+}
+
 bool EventRunner::refire(const EventDef& ev, Person& p, Id target) {
     Id playerHead = w_.playerHousehold_ != kNone ? w_.households_[w_.playerHousehold_].head : kNone;
     if (!eligible(ev, p, playerHead) || !eval(ev.conditions, p, target)) return false;
+    if (target != kNone && !ev.target["conditions"].isNull() && !eval(ev.target["conditions"], w_.people_[target], p.id)) return false;
     fire(ev, p, target);
     return true;
 }
@@ -238,10 +249,17 @@ bool EventRunner::playersToAnswer(const EventDef& ev, const Person& p) const {
 
 void EventRunner::fire(const EventDef& ev, Person& p, Id target) {
     // Past the opening's few questions, a card that would stop the player waits for the first year to be under way.
-    if (w_.openingFull() && ev.ask && ev.options.size() > 1 && !(ev.routine && w_.routineByRule_) && playersToAnswer(ev, p)) {
-        w_.deferredCards_.push_back({ev.id, p.id, target});
+    // Only a pulse card waits: one sent by a signal (a death, a deed, a fine) is about its moment and is asked now.
+    if (pulsing_ && w_.openingFull() && ev.ask && ev.options.size() > 1 && !(ev.routine && w_.routineByRule_) && playersToAnswer(ev, p)) {
+        auto& q = w_.deferredCards_;
+        bool queued = std::any_of(q.begin(), q.end(), [&](const World::DeferredCard& d) { return d.event == ev.id && d.who == p.id; });
+        if (!queued) q.push_back({ev.id, p.id, target, w_.day_});
         return;
     }
+    // Asked now: a copy still waiting is not asked a second time.
+    w_.deferredCards_.erase(std::remove_if(w_.deferredCards_.begin(), w_.deferredCards_.end(),
+                                           [&](const World::DeferredCard& d) { return d.event == ev.id && d.who == p.id; }),
+                            w_.deferredCards_.end());
     bookAs_ = ev.title;
     const OptionDef& o = ev.options[chooseOption(ev, p, target)];
     natureStress(ev, o, p, target);
@@ -595,9 +613,18 @@ int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
             prompt.situation = format(*when, p, target);
         } else if (!ev.prompt.empty()) {
             // Another way of telling it each time, until the house has heard them all.
-            const std::string& said = ev.prompts.size() > 1
-                                          ? ev.prompts[w_.freshVariant(p.household, ev.id, static_cast<int>(ev.prompts.size()), w_.rngEvents_)]
-                                          : ev.prompt;
+            std::string said = ev.prompts.size() > 1
+                                   ? ev.prompts[w_.freshVariant(p.household, ev.id, static_cast<int>(ev.prompts.size()), w_.rngEvents_)]
+                                   : ev.prompt;
+            // No priest in the village: a way of telling it that has him in it gives way to one without.
+            bool priestHere = w_.priest_ != kNone && w_.people_[w_.priest_].alive() && w_.people_[w_.priest_].household != kNone;
+            if (!priestHere && said.find("神父") != std::string::npos) {
+                for (const auto& v : ev.prompts)
+                    if (v.find("神父") == std::string::npos) {
+                        said = v;
+                        break;
+                    }
+            }
             prompt.situation = format(said, p, target);
         } else {
             // The situation: what every option's line agrees on, up to the last full stop or comma in it,

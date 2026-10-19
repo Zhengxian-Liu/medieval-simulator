@@ -444,7 +444,10 @@ std::string World::kinLabel(Id a, Id b) const {
     Id hh = pb.household;
     bool spouseHere = pb.spouse != kNone && people_[pb.spouse].alive() && people_[pb.spouse].household == hh;
     if (hh != kNone && households_[hh].head == b && spouseHere && pb.sex == Sex::Female)
-        note = "她當家：地是她的，" + shortName(pb.spouse) + "入贅";
+        // Her husband married in only if the house is her own family's and not his; otherwise she simply keeps it.
+        note = households_[hh].dynasty == pb.dynasty && people_[pb.spouse].dynasty != pb.dynasty
+                   ? "她當家：地是她家的，" + shortName(pb.spouse) + "入贅"
+                   : std::string("她當家");
     else if (!inLaw && hh != kNone && !inPlayerHouse(hh) && pb.spouse != kNone && surname(hh) != "" && surname(hh) != surname(people_[a].household))
         note = (pb.sex == Sex::Female && households_[hh].dynasty == people_[pb.spouse].dynasty ? "嫁到" : pb.sex == Sex::Male && households_[hh].dynasty != pb.dynasty ? "入贅到" : "在") +
                surname(hh) + "家";

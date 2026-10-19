@@ -733,6 +733,7 @@ public:
     void setFoodForTest(Id house, double days) { households_[house].food = consumption(households_[house]) * days; }  // tests only
     void setHealthForTest(Id person, double health) { people_[person].health = health; }  // tests only
     void killForTest(Id person) { kill(person, "test"); }                                    // tests only
+    std::vector<std::pair<std::string, Id>> deferredForTest() const;                          // tests only: waiting cards
     void startSeason() { rollSeason(); }  // on a season's first day, before it runs: free time and the family's wants  // carry out what the player just asked for, before the day runs
     // The season at a glance, and what changed since a snapshot taken at its start.
     std::string familyGlance() const;
@@ -915,6 +916,7 @@ private:
     int lastAgendaSeason_ = -1;
     std::map<std::string, std::string> agendaDone_;  // id → title, done this season
     mutable std::map<Id, std::string> marks_;  // houseMark: the namesake mark each living person was last given
+    mutable std::map<Id, Id> markHouse_;       // ... and the house it was given in (a mark does not move house with them)
     std::map<std::pair<Id, std::string>, std::vector<int>> toldPrompts_;  // (household, event) -> prompt variants told
     static constexpr int kRepeatYears = 3;
     bool metLately(Id key, const std::string& story) const {
@@ -961,12 +963,14 @@ private:
     std::map<Id, int> noticed_;          // far villagers drawn closer for a while (until day)
     std::map<Id, int> lastStanding_;     // household -> rung last seen
     bool pendingAmbition_ = false;       // the first head picks an ambition on the first day
-    // The opening (design/status-2026-10-19.md): at most kOpeningCards questions before the first season's page; an
-    // event card that would ask past that waits in deferredCards_ and comes later in the first year, one a month.
+    // The opening (design/status-2026-10-19.md): at most kOpeningCards questions before the first season's page, and
+    // in the first year at most kOpeningCards a month. A pulse event card (never one sent by a signal: a death, a deed,
+    // a fine falling due) that would ask past that waits in deferredCards_ and comes one a month while it still holds;
+    // a question the family's own ways can answer (askPlayer) is answered by them meanwhile.
     // (Also any one day: see cardsOnDay_.)
     static constexpr int kOpeningCards = 2;
     int openingAsked_ = 0;
-    struct DeferredCard { std::string event; Id who = kNone, target = kNone; };
+    struct DeferredCard { std::string event; Id who = kNone, target = kNone; int day = 0; };
     std::vector<DeferredCard> deferredCards_;
     bool inOpening() const {
         const int q = 3 * kDaysPerMonth;
@@ -974,13 +978,18 @@ private:
     }
     // The same on any one day (the new year's cards all come on its first day): two, and the rest wait their month.
     int cardsDay_ = -1, cardsOnDay_ = 0;
+    int cardsMonth_ = -1, cardsInMonth_ = 0;  // the first year's months: kOpeningCards each
+    bool firstYear() const { return day_ >= handedOver_ && day_ < handedOver_ + kDaysPerYear; }
     bool openingFull() const {
-        return chooser_ && ((inOpening() && openingAsked_ >= kOpeningCards) || (cardsDay_ == day_ && cardsOnDay_ >= kOpeningCards));
+        return chooser_ && ((inOpening() && openingAsked_ >= kOpeningCards) || (cardsDay_ == day_ && cardsOnDay_ >= kOpeningCards) ||
+                            (firstYear() && cardsMonth_ == day_ / kDaysPerMonth && cardsInMonth_ >= kOpeningCards));
     }
     void noteCardAsked() {
         if (inOpening()) ++openingAsked_;
         if (cardsDay_ != day_) cardsDay_ = day_, cardsOnDay_ = 0;
         ++cardsOnDay_;
+        if (cardsMonth_ != day_ / kDaysPerMonth) cardsMonth_ = day_ / kDaysPerMonth, cardsInMonth_ = 0;
+        ++cardsInMonth_;
     }
     void releaseDeferredCard();
     int handedOver_ = 0;                 // day the player took the family over (Config::prerun)
@@ -1087,6 +1096,7 @@ private:
     void inheritRegard(Id dead, Id heir);  // the village's regard for the dead, half of it, passes to the one taking over
     void monthlyParish();                  // the priest gone: after a few months the bishop sends another
     int priestGoneSince_ = -1;
+    std::vector<Id> glebe_;  // the parcels the priest's house held while he lived: what the next one takes back
     void monthlyWards();                   // an heir held for turns 16: the land is handed over
     void marry(Id a, Id b);
     std::string pickName(Sex sex, Id father, Id mother);

@@ -1741,7 +1741,7 @@ int main() {
         // (in the first of a few villages with someone married in and near kin in another house)
         {
             int tested = 0;
-            for (int seed : {58, 3, 5, 7, 72, 91, 64}) {
+            for (int seed : {58, 3, 5, 7, 72, 91, 64, 9, 14, 16, 18, 20}) {
                 Config vc;
                 vc.seed = seed;
                 vc.prerun = 25;
@@ -2081,19 +2081,24 @@ int main() {
         w.addReputation(h, 200, "大功");
         CHECK(w.reputationView(h).value == 50, "reputation: not held to the stated scale");
     }
-    // Round 7 (design/ui-text.md, part 1): at most two cards before the first season page; the rest wait.
+    // Round 7 (design/ui-text.md, part 1): at most two cards before the first season page; the rest wait. A card sent
+    // by a signal (a death, a deed found out) is about its moment and does not count.
     {
         Config c;
         c.seed = 64;
         c.prerun = 25;  // as the game starts (tools/webplay.cpp)
         World w(defs, c);
-        int firstSeason = (w.handedOver() / 90 + 1) * 90, early = 0;
-        w.setChooser([&](const World::ChoicePrompt&) {
-            if (w.today() < firstSeason) ++early;
+        int firstSeason = (w.handedOver() / 90 + 1) * 90, early = 0, signals = 0;
+        w.setChooser([&](const World::ChoicePrompt& p) {
+            if (w.today() >= firstSeason) return -1;
+            bool signal = false;
+            for (const auto& ev : defs.events)
+                if (ev.title == p.title && ev.pulse == "signal") signal = true;
+            ++(signal ? signals : early);
             return -1;
         });
         while (w.today() < firstSeason) w.stepDay();
-        std::printf("opening: %d cards before the first season\n", early);
+        std::printf("opening: %d cards before the first season (and %d sent by a signal)\n", early, signals);
         CHECK(early >= 1 && early <= 2, "opening: more than two cards before the first season (or none)");
     }
     // 〔親友挨餓〕: at most two a harvest year for the whole family, however many kin houses run short (the family kept
@@ -2179,6 +2184,35 @@ int main() {
         }
         CHECK(!offered, "priest: a card offered the priest while there was none");
         CHECK(back, "priest: no new priest within half a year");
+    }
+    // Waiting cards (review r7 1–3): only pulse cards wait (a death, a deed or a fine is asked at its moment), never
+    // twice in the queue, and the first year asks no more than a few cards a month.
+    {
+        Config c;
+        c.seed = 64;
+        c.prerun = 25;
+        World w(defs, c);
+        std::map<int, int> perMonth;
+        w.setChooser([&](const World::ChoicePrompt&) {
+            if (w.today() < w.handedOver() + kDaysPerYear) ++perMonth[w.today() / kDaysPerMonth];
+            return -1;
+        });
+        bool signalWaits = false, twice = false;
+        for (int d = 0; d < 2 * kDaysPerYear; ++d) {
+            w.stepDay();
+            std::set<std::pair<std::string, Id>> seen;
+            for (const auto& q : w.deferredForTest()) {
+                twice = twice || !seen.insert(q).second;
+                for (const auto& ev : defs.events)
+                    if (ev.id == q.first && ev.pulse == "signal") signalWaits = true;
+            }
+        }
+        int most = 0;
+        for (auto [m, n] : perMonth) most = std::max(most, n);
+        std::printf("first year: at most %d cards a month\n", most);
+        CHECK(!signalWaits, "a signal card (death, deed, fine) was held back past its moment");
+        CHECK(!twice, "the same card waiting twice");
+        CHECK(most <= 4, "the first year piles up more than four cards in a month");
     }
     // The season's list never shows the same item twice.
     {

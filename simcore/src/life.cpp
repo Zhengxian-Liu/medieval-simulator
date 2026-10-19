@@ -1428,6 +1428,8 @@ void World::marry(Id man, Id woman) {
 
 int World::askPlayer(const std::string& title, const std::string& situation, const std::vector<std::string>& options) {
     if (!chooser_ || options.size() < 2) return -1;
+    // Past the opening's questions (World::openingFull) the family's own ways answer it, as when nobody is asked.
+    if (inOpening() && openingAsked_ >= kOpeningCards) return -1;
     ChoicePrompt c{title, situation, options, {}};
     noteCardAsked();
     int r = chooser_(c);
@@ -1724,6 +1726,10 @@ void World::monthlyParish() {
     bool has = priest_ != kNone && people_[priest_].alive() && people_[priest_].household != kNone;
     if (has) {
         priestGoneSince_ = -1;
+        std::vector<Id> held;
+        for (const auto& pc : parcels_)
+            if (!pc.gone && pc.holder == people_[priest_].household) held.push_back(pc.id);
+        if (!held.empty()) glebe_ = held;
         return;
     }
     if (priestGoneSince_ < 0) {
@@ -1744,14 +1750,19 @@ void World::monthlyParish() {
     rollCongenital(p);
     rollPersonality(p, 3);
     p.health = rngSocial_.range(75, 95);
+    for (int s = 0; s < kSkillCount; ++s) p.skills[s] = rngSocial_.range(1, 5);
     p.skills[Learning] = rngSocial_.range(10, 15);
     p.skills[Charm] = rngSocial_.range(3, 9);
+    p.reputation = rngSocial_.range(0, 10);
     households_[hh].head = id;
     dynasties_[dyn].heads.push_back(id);
     dynasties_[dyn].headSince.push_back(day_);
     dynasties_[dyn].headStart.push_back({0, 40});
     households_[hh].food = consumption(households_[hh]) * 120;
-    moveLand(kNone, hh, 8, LandPick::CustomaryFirst, "教堂的田");
+    households_[hh].firewood = 40;
+    // Only the church's own land, what of it is in nobody's hands: never a parcel some house is waiting for.
+    for (Id pc : glebe_)
+        if (!parcels_[pc].gone && parcels_[pc].holder == kNone) moveParcel(pc, hh, "教堂的田");
     placeHouse(hh);
     priest_ = id;
     priestGoneSince_ = -1;

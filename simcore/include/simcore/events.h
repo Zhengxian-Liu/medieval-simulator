@@ -42,6 +42,7 @@ private:
     Id pickTarget(const EventDef& ev, const Person& p);
     Id cause_ = kNone;  // deed being answered, for causality
     Id deed_ = kNone;   // the deed a signal-driven event is about
+    bool pulsing_ = false;  // fire() called from pulse(): only such a card may wait out the opening (World::deferredCards_)
     double writtenOff_ = 0;  // what target_lord_debt last wrote off the manor book without payment
     bool eligible(const EventDef& ev, const Person& p, Id playerHead) const;
     bool playersToAnswer(const EventDef& ev, const Person& p) const;  // the player (not the AI) answers it

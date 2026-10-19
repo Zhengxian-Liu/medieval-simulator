@@ -86,11 +86,14 @@ EventDef parseEvent(const Json& e) {
         auto priestly = [](const std::string& s) { return s.find("神父") != std::string::npos; };
         bool all = true;
         for (auto& od : d.options) {
-            if (priestly(od.text)) od.conditions = Json::allOf(od.conditions, priest);
+            bool his = priestly(od.text) || priestly(od.log);  // what is chosen, or what then happens, is his doing
+            for (const auto& l : od.logs) his = his || priestly(l);
+            if (his) od.conditions = Json::allOf(od.conditions, priest);
             else all = false;
         }
-        bool told = priestly(d.title) || priestly(d.prompt) || all;
-        for (const auto& pr : d.prompts) told = told || priestly(pr);
+        // One way of telling it among several does not make the event his (the king's tax read out by him): that
+        // variant is passed over while the parish is empty (EventRunner, the situation).
+        bool told = priestly(d.title) || (d.prompts.empty() && priestly(d.prompt)) || all;
         if (told) d.conditions = Json::allOf(d.conditions, priest);
     }
     return d;

@@ -215,12 +215,23 @@ std::string World::houseMark(Id id, int* youngerOut) const {
         if (people_[m].alive() && people_[m].firstName == p.firstName) group.push_back(m);
     std::sort(group.begin(), group.end(), [&](Id a, Id b) { return people_[a].birthDay != people_[b].birthDay ? people_[a].birthDay < people_[b].birthDay : a < b; });
     std::set<std::string> taken;
+    // Marks already given in this house to its namesakes: one who comes in later (married in, taken in) does not
+    // take one of theirs, older though he may be.
+    std::map<std::string, Id> held;
+    for (Id m : group)
+        if (auto it = marks_.find(m); it != marks_.end() && !it->second.empty() && markHouse_.count(m) && markHouse_.at(m) == p.household)
+            held.emplace(it->second, m);
+    auto others = [&](const std::string& x, Id m) { auto h = held.find(x); return h != held.end() && h->second != m; };
     std::string mine;
     for (Id m : group) {
         int yo = 0;
         std::string want = rule(m, &yo);
         if (m == id && youngerOut) *youngerOut = yo;
         auto old = marks_.find(m);
+        if (old != marks_.end() && markHouse_[m] != p.household) {
+            marks_.erase(old);  // given in another house: someone who comes in takes the mark this house gives
+            old = marks_.end();
+        }
         std::string got;
         // Kept as long as there is a namesake at home: 二羅伯特 stays 二羅伯特 when his father dies and 小羅伯特 is left.
         bool keep = old != marks_.end() && !old->second.empty() && !taken.count(old->second) && group.size() > 1;
@@ -228,16 +239,16 @@ std::string World::houseMark(Id id, int* youngerOut) const {
             got = old->second;
         } else if (!want.empty()) {
             if (old != marks_.end() && !old->second.empty() && !taken.count(old->second)) got = old->second;
-            else if (!taken.count(want)) got = want;
+            else if (!taken.count(want) && !others(want, m)) got = want;
             else
                 for (const char* x : {"小", "二", "三", "四", "五", "六", "七", "八", "九", "十"})
-                    if (!taken.count(x)) {
+                    if (!taken.count(x) && !others(x, m)) {
                         got = x;
                         break;
                     }
         }
         if (got.empty()) marks_.erase(m);
-        else marks_[m] = got, taken.insert(got);
+        else marks_[m] = got, markHouse_[m] = p.household, taken.insert(got);
         if (m == id) mine = got;
     }
     return mine;

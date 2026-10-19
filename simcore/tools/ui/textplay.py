@@ -105,7 +105,8 @@ def ledger_text(l):
     buy = [x for x in l.get("outs", []) if x[0] == "買糧"]
     grain = f"買糧 {g['times']} 次，{g['days']} 天，{-buy[0][1] if buy else g['pence']} 便士" if g else (f"買糧 {signed(buy[0][1])}" if buy else "")
     parts = "；".join(x for x in (ins, "、".join(y for y in (outs, grain) if y)) if x)
-    head = f"錢 {l['from']} → {l['to']} 便士" if l["from"] != l["to"] else f"錢 {l['from']} 便士，沒有進出"
+    moved = bool(l.get("ins") or l.get("outs"))
+    head = f"錢 {l['from']} → {l['to']} 便士" if l["from"] != l["to"] else f"錢 {l['from']} 便士，" + ("進出相抵" if moved else "沒有進出")
     return head + (f"（{parts}）" if parts else "")
 
 
