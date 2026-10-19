@@ -221,7 +221,7 @@ void World::settleRent(Household& h, double rent, bool respite, bool begged) {
     book(h, "交租", -paid);
     if (lordHouse != kNone && lordHouse >= 0) households_[lordHouse].money += full ? rent : paid;
     if (full) return;
-    if (h.head != kNone) people_[h.head].reputation -= 2;
+    if (h.head != kNone) addReputation(h.head, -2, "地租沒交齊");
     // The steward carries at most about a year's rent on the books; beyond that he stops counting.
     double before = owedLord(h);
     addDebt(h, std::min(rent - paid, std::max(0.0, rent - before)), lord_);

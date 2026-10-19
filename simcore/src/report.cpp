@@ -158,6 +158,34 @@ Id World::actingHead() const {
     return best;
 }
 
+std::string World::ladderText() const {
+    if (playerHousehold_ == kNone) return "";
+    const Household& h = households_[playerHousehold_];
+    int rung = standing(playerHousehold_);
+    std::string o = standingName(rung);
+    if (rung >= 0) o += "（第 " + std::to_string(rung + 1) + " 階，共 4 階）";
+    if (h.freehold >= 1) o += "，" + std::to_string(int(h.acres)) + " 畝裡有 " + std::to_string(int(h.freehold)) + " 畝是自由地";
+    o += "。";
+    switch (rung) {
+        case 0: o += "下一階「自由佃農」：替全家贖身（計畫「贖身」，存錢 140 便士以上）。"; break;
+        case 1: o += "下一階「自耕農」：把 6 畝佃來的地買成自由地（計畫「買自由地」，存錢 200 便士以上）。"; break;
+        case 2:
+            o += "下一階「小地主」：40 畝地，其中 20 畝是自由地（現在 " + std::to_string(int(h.acres)) + " 畝，自由地 " + std::to_string(int(h.freehold)) + " 畝）。";
+            break;
+        case 3: o += "已經是村裡佃戶能到的最高一階。"; break;
+        default: break;
+    }
+    return o;
+}
+
+std::string World::regretText() const {
+    if (playerDynasty_ == kNone || playerHead() == kNone) return "";
+    const std::string& r = dynasties_[playerDynasty_].regret;
+    if (r.empty() || r == people_[playerHead()].ambition) return "";
+    const AmbitionDef* a = defs_.ambition(r);
+    return a ? a->name : "";
+}
+
 std::string World::familyReport() const {
     std::ostringstream o;
     Id head = playerHead();
@@ -217,20 +245,7 @@ std::string World::familyReport() const {
 
     // Where the family stands on the ladder, and what this generation is reaching for.
     {
-        int rung = standing(playerHousehold_);
-        o << "家族地位：" << standingName(rung);
-        if (rung >= 0) o << "（第 " << rung + 1 << " 階，共 4 階）";
-        if (h.freehold >= 1) o << "，" << int(h.acres) << " 畝裡有 " << int(h.freehold) << " 畝是自由地";
-        o << "。";
-        switch (rung) {
-            case 0: o << "下一階「自由佃農」：替全家贖身（計畫「贖身」，存錢 140 便士以上）。"; break;
-            case 1: o << "下一階「自耕農」：把 6 畝佃來的地買成自由地（計畫「買自由地」，存錢 200 便士以上）。"; break;
-            case 2:
-                o << "下一階「小地主」：40 畝地，其中 20 畝是自由地（現在 " << int(h.acres) << " 畝，自由地 " << int(h.freehold) << " 畝）。";
-                break;
-            case 3: o << "已經是村裡佃戶能到的最高一階。"; break;
-            default: break;
-        }
+        o << "家族地位：" << ladderText();
         std::string branch;
         if (kinInChurch(playerDynasty_)) branch += "家裡有人在教會";
         for (Id id : livingAway())

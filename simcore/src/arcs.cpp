@@ -484,7 +484,7 @@ void World::yearlyDebts() {
             }
             if (r >= 0 && opts[r].rfind("在法庭", 0) == 0) {
                 recordDeed("defaulted", h.head, h.creditor);
-                if (h.head != kNone) people_[h.head].reputation -= 4;
+                if (h.head != kNone) addReputation(h.head, -4, "欠債賴帳，被告上法庭");
                 log(1, "【欠債】" + fullName(h.head) + " 在莊園法庭上咬定早就還過了。陪審的鄰居面面相覷，" + fullName(h.creditor) +
                            " 家這筆錢算是要不回來了。");
                 clearDebt(h);
@@ -598,7 +598,7 @@ void World::exposeAffair(Id a, Id b) {
     log(family ? 1 : 2, "【醜聞】" + fullName(a) + " 和 " + fullName(b) + " 的姦情敗露，兩人被教會法庭罰款，還得披著白布在主日彌撒上當眾悔罪。");
     for (Id x : {a, b}) {
         Person& p = people_[x];
-        p.reputation -= 15;
+        addReputation(x, -15, "姦情敗露，當眾悔罪");
         p.flags.insert("adulterer");
         noteLife(x, "和 " + fullName(x == a ? b : a) + " 的私情敗露，在教堂當眾悔罪");
         if (p.household != kNone) {

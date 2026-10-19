@@ -1011,7 +1011,7 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
             } else if (k == "health") {
                 p.health = std::clamp(p.health + v.asNumber(), 0.0, 100.0);
             } else if (k == "reputation") {
-                p.reputation += v.asNumber();
+                w.addReputation(p.id, v.asNumber(), bookAs_.empty() ? "各種事情" : "〔" + bookAs_ + "〕");
             } else if (k == "prestige") {
                 if (p.dynasty != kNone) w.dynasties_[p.dynasty].prestige += v.asNumber();
             } else if (k == "skill") {

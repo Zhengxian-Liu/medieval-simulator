@@ -221,7 +221,10 @@ function renderTop() {
   }
   $("top").innerHTML = `<h1>${esc(h.surname)}家</h1>
     <span class="stat"><b>${s.date.year}</b> 年 ${esc(s.date.season)}</span>
-    <span class="stat">地位 <b>${esc(h.standing)}</b></span>
+    <span class="stat" title="${esc(s.ladder || "")}">地位 <b>${esc(h.standing)}</b>${s.ladder ? `<br><span class="muted" style="font-size:12px">${esc(s.ladder)}</span>` : ""}</span>
+    ${s.reputation ? `<span class="stat${s.reputation.value <= -10 ? " lean" : ""}" title="${esc([s.reputation.effect, ...(s.reputation.recent || []), s.reputation.mend].join("\n"))}">名聲 <b>${s.reputation.value}</b>（${esc(s.reputation.word)}）<br><span class="muted" style="font-size:12px">${esc((s.reputation.recent || []).join("；") || "最近沒什麼事")}</span>${s.reputation.value <= -10 ? `<br><span class="muted" style="font-size:12px">${esc(s.reputation.mend)}</span>` : ""}</span>` : ""}
+    ${s.regret ? `<span class="stat">上一代沒做完的心願 <b>${esc(s.regret)}</b></span>` : ""}
+    ${s.notice ? `<span class="stat lean">不行：${esc(s.notice)}</span>` : ""}
     <span class="stat">錢 <b>${h.money}</b> 便士</span>
     <span class="stat">存糧 <b>${h.food_days}</b> 天${h.lean ? ' <span class="lean">今年缺糧</span>' : ""}</span>
     <span class="stat">地 <b>${h.acres}</b> 畝${h.freehold > 0 ? `（自由地 ${h.freehold}）` : ""}</span>
@@ -558,7 +561,10 @@ function renderContest(s) {
             ? o.men.map((m) => `<button ${can ? "" : "disabled"} onclick="act({do:'want',what:'office:${o.id}',object:${m.id}})">讓${esc(m.name)}選</button>`).join(" ")
             : `<button ${can ? "" : "disabled"} onclick="act({do:'want',what:'office:${o.id}',object:-1})">${o.mine ? "想連任，去拉票" : "想當"}</button>`}</span>`
         : !o.mine && o.why ? `<span class="muted" style="font-size:12px">爭不了：${esc(o.why)}</span>` : ""}</div>
-      ${!o.mine && (o.gates || []).length ? `<div class="muted" style="font-size:12px;padding:0 0 4px">條件：${o.gates.map((g) => g.ok ? `<span class="pos" title="${esc(g.detail)}">✓ ${esc(g.label)}</span>` : `<span class="neg">✗ ${esc(g.detail)}</span>`).join("　")}</div>` : ""}`).join("");
+      ${!o.mine && (o.gates || []).length ? `<div class="muted" style="font-size:12px;padding:0 0 4px">條件：${o.gates.map((g) => g.ok ? `<span class="pos" title="${esc(g.detail)}">✓ ${esc(g.label)}</span>` : `<span class="neg">✗ ${esc(g.detail)}</span>`).join("　")}</div>` : ""}
+      ${(o.voters || []).length ? `<div style="font-size:12px;padding:0 0 6px"><span class="muted">各家家主照現在看（${o.voters.filter((x) => x.ours).length}/${o.voters.length} 家會投你家）：</span>${o.voters.map((x) =>
+        `<div>${esc(x.name)}：看樣子投 <b class="${x.ours ? "pos" : ""}">${esc(x.lean || "?")}</b>${x.promised ? `（答應了${esc(x.promised)}）` : ""}<span class="muted">；${esc(x.note)}</span>
+         ${x.ask ? `<button ${x.ask.open && can ? "" : "disabled"} title="${esc(x.ask.open ? "用一段空閒去問" : x.ask.why)}" onclick="${askCall(x.id, x.ask, "")}">拉票</button>` : ""}</div>`).join("")}</div>` : ""}`).join("");
   if (c.past.length) html += `<h3>你家最近的結果</h3>` + c.past.map((p) => `<div style="font-size:13px">${p.year} 年　${esc(p.thing)}：<b>${esc(p.outcome)}</b></div>`).join("");
   html += `<p class="legend">只列你家聽說的。去「村民」那一欄找人開口：買地、租地、請他投票、借錢、說親、收學徒。</p>`;
   $("tab-body").innerHTML = html;

@@ -111,6 +111,19 @@ def render(v, full=False):
                f"地 {h['acres']} 畝（自有 {h['freehold']}）｜ 欠債 {h['debt']}" + (f"（{h['debt_text']}）" if h.get("debt_text") else "")
                + ("｜ 今年缺糧" if h.get("lean") else "")
                + (f" ｜ 這一季還有 {s.get('time_left')} 段空閒" if season else ""))
+    if s.get("notice"):
+        out.append("不行：" + s["notice"])
+    rep = s.get("reputation")
+    if rep:
+        out.append(f"名聲 {rep['value']}（{rep['word']}；-50 到 +50）：{rep.get('effect', '')}")
+        if rep.get("recent"):
+            out.append("  最近：" + "；".join(rep["recent"]))
+        if rep.get("mend") and rep["value"] <= -10:
+            out.append("  " + rep["mend"])
+    if s.get("ladder"):
+        out.append(f"家族地位：{s['ladder']}")
+    if s.get("regret"):
+        out.append(f"上一代沒做完的心願：「{s['regret']}」")
     if season and s.get("regency"):
         r = s["regency"]
         out.append(f"（你在替 {r['ward']} 持家，還有約 {r['years_left']} 年。可以 act '{{\"do\":\"regency\"}}' 交給管家，直到{r['ward']}成年，路上有大事還是會問你。）")
@@ -236,6 +249,19 @@ def render(v, full=False):
                 tail = "（你家的，到期自動出來連任）" + tail
             gates = "　".join(("✓ " + g["label"]) if g.get("ok") else ("✗ " + g.get("detail", "")) for g in o.get("gates", []))
             out.append(f"  {o['name']}：{who}{tail}" + (f"\n    條件：{gates}" if gates and not o.get("mine") else ""))
+            if o.get("voters"):
+                ours = sum(1 for x in o["voters"] if x.get("ours"))
+                out.append(f"    各家家主（照現在看，{ours}/{len(o['voters'])} 家會投你家；開口拉票要一段空閒）：")
+                for x in o["voters"]:
+                    t = f"      [{x['id']}] {x['name']}：看樣子投 {x.get('lean') or '?'}"
+                    if x.get("promised"):
+                        t += f"（答應了 {x['promised']}）"
+                    t += f"；{x.get('note', '')}"
+                    a = x.get("ask")
+                    if a:
+                        press = {"do": "ask", "who": x["id"], "ask": a["ask"], "object": a["object"], "subject": a["subject"], "office": a.get("office", ""), "lever": ""}
+                        t += f" → act '{json.dumps(press, ensure_ascii=False)}'" if a.get("open") else f"［不行：{a.get('why', '')}］"
+                    out.append(t)
         for pst in c.get("past", [])[:4]:
             out.append(f"  {pst['year']} {pst['thing']}：{pst['outcome']}")
     heard = [x for x in s.get("heard", []) if x.get("recent")]
@@ -268,6 +294,7 @@ def wait_ask(prev_seq):
     return v
 
 
+SEASON_DO = ("agenda", "interact", "ask", "plan", "cancel", "want", "focus", "pass", "year", "regency", "quit")
 cmd = args[0] if args else "view"
 if cmd == "view":
     v = get("/api/view?seq=-1&line=0")
@@ -285,9 +312,13 @@ elif cmd == "act":
         bad = "現在沒有在問你（遊戲還在跑或已結束），先 view。"
     elif a.get("kind") == "choice" and not (do == "ai" or (do == "choose" and 0 <= int(obj.get("index", -1)) < len(a.get("options", [])))):
         bad = "現在是在問一個問題：只能 choose（index 在選項範圍內）或 ai。"
-    elif a.get("kind") == "season" and do not in ("agenda", "interact", "ask", "plan", "cancel", "want", "focus", "pass", "year", "regency", "quit"):
+    elif a.get("kind") == "season" and do in ("choose", "ai"):
         bad = "現在是一季的空閒：choose / ai 只能用在問題上。"
+    elif a.get("kind") == "season" and do not in SEASON_DO:
+        bad = f"不認得「{do}」這個動作（這一季能用的：{'、'.join(SEASON_DO)}）。"
     if bad:
+        if v0.get("state"):
+            v0["state"].pop("notice", None)  # what the game refused before is not this refusal
         print("不行：" + bad + "\n")
         print(render(v0))
         sys.exit(1)

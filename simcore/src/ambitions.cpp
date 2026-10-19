@@ -292,7 +292,7 @@ void World::checkMilestones(Person& head, bool quiet) {
         head.ambitionDone |= 1u << i;
         ++head.ambitionStep;
         if (quiet) continue;
-        head.reputation += 1;
+        addReputation(head.id, 1, "志向往前走了一步");
         addStress(head.id, -5, "");
         if (player) {
             int nx = nextMilestone(head);
@@ -386,7 +386,7 @@ void World::reviewAmbition(Household& h, bool yearTurn) {
                 dyn->prestige += regret ? 20 : 10;
                 if (regret) dyn->regret.clear();
             }
-            head.reputation += 5;
+            addReputation(head.id, 5, "做成了志向「" + a->name + "」");
             head.lastAmbition = a->id;
             noteLife(head.id, "做成了「" + a->name + "」");
             if (dyn && !a->tradition.empty() &&
@@ -430,7 +430,7 @@ void World::checkStandings() {
         }
         ++counters_[std::string(player ? "rise_family:" : "rise:") + std::to_string(now)];
         if (h.dynasty != kNone) dynasties_[h.dynasty].prestige += 5 * (now - before);
-        head.reputation += 3;
+        addReputation(head.id, 3, std::string("家族成了") + standingName(now));
         if (!player) {
             log(2, surname + " 家成了" + std::string(standingName(now)) + "。");
             continue;
@@ -777,7 +777,7 @@ void World::manorBondDue(Person& head) {
         addOpinion(lord_, head.id, "forgave_manor", 30, 20);
         head.flags.insert("lord_favour");
         if (head.dynasty != kNone) dynasties_[head.dynasty].prestige += 5;
-        head.reputation += 3;
+        addReputation(head.id, 3, "免了莊園欠的債");
         ++counters_["manor_loan:forgiven"];
         log(1, "【莊園還債】" + head.firstName + " 把借據還給管家，說這筆錢不用還了。老爺親自來道謝（好感 +30），從此把你家當自己人。");
     }

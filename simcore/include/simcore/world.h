@@ -90,6 +90,15 @@ struct Person {
     std::array<double, kNeedCount> needs{};
     double health = 90;
     double reputation = 0;
+    // What moved the reputation, newest last (design/fun-r6.md A): {day, by how much, why}. Small steady drifts (a
+    // year of evenings at the alehouse) are gathered in repDrift until they come to a point.
+    struct RepNote {
+        int day = 0;
+        double delta = 0;
+        std::string why;
+    };
+    std::vector<RepNote> repNotes;
+    double repDrift = 0;
     std::set<std::string> flags;
     int pregnantDue = -1;
     int lastBirthDay = -100000;
@@ -326,6 +335,8 @@ struct AskResult {
     double dealCost = 0;       // what a yes costs the family outright (a parcel's price, a fee)
     double giftSum = 0;        // what the gift lever would hand over
     std::vector<std::string> levers;  // what the head can still try: gift | favour | hook | meet
+    std::string noLever;              // why a gift is not among them (a flat no, too much to be bought), "" if it is
+    bool refusalPending = false;      // a land no not yet final: remembered once the talk ends (a press may still turn it)
 };
 
 struct Item {
@@ -526,6 +537,8 @@ public:
     bool gameOver() const { return gameOver_; }
 
     std::string fullName(Id id) const;
+    // The mark a namesake goes by in their own house (小, 二, …; "" for none), kept once given while still needed.
+    std::string houseMark(Id id, int* younger = nullptr) const;
     std::string shortName(Id id) const;  // first name, with "小" when fullName gives one (younger namesake)
 
     // Human play: when set, the player's head makes their own choices in events. The chooser gets
@@ -542,6 +555,8 @@ public:
     int askPlayer(const std::string& title, const std::string& situation, const std::vector<std::string>& options);
     // What the family knows: opinions with their reasons, feuds, debts, believed secrets, inquiries.
     std::string familyReport() const;
+    std::string ladderText() const;   // 「自由佃農（第 2 階，共 4 階）。下一階……」
+    std::string regretText() const;   // the last generation's unfinished wish, by name ("" when none or it is this one's)
     // One villager as the family sees them: what they want, what they mean to do, what they think of you and why.
     std::string personReport(Id id) const;
     // One line on a person: age, how they feel about the family, and what they are about (if known).
@@ -603,6 +618,16 @@ public:
     int feudStage(Id personA, Id personB) const;  // between the two people's families
     std::string describeDeed(Id deed) const;      // "1414 年的「拒婚之辱」"
     double opinion(Id from, Id to) const;
+    // The village's name for someone (「你家名聲」 is the head's): every change goes through here with its reason.
+    void addReputation(Id who, double by, const std::string& why);
+    struct RepView {
+        int value = 0;                    // -50 .. +50
+        std::string word;                 // 好 / 平常 / 不好 / 很壞
+        std::string effect;               // what it does when asking
+        std::vector<std::string> recent;  // the last three things that moved it, with their years
+        std::string mend;                 // how it is mended
+    };
+    RepView reputationView(Id who) const;
     bool hasTrait(const Person& p, const std::string& t) const;
     double traitMod(const Person& p, const std::string& key) const;  // sum over traits + traditions
     double param(const std::string& name, double fallback) const;
@@ -633,15 +658,16 @@ public:
         std::string id;     // stable while the situation holds: "sell_grain", "company:12", "help_land:4"
         std::string title, desc, why;
         bool open = true;   // false: why
-        std::string kind;   // interact | plan | effects
+        std::string kind;   // interact | plan | effects | ask (開口: who, event = the ask, target = its object)
         std::string event;  // interact: the interaction (or keep_company); plan: the plan
         Id who = kNone, target = kNone, subject = kNone;
         std::string effects;  // kind effects: a JSON effect list run on the head, with `target` as its other party
         std::string done;     // kind effects: the chronicle line
         int rank = 0;
     };
-    std::vector<AgendaItem> seasonAgenda();
+    std::vector<AgendaItem> seasonAgenda(bool all = false);  // all: not cut to the four shown
     void doAgenda(const std::string& id);
+    std::string agendaGoneWhy(const AgendaItem& a);  // why one that was on the list can no longer be done
     // 陪家人: of 談心, 一起上教堂, 誇獎 and 帶去市集, the one this person wants or needs most now ("" when none is open).
     std::string companyEvent(Id who);
     // Lasting help for a house that cannot feed itself (season agenda, 〔親友挨餓〕): a parcel the family can spare
@@ -721,6 +747,9 @@ public:
     // The family's man who would stand for a post: the preferred one if he can, else the head, else any man of the
     // house who can (kNone: none). familyOfficeBar: why none of them can ("" when one can).
     Id familyOfficeMan(const std::string& id, Id preferred) const;
+    // The family's man for a post, the one votes are asked for: whom it put up when it wants the post, else the head
+    // if he may stand (kNone when nobody of the house can).
+    Id familyRunner(const std::string& id) const;
     std::string familyOfficeBar(const std::string& id) const;
     const std::vector<Want>& wants() const { return wants_; }
     std::string wantThing(const Want& wt) const;   // "北田坡上那 3 畝", "莊頭的位子", "替威廉娶艾瑪"
@@ -732,6 +761,8 @@ public:
     // Whether the last answer can be pressed with this lever now: same season, a free day, the money it takes,
     // the secret still unused, the parcel asked for still the family's. The front ends show only these.
     bool leverOpen(const std::string& lever) const;
+    std::string pressWhy(Id who, const std::string& what, Id object, Id subject, const std::string& lever) const;  // "" = can press
+    std::string askGoneWhy(Id who, const std::string& what, Id object, Id subject, const std::string& office) const;
     // 年度重心 (data/focus.json): the foci open to someone now, the one they follow, and the family choosing one.
     std::vector<const FocusDef*> focusChoices(Id who) const;
     const FocusDef* focusOf(const Person& p) const;
@@ -792,6 +823,10 @@ private:
     // No repeats (design/fun-r5.md C): (household, event / beat / card id) -> the day the family last met it; a story
     // keyed by person is stored as (person, "p:" + id). Within kRepeatYears it is not met again.
     std::map<std::pair<Id, std::string>, int> metStory_;
+    std::vector<AgendaItem> lastAgenda_;  // 這一季的事 shown this season: a button pressed after the list changed is still known
+    int lastAgendaSeason_ = -1;
+    std::map<std::string, std::string> agendaDone_;  // id → title, done this season
+    mutable std::map<Id, std::string> marks_;  // houseMark: the namesake mark each living person was last given
     std::map<std::pair<Id, std::string>, std::vector<int>> toldPrompts_;  // (household, event) -> prompt variants told
     static constexpr int kRepeatYears = 3;
     bool metLately(Id key, const std::string& story) const {
@@ -1111,7 +1146,21 @@ private:
         std::vector<Id> grudge;  // heads an old feud with the family turned against him
         std::vector<Id> broke;   // heads who promised him their vote and gave it to someone else
         Id mine = kNone;         // the family's man among the candidates (the head, or the son put up for it)
+        std::vector<std::pair<Id, Id>> ballots;  // (voting head, whom he voted for), in the order the houses voted
     };
+    std::string ballotText(const Tally& t) const;  // 「投彼得的：艾德蒙·格林、約翰·庫柏；投……」
+
+public:
+    // A post the family is after, house by house (design/fun-r6.md A 選舉): whom each voting head leans to as things
+    // stand, his word if given, what stands in the way or what he would want, and the 開口 to ask him for his vote.
+    struct VoterView {
+        Id voter = kNone, lean = kNone, promised = kNone;
+        std::string note;
+        AskOption ask;  // ask.ask empty: none to make (he is of the family's rivals' house, or not one to ask)
+    };
+    std::vector<VoterView> electionView(const std::string& office);
+
+private:
     double officeMerit(const Person& p, const std::string& id) const;
     std::vector<Id> officeCandidates(const std::string& id, Id old, const std::function<double(double)>& noise) const;
     Tally countVotes(const std::string& id, const std::vector<Id>& cands, Id old, const std::function<double(double)>& noise) const;
@@ -1141,6 +1190,7 @@ private:
     void resolveFine(EntryFine& f);
     void forfeitForFine(Household& h, double share);
     void ask(Id who, const std::string& what, Id object, Id subject, const std::string& office, const std::string& lever);
+    void settleAsk();  // the last talk is over: a no that could still have been pressed is remembered now
     Id bestParcelWant(Id house) const;  // the parcel this house is most after, kNone if none
     Id openApprenticeship(const std::string& trade, Id except) const;  // a master of that trade with a place free
     // Any place of that kind free outside the household `except`: the lord's first for service, then in village order.

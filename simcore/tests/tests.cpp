@@ -205,6 +205,12 @@ int main() {
                     w.issue({w.today(), "ask", w.playerHead(), o.ask + "|" + o.office + "||" + sub, who, o.object});
                     w.runCommands();
                     CHECK(w.household(w.playerHousehold()).money > -0.01, "an ask left the family in the red");
+                    // A gift is offered only where it can turn the answer (design/fun-r6.md A: 13 pence spent in 1335
+                    // against 「祖上傳下來的地」); when none is offered after a no, the reason is there to be told.
+                    int first = w.lastAsk().answer;
+                    const auto& lv = w.lastAsk().levers;
+                    bool gift = std::find(lv.begin(), lv.end(), "gift") != lv.end();
+                    if (first == 3 && !gift) CHECK(!w.lastAsk().noLever.empty() || w.household(w.playerHousehold()).money < 12, "a no without a gift lever did not say why");
                     for (const auto& lever : std::vector<std::string>(w.lastAsk().levers)) {
                         int before = w.timeLeft();
                         std::string said = w.lastAsk().text;
@@ -213,9 +219,17 @@ int main() {
                         CHECK(w.household(w.playerHousehold()).money > -0.01, "pressing an ask left the family in the red");
                         if (w.lastAsk().text == said) break;  // not pressed (no money for the lever)
                         CHECK(w.timeLeft() == before, "pressing an ask took another day (it is the same talk)");
+                        if (lever == "gift") {
+                            ++presses["gift_" + std::to_string(w.lastAsk().answer)];
+                            CHECK(w.lastAsk().answer != 3, "a gift was offered that could not turn the no");
+                        }
                         ++presses[lever];
                         break;  // one press per answer
                     }
+                    // A press that cannot be made says which thing it lacks.
+                    for (const char* l : {"gift", "favour", "hook", "meet"})
+                        if (std::find(w.lastAsk().levers.begin(), w.lastAsk().levers.end(), l) == w.lastAsk().levers.end())
+                            CHECK(!w.pressWhy(who, o.ask, o.object, o.subject, l).empty(), "a press that cannot be made gave no reason");
                     break;  // one ask per person a season
                 }
             }
@@ -607,6 +621,17 @@ int main() {
                     CHECK(w.timeLeft() == before - 1, "a thing on the season's list did not take one free day");
                     ++agendaDone;
                     ++kinds[a.id.substr(0, a.id.find(':'))];
+                    // Pressed again once done (a stale button): told so, and no day taken.
+                    auto now = w.seasonAgenda(true);
+                    if (std::none_of(now.begin(), now.end(), [&](const World::AgendaItem& x) { return x.id == a.id; })) {
+                        size_t lines = w.chronicle().size();
+                        int left = w.timeLeft();
+                        w.issue({w.today(), "agenda", w.actingHead(), a.id, kNone, kNone});
+                        w.runCommands();
+                        CHECK(w.timeLeft() == left, "a done thing pressed again took a day");
+                        CHECK(w.chronicle().size() > lines && w.chronicle().back().text.find("已經辦過了") != std::string::npos,
+                              "a done thing pressed again was not told as done");
+                    }
                     break;
                 }
                 for (Id who : w.peopleToSee()) {
@@ -825,6 +850,77 @@ int main() {
             CHECK(w.planBlock(head, *w.defs().plan("seek_patron")).find("19 歲") != std::string::npos, "seeking the lord's favour: the age bar was not told");
         }
         std::printf("plan gates: %d checked\n", checked);
+        // An ask that is no longer there says why (「這件事現在跟華特談不了了」 with no reason, 1352 and 1359).
+        for (const auto& q : w.people())
+            if (q.alive() && q.household != kNone && !w.inPlayerHouse(q.household) && w.household(q.household).head != q.id && w.ageYears(q) >= 21) {
+                std::string why = w.askGoneWhy(q.id, "vote", kNone, kNone, "hayward");
+                CHECK(why.find("不是一家之主") != std::string::npos, "a vote asked of one who does not head a house: no reason why not");
+                break;
+            }
+    }
+
+    // Names (design/fun-r6.md A): no two living villagers go by the same name at the same time, and a mark given at
+    // home is not swapped for another (小尼可拉斯 does not become 二尼可拉斯 when a baby Nicholas comes).
+    {
+        int dup = 0, swapped = 0, sampled = 0;
+        for (uint64_t seed : {91ull, 58ull}) {
+            Config c;
+            c.seed = seed;
+            World w(defs, c);
+            std::map<Id, std::pair<Id, std::string>> last;  // person -> (household, mark)
+            for (int y = 0; y < 30 && !w.gameOver(); ++y) {
+                for (int q = 0; q < 4; ++q) {
+                    for (int d = 0; d < kDaysPerYear / 4 && !w.gameOver(); ++d) w.stepDay();
+                    for (const auto& p : w.people()) {
+                        if (!p.alive() || p.household == kNone) continue;
+                        std::string m = w.houseMark(p.id);
+                        auto it = last.find(p.id);
+                        if (it != last.end() && it->second.first == p.household && !it->second.second.empty() && !m.empty() && it->second.second != m) {
+                            if (swapped < 3) std::printf("  name mark changed: %s %s -> %s\n", w.fullName(p.id).c_str(), it->second.second.c_str(), m.c_str());
+                            ++swapped;
+                        }
+                        last[p.id] = {p.household, m};
+                    }
+                }
+                std::map<std::string, Id> seen;
+                for (const auto& p : w.people()) {
+                    if (!p.alive() || p.household == kNone) continue;
+                    ++sampled;
+                    auto [it, fresh] = seen.insert({w.fullName(p.id), p.id});
+                    if (!fresh) {
+                        if (dup < 3) std::printf("  two villagers called %s (%d, %d)\n", it->first.c_str(), it->second, p.id);
+                        ++dup;
+                    }
+                }
+            }
+        }
+        std::printf("names: %d sampled, %d shared, %d marks swapped\n", sampled, dup, swapped);
+        CHECK(dup == 0, "two living villagers go by the same name");
+        CHECK(swapped == 0, "a namesake's mark at home was swapped for another");
+    }
+    // The family's name on the main screen (design/fun-r6.md A): a number on a stated scale, a word that changes where
+    // asking starts to count it, the last three things that moved it with their years, and how to mend it.
+    {
+        Config c;
+        c.seed = 72;
+        World w(defs, c);
+        Id h = w.playerHead();
+        CHECK(h != kNone, "reputation: no head");
+        double start = w.person(h).reputation;
+        w.addReputation(h, -start, "歸零");
+        for (int i = 0; i < 8; ++i) w.addReputation(h, 0.4, "小事");  // drift under a point is told once it makes one
+        w.addReputation(h, -12, "地租沒交齊");
+        for (int i = 0; i < 3; ++i) w.addReputation(h, 1, "〔這一年的買賣〕");
+        auto v = w.reputationView(h);
+        CHECK(v.value == -6 && v.word == "平常", "reputation: value or word wrong at -6");
+        CHECK(v.recent.size() == 3 && v.recent[0].find("3 回") != std::string::npos && v.recent[1].find("地租沒交齊") != std::string::npos &&
+                  v.recent[2].find("小事") != std::string::npos,
+              "reputation: the same thing year after year pushed out the bad one");
+        w.addReputation(h, -5, "又欠租");
+        v = w.reputationView(h);
+        CHECK(v.word == "不好" && v.effect.find("名聲不好") != std::string::npos && !v.mend.empty(), "reputation: at -10 asking counts it, and the screen must say so");
+        w.addReputation(h, 200, "大功");
+        CHECK(w.reputationView(h).value == 50, "reputation: not held to the stated scale");
     }
 
     if (failures == 0) std::printf("all tests passed\n");

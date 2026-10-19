@@ -64,15 +64,17 @@ std::vector<AskOption> World::asksFor(Id target) {
             push(o);
         }
     }
-    // A vote: for the posts the head could stand for.
-    if (isHead && target != lord_ && t.occupation != "priest" && ageYears(t) >= 21 && hp.sex == Sex::Male) {
+    // A vote: for the posts the family's man could stand for — the head, or whoever of the house it put up (a grown
+    // son, a cousin under the roof while the head is too young). subject = that man when he is not the head.
+    if (isHead && target != lord_ && t.occupation != "priest" && ageYears(t) >= 21) {
         for (const auto& of : offices_) {
-            bool can = officeEligible(head, of.id) && (of.id != "reeve" || year() + 1 >= nextReeveYear_);
-            if (!can || of.holder == head) continue;
-            AskOption o = opt("vote", "請他選" + of.name + "時投你一票");
+            if (of.id == "reeve" && year() + 1 < nextReeveYear_) continue;
+            Id man = familyRunner(of.id);
+            if (man == kNone || of.holder == man) continue;
+            AskOption o = opt("vote", "請他選" + of.name + "時投" + (man == head ? std::string("你") : shortName(man)) + "一票", kNone, man == head ? kNone : man);
             o.office = of.id;
             auto pr = promises_.find({target, of.id});
-            if (pr != promises_.end() && pr->second == head) o.open = false, o.why = "已經答應你了";
+            if (pr != promises_.end() && pr->second == man) o.open = false, o.why = "已經答應了";
             push(o);
         }
     }
@@ -141,24 +143,26 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
     std::vector<AskOption> opts = asksFor(who);
     const AskOption* opt = nullptr;
     for (const auto& o : opts)
-        if (o.ask == what && o.object == object && o.subject == subject && o.office == officeId) opt = &o;
+        if (o.ask == what && o.object == object && (o.subject == subject || (what == "vote" && subject == kNone)) && o.office == officeId) opt = &o;
+    if (opt) subject = opt->subject;
+    const Id runner = what == "vote" ? (subject != kNone ? subject : head) : kNone;  // whom the vote is asked for
     bool again = !lever.empty();
+    if (!again) settleAsk();
     if (again) {
         // Pressing the answer just given: in the same season, with a lever offered, in the same talk.
-        // Never silent: a press that cannot be made says why (an answer from last season, a lever no longer there).
-        if (lastAsk_.who != who || lastAsk_.ask != what || lastAsk_.object != object || lastAsk_.subject != subject ||
-            lastAsk_.season != year() * 4 + month() / 3 ||
-            std::find(lastAsk_.levers.begin(), lastAsk_.levers.end(), lever) == lastAsk_.levers.end()) {
-            log(1, "〔開口〕" + shortName(who) + "那個答覆已經是上一季的事了，要談得重新開口。");
+        // Never silent: a press that cannot be made says which of those it misses.
+        std::string why = pressWhy(who, what, object, subject, lever);
+        if (!why.empty()) {
+            log(1, "〔開口〕" + why);
             return;
         }
         if (!opt) {
-            log(1, "〔開口〕這件事現在跟" + shortName(who) + "談不了了。");
+            log(1, "〔開口〕這件事現在跟" + shortName(who) + "談不了了：" + askGoneWhy(who, what, object, subject, officeId) + "。");
             return;
         }
     } else {
         if (!opt) {
-            log(1, "〔開口〕這件事現在跟" + shortName(who) + "談不了了。");
+            log(1, "〔開口〕這件事現在跟" + shortName(who) + "談不了了：" + askGoneWhy(who, what, object, subject, officeId) + "。");
             return;
         }
         if (!opt->open) {
@@ -181,7 +185,7 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
     // What the family is asking for, it is now known to want: word of it goes round.
     if (!again) {
         if (what == "sell_parcel" || what == "rent_vacant") addWant(playerHousehold_, "parcel", object, kNone, "", "開口要了");
-        else if (what == "vote") addWant(playerHousehold_, "office", kNone, head, officeId, "開口拉票");
+        else if (what == "vote") addWant(playerHousehold_, "office", kNone, runner, officeId, "開口拉票");
         else if (what == "match") {
             addWant(playerHousehold_, "match", object, subject, "", "開口提親");
             answerWant(subject, "plan:arrange_match");  // going to ask is what they were waiting for
@@ -292,9 +296,9 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
         const Office* of = office(officeId);
         Id incumbent = officeId == "reeve" ? currentReeve() : of ? of->holder : kNone;
         for (Id c : officeCandidates(officeId, incumbent, [](double) { return 0.0; }))
-            if (c != head && people_[c].household == th.id) hardNo = true, hardWhy = "我家自己也有人要出來選";
+            if (c != runner && people_[c].household == th.id) hardNo = true, hardWhy = "我家自己也有人要出來選";
         auto pr = promises_.find({who, officeId});
-        if (pr != promises_.end() && pr->second != head) fs.push_back({-30, "我已經答應投給" + fullName(pr->second) + "了"});
+        if (pr != promises_.end() && pr->second != runner) fs.push_back({-30, "我已經答應投給" + fullName(pr->second) + "了"});
         std::string r = rivalFavoured("office", kNone, officeId);
         if (!r.empty()) fs.push_back({-15, r + "家也找過我"});
         big = 5;
@@ -503,10 +507,10 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
             res.text += parcelName(parcels_[object]) + "租給了你家。";
             moveParcel(object, playerHousehold_, "向領主租來");
         } else if (what == "vote") {
-            promises_[{who, officeId}] = head;
+            promises_[{who, officeId}] = runner;
             const Office* of = office(officeId);
-            res.text += "選" + (of ? of->name : officeId) + "時會投你。";
-            oweFavour(head, who, 6, "答應投你一票");
+            res.text += "選" + (of ? of->name : officeId) + "時會投" + (runner == head ? std::string("你") : shortName(runner)) + "。";
+            oweFavour(head, who, 6, runner == head ? "答應投你一票" : "答應投你家的人一票");
         } else if (what == "lend") {
             double amount = object;
             th.money -= amount;
@@ -579,7 +583,9 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
     } else if (answer == 3) {
         res.text = name + "搖了搖頭：「" + why + "。」";
         asked_[{who, what, object}] = day_ + 90;
-        if (what == "sell_parcel") recordDeed("refused_land", who, head);  // the family remembers being turned away
+        // The family remembers being turned away, once the talk is over: a no it can still press is not yet
+        // a grudge (else the refusal itself would sour the press it offers).
+        if (what == "sell_parcel") res.refusalPending = true;
     } else {
         res.text = name + "沉下臉來：「你也太看得起自己了！」";
         addOpinion(who, head, "asked_too_much", -8, 4);
@@ -590,11 +596,23 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
     if (lever.empty() && (answer == 2 || answer == 3)) {
         res.dealCost = dealCost;
         res.giftSum = giftSum;
-        if (households_[playerHousehold_].money >= giftSum + dealCost) res.levers.push_back("gift");
-        if (favourOwed(who, head) >= 5) res.levers.push_back("favour");
+        // A gift or a favour called in is offered only where it could turn the answer: never against a flat no
+        // (「賣了我家就不夠吃了」), nor where they weigh it too heavily for a small present to move them. The press
+        // counts the same factors with the lever's weight added, so this is the answer it would get.
+        auto turns = [&](double add) { return !hardNo && (s + add >= yesAt || (answer == 3 && !demand.empty() && s + add >= -12)); };
+        const double favourAdd = favourOwed(who, head) * 2 + 15;
+        bool giftTurns = turns(18), favourTurns = turns(favourAdd);
+        if (households_[playerHousehold_].money >= giftSum + dealCost && giftTurns) res.levers.push_back("gift");
+        if (favourOwed(who, head) >= 5 && favourTurns) res.levers.push_back("favour");
         if (hookDeed(head, who) != kNone) res.levers.push_back("hook");
+        if (hardNo) res.noLever = "「" + hardWhy + "」——這是硬道理，送禮、提人情都改不了";
+        else if (!giftTurns) res.noLever = "要說動" + name + "還差得遠，送點小禮改不了主意；先多來往、攢下人情，或找到他家想要的東西再說";
+        else if (households_[playerHousehold_].money < giftSum + dealCost) res.noLever = "要送得出 " + pence(giftSum) + "的禮（還得留著這件事本身的錢）才好再去說";
     }
-    if (!(answer == 1 && what == "match")) log(1, "〔開口〕" + o.label.substr(0, o.label.find("（")) + "。" + res.text);
+    lastAsk_ = res;
+    if (res.refusalPending && res.levers.empty()) settleAsk();
+    if (!(answer == 1 && what == "match")) log(1, "〔開口〕" + o.label.substr(0, o.label.find("（")) + "。" + res.text +
+                                               (answer == 3 && res.levers.empty() && !res.noLever.empty() ? "（" + res.noLever + "。）" : ""));
     if (!pendingReason_.empty()) {
         log(1, "  （" + pendingReason_ + "）");
         pendingReason_.clear();
@@ -602,7 +620,6 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
     seasonNotes_.push_back("你找" + name + "開口：" + res.text);
     t.soughtDay = day_;
     befriend(who, head, 6);
-    lastAsk_ = res;
     ++counters_["ask:" + what + ":" + std::to_string(answer)];
     // Terms are answered there and then, in the same talk: take them, turn them down, or sweeten it with a gift.
     if (answer == 2 && lever.empty()) {
@@ -625,6 +642,93 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
     }
 }
 
+// Why a press (送禮、提人情、答應條件) cannot be made on this answer ("" when it can): which of the things a press
+// needs it misses — this season's answer from this person about this thing, and the lever offered with it.
+std::string World::pressWhy(Id who, const std::string& what, Id object, Id subject, const std::string& lever) const {
+    static const std::map<std::string, std::string> names{{"gift", "送禮"}, {"favour", "提起上回幫過的忙"}, {"hook", "拿那件事壓對方"}, {"meet", "答應對方的條件"}};
+    auto nm = names.find(lever);
+    const std::string how = nm != names.end() ? nm->second : lever;
+    const AskResult& a = lastAsk_;
+    const std::string n = shortName(who);
+    if (a.who != who || a.ask != what || a.object != object || (a.subject != subject && !(what == "vote" && subject == kNone)))
+        return "這一季還沒跟" + n + "開口談這件事：先開口（一段空閒）聽了答覆，回絕了或開了條件，才能再" + how + "。";
+    if (a.season != year() * 4 + month() / 3)
+        return n + "那個答覆是" + seasonOf(a.day) + "的事了：這一季要重新開口（一段空閒），回絕了才能再" + how + "。";
+    if (std::find(a.levers.begin(), a.levers.end(), lever) == a.levers.end()) {
+        if (lever == "gift" && !a.noLever.empty()) return "這回沒有送禮這條路：" + a.noLever + "。";
+        if (lever == "favour") return n + "沒欠你家什麼人情（要欠到 5 以上才好提）。";
+        if (lever == "hook") return "你手上沒有" + n + "的把柄。";
+        if (lever == "meet") return n + "這回沒開條件，沒有條件可答應。";
+        return "這回沒有「" + how + "」這條路。";
+    }
+    return "";
+}
+
+// Why something once on the list can no longer be asked of this person: the first of asksFor's own conditions it fails.
+std::string World::askGoneWhy(Id who, const std::string& what, Id object, Id subject, const std::string& officeId) const {
+    Id head = actingHead();
+    if (who < 0 || who >= static_cast<Id>(people_.size())) return "沒有這個人";
+    const Person& t = people_[who];
+    const std::string n = shortName(who);
+    if (!t.alive() || t.household == kNone) return n + "已經不在村裡了";
+    if (inPlayerHouse(t.household)) return n + "現在是你家的人了";
+    if (ageYears(t) < 16) return n + "還沒成年";
+    if (head != kNone && ageYears(people_[head]) < 16) return "當家的還沒成年";
+    if (people_[head].flags.count("plague_shelter")) return "全家躲在林子裡避瘟疫，不和外人來往";
+    const Household& th = households_[t.household];
+    bool isHead = th.head == who;
+    auto notHead = [&] { return n + "不是一家之主，這種事要找他家的 " + shortName(th.head); };
+    auto parcelHolder = [&](Id pc) {
+        if (pc < 0 || pc >= static_cast<Id>(parcels_.size()) || parcels_[pc].gone) return std::string("那塊地已經沒了");
+        Id hh = parcels_[pc].holder;
+        if (hh == kNone) return parcelName(parcels_[pc]) + "現在是領主手上空著的地";
+        if (inPlayerHouse(hh)) return parcelName(parcels_[pc]) + "已經是你家的了";
+        return parcelName(parcels_[pc]) + "現在是" + (households_[hh].dynasty != kNone ? dynasties_[households_[hh].dynasty].surname : std::string("別")) + "家的";
+    };
+    if (what == "vote") {
+        if (who == lord_) return "領主不投村裡的票";
+        if (!isHead) return notHead();
+        if (t.occupation == "priest") return "神父不投村裡的票";
+        if (ageYears(t) < 21) return n + "還不到 21 歲，不投票";
+        const Office* of = office(officeId);
+        if (!of) return "沒有這個差事";
+        if (officeId == "reeve" && year() + 1 < nextReeveYear_) return "莊頭要到 " + std::to_string(nextReeveYear_) + " 年才再選";
+        Id man = familyRunner(officeId);
+        if (man == kNone) return "你家這回爭不了" + of->name + "：" + familyOfficeBar(officeId);
+        if (of->holder == man) return shortName(man) + "已經當著" + of->name + "了，到期自動出來連任";
+        if (subject != kNone && subject != man) return "你家出來選" + of->name + "的是" + shortName(man) + "，不是" + shortName(subject);
+    } else if (what == "sell_parcel") {
+        if (!isHead) return notHead();
+        if (object < 0 || object >= static_cast<Id>(parcels_.size()) || parcels_[object].holder != th.id) return parcelHolder(object);
+    } else if (what == "rent_vacant") {
+        if (who != lord_) return "空著的地只有領主能租";
+        if (object < 0 || object >= static_cast<Id>(parcels_.size()) || parcels_[object].holder != kNone || parcels_[object].gone) return parcelHolder(object);
+    } else if (what == "lend") {
+        if (!isHead) return notHead();
+        if (th.money < 100) return n + "家手頭也只剩 " + std::to_string(long(th.money)) + " 便士，借不出錢";
+        if (th.debt > 0.5) return n + "家自己還欠著債";
+        return n + "家現在借得出的數目變了，重新看看能借多少";
+    } else if (what == "match") {
+        auto wed = [&](Id x) { return x >= 0 && people_[x].alive() && people_[x].spouse != kNone && people_[people_[x].spouse].alive(); };
+        if (wed(object)) return shortName(object) + "已經成親了";
+        if (wed(subject)) return shortName(subject) + "已經成親了";
+        if (object >= 0 && (!people_[object].alive() || people_[object].household != th.id)) return shortName(object) + "不在" + n + "家了";
+        return "兩邊的年紀、身分眼下說不到一塊";
+    } else if (what == "apprentice") {
+        if (!isHead) return notHead();
+        if (!placeOpen(th.id, "apprentice")) return n + "那裡的學徒已經收滿了";
+        if (subject >= 0 && people_[subject].flags.count("trade_decided")) return shortName(subject) + "的出路已經定了";
+        return shortName(subject) + "的年紀過了（要 11 到 14 歲）";
+    } else if (what == "speak") {
+        if (!t.flags.count("reeve") && who != priest_) return n + "現在不是莊頭，也不是神父，在領主面前說不上話";
+        if (lord_ == kNone || !people_[lord_].alive()) return "莊園眼下沒有領主";
+    } else if (what == "stand_aside") {
+        if (object < 0 || object >= static_cast<Id>(wants_.size()) || !wants_[object].open) return n + "家已經不爭這件事了";
+        return "你家已經不爭這件事了";
+    }
+    return n + "那邊的情形變了（" + what + "）";
+}
+
 bool World::leverOpen(const std::string& lever) const {
     const AskResult& a = lastAsk_;
     if (a.who == kNone || playerHousehold_ == kNone || a.season != year() * 4 + month() / 3) return false;
@@ -634,6 +738,13 @@ bool World::leverOpen(const std::string& lever) const {
     if (lever == "hook") return hookDeed(actingHead(), a.who) != kNone;
     if (lever == "meet") return a.answer == 2 && (a.demandParcel == kNone || inPlayerHouse(parcels_[a.demandParcel].holder));
     return true;
+}
+
+void World::settleAsk() {
+    if (!lastAsk_.refusalPending) return;
+    lastAsk_.refusalPending = false;
+    Id head = actingHead();
+    if (head != kNone && lastAsk_.who != kNone && people_[lastAsk_.who].alive()) recordDeed("refused_land", lastAsk_.who, head);
 }
 
 }  // namespace sim

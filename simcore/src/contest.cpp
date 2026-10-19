@@ -175,6 +175,14 @@ Id World::familyOfficeMan(const std::string& id, Id preferred) const {
     return kNone;
 }
 
+Id World::familyRunner(const std::string& id) const {
+    Id head = playerHead();
+    for (const auto& wt : wants_)
+        if (wt.open && wt.house == playerHousehold_ && wt.kind == "office" && wt.office == id)
+            return familyOfficeMan(id, wt.subject != kNone ? wt.subject : head);
+    return head != kNone && officeEligible(head, id) ? head : kNone;
+}
+
 std::string World::familyOfficeBar(const std::string& id) const {
     return familyOfficeMan(id, kNone) != kNone ? "" : officeBar(playerHead(), id);
 }
@@ -253,6 +261,7 @@ World::Tally World::countVotes(const std::string& id, const std::vector<Id>& can
         }
         if (pick == kNone) continue;
         ++t.votes[pick];
+        t.ballots.push_back({voter.id, pick});
         if (!familyRuns || inPlayerHouse(h.id)) continue;
         Id m = t.mine;
         bool toUs = pr != promises_.end() && (pr->second == m || pr->second == head);
@@ -275,6 +284,60 @@ std::string World::tallyText(const std::vector<Id>& cands, const Tally& t, bool 
         auto v = t.votes.find(c);
         out += (out.empty() ? "" : "、") + fullName(c) + (c == head ? "（你）" : c == t.mine ? "（你家）" : "") + (forecast ? " 約 " : " ") +
                std::to_string(v != t.votes.end() ? v->second : 0) + " 票";
+    }
+    return out;
+}
+
+// Who voted for whom: the heads vote aloud at the hallmote, so the family hears every house's choice.
+std::string World::ballotText(const Tally& t) const {
+    std::vector<Id> order;
+    std::map<Id, std::string> by;
+    for (const auto& [voter, pick] : t.ballots) {
+        if (!by.count(pick)) order.push_back(pick);
+        by[pick] += (by[pick].empty() ? "" : "、") + (inPlayerHouse(people_[voter].household) ? std::string("你家") : fullName(voter));
+    }
+    std::string out;
+    for (Id c : order) out += (out.empty() ? "" : "；") + std::string("投") + (c == playerHead() ? "你" : inPlayerHouse(people_[c].household) ? shortName(c) : fullName(c)) + "的：" + by[c];
+    return out;
+}
+
+std::vector<World::VoterView> World::electionView(const std::string& id) {
+    std::vector<VoterView> out;
+    const Office* of = office(id);
+    Id man = familyRunner(id);
+    if (!of || man == kNone) return out;
+    Id old = id == "reeve" ? currentReeve() : of->holder;
+    auto mid = [](double m) { return m / 2; };
+    std::vector<Id> cands = officeCandidates(id, old, mid);
+    if (std::find(cands.begin(), cands.end(), man) == cands.end()) cands.push_back(man);
+    Tally t = countVotes(id, cands, old, mid);
+    Id head = actingHead();
+    for (const auto& [voter, pick] : t.ballots) {
+        if (inPlayerHouse(people_[voter].household)) continue;
+        VoterView v;
+        v.voter = voter;
+        v.lean = pick;
+        const Household& th = households_[people_[voter].household];
+        auto pr = promises_.find({voter, id});
+        if (pr != promises_.end()) v.promised = pr->second;
+        // What stands in the way, the same reasons the asking weighs (ask.cpp "vote"): his own man, his word to
+        // another, a feud, the thing both houses are after (and what he would take for it).
+        std::string note;
+        if (wantOf(th.id, "office", kNone, id)) note = "他家自己也要選";
+        for (Id c : cands)
+            if (note.empty() && c != man && people_[c].household == th.id) note = "他家自己也有人出來選";
+        if (note.empty() && v.promised != kNone && v.promised != man) note = "已經答應投給" + fullName(v.promised) + "了";
+        if (note.empty() && feudStage(voter, man) >= 2) note = "跟你家有仇，不會投";
+        for (const auto& wt : wants_) {
+            if (!note.empty() || !wt.open || wt.house != th.id) continue;
+            if (wt.kind == "parcel" && inPlayerHouse(parcels_[wt.object].holder)) note = "想要你家的" + parcelName(parcels_[wt.object]) + "，拉票時多半會拿這個開條件";
+        }
+        double op = opinion(voter, head);
+        if (note.empty()) note = op >= 20 ? "跟你家有交情" : op <= -15 ? "跟你家沒交情" : "還沒說要投誰";
+        v.note = note;
+        for (const auto& a : asksFor(voter))
+            if (a.ask == "vote" && a.office == id) v.ask = a;
+        out.push_back(v);
     }
     return out;
 }
@@ -334,9 +397,17 @@ void World::electionNotice() {
                     : ours == top ? "，" + who + "跟人同票；同票時現任的連任，不然由老爺點名"
                                   : "，" + who + "落後 " + std::to_string(top - ours) + " 票，去找各家家主「開口」拉票，答應了的人多半會投你家";
             if (!t.grudge.empty()) part += "；有 " + std::to_string(t.grudge.size()) + " 家記著和你家的舊仇，不會投你";
+            if (cands.size() > 1) part += "（各家看樣子投誰、拉票要什麼，看「村裡在爭什麼」的" + of->name + "）";
             loud = true;
         } else if (bar.empty()) {
-            could.push_back(of->name);
+            // That the family could stand is said when it is this generation's aim, else once in a few years: not
+            // twice every year to a house that has shown no wish for it.
+            const AmbitionDef* amb = defs_.ambition(people_[head].ambition);
+            bool aim = amb && amb->office == id;
+            if (aim || !metLately(playerHousehold_, "election_could:" + id)) {
+                could.push_back(of->name);
+                meetStory(playerHousehold_, "election_could:" + id);
+            }
         } else {
             barred.push_back(of->name + "（" + bar + "）");
             loud = loud || wanted;
@@ -392,9 +463,10 @@ void World::chooseOfficers() {
         Household& wh = households_[people_[winner].household];
         if (id == "aletaster") wh.money += 8, book(wh, "品酒官的罰款分成", 8);  // a share of the fines he presents
         else wh.food += consumption(wh) * 30;  // a sheaf from every house at harvest
-        if (winner != old) people_[winner].reputation += 2;
+        if (winner != old) addReputation(winner, 2, "當選" + name);
         if (familyIn && cands.size() > 1) {
             log(1, "【選" + name + "】" + tallyText(cands, t, false) + "。" + tie + voteWhy(t, winner) + fullName(winner) + " 當選，做到明年米迦勒節。");
+            log(1, "  開票時各家當眾說了投誰：" + ballotText(t) + "。");
         } else if (familyIn && t.mine != kNone) {
             log(1, "【選" + name + "】沒有別人出來爭，" + fullName(winner) + " 當選，做到明年米迦勒節。");
         } else if (std::any_of(wants_.begin(), wants_.end(), [&](const Want& wt) {

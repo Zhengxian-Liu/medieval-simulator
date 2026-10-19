@@ -92,7 +92,7 @@ OfficeGate EventRunner::gate(const std::string& k, const Json& v, const Person& 
         const TraitDef* td = d.trait(v.asString());
         std::string tn = td ? td->name : v.asString();
         if (k == "trait") set(tn, who + "不" + (tn == "識字" ? "識字" : "是「" + tn + "」的人"));
-        else set(tn == "識字" ? "不識字" : "不是「" + tn + "」的人", who + (tn == "識字" ? "已經識字了" : "是「" + tn + "」的人"));
+        else set(tn == "識字" ? "不識字" : "不是「" + tn + "」", who + (tn == "識字" ? "已經識字了" : "是「" + tn + "」的人"));
     } else if (k == "sex") {
         set(v.asString() == "male" ? "男的" : "女的", who + "是" + (p.sex == Sex::Male ? "男的" : "女的"));
     } else if (k == "occupation") {
@@ -105,7 +105,7 @@ OfficeGate EventRunner::gate(const std::string& k, const Json& v, const Person& 
         } else if (v.isObject() && v.has("trait") && v.asObject().size() == 1) {
             const TraitDef* td = d.trait(v["trait"].asString());
             std::string tn = td ? td->name : v["trait"].asString();
-            set("不是「" + tn + "」的人", who + "是「" + tn + "」的人");
+            set("不是「" + tn + "」", who + "是「" + tn + "」的人");
         } else if (v.isObject() && v.has("remembers")) {
             set("最近沒有對他家下過手", "最近才對這家下過手");
             hush();
@@ -237,8 +237,6 @@ std::vector<OfficeGate> World::planGates(Id actorId, const PlanDef& pd, bool wit
         std::vector<Id> pool = planPool(actorId, pd);
         std::string what = ev.describe(pd.subject["conditions"], actor, actorId);
         bool any = false;
-        Id waiting = kNone;
-        int until = 0;
         std::vector<std::string> nots;
         for (Id c : pool) {
             const Person& cp = people_[c];
@@ -255,7 +253,6 @@ std::vector<OfficeGate> World::planGates(Id actorId, const PlanDef& pd, bool wit
             }
             auto scd = cooldowns_.find({c, "plan:" + pd.id});
             if (scd != cooldowns_.end() && scd->second > day_) {
-                if (waiting == kNone) waiting = c, until = scd->second;
                 nots.push_back(cp.firstName + " 上回的事才過，要到 " + seasonOf(scd->second) + "才好再辦");
                 continue;
             }
@@ -263,7 +260,7 @@ std::vector<OfficeGate> World::planGates(Id actorId, const PlanDef& pd, bool wit
         }
         std::string label = "家裡有" + (what.empty() ? std::string("合適的人") : what + "的人");
         std::string detail;
-        if (pool.empty()) detail = pd.subject.stringOr("pick", "any_child") == "any_child" ? "家裡沒有兒女" : "家裡沒有別人";
+        if (nots.empty()) detail = pd.subject.stringOr("pick", "any_child") == "any_child" ? "沒有在世、在村裡的兒女" : "家裡沒有別人";
         else {
             detail = "家裡沒有合適的人：";
             for (size_t i = 0; i < nots.size() && i < 4; ++i) detail += (i ? "；" : "") + nots[i];

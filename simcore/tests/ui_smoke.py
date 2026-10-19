@@ -32,7 +32,7 @@ def main():
         PORT = int(first.split("127.0.0.1:")[1].split("/")[0])
         page = call("/")
         assert "<html" in page and "/api/view" in page, "page missing"
-        seq, line, asked, looked = -1, 0, 0, False
+        seq, line, asked, looked, looked_bad = -1, 0, 0, False, False
         deadline = time.time() + 120
         while time.time() < deadline:
             v = call(f"/api/view?seq={seq}&line={line}")
@@ -54,6 +54,20 @@ def main():
                 assert r.get("type") == "report" and r.get("text"), f"report failed: {r}"
                 looked = True
             asked += 1
+            if ask["kind"] == "season" and not looked_bad:
+                # A mistyped key is refused with what it lacks, and the season goes on (design/fun-r6.md A).
+                looked_bad = True
+                call("/api/act", {"do": "interact", "target": st["family"][0]["id"], "event": "talk_heart"})
+                v2 = call(f"/api/view?seq={seq}&line={line}")
+                while not v2["ask"] and not v2["ended"]:
+                    v2 = call(f"/api/view?seq={v2['seq']}&line={line}")
+                seq = v2["seq"]
+                note = (v2["state"] or {}).get("notice", "")
+                assert "少了" in note and "who" in note, f"malformed action not refused: {note!r}"
+                assert v2["ask"] and v2["ask"]["kind"] == "season", "a malformed action ended the season"
+                assert all(p.get("gates") is not None for p in v2["state"].get("plans", [])), "a plan without its conditions"
+                assert "reputation" in v2["state"] and "ladder" in v2["state"], "reputation or the ladder missing from the main screen"
+                continue
             if ask["kind"] == "season":
                 call("/api/act", {"do": "pass"})
             else:

@@ -101,7 +101,19 @@ void World::processCommands() {
         } else if (c.type == "interact") {
             // 陪家人 (keep_company): whichever of the company visits this person needs most now.
             std::string id = c.plan == "keep_company" && c.target != kNone ? companyEvent(c.target) : c.plan;
-            if (id.empty()) log(1, "〔陪家人〕眼下沒法陪" + shortName(c.target) + "：" + (timeLeft() < 1 ? "這一季沒有空了。" : "這陣子不方便（最近才陪過，或手頭、時局不許）。"));
+            if (c.target == kNone || c.target >= static_cast<Id>(people_.size())) {
+                log(1, "〔陪家人〕沒說要陪誰。");
+                continue;
+            }
+            if (id.empty()) {
+                // Each way of keeping them company says why it is shut; the first such reason is the one told.
+                std::string why;
+                for (const auto& in : interactionsWith(c.target))
+                    if (why.empty() && !in.open && !in.why.empty() &&
+                        (in.ev->id == "talk_heart" || in.ev->id == "talk_church" || in.ev->id == "talk_praise" || in.ev->id == "talk_market"))
+                        why = in.why;
+                log(1, "〔陪家人〕眼下沒法陪" + shortName(c.target) + "：" + (timeLeft() < 1 ? "這一季沒有空了" : why.empty() ? "最近才陪過" : why) + "。");
+            }
             for (const auto& ev : defs_.events)
                 if (ev.id == id && ev.scope == "interaction" && c.target != kNone) {
                     EventRunner er(*this);
