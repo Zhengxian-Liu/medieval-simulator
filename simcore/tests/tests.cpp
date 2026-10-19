@@ -504,6 +504,29 @@ int main() {
             CHECK(w.timeLeft() == left - 1, "the day's work did not take a free day");
             CHECK(w.chronicle().back().text.find("拿到") != std::string::npos, "the day's work and its pay were not told");
         }
+        // A head too sick to work: the fittest grown member of the house goes instead.
+        {
+            World sick = w;
+            const Id head = sick.actingHead();
+            sick.setHealthForTest(head, 20);
+            sick.setMoneyForTest(hh, 5);
+            Id other = kNone;
+            for (Id m : sick.household(hh).members)
+                if (m != head && sick.ageYears(sick.person(m)) >= 14 && sick.person(m).health >= 40) other = m;
+            const World::AgendaItem* job = nullptr;
+            std::vector<World::AgendaItem> list = sick.seasonAgenda();
+            for (const auto& a : list)
+                if (a.id == "spare:day") job = &a;
+            if (other != kNone) {
+                CHECK(job != nullptr, "with the head sick in bed, nobody else in the house was offered the day's work");
+                if (job) {
+                    sick.issue({sick.today(), "agenda", head, job->id, kNone, kNone});
+                    sick.runCommands();
+                    CHECK(sick.chronicle().back().text.rfind(sick.fullName(head), 0) != 0 && sick.chronicle().back().text.find("拿到") != std::string::npos,
+                          "the sick head went to the day's work himself");
+                }
+            }
+        }
         w.setMoneyForTest(hh, 500);
         w.setFoodForTest(hh, 400);
         bool still = false;

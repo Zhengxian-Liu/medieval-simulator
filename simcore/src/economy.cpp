@@ -155,8 +155,8 @@ std::string World::hungerWhy(Id house) const {
     if (int more = static_cast<int>(h.members.size()) - h.harvestMembers; more > 0 && h.harvestMembers > 0)
         why.push_back("秋收以後家裡多了 " + std::to_string(more) + " 口人");
     if (h.soldForRent >= daily * 15) why.push_back("米迦勒節為了交租賣掉了 " + num(h.soldForRent / daily) + " 天的糧");
-    if (h.noOxUntil > day_ && h.house != "manor") why.push_back("沒有耕牛，犁地靠借，收成少了一成多");
-    if (h.boonUntil > day_) why.push_back("替莊園服勞役抵債，自家的地少顧了");
+    if (h.noOxUntil > day_ && h.house != "manor" && h.acres >= 0.5) why.push_back("沒有耕牛，犁地靠借，收成少了一成多");
+    if (h.boonUntil > day_) why.push_back(h.acres >= 0.5 ? "替莊園服勞役抵債，自家的地少顧了" : "替莊園服勞役抵債，少了出去做工掙錢的日子");
     if (why.empty())
         why.push_back("年景平常，去年秋收的糧本來夠吃到今年秋收（約 " + num(h.harvestBread / daily) + " 天），是後來陸續花在了別處");
     return "缺糧的緣故：" + join(why, "；") + "。";

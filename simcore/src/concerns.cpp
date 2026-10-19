@@ -687,7 +687,13 @@ std::vector<World::AgendaItem> World::spareWorkItems() {
     if (head == kNone || playerHousehold_ == kNone) return items;
     Household& ph = households_[playerHousehold_];
     const Person& hp = people_[head];
-    if (hp.flags.count("plague_shelter") || ageYears(hp) < 14 || hp.health < 40 || hp.occupation == "priest" || gentry(head)) return items;
+    if (hp.flags.count("plague_shelter") || hp.occupation == "priest" || gentry(head)) return items;
+    // Who goes out to work: the head if fit, else the fittest grown member of the house (a sick head's husband).
+    Id hand = ageYears(hp) >= 14 && hp.health >= 40 ? head : kNone;
+    for (Id m : ph.members)
+        if (m != head && hand != head && ageYears(people_[m]) >= 14 && people_[m].health >= 40 &&
+            (hand == kNone || people_[m].health > people_[hand].health))
+            hand = m;
     const double daily = std::max(0.5, consumption(ph));
     const double days = ph.food / daily;
     const bool shortCoin = ph.money < 40 || owedAll(ph.id) > ph.money + 0.5;
@@ -701,7 +707,7 @@ std::vector<World::AgendaItem> World::spareWorkItems() {
     };
     const std::string me = fullName(head);
     // A day's work for whoever is shortest of hands for their land and can pay (the manor last).
-    {
+    if (hand != kNone) {
         const double pay = std::round((season == 2 ? 9 : 6) * wage);
         Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
         Id best = kNone;
@@ -730,8 +736,9 @@ std::vector<World::AgendaItem> World::spareWorkItems() {
             a.desc = state + "。" +
                      (manor ? "莊園的管家在找人手" : where + "地多人少，正缺人手") + "：幹幾天活，當場拿工錢，還管飯。（用一段空閒）";
             a.kind = "effects", a.target = manor ? lord_ : o.head;
-            a.effects = "[{\"spare_work\": {\"kind\": \"day\", \"pay\": " + std::to_string(int(pay)) + ", \"meals\": 6}}]";
-            a.done = me + " 去" + where + kWork[season] + "，幹了六天，拿到 " + pence(pay) + "，晌午還在那邊吃了飯。";
+            a.effects = "[{\"spare_work\": {\"kind\": \"day\", \"pay\": " + std::to_string(int(pay)) + ", \"meals\": 6, \"worker\": " +
+                        std::to_string(hand) + "}}]";
+            a.done = fullName(hand) + " 去" + where + kWork[season] + "，幹了六天，拿到 " + pence(pay) + "，晌午還在那邊吃了飯。";
             a.rank = 78;
             items.push_back(a);
         }
@@ -799,7 +806,8 @@ void World::spareWork(Household& h, Id worker, const Json& what, Id target) {
         h.money += pay;
         book(h, "打零工（" + (o.head != kNone && o.house != "manor" ? shortName(o.head) + "家" : std::string("莊園")) + "）", pay);
         h.food += what.numberOr("meals", 0);  // the worker ate at the master's table those days
-        if (target != kNone && worker != kNone) addOpinion(target, worker, "good_work", 3, 3);
+        const Id hand = static_cast<Id>(what.numberOr("worker", static_cast<double>(worker)));
+        if (target != kNone && hand != kNone) addOpinion(target, hand, "good_work", 3, 3);
     } else if (kind == "glean") {
         h.food += what.numberOr("food", 0);
         cooldowns_[{h.id, "spare_glean"}] = day_ + daysToHarvest() + 1;
