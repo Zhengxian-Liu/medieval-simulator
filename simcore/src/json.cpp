@@ -215,4 +215,13 @@ std::string Json::stringOr(const std::string& key, const std::string& fallback) 
     return v.isString() ? v.string_ : fallback;
 }
 
+Json Json::allOf(const Json& a, const Json& b) {
+    if (a.isNull()) return b;
+    if (b.isNull()) return a;
+    Json j;
+    j.type_ = Type::Array;
+    j.array_ = {a, b};
+    return j;
+}
+
 }  // namespace sim

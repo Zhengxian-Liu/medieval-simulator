@@ -1429,6 +1429,7 @@ void World::marry(Id man, Id woman) {
 int World::askPlayer(const std::string& title, const std::string& situation, const std::vector<std::string>& options) {
     if (!chooser_ || options.size() < 2) return -1;
     ChoicePrompt c{title, situation, options, {}};
+    noteCardAsked();
     int r = chooser_(c);
     return r >= 0 && r < static_cast<int>(options.size()) ? r : -1;
 }
@@ -1614,6 +1615,19 @@ void World::yearlyAdulthood() {
             }
         }
         if (age >= 25 && personality == 2 && rngLife_.chance(0.3)) rollPersonality(p, 1);
+        // What they were born with but only shows in a grown body (多子).
+        for (auto it = p.flags.begin(); it != p.flags.end();) {
+            if (it->rfind("latent:", 0) == 0) {
+                std::string id = it->substr(7);
+                auto td = defs_.traits.find(id);
+                if (td == defs_.traits.end() || age >= td->second.fromAge) {
+                    if (td != defs_.traits.end() && !hasTrait(p, id)) p.traits.push_back(id);
+                    it = p.flags.erase(it);
+                    continue;
+                }
+            }
+            ++it;
+        }
 
         if (age >= 14 && p.occupation.empty()) {
             std::string occ;
@@ -1701,6 +1715,47 @@ void World::growSkills() {
             for (auto& s : p.skills) s -= 0.03;
         for (auto& s : p.skills) s = std::clamp(s, 0.0, 20.0);
     }
+}
+
+// A parish is not left without a priest for long: four months after the last one died or left, the bishop sends a
+// new one, who takes the church's glebe (what is vacant of it) and lives by the church. Until then everything that
+// needs a priest (letters, masses, his word) waits: the same check (village_priest) everywhere.
+void World::monthlyParish() {
+    bool has = priest_ != kNone && people_[priest_].alive() && people_[priest_].household != kNone;
+    if (has) {
+        priestGoneSince_ = -1;
+        return;
+    }
+    if (priestGoneSince_ < 0) {
+        priestGoneSince_ = day_;
+        return;
+    }
+    if (day_ - priestGoneSince_ < 4 * kDaysPerMonth || defs_.surnames.empty()) return;
+    Id dyn = addDynasty(defs_.surnames[rngNames_.range(0, int(defs_.surnames.size()) - 1)]);
+    Id hh = addHousehold(dyn, 0, 40);
+    households_[hh].house = "timber";
+    int age = rngSocial_.range(28, 42);
+    Id id = addPerson(pickName(Sex::Male, kNone, kNone), dyn, Sex::Male, day_ - age * kDaysPerYear - rngSocial_.range(0, 300), hh);
+    Person& p = people_[id];
+    p.occupation = "priest";
+    p.free = true;
+    p.flags.insert("celibate");
+    if (std::find(p.traits.begin(), p.traits.end(), "literate") == p.traits.end()) p.traits.push_back("literate");
+    rollCongenital(p);
+    rollPersonality(p, 3);
+    p.health = rngSocial_.range(75, 95);
+    p.skills[Learning] = rngSocial_.range(10, 15);
+    p.skills[Charm] = rngSocial_.range(3, 9);
+    households_[hh].head = id;
+    dynasties_[dyn].heads.push_back(id);
+    dynasties_[dyn].headSince.push_back(day_);
+    dynasties_[dyn].headStart.push_back({0, 40});
+    households_[hh].food = consumption(households_[hh]) * 120;
+    moveLand(kNone, hh, 8, LandPick::CustomaryFirst, "教堂的田");
+    placeHouse(hh);
+    priest_ = id;
+    priestGoneSince_ = -1;
+    log(1, "【消息】主教派了新的神父 " + fullName(id) + "（" + std::to_string(age) + " 歲）來村裡。教堂又有人做彌撒、教孩子認字了。");
 }
 
 }  // namespace sim

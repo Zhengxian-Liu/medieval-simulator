@@ -109,7 +109,7 @@
     {"id": "neighbour_death_npc", "title": "村裡的怪事", "scope": "anyone", "chance": 0.002, "npc_log": true, "cooldown_years": 30,
      "conditions": {"age": [30, 70], "trait": "cynical"},
      "options": [{"text": "好", "log": "有人說 {name} 半夜在十字路口和人說話，村裡議論紛紛。", "effects": [{"reputation": -4}]}]},
-    {"id": "deathbed_wishes", "title": "床前", "prompt": "{name} 病得起不了床，神父已經來過了。{target} 守在床邊，等著聽最後的話。",
+    {"id": "deathbed_wishes", "title": "床前", "prompt": "{name} 病得起不了床，臨終的聖事也做過了。{target} 守在床邊，等著聽最後的話。",
      "scope": "player_head", "chance": 1, "once": true,
      "on": {"signal": "manual"},
      "options": [
@@ -128,7 +128,7 @@
      ]},
     // The heir is a small child (design/fun-r6.md D): the last words are still the heir's, said to a child who will
     // keep them, while someone else holds the house for a few years.
-    {"id": "deathbed_wishes_child", "title": "床前", "prompt": "{name} 病得起不了床，神父已經來過了。家業往後是 {target} 的，可{target_pron}還小，被大人抱到床前，睜大眼睛等著聽最後的話。",
+    {"id": "deathbed_wishes_child", "title": "床前", "prompt": "{name} 病得起不了床，臨終的聖事也做過了。家業往後是 {target} 的，可{target_pron}還小，被大人抱到床前，睜大眼睛等著聽最後的話。",
      "scope": "player_head", "chance": 1, "once": true,
      "on": {"signal": "manual"},
      "options": [

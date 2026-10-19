@@ -136,6 +136,7 @@ void World::stepDay() {
         monthlyConcerns();
         monthlyFocus();
         monthlyWards();
+        monthlyParish();
         growSkills();
         monthlyAway();
         if (month() % 3 == 0) computeRings();
@@ -146,6 +147,8 @@ void World::stepDay() {
         monthlyAmbition();
         events.pulse("monthly");
     }
+    // The cards held back at the opening: one a month, in the middle of the month, once the first season is on.
+    if (dayOfMonth() == 14 && !deferredCards_.empty() && !inOpening() && !openingFull()) releaseDeferredCard();
     if (month() == 8 && dayOfMonth() == 29) {
         yearlyDebts();
         payRent();

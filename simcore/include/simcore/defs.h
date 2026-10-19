@@ -15,6 +15,7 @@ struct TraitDef {
     std::string category;  // personality | congenital | education
     std::string opposite;
     double inheritChance = 0;  // congenital: chance to pass to a child per parent
+    double fromAge = 0;        // congenital but only shown (and in effect) from this age: 多子 is no trait of a newborn
     double weight = 1;         // random roll weight
     std::map<std::string, double> mods;  // fertility, mortality, skill_gain, charm, ...
     std::string against;  // what acting against this trait weighs on you, e.g. "一口嚥不下去的氣"

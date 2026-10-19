@@ -163,6 +163,7 @@ struct Household {
     // A second debt to someone else waits behind the first (e.g. rent arrears while owing the miller).
     double heldDebt = 0;
     Id heldCreditor = kNone;
+    int debtSince = -1, heldSince = -1;  // the day each debt was first taken (「（1330 春借的）」 when it is cleared)
     Id creditor = kNone;   // person owed; the lord for rent arrears
     int debtYears = 0;     // rent days passed with the debt unpaid
     int noOxUntil = -1;    // the plough ox was sold or seized: poorer harvests until then
@@ -588,6 +589,8 @@ public:
     // One line on a person: age, how they feel about the family, and what they are about (if known).
     std::string personLine(Id id) const;
     std::string kinWord(Id a, Id b) const;  // "兒子", "姊妹", "親戚"…: what b is to a
+    std::string kinLabel(Id a, Id b) const;
+    std::string seasonLabel(int day) const;  // 「1330 春」: the season a day falls in, as the chronicle groups them  // kinWord placed for a list: 「女兒（嫁到庫柏家）」, 「媳婦（她當家：地是她的，華特入贅）」
     bool aimsKnown(const Person& p) const;
 
     // The family ladder: 0 villein, 1 free tenant, 2 freeholder, 3 small landholder (-1: the lord's house).
@@ -957,6 +960,28 @@ private:
     std::map<Id, int> noticed_;          // far villagers drawn closer for a while (until day)
     std::map<Id, int> lastStanding_;     // household -> rung last seen
     bool pendingAmbition_ = false;       // the first head picks an ambition on the first day
+    // The opening (design/status-2026-10-19.md): at most kOpeningCards questions before the first season's page; an
+    // event card that would ask past that waits in deferredCards_ and comes later in the first year, one a month.
+    // (Also any one day: see cardsOnDay_.)
+    static constexpr int kOpeningCards = 2;
+    int openingAsked_ = 0;
+    struct DeferredCard { std::string event; Id who = kNone, target = kNone; };
+    std::vector<DeferredCard> deferredCards_;
+    bool inOpening() const {
+        const int q = 3 * kDaysPerMonth;
+        return day_ >= handedOver_ && day_ < (handedOver_ / q + 1) * q;
+    }
+    // The same on any one day (the new year's cards all come on its first day): two, and the rest wait their month.
+    int cardsDay_ = -1, cardsOnDay_ = 0;
+    bool openingFull() const {
+        return chooser_ && ((inOpening() && openingAsked_ >= kOpeningCards) || (cardsDay_ == day_ && cardsOnDay_ >= kOpeningCards));
+    }
+    void noteCardAsked() {
+        if (inOpening()) ++openingAsked_;
+        if (cardsDay_ != day_) cardsDay_ = day_, cardsOnDay_ = 0;
+        ++cardsOnDay_;
+    }
+    void releaseDeferredCard();
     int handedOver_ = 0;                 // day the player took the family over (Config::prerun)
     Rng rngMinds_;
     std::string pendingOpening_;  // the opening situation, run on the first day
@@ -1059,6 +1084,8 @@ private:
     void followSurvivingBranch(bool lineEnded = false);
     void mergeHousehold(Household& from, Household& to, const std::string& how);  // the land notes: how it came  // members, land, money, food and goods move in; `from` ends
     void inheritRegard(Id dead, Id heir);  // the village's regard for the dead, half of it, passes to the one taking over
+    void monthlyParish();                  // the priest gone: after a few months the bishop sends another
+    int priestGoneSince_ = -1;
     void monthlyWards();                   // an heir held for turns 16: the land is handed over
     void marry(Id a, Id b);
     std::string pickName(Sex sex, Id father, Id mother);
@@ -1081,6 +1108,10 @@ private:
     void hireKin(Id house, Id master);
     Id harvestHand() const;                 // a poor man glad of a season's wage at the family's harvest
     std::map<Id, int> feedAskedUntil_;
+    // 〔親友挨餓〕 across all houses: at most kFeedCardsPerYear a harvest year (from September to September) for the
+    // family, whichever kin are hungry; the per-house limits above still hold.
+    static constexpr int kFeedCardsPerYear = 2;
+    int feedCardYear_ = -1, feedCardsThisYear_ = 0;
     int ambitionAskAfter_ = 0;  // the player's head put off choosing an ambition: not asked again before this day
     ManorBond manorBond_;       // the family's loan to the manor, if any
     std::map<std::string, int> lateAsked_;  // late-game asks (a rival's bid, the steward's loan): not again before this day

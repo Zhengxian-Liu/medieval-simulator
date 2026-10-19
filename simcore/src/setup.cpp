@@ -83,7 +83,10 @@ void World::rollCongenital(Person& p) {
         double c = 0.03 * t.weight;
         for (Id par : {p.father, p.mother})
             if (par != kNone && hasTrait(people_[par], id)) c += t.inheritChance;
-        if (rngLife_.chance(c)) p.traits.push_back(id);
+        if (!rngLife_.chance(c)) continue;
+        // Born with it, but it is only a trait once they are grown (yearlyAdulthood brings it out).
+        if (t.fromAge > 0 && ageYears(p) < t.fromAge) p.flags.insert("latent:" + id);
+        else p.traits.push_back(id);
     }
 }
 

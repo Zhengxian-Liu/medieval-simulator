@@ -202,7 +202,7 @@
      "ai": {"base": 2, "traits": {"vengeful": 8, "wrathful": 5, "pious": 4, "brave": 3, "craven": -6, "forgiving": -6}}},
 
     {"id": "study", "name": "苦讀", "personal": true, "requires": "不識字，存錢 20 便士以上", "desc": "跟神父學讀寫。識字的人能當書記、讀契約。",
-     "actor": {"age": [12, 40], "no_trait": "literate", "no_flag": "study_failed", "money_ge": 20},
+     "actor": {"age": [12, 40], "no_trait": "literate", "no_flag": "study_failed", "money_ge": 20, "village_priest": true},
      "max_months": 24, "monthly_cost": 1,
      "progress": {"base": 3, "skill": {"learning": 1.5}, "traits": {"clever": 3, "diligent": 2, "dull": -2, "lazy": -2}},
      "start_log": "{name} 每天收工後去神父那裡學認字。",
@@ -348,7 +348,7 @@
 
     {"id": "school_child", "name": "送孩子讀書", "requires": "家主，存錢 20 便士以上，家裡有 7 到 14 歲還沒讀書的孩子（自己的或住在家裡的）",
      "desc": "每月送神父兩便士和一些雞蛋，請他教孩子認字。識了字，才進得了教會、當得了書記。",
-     "actor": {"is_head": true, "money_ge": 20},
+     "actor": {"is_head": true, "money_ge": 20, "village_priest": true},
      "subject": {"pick": "kin_at_home", "conditions": {"age": [7, 14], "no_flag": "schooled", "no_trait": "literate", "not": {"trait": "dull"}}},
      "target": {"pick": "villager", "conditions": {"occupation": "priest"}},
      "max_months": 8, "retry_years": 1, "monthly_cost": 2,

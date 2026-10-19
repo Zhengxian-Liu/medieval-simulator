@@ -78,6 +78,21 @@ EventDef parseEvent(const Json& e) {
         d.options.push_back(od);
     }
     if (d.options.empty()) throw JsonError("event " + d.id + " has no options");
+    // Anything that needs the village priest (his letters, his mass, his word) holds only while there is one: the same
+    // check (village_priest) as the plans and ambitions that need him, so no card has a priest the plans say is gone.
+    // (A son of the house who is a priest elsewhere is not the village's.)
+    if (d.scope != "away") {
+        static const Json priest = Json::parse(R"({"village_priest": true})");
+        auto priestly = [](const std::string& s) { return s.find("神父") != std::string::npos; };
+        bool all = true;
+        for (auto& od : d.options) {
+            if (priestly(od.text)) od.conditions = Json::allOf(od.conditions, priest);
+            else all = false;
+        }
+        bool told = priestly(d.title) || priestly(d.prompt) || all;
+        for (const auto& pr : d.prompts) told = told || priestly(pr);
+        if (told) d.conditions = Json::allOf(d.conditions, priest);
+    }
     return d;
 }
 
@@ -93,6 +108,7 @@ Defs Defs::loadFromDir(const std::string& dir) {
         td.category = t.stringOr("category", "personality");
         td.opposite = t.stringOr("opposite", "");
         td.inheritChance = t.numberOr("inherit", 0);
+        td.fromAge = t.numberOr("from_age", 0);
         td.weight = t.numberOr("weight", 1);
         td.mods = readMods(t["mods"]);
         td.against = t.stringOr("against", "");

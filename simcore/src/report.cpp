@@ -429,6 +429,33 @@ std::string World::kinWord(Id a, Id b) const {
     return "";
 }
 
+// kinWord with what a list needs to place the person: a married daughter under her husband's name says whose house
+// she married into; a man who married into his wife's house says so; a woman who heads a house while her husband
+// lives says why (the holding is hers: a widow's or an heiress's land, and he married in).
+std::string World::kinLabel(Id a, Id b) const {
+    std::string k = kinWord(a, b);
+    if (k.empty() || a == kNone || b == kNone) return k;
+    const Person& pb = people_[b];
+    auto surname = [&](Id hh) {
+        return hh != kNone && households_[hh].dynasty != kNone ? dynasties_[households_[hh].dynasty].surname : std::string();
+    };
+    std::string note;
+    bool inLaw = k == "妻子" || k == "丈夫" || k == "媳婦" || k == "女婿" || k.find("繼") != std::string::npos;
+    Id hh = pb.household;
+    bool spouseHere = pb.spouse != kNone && people_[pb.spouse].alive() && people_[pb.spouse].household == hh;
+    if (hh != kNone && households_[hh].head == b && spouseHere && pb.sex == Sex::Female)
+        note = "她當家：地是她的，" + shortName(pb.spouse) + "入贅";
+    else if (!inLaw && hh != kNone && !inPlayerHouse(hh) && pb.spouse != kNone && surname(hh) != "" && surname(hh) != surname(people_[a].household))
+        note = (pb.sex == Sex::Female && households_[hh].dynasty == people_[pb.spouse].dynasty ? "嫁到" : pb.sex == Sex::Male && households_[hh].dynasty != pb.dynasty ? "入贅到" : "在") +
+               surname(hh) + "家";
+    return note.empty() ? k : k + "（" + note + "）";
+}
+
+std::string World::seasonLabel(int day) const {
+    static const char* names[4] = {"冬末", "春", "夏收", "秋"};
+    return std::to_string(cfg_.startYear + day / kDaysPerYear) + " " + names[(day % kDaysPerYear) / kDaysPerMonth / 3];
+}
+
 // What the family can tell about a person's aims. Kin, friends and talkers let it be known what they
 // want; a scheme is never told, though a target may sense something.
 bool World::aimsKnown(const Person& p) const {

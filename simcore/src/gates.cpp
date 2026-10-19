@@ -49,6 +49,10 @@ OfficeGate EventRunner::gate(const std::string& k, const Json& v, const Person& 
         g.label = label;
         g.detail = g.ok ? label : detail;
     };
+    auto setv = [&](const std::string& label, const std::string& okDetail, const std::string& failDetail) {
+        g.label = label;
+        g.detail = g.ok ? okDetail : failDetail;
+    };
     auto hush = [&] { if (quiet) *quiet = true; };
     const double money = h ? h->money : 0;
     if (k == "age") {
@@ -58,7 +62,10 @@ OfficeGate EventRunner::gate(const std::string& k, const Json& v, const Person& 
         set("年紀 " + range(v) + " 歲",
             a < lo ? who + " " + std::to_string(y) + " 歲，還要 " + std::to_string(std::max(1, static_cast<int>(std::ceil(lo - a)))) + " 年才滿 " + num(lo) + " 歲（要 " + range(v) + " 歲）"
                    : who + "已經 " + std::to_string(y) + " 歲（要 " + range(v) + " 歲）");
+        if (g.ok) g.detail = "年紀 " + std::to_string(y) + " 歲（" + range(v) + "）";
         if (a > hi && hi >= 60) g.detail = who + "已經 " + std::to_string(y) + " 歲，年紀太大了（要 " + range(v) + " 歲）";
+    } else if (k == "village_priest") {
+        set(yes(v) ? "村裡有神父" : "村裡沒有神父", yes(v) ? "村裡眼下沒有神父（老神父過世了，還沒派來新的）" : "村裡有神父");
     } else if (k == "married") {
         set(yes(v) ? "已婚" : "沒有成親", yes(v) ? who + "沒有成親" : who + "已經成親了");
     } else if (k == "is_head") {
@@ -66,17 +73,19 @@ OfficeGate EventRunner::gate(const std::string& k, const Json& v, const Person& 
         set(yes(v) ? "是一家之主" : "不是一家之主",
             yes(v) ? who + "不是一家之主" + (hh != kNone ? "（家主是 " + w.shortName(hh) + "）" : std::string()) : who + "自己當著家");
     } else if (k == "money_ge") {
-        set("存錢 " + num(v.asNumber()) + " 便士以上", "存錢 " + num(money) + "／要 " + num(v.asNumber()) + " 便士");
+        setv("存錢 " + num(v.asNumber()) + " 便士以上", "存錢 " + num(money) + " 便士（要 " + num(v.asNumber()) + " 以上）",
+             "存錢 " + num(money) + " 便士（要 " + num(v.asNumber()) + " 以上）");
     } else if (k == "money_lt") {
         set("存錢不到 " + num(v.asNumber()) + " 便士", "手上有 " + num(money) + " 便士，不缺這份錢（要不到 " + num(v.asNumber()) + "）");
     } else if (k == "acres_ge") {
-        set("地 " + num(v.asNumber()) + " 畝以上", "地 " + num(h ? h->acres : 0) + "／要 " + num(v.asNumber()) + " 畝");
+        setv("地 " + num(v.asNumber()) + " 畝以上", "地 " + num(h ? h->acres : 0) + " 畝（要 " + num(v.asNumber()) + " 以上）",
+             "地 " + num(h ? h->acres : 0) + " 畝（要 " + num(v.asNumber()) + " 以上）");
     } else if (k == "acres_lt") {
         set("田不到 " + num(v.asNumber()) + " 畝", "已經有 " + num(h ? h->acres : 0) + " 畝地了");
     } else if (k == "customary_ge") {
-        set("佃來的地 " + num(v.asNumber()) + " 畝以上", "佃來的地 " + num(h ? h->acres - h->freehold : 0) + "／要 " + num(v.asNumber()) + " 畝");
+        set("佃來的地 " + num(v.asNumber()) + " 畝以上", "佃來的地 " + num(h ? h->acres - h->freehold : 0) + " 畝（要 " + num(v.asNumber()) + " 以上）");
     } else if (k == "freehold_ge") {
-        set("自由地 " + num(v.asNumber()) + " 畝以上", "自由地 " + num(h ? h->freehold : 0) + "／要 " + num(v.asNumber()) + " 畝");
+        set("自由地 " + num(v.asNumber()) + " 畝以上", "自由地 " + num(h ? h->freehold : 0) + " 畝（要 " + num(v.asNumber()) + " 以上）");
     } else if (k == "free") {
         set(yes(v) ? "自由身" : "農奴身分", yes(v) ? "你家還是農奴" : "你家已經是自由人了");
     } else if (k == "no_flag" || k == "flag") {
@@ -144,7 +153,8 @@ OfficeGate EventRunner::gate(const std::string& k, const Json& v, const Person& 
             World::standingName(static_cast<int>(v.asNumber())) + "」）");
     } else if (k == "lord_opinion_ge") {
         double op = w.lord_ != kNone && w.people_[w.lord_].alive() ? w.opinion(w.lord_, p.id) : 0;
-        set("老爺對你家好感 " + num(v.asNumber()) + " 以上", w.lord_ == kNone ? "莊園眼下沒有領主" : "老爺對" + who + "好感 " + num(op) + "／要 " + num(v.asNumber()));
+        setv("老爺對你家好感 " + num(v.asNumber()) + " 以上", "老爺對" + who + "好感 " + num(op) + "（要 " + num(v.asNumber()) + " 以上）",
+             w.lord_ == kNone ? "莊園眼下沒有領主" : "老爺對" + who + "好感 " + num(op) + "（要 " + num(v.asNumber()) + " 以上）");
     } else if (k == "demesne_free") {
         set("領主的自營地沒人包著", "領主的自營地已經包給別人了");
     } else if (k == "mill_free") {

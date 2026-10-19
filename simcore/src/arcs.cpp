@@ -444,11 +444,13 @@ void World::addDebt(Household& h, double amount, Id creditor) {
     if (creditor == kNone) creditor = lord_;
     if (h.debt <= 0.5) {
         h.creditor = creditor;
+        h.debtSince = day_;
         // A neighbour's loan made after the winter is due at the Michaelmas after next ("明年米迦勒節"), not in weeks.
         h.debtYears = creditor != lord_ && month() >= 2 ? -1 : 0;
     } else if (creditor != h.creditor) {
         // Owed to someone else: it waits its turn rather than being added to the wrong account.
         if (h.heldDebt <= 0.5 || h.heldCreditor == creditor) {
+            if (h.heldDebt <= 0.5) h.heldSince = day_;
             h.heldDebt += amount;
             h.heldCreditor = creditor;
             return;
@@ -529,6 +531,7 @@ void World::promoteHeldDebt(Household& h) {
     if (h.debt > 0.5 || h.heldDebt <= 0.5) return;
     h.debt = h.heldDebt;
     h.creditor = h.heldCreditor;
+    h.debtSince = h.heldSince;
     h.debtYears = 0;
     h.heldDebt = 0;
     h.heldCreditor = kNone;
@@ -628,7 +631,8 @@ void World::monthlyDebts() {
             h.debt = 0;
             h.debtYears = 0;
             if (inPlayerHouse(h.id))
-                log(1, h.creditor == lord_ ? std::string("總算還清了欠領主的債。") : "總算還清了欠 " + fullName(h.creditor) + " 的債。");
+                log(1, (h.creditor == lord_ ? std::string("總算還清了欠領主的債") : "總算還清了欠 " + fullName(h.creditor) + " 的債") +
+                           (h.debtSince >= 0 ? "（" + seasonLabel(h.debtSince) + "借的）" : "") + "。");
             else if (manor && h.creditor != kNone && people_[h.creditor].household != kNone && inPlayerHouse(people_[h.creditor].household))
                 log(1, "莊園把借你家的錢連本帶利還清了。");
             if (h.head != kNone) addStress(h.head, -15, "");
@@ -762,7 +766,7 @@ void World::yearlyDebts() {
                 households_[people_[h.creditor].household].money += h.debt;
                 book(households_[people_[h.creditor].household], "收回借款", h.debt);
                 log(1, "【欠債】" + fullName(h.head) + " 在莊園法庭上把欠 " + fullName(h.creditor) + " 的 " + std::to_string(int(h.debt)) +
-                           " 便士一次還清了。");
+                           " 便士一次還清了" + (h.debtSince >= 0 ? "（" + seasonLabel(h.debtSince) + "借的）" : "") + "。");
                 clearDebt(h);
                 continue;
             }

@@ -434,7 +434,13 @@ int main() {
                 w.stepDay();
                 return cards - before;
             };
-            CHECK(cardAt(3, 20) == 1 && foodDays(w) > 45 && foodDays(w) < 55, "a month's grain was not bought on the card");
+            // (What the card bought, from its line: a neighbour's sack the same day is not the card's doing.)
+            auto lastGrainLine = [&] {
+                for (size_t i = w.chronicle().size(); i-- > 0;)
+                    if (w.chronicle()[i].text.rfind("〔買糧〕", 0) == 0) return w.chronicle()[i].text;
+                return std::string();
+            };
+            CHECK(cardAt(3, 20) == 1 && lastGrainLine().find("買了 30 天的糧") != std::string::npos, "a month's grain was not bought on the card");
             CHECK(cardAt(4, 40) == 0 && foodDays(w) < 41, "grain was bought again on the strength of last time's answer");
             CHECK(cardAt(5, 10) == 1 && lastSit.find("上回買的糧又快吃完了") != std::string::npos, "the month eaten, the family was not asked again");
             size_t lines = w.chronicle().size();
@@ -1688,7 +1694,7 @@ int main() {
             std::printf("books (seed %d): %d cards answered, %s\n", seed, asked, w.seasonBooksText(w.seasonBooks().back()).c_str());
         }
         // Shown in whole pence, the items add up to the purse as the header shows it.
-        CHECK(World::booksText(10.0, 2.6, {{"甲", -2.4}, {"乙", -2.3}, {"丙", -2.7}}) == "存錢 10 → 2 便士（出：丙 -3、甲 -3、乙 -2）。",
+        CHECK(World::booksText(10.0, 2.6, {{"甲", -2.4}, {"乙", -2.3}, {"丙", -2.7}}) == "存錢 10 → 2 便士（出：丙 −3、甲 −3、乙 −2）。",
               "the books do not add up in whole pence");
         CHECK(World::booksText(40.2, 40.9, {}) == "存錢 40 便士，沒有進出。", "a season with no money moving is not said so");
 

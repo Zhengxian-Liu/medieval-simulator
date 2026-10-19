@@ -481,7 +481,7 @@ std::string World::booksText(double start, double end, const std::map<std::strin
     std::sort(out.begin(), out.end(), bySize);
     auto list = [](const std::vector<Item>& v) {
         std::string s;
-        for (const auto& x : v) s += (s.empty() ? "" : "、") + x.why + " " + (x.shown > 0 ? "+" : "") + std::to_string(x.shown);
+        for (const auto& x : v) s += (s.empty() ? "" : "、") + x.why + " " + (x.shown > 0 ? "+" + std::to_string(x.shown) : "−" + std::to_string(-x.shown));
         return s;
     };
     std::string why;
@@ -1240,9 +1240,11 @@ std::vector<World::AgendaItem> World::seasonAgenda(bool all) {
 
     std::stable_sort(items.begin(), items.end(), [](const AgendaItem& x, const AgendaItem& y) { return x.rank > y.rank; });
     // One plan once: the ambition's step may be the match or the courting found below it.
+    // And every item once: two hungry houses can name the same child to take in (help_take:<child>).
     std::set<std::tuple<std::string, Id, Id>> plansNamed;
+    std::set<std::string> ids;
     items.erase(std::remove_if(items.begin(), items.end(), [&](const AgendaItem& x) {
-                    return x.kind == "plan" && !plansNamed.insert({x.event, x.target, x.subject}).second;
+                    return !ids.insert(x.id).second || (x.kind == "plan" && !plansNamed.insert({x.event, x.target, x.subject}).second);
                 }), items.end());
     // At most four, and the company kept among them when there is room: the season's list, not the village's.
     if (items.size() > 4 && !all) {

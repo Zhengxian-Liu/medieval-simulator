@@ -16,6 +16,7 @@ public:
     Json() = default;
     static Json parse(const std::string& text);
     static Json parseFile(const std::string& path);
+    static Json allOf(const Json& a, const Json& b);  // both must hold (an array of conditions); a null side drops out
 
     Type type() const { return type_; }
     bool isNull() const { return type_ == Type::Null; }

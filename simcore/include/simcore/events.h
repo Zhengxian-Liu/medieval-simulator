@@ -32,6 +32,7 @@ public:
     // The head goes to see `p` (an interaction event): p answers, the head's time is spent.
     void interact(const EventDef& ev, Person& p, Id head);
     void fireScheduled(const EventDef& ev, Person& p, Id target, Id deed);
+    bool refire(const EventDef& ev, Person& p, Id target);  // a card held back at the opening, if it still fits
     // Picks an option, logs it at `importance` (0 = silent) and applies it.
     void runEvent(const EventDef& ev, Person& p, Id target, int importance);
 
@@ -43,6 +44,7 @@ private:
     Id deed_ = kNone;   // the deed a signal-driven event is about
     double writtenOff_ = 0;  // what target_lord_debt last wrote off the manor book without payment
     bool eligible(const EventDef& ev, const Person& p, Id playerHead) const;
+    bool playersToAnswer(const EventDef& ev, const Person& p) const;  // the player (not the AI) answers it
     // Where a story the family met is remembered so as not to come again soon (World::metStory_); first = kNone
     // when it is not held back (signals, institutions, rules that fire whenever their state holds, villagers).
     std::pair<Id, std::string> storyKey(const EventDef& ev, const Person& p) const;

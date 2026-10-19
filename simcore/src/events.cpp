@@ -44,6 +44,28 @@ void EventRunner::pulse(const std::string& kind) {
     }
 }
 
+// One card held back at the opening, if it still fits (the person about, the target too, its conditions still holding).
+void World::releaseDeferredCard() {
+    while (!deferredCards_.empty() && !gameOver_) {
+        DeferredCard d = deferredCards_.front();
+        deferredCards_.erase(deferredCards_.begin());
+        const EventDef* ev = nullptr;
+        for (const auto& e : defs_.events)
+            if (e.id == d.event) ev = &e;
+        if (!ev || d.who == kNone) continue;
+        Person& p = people_[d.who];
+        if (d.target != kNone && (!people_[d.target].alive() || people_[d.target].household == kNone)) continue;
+        if (EventRunner(*this).refire(*ev, p, d.target)) return;
+    }
+}
+
+bool EventRunner::refire(const EventDef& ev, Person& p, Id target) {
+    Id playerHead = w_.playerHousehold_ != kNone ? w_.households_[w_.playerHousehold_].head : kNone;
+    if (!eligible(ev, p, playerHead) || !eval(ev.conditions, p, target)) return false;
+    fire(ev, p, target);
+    return true;
+}
+
 bool EventRunner::eligible(const EventDef& ev, const Person& p, Id playerHead) const {
     if (!p.alive()) return false;
     if (ev.scope == "away" ? !w_.isAway(p) : p.household == kNone) return false;
@@ -203,7 +225,23 @@ std::string EventRunner::choseLine(const Person& p, Id target, const std::string
     return format("{name}", p, target) + "選了：" + option + "。";
 }
 
+// Whose answer it is: the one keeping the house decides for themselves, for the young children in it, and on the big
+// roads (parent_decides: school, the cloister, the levy, a match) for anyone of the house, a brother or a stepchild as
+// much as a son, at home or away from it. Someone the head goes to see answers for themselves, child or not.
+bool EventRunner::playersToAnswer(const EventDef& ev, const Person& p) const {
+    Id acting = w_.actingHead();
+    bool ofHouse = acting != kNone && p.id != acting &&
+                   (p.household == w_.playerHousehold_ || (w_.isAway(p) && p.awayFrom == w_.playerHousehold_));
+    return ev.scope != "interaction" && (p.id == acting || (p.household == w_.playerHousehold_ && w_.ageYears(p) < 14) ||
+                                         (ev.parentDecides && ofHouse && (p.spouse == kNone || p.household == w_.playerHousehold_)));
+}
+
 void EventRunner::fire(const EventDef& ev, Person& p, Id target) {
+    // Past the opening's few questions, a card that would stop the player waits for the first year to be under way.
+    if (w_.openingFull() && ev.ask && ev.options.size() > 1 && !(ev.routine && w_.routineByRule_) && playersToAnswer(ev, p)) {
+        w_.deferredCards_.push_back({ev.id, p.id, target});
+        return;
+    }
     bookAs_ = ev.title;
     const OptionDef& o = ev.options[chooseOption(ev, p, target)];
     natureStress(ev, o, p, target);
@@ -516,12 +554,7 @@ int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
     // The one keeping the house decides for themselves, for the young children in it, and on the big roads
     // (parent_decides: school, the cloister, the levy, a match) for anyone of the house, a brother or a
     // stepchild as much as a son, at home or away from it.
-    Id acting = w_.actingHead();
-    bool ofHouse = acting != kNone && p.id != acting &&
-                   (p.household == w_.playerHousehold_ || (w_.isAway(p) && p.awayFrom == w_.playerHousehold_));
-    // Someone the head goes to see answers for themselves, child or not.
-    bool asks = ev.scope != "interaction" && (p.id == acting || (p.household == w_.playerHousehold_ && w_.ageYears(p) < 14) ||
-                (ev.parentDecides && ofHouse && (p.spouse == kNone || p.household == w_.playerHousehold_)));
+    bool asks = playersToAnswer(ev, p);
     asked_ = ev.ask && asks && !(ev.routine && w_.routineByRule_);
     picked_ = false;
     // While a year is let run, an everyday moment is not a stop: the AI answers it as the family would.
@@ -533,8 +566,18 @@ int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
         for (size_t k = 0; k < ev.options.size(); ++k) {
             const OptionDef& o = ev.options[k];
             if (ws[k] <= 0 && !optionOpen(o, p, target)) {
-                if (o.conditions.isNull() || eval(o.conditions, p, target))
-                    prompt.unavailable.push_back(optionText(o, p, target) + "（錢不夠）");
+                if (o.conditions.isNull() || eval(o.conditions, p, target)) {
+                    // What it costs against what the house has: 「✗ …（錢不夠：要 40 便士，手上 12）」.
+                    double cost = 0;
+                    if (o.effects.isArray())
+                        for (const auto& e : o.effects.asArray())
+                            if (e.isObject() && e["money"].isNumber() && e["money"].asNumber() < 0) cost -= e["money"].asNumber();
+                    Id hid = p.household != kNone ? p.household : w_.isAway(p) ? p.awayFrom : kNone;
+                    double have = hid != kNone ? std::floor(w_.households_[hid].money) : 0;
+                    prompt.unavailable.push_back("✗ " + optionText(o, p, target) +
+                                                 (cost > 0 ? "（錢不夠：要 " + std::to_string(long(std::ceil(cost))) + " 便士，手上 " + std::to_string(long(have)) + "）"
+                                                           : "（錢不夠）"));
+                }
                 continue;
             }
             open.push_back(static_cast<int>(k));
@@ -573,6 +616,7 @@ int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
             prompt.situation = cut != std::string::npos && cut >= 9 ? common.substr(0, cut) + "……" : "";
         }
         if (open.size() > 1 || (!open.empty() && !prompt.unavailable.empty())) {
+            w_.noteCardAsked();
             int r = w_.chooser_(prompt);
             if (r >= 0 && r < static_cast<int>(open.size())) {
                 picked_ = true;

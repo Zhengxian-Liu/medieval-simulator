@@ -28,7 +28,7 @@
     {"id": "clever",    "name": "聰慧", "category": "congenital", "opposite": "dull", "inherit": 0.15, "weight": 1.2, "mods": {"skill_gain": 0.4}},
     {"id": "dull",      "name": "遲鈍", "category": "congenital", "opposite": "clever", "inherit": 0.12, "weight": 1.0, "mods": {"skill_gain": -0.35}},
     {"id": "comely",    "name": "俊美", "category": "congenital", "inherit": 0.15, "weight": 1.2, "mods": {"attraction": 1.5, "marriage": 0.4}},
-    {"id": "fecund",    "name": "多子", "category": "congenital", "inherit": 0.15, "weight": 0.8, "mods": {"fertility": 0.5}},
+    {"id": "fecund",    "name": "多子", "category": "congenital", "inherit": 0.15, "weight": 0.8, "from_age": 16, "mods": {"fertility": 0.5}},
 
     // acquired through life
     {"id": "literate",  "name": "識字", "category": "education", "mods": {"skill_learning": 0.3}},

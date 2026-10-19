@@ -74,7 +74,10 @@ std::string World::officeBar(Id who, const std::string& id) const {
 // servant, a woman) is told only when it does, and alone: there is nothing there to work towards.
 std::vector<OfficeGate> World::officeGates(Id who, const std::string& id) const {
     std::vector<OfficeGate> g;
-    auto add = [&](const std::string& label, bool ok, const std::string& detail) { g.push_back({label, ok, detail}); };
+    // A met condition keeps its label as its detail unless it has a value to say (okDetail): 「年紀 31 歲（25–65）」.
+    auto add = [&](const std::string& label, bool ok, const std::string& detail, const std::string& okDetail = "") {
+        g.push_back({label, ok, ok ? (okDetail.empty() ? label : okDetail) : detail});
+    };
     auto only = [&](const std::string& label, const std::string& detail) { return std::vector<OfficeGate>{{label, false, detail}}; };
     if (who == kNone) return only("家裡有當家的", "家裡沒有當家的");
     const Person& p = people_[who];
@@ -93,7 +96,8 @@ std::vector<OfficeGate> World::officeGates(Id who, const std::string& id) const 
             y < lo   ? shortName(who) + "還要 " + std::to_string(std::max(1, static_cast<int>(std::ceil(lo - a)))) + " 年才滿 " +
                            std::to_string(lo) + " 歲（" + range + "）"
             : a > hi ? shortName(who) + "已經 " + std::to_string(y) + " 歲（" + range + "）"
-                     : "現在 " + std::to_string(y) + " 歲");
+                     : "",
+            "年紀 " + std::to_string(y) + " 歲（" + std::to_string(lo) + "–" + std::to_string(hi) + "）");
     };
     if (id == "reeve") {
         add("一家之主", h.head == who, "莊頭得是一家之主");
@@ -101,7 +105,8 @@ std::vector<OfficeGate> World::officeGates(Id who, const std::string& id) const 
         add("種地的人", p.occupation == "peasant", "莊頭得是種地的人，做手藝和買賣的不當");
         // All the house owes, counted as the header shows it (whole pence): one number on every page.
         const long owed = static_cast<long>(std::floor(owedAll(h.id) + 1e-9));
-        add("欠債不到 20 便士", owed < 20, "欠債 " + std::to_string(owed) + "／上限 20（沒人放心讓欠債的人收租）");
+        add("欠債不到 20 便士", owed < 20, "欠債 " + std::to_string(owed) + " 便士（上限 20；沒人放心讓欠債的人收租）",
+            "欠債 " + std::to_string(owed) + " 便士（上限 20）");
         auto bound = cooldowns_.find({who, "lords_debtor"});
         bool beholden = bound != cooldowns_.end() && bound->second > day_;
         add("不欠領主免債的人情", !beholden,
@@ -126,7 +131,7 @@ std::vector<OfficeGate> World::officeGates(Id who, const std::string& id) const 
 
 std::string World::gatesText(const std::vector<OfficeGate>& gates) {
     std::string out;
-    for (const auto& gt : gates) out += (out.empty() ? "" : "　") + std::string(gt.ok ? "✓ " + gt.label : "✗ " + gt.detail);
+    for (const auto& gt : gates) out += (out.empty() ? "" : "　") + std::string(gt.ok ? "✓ " : "✗ ") + (gt.detail.empty() ? gt.label : gt.detail);
     return out;
 }
 

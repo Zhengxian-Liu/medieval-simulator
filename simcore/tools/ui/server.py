@@ -27,6 +27,7 @@ class Game:
         self.state = None       # the latest situation (chronicle lines taken out)
         self.ask = None         # what the game is waiting for, or None while it runs
         self.chronicle = []     # every line so far
+        self.entries = []       # every chronicle entry so far, by season (design/ui-text.md)
         self.ended = None
         self.replies = []       # answers to looks (a person, the family's knowledge), in order
         self.write_lock = threading.Lock()
@@ -45,6 +46,7 @@ class Game:
                 kind = msg.get("type")
                 if kind == "state":
                     self.chronicle.extend(msg.pop("chronicle", []))
+                    self.entries.extend(msg.pop("entries", []))
                     self.state = msg
                 elif kind == "ask":
                     self.ask = msg
@@ -62,7 +64,7 @@ class Game:
             self.seq += 1
             self.cond.notify_all()
 
-    def view(self, since_seq, since_line, wait):
+    def view(self, since_seq, since_line, wait, since_entry=0):
         with self.cond:
             if wait:
                 self.cond.wait_for(lambda: self.seq > since_seq, timeout=25)
@@ -73,6 +75,8 @@ class Game:
                 "ended": self.ended,
                 "lines": self.chronicle[since_line:],
                 "line_count": len(self.chronicle),
+                "entries": self.entries[since_entry:],
+                "entry_count": len(self.entries),
             }
 
     def send(self, obj):
@@ -122,7 +126,8 @@ def make_handler(game):
                 q = parse_qs(url.query)
                 seq = int(q.get("seq", ["-1"])[0])
                 line = int(q.get("line", ["0"])[0])
-                return self._send(200, json.dumps(game.view(seq, line, wait=seq >= 0), ensure_ascii=False))
+                entry = int(q.get("entry", ["0"])[0])
+                return self._send(200, json.dumps(game.view(seq, line, wait=seq >= 0, since_entry=entry), ensure_ascii=False))
             self._send(404, "{}")
 
         def do_POST(self):

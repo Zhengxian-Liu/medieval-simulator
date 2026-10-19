@@ -884,6 +884,7 @@ void World::askHouseStyle(Household& h, double monthly, double cap) {
     if (h.styleAsked >= 0 && h.styleHead == head &&
         (day_ - h.styleAsked < 5 * kDaysPerYear || (!h.styleLapsed && std::abs(h.styleCap - cap) < 0.5)))
         return;
+    if (openingFull()) return;  // asked once the first season is under way
     bool again = h.styleAsked >= 0;
     h.styleAsked = day_;
     h.styleHead = head;
@@ -1016,10 +1017,17 @@ void World::askToFeed(Household& h) {
             if (kin == kNone || ageYears(people_[m]) > ageYears(people_[kin])) kin = m;
         }
     if (kin == kNone && opinion(ours, h.head) < 40) return;
+    // However many kin houses are short, the family is asked at most kFeedCardsPerYear times a harvest year.
+    int harvestYear = (day_ + kDaysPerYear - 8 * kDaysPerMonth) / kDaysPerYear;
+    if (harvestYear != feedCardYear_) feedCardYear_ = harvestYear, feedCardsThisYear_ = 0;
+    if (feedCardsThisYear_ >= kFeedCardsPerYear) return;
     Household& ph = households_[playerHousehold_];
     double spare = ph.food - consumption(ph) * 120;
     double price = param("grain_price", 0.5);
-    double coin = std::round(daily * 60 * price);
+    // A handout sized to the family's own means: two months of their bread at most, never more than half the spare
+    // grain or a quarter of the purse (a gift of most of what the family has is no first offer).
+    double grain = std::min(daily * 60, spare / 2);
+    double coin = std::round(std::min(daily * 60 * price, std::floor(ph.money / 4)));
     std::vector<std::string> opts;
     std::vector<int> what;
     // Helped once already and hungry again: the want is in the holding, not the season. Only a lasting way out is
@@ -1035,8 +1043,14 @@ void World::askToFeed(Household& h) {
     // (their want is in the holding, and the season's list still offers to take a child in when there is room).
     if (opts.empty() && feedHelped_[h.id] >= 2) return;
     if (opts.empty()) {
-        if (spare >= daily * 90) opts.push_back("從自家糧倉送去夠吃三個月的糧"), what.push_back(0);
-        if (ph.money >= coin + 20) opts.push_back("送 " + std::to_string(int(coin)) + " 便士讓他們買糧"), what.push_back(1);
+        if (grain >= daily * 20)
+            opts.push_back("從自家糧倉送去夠他們吃 " + std::to_string(int(grain / daily)) + " 天的糧（自家存糧 " + std::to_string(int(foodDays(ph))) + " 天 → " +
+                           std::to_string(int((ph.food - grain) / std::max(0.5, consumption(ph)))) + " 天）"),
+                what.push_back(0);
+        if (coin >= daily * 20 * price && ph.money >= coin + 20)
+            opts.push_back("送 " + std::to_string(int(coin)) + " 便士讓他們買糧（夠吃 " + std::to_string(int(coin / price / daily)) + " 天；你家有 " +
+                           std::to_string(int(ph.money)) + " 便士）"),
+                what.push_back(1);
         if (h.debt > 0.5 && h.creditor != kNone && inPlayerHouse(people_[h.creditor].household)) opts.push_back("免了他們欠你家的債"), what.push_back(2);
     }
     if (opts.empty()) return;
@@ -1044,11 +1058,17 @@ void World::askToFeed(Household& h) {
     what.push_back(3);
     feedAskedUntil_[h.id] = day_ + (again ? kDaysPerYear : kDaysPerYear / 2);  // the same house not every season
     feedAskedUntil_[kAnyHouse] = day_ + kDaysPerMonth;
+    ++feedCardsThisYear_;
     int children = 0;
     for (Id m : h.members)
         if (ageYears(people_[m]) < 12) ++children;
-    std::string who = kin == h.head ? kinWord(ours, kin) + " " + fullName(h.head) + " 家"
-                      : kin != kNone ? fullName(h.head) + " 家（你家的" + kinWord(ours, kin) + " " + shortName(kin) + " 在他家）" : "好朋友 " + fullName(h.head) + " 家";
+    // Whose house it is, said so the player can place it: a son who married into his wife's house is 「入贅」 there.
+    const bool sheHeads = people_[h.head].sex == Sex::Female;
+    const bool marriedIn = kin != kNone && people_[kin].spouse == h.head;
+    std::string who = kin == h.head ? kinLabel(ours, kin) + " " + fullName(h.head) + " 家"
+                      : kin != kNone ? fullName(h.head) + " 家（你家的" + kinWord(ours, kin) + " " + shortName(kin) + (marriedIn ? " 入贅在" : " 在") +
+                                           (sheHeads ? "她" : "他") + "家）"
+                                     : "好朋友 " + fullName(h.head) + " 家";
     int days = static_cast<int>(h.food / std::max(1.0, daily));
     std::string sit = who + (again ? "又缺糧了：只剩 " : "只剩 ") + std::to_string(days) + " 天的糧" +
                       (children ? "，家裡有 " + std::to_string(children) + " 個孩子" : "") + "。" +
@@ -1067,10 +1087,9 @@ void World::askToFeed(Household& h) {
         return;
     }
     if (w == 0) {
-        double amount = daily * 90;
-        ph.food -= amount;
-        h.food += amount;
-        log(1, "〔親友挨餓〕" + fullName(ours) + " 讓人背了幾袋麥子送到 " + fullName(h.head) + " 家，夠他們吃到下一季。");
+        ph.food -= grain;
+        h.food += grain;
+        log(1, "〔親友挨餓〕" + fullName(ours) + " 讓人背了幾袋麥子送到 " + fullName(h.head) + " 家，夠他們吃 " + std::to_string(int(grain / daily)) + " 天。");
     } else if (w == 1) {
         ph.money -= coin;
         book(ph, "接濟別人", -coin);

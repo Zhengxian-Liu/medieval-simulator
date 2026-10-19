@@ -132,6 +132,7 @@ public:
     size_t shown = 0;           // chronicle lines already sent
     std::string summary;        // what the last season came to, shown through this season
     World::FamilySnapshot seasonStart;  // the family at the start of this season, for "這一季到現在"
+    World::FamilySnapshot lastSeason;   // ...and of the season before it: how each one's feeling for the head moved since
     bool quit = false;
     std::string notice;         // an action refused as malformed: sent once with the next state
 
@@ -221,6 +222,296 @@ public:
         return arr(out);
     }
 
+    // ---- The chronicle by season (design/ui-text.md) ----
+    // Each new chronicle line becomes an entry: its season, which block it goes in (big = 大事 in bold, fam = the
+    // family's smaller news under them, news = village talk, sub = a line that belongs to the entry above it), the
+    // text in the house style (full name at the first mention in a season, then the given name; only 〔〕 for a card
+    // the player answered and 【消息】 for what was heard), and for a late outcome the season it came from.
+    static int seasonKeyOf(int year, int month) { return year * 4 + month / 3; }
+    int seasonKey(int day) const {
+        return seasonKeyOf(w_.config().startYear + day / kDaysPerYear, (day % kDaysPerYear) / kDaysPerMonth);
+    }
+    static std::string seasonLabel(int key) {
+        static const char* names[4] = {"冬末", "春", "夏收", "秋"};
+        return std::to_string(key / 4) + " " + names[key % 4];
+    }
+    // 【欠債】 → 「欠債：」, 【風聲】 → 【消息】; ASCII minus before a number → −.
+    static std::string houseStyle(std::string t) {
+        std::string out;
+        size_t i = 0;
+        while (i < t.size()) {
+            size_t a = t.find("【", i);
+            if (a == std::string::npos) break;
+            size_t b = t.find("】", a);
+            if (b == std::string::npos) break;
+            std::string tag = t.substr(a + 3, b - a - 3);
+            out += t.substr(i, a - i);
+            if (tag == "消息" || tag == "風聲" || tag == "傳聞") out += "【消息】";
+            else if (!tag.empty()) out += tag + "：";
+            i = b + 3;
+        }
+        out += t.substr(i);
+        std::string r;
+        for (size_t k = 0; k < out.size(); ++k) {
+            unsigned char prev = k ? static_cast<unsigned char>(out[k - 1]) : ' ';
+            bool numAfter = k + 1 < out.size() && out[k + 1] >= '0' && out[k + 1] <= '9';
+            if (out[k] == '-' && numAfter && (prev == ' ' || prev >= 0x80 || prev == '(' || prev == ','))
+                r += "−";
+            else
+                r += out[k];
+        }
+        return r;
+    }
+    struct NameRef { std::string full, given; };
+    std::vector<NameRef> names_;
+    size_t namesFor_ = static_cast<size_t>(-1);
+    std::map<int, std::set<std::string>> namesSeen_;  // season -> full names already written in it
+    void refreshNames() {
+        const World& w = w_;
+        if (namesFor_ == static_cast<size_t>(w.today())) return;
+        namesFor_ = static_cast<size_t>(w.today());
+        names_.clear();
+        std::map<std::string, int> givenCount;
+        std::vector<NameRef> all;
+        for (const auto& p : w.people()) {
+            if (!p.alive() && p.deathDay < w.today() - kDaysPerYear) continue;
+            std::string full = w.fullName(p.id), given = w.shortName(p.id);
+            if (full == given || given.empty()) continue;
+            ++givenCount[given];
+            all.push_back({full, given});
+        }
+        for (const auto& n : all)
+            if (givenCount[n.given] == 1) names_.push_back(n);  // a given name two people answer to stays full
+        std::sort(names_.begin(), names_.end(), [](const NameRef& a, const NameRef& b) { return a.full.size() > b.full.size(); });
+    }
+    std::string shortenNames(std::string t, int key) {
+        auto& seen = namesSeen_[key];
+        for (const auto& n : names_) {
+            size_t at = t.find(n.full);
+            if (at == std::string::npos) continue;
+            bool first = !seen.count(n.full);
+            seen.insert(n.full);
+            // The first mention in the season stays whole; every later one is the given name.
+            size_t from = first ? at + n.full.size() : at;
+            while ((at = t.find(n.full, from)) != std::string::npos) {
+                t.replace(at, n.full.size(), n.given);
+                from = at + n.given.size();
+            }
+        }
+        return t;
+    }
+    // Who and what count as touching the family: kin, the household, anyone with a strong feeling either way (好感
+    // 40 or more, a grudge of −30 or a feud), and the things the family is after.
+    std::vector<std::string> nearNames_, nearThings_;
+    void refreshNear() {
+        const World& w = w_;
+        nearNames_.clear();
+        nearThings_.clear();
+        Id head = w.playerHead(), hh = w.playerHousehold();
+        if (head == kNone) return;
+        for (const auto& p : w.people()) {
+            if (!p.alive() || p.id == head) continue;
+            bool near = p.household == hh || !w.kinWord(head, p.id).empty() || w.opinion(p.id, head) >= 40 ||
+                        w.opinion(head, p.id) >= 40 || w.opinion(head, p.id) <= -30 || w.feudStage(head, p.id) > 0;
+            if (near) nearNames_.push_back(w.fullName(p.id));
+        }
+        nearNames_.push_back(w.fullName(head));
+        nearNames_.push_back(w.dynasties()[w.playerDynasty()].surname + "家");
+        for (const auto& wt : w.wants())
+            if (wt.open && wt.house == hh) nearThings_.push_back(w.wantThing(wt));
+    }
+    bool touches(const std::string& t) const {
+        for (const auto& n : nearNames_)
+            if (t.find(n) != std::string::npos) return true;
+        for (const auto& n : nearThings_)
+            if (!n.empty() && t.find(n) != std::string::npos) return true;
+        return false;
+    }
+    // Grain bought in a season, merged into one line of its books: times, days, pence.
+    struct Grain { int times = 0; double days = 0, pence = 0; };
+    std::map<int, Grain> grain_;
+    static double numberBefore(const std::string& t, const std::string& mark) {
+        size_t at = t.find(mark);
+        if (at == std::string::npos) return 0;
+        size_t b = at;
+        while (b > 0 && t[b - 1] == ' ') --b;
+        size_t a = b;
+        while (a > 0 && ((t[a - 1] >= '0' && t[a - 1] <= '9') || t[a - 1] == '.')) --a;
+        return a < b ? std::atof(t.substr(a, b - a).c_str()) : 0;
+    }
+    static bool bigLine(const std::string& t) {
+        // The family's turning points: births, deaths, marriages, the ambition and posts, contests, debts, standing.
+        for (const char* k : {"出生", "生了", "去世", "過世", "夭折", "死了", "死於", "娶了", "嫁給", "嫁到", "入贅", "成了親", "訂了親", "立志", "志向",
+                              "達成", "當上", "選上", "落選", "連任", "爭到", "拿到了", "讓給", "輸給", "贏了", "欠債", "借了", "借來", "還清", "地位",
+                              "繼承", "當了家", "接下", "贖身", "自由人", "法庭", "判了", "罰", "世仇", "結了怨", "和好", "開局"})
+            if (t.find(k) != std::string::npos) return true;
+        return false;
+    }
+    std::vector<std::string> entries_;  // built since the last state
+    int lastBooksDay_ = -1;
+    void takeLine(const ChronicleEntry& e) {
+        std::string raw = e.text;
+        bool indented = !raw.empty() && raw[0] == ' ';
+        std::string t = raw;
+        t.erase(0, t.find_first_not_of(' '));
+        if (t.empty()) return;
+        // The road's conditions are the top bar's to show (its expanded part), never the chronicle's.
+        if (t.rfind("路怎麼走", 0) == 0 || (t.find("的條件：") != std::string::npos && (t.find("✓") != std::string::npos || t.find("✗") != std::string::npos)))
+            return;
+        int key = seasonKey(e.day);
+        bool sub = indented || t.rfind("→", 0) == 0 || t.rfind("（", 0) == 0;
+        std::string cls = sub ? "sub" : "fam";
+        bool near = false;
+        if (t.rfind("家裡買了 ", 0) == 0 && t.find("天的糧") != std::string::npos) {
+            Grain& g = grain_[key];
+            ++g.times;
+            g.days += numberBefore(t, "天的糧");
+            g.pence += numberBefore(t, "便士）");
+            return;
+        }
+        if (!sub && (t.rfind("【消息】", 0) == 0 || t.rfind("【風聲】", 0) == 0 || t.rfind("【傳聞】", 0) == 0)) {
+            cls = "news";
+            // Who told it is not what it is about: 「聽女兒露西說，…」 touches the family only by what follows.
+            size_t said = t.find("說，");
+            near = touches(said != std::string::npos && said < 80 ? t.substr(said) : t);
+        } else if (!sub && t.rfind("〔", 0) == 0) {
+            size_t close = t.find("〕");
+            std::string title = close == std::string::npos ? "" : t.substr(3, close - 3);
+            std::string rest = close == std::string::npos ? t : t.substr(close + 3);
+            size_t ch = rest.rfind("（選擇：");
+            if (ch != std::string::npos && rest.size() >= 3 && rest.compare(rest.size() - 3, 3, "）") == 0) {
+                // The choice and what came of it, one entry: 〔卡名〕選擇 → 結果.
+                std::string choice = rest.substr(ch + std::string("（選擇：").size(), rest.size() - 3 - ch - std::string("（選擇：").size());
+                std::string outcome = rest.substr(0, ch);
+                t = "〔" + title + "〕" + choice + " → " + outcome;
+                cls = "big";
+            } else {
+                // Not the player's answer: the card's name is a plain label, not a 〔〕.
+                t = title.empty() ? rest : title + "：" + rest;
+                cls = bigLine(rest) ? "big" : "fam";
+            }
+        } else if (!sub) {
+            cls = e.importance == 3 || bigLine(t) ? "big" : "fam";
+        }
+        std::string origin;
+        if (size_t at = t.find("借的）"); at != std::string::npos) {
+            // 「（1330 春借的）」: the season the loan was taken, so the clients can show it under that entry too.
+            size_t open = t.rfind("（", at);
+            if (open != std::string::npos) origin = t.substr(open + 3, at - open - 3);
+        }
+        t = shortenNames(houseStyle(t), key);
+        Obj o;
+        o.n("skey", key).text("season", seasonLabel(key)).n("year", key / 4).text("cls", cls).text("text", t);
+        if (near) o.b("near", true);
+        if (!origin.empty()) o.text("origin", origin);
+        entries_.push_back(o.done());
+    }
+    // A season's books as the clients show them: from → to, each item signed and rounded to add up (as booksText),
+    // and the grain bought merged into one line.
+    std::string booksJson(int key, double start, double end, const std::map<std::string, double>& items) {
+        long from = static_cast<long>(std::floor(start + 1e-9)), to = static_cast<long>(std::floor(end + 1e-9));
+        std::vector<std::pair<std::string, std::pair<double, long>>> xs;
+        long sum = 0;
+        for (const auto& [why, d] : items) xs.push_back({why, {d, std::lround(d)}}), sum += std::lround(d);
+        long off = (to - from) - sum;
+        while (off != 0 && !xs.empty()) {
+            int dir = off > 0 ? 1 : -1;
+            size_t pick = 0;
+            double worst = -1e9;
+            for (size_t i = 0; i < xs.size(); ++i) {
+                double cut = (xs[i].second.first - xs[i].second.second) * dir;
+                if (cut > worst) worst = cut, pick = i;
+            }
+            xs[pick].second.second += dir;
+            off -= dir;
+        }
+        std::sort(xs.begin(), xs.end(), [](auto& a, auto& b) { return std::abs(a.second.first) > std::abs(b.second.first); });
+        std::vector<std::string> ins, outs;
+        for (const auto& [why, v] : xs)
+            if (v.second != 0) (v.second > 0 ? ins : outs).push_back("[" + str(why) + "," + std::to_string(v.second) + "]");
+        Obj o;
+        o.n("skey", key).text("season", seasonLabel(key)).text("cls", "ledger").n("from", from).n("to", to).raw("ins", arr(ins)).raw("outs", arr(outs));
+        if (auto g = grain_.find(key); g != grain_.end() && g->second.times > 0)
+            o.raw("grain", Obj().n("times", g->second.times).n("days", std::lround(g->second.days)).n("pence", std::lround(g->second.pence)).done());
+        return o.done();
+    }
+
+    // 村裡在說 (design/ui-text.md): one entry for each thing houses are after (who wants it, and who got it), what
+    // touches the family before the rest, strangers' births, weddings and deaths folded into one line a year.
+    // Six years back at most; the clients show the last three and fold the rest.
+    std::string talk() {
+        const World& w = w_;
+        refreshNear();
+        Id hh = w.playerHousehold();
+        auto surname = [&](Id h) { return h != kNone && w.households()[h].dynasty != kNone ? w.dynasties()[w.households()[h].dynasty].surname : std::string(); };
+        struct Thing { std::string thing; std::vector<std::string> houses; std::string outcome; int year = 0; bool near = false; };
+        std::vector<Thing> things;
+        struct Fold { int births = 0, weddings = 0, deaths = 0; std::vector<std::string> texts; };
+        std::map<int, Fold> folds;
+        std::vector<std::string> near, other;
+        const auto& hd = w.heard();
+        for (size_t i = hd.size(); i-- > 0;) {
+            const Heard& x = hd[i];
+            int year = w.config().startYear + x.day / kDaysPerYear;
+            if (x.day < w.today() - 6 * kDaysPerYear) break;
+            std::string text = houseStyle(x.text);
+            bool touch = touches(x.text);
+            if (x.news != kNone && x.news < static_cast<Id>(w.news().size())) {
+                const News& n = w.news()[x.news];
+                bool want = n.kind.rfind("want:", 0) == 0, won = n.kind == "contest:won" || n.kind == "office:won";
+                if ((want || won) && !n.thing.empty()) {
+                    auto it = std::find_if(things.begin(), things.end(), [&](const Thing& t) { return t.thing == n.thing; });
+                    if (it == things.end()) things.push_back({n.thing, {}, "", year, false}), it = things.end() - 1;
+                    std::string house = n.house == hh ? std::string("你家") : surname(n.house) + "家";
+                    if (want && n.house != kNone && std::find(it->houses.begin(), it->houses.end(), house) == it->houses.end()) it->houses.push_back(house);
+                    if (won && it->outcome.empty()) it->outcome = std::to_string(year) + " 年讓" + house + "拿到了";
+                    it->near = it->near || touch || n.house == hh;
+                    continue;
+                }
+                bool life = n.kind == "birth" || n.kind == "marriage" || n.kind == "death" || n.kind == "child_death" || n.kind == "infant_death";
+                if (life && !touch) {
+                    Fold& f = folds[year];
+                    (n.kind == "birth" ? f.births : n.kind == "marriage" ? f.weddings : f.deaths)++;
+                    f.texts.push_back(text);
+                    continue;
+                }
+            }
+            Obj q;
+            q.n("year", year).text("text", text).b("whisper", x.news == kNone)
+                .text("teller", x.teller != kNone ? w.tellerName(x.teller, x.news) : "");
+            (touch ? near : other).push_back(q.done());
+        }
+        std::vector<std::string> out;
+        std::stable_partition(things.begin(), things.end(), [](const Thing& t) { return t.near; });
+        for (const auto& t : things) {
+            std::string others;
+            bool mine = false;
+            for (const auto& h : t.houses) {
+                if (h == "你家") mine = true;
+                else others += (others.empty() ? "" : "、") + h.substr(0, h.size() - 3);  // 「卡特、米勒家」
+            }
+            std::string hs = std::string(mine ? "你家" : "") + (mine && !others.empty() ? "和" : "") + (others.empty() ? "" : others + "家");
+            std::string line = t.thing + "：" + (hs.empty() ? "" : hs + (t.houses.size() > 1 ? "都想要" : "想要")) +
+                               (t.outcome.empty() ? "" : (hs.empty() ? "" : " → ") + t.outcome);
+            out.push_back(Obj().text("kind", "thing").n("year", t.year).b("near", t.near).text("text", line).done());
+        }
+        for (const auto& s : near) out.push_back("{\"kind\":\"near\"," + s.substr(1));
+        for (auto it = folds.rbegin(); it != folds.rend(); ++it) {
+            const Fold& f = it->second;
+            std::string line = std::to_string(it->first) + " 年村裡";
+            std::vector<std::string> parts;
+            if (f.births) parts.push_back("生了 " + std::to_string(f.births) + " 個孩子");
+            if (f.weddings) parts.push_back(std::to_string(f.weddings) + " 對結婚");
+            if (f.deaths) parts.push_back("走了 " + std::to_string(f.deaths) + " 個人");
+            for (size_t k = 0; k < parts.size(); ++k) line += (k ? "、" : "") + parts[k];
+            std::vector<std::string> texts;
+            for (const auto& t : f.texts) texts.push_back(str(t));
+            out.push_back(Obj().text("kind", "fold").n("year", it->first).text("text", line).raw("items", arr(texts)).done());
+        }
+        for (const auto& s : other) out.push_back("{\"kind\":\"other\"," + s.substr(1));
+        return arr(out);
+    }
+
     std::string state(bool withActions) {
         const World& w = w_;
         Id head = w.playerHead();
@@ -258,9 +549,13 @@ public:
         o.n("time_left", w.timeLeft());
         // 這一季的事: the few things worth a free day now, each a button ({"do":"agenda","id":...}).
         if (withActions) {
+            // What pushes the ambition first (design/ui-text.md), then the rest in the game's order.
+            std::vector<World::AgendaItem> list = w_.seasonAgenda();
+            std::stable_partition(list.begin(), list.end(), [](const World::AgendaItem& a) { return a.id.rfind("step:", 0) == 0; });
             std::vector<std::string> items;
-            for (const auto& a : w_.seasonAgenda())
-                items.push_back(Obj().text("id", a.id).text("title", a.title).text("desc", a.desc).b("open", a.open).text("why", a.why).done());
+            for (const auto& a : list)
+                items.push_back(Obj().text("id", a.id).text("title", a.title).text("desc", a.desc).b("open", a.open).text("why", a.why)
+                                    .b("amb", a.id.rfind("step:", 0) == 0).done());
             o.raw("agenda", arr(items));
         }
         // 家裡的規矩: standing rules, each with what it is now and what it could be ({"do":"rule","rule":..,"value":..}).
@@ -299,7 +594,28 @@ public:
             if (bond.house == w.playerHousehold())
                 note = "莊園欠你家 " + std::to_string(long(bond.owed)) + " 便士（借出 " + std::to_string(long(bond.lent)) + "），" +
                        std::to_string(bond.due) + " 年米迦勒節到期。";
+            // The one thing in the way now (the top bar's second line): the first step not reached, and for a post the
+            // first of its conditions that fails, with the value and the limit.
+            std::string blocker;
+            for (size_t i = 0; i < a->milestones.size() && blocker.empty(); ++i)
+                if (st[i] != 1) {
+                    if (a->milestones[i].gate && !a->office.empty())
+                        for (const auto& g : w.officeGates(head, a->office))
+                            if (!g.ok && blocker.empty()) blocker = "✗ " + g.detail;
+                    if (blocker.empty()) {
+                        // The step's own condition as it stands, with the value and the limit.
+                        std::string why;
+                        EventRunner er(w_);
+                        for (const auto& g : er.explain(a->milestones[i].goal, hp, kNone))
+                            if (!g.ok && why.empty()) why = g.detail;
+                        std::string name = w.milestoneName(hp, i);
+                        if (size_t cut = name.find("（"); cut != std::string::npos && !why.empty()) name = name.substr(0, cut);
+                        blocker = std::string(st[i] == 2 ? "△ " : "○ ") + name + (why.empty() ? "" : "：" + why);
+                    }
+                }
+            if (blocker.empty()) blocker = "◎ " + w.ambitionFinal(hp);
             o.raw("ambition", Obj().text("name", a->name).text("desc", w.ambitionDesc(hp)).raw("steps", arr(steps)).text("hint", a->hint)
+                                   .text("blocker", blocker)
                                    .raw("plans", arr(helps)).n("years_left", std::max(0, left)).n("deadline", w.ambitionDeadline(hp))
                                    .text("gates", gates).text("rival", w.rivalLine(hp)).text("note", note).done());
         }
@@ -342,9 +658,19 @@ public:
                     for (const FocusDef* o : w.focusChoices(m)) foci.push_back(Obj().text("id", o->id).text("name", o->name).text("desc", o->desc).done());
                 f.raw("foci", arr(foci));
             }
+            // The need that has fallen lowest, when it is in the yellow or the red (the only bar a name tag shows).
+            {
+                static const char* needNames[kNeedCount] = {"吃飽", "歇息", "暖和", "人情", "心靈"};
+                int low = -1;
+                for (int k = 0; k < kNeedCount; ++k)
+                    if (p.needs[k] < 55 && (low < 0 || p.needs[k] < p.needs[low])) low = k;
+                if (low >= 0) f.raw("need_low", Obj().text("name", needNames[low]).n("value", std::lround(p.needs[low])).done());
+            }
             if (m != head) {
                 double op = w.opinion(m, head);
                 f.n("opinion", std::lround(op)).text("opinion_word", opinionWord(op)).raw("reasons", reasons(m, head)).text("want", w.wantText(p));
+                if (auto was = lastSeason.people.find(m); lastSeason.head == head && was != lastSeason.people.end())
+                    f.n("opinion_was", std::lround(was->second.second)).text("mood_was", was->second.first);
                 if (withActions) f.raw("actions", actionsFor(m, hp));
             }
             fam.push_back(f.done());
@@ -377,7 +703,7 @@ public:
             const Person& p = w.people()[id];
             if (!p.alive()) continue;
             double close = w.closeness(head, id);
-            std::string kin = w.kinWord(head, id);
+            std::string kin = w.kinLabel(head, id);
             Obj q;
             q.n("id", id).text("name", w.fullName(id)).text("kin", kin).n("age", std::floor(w.ageYears(p)))
                 .text("house", p.household != kNone && w.households()[p.household].dynasty != kNone
@@ -588,7 +914,8 @@ public:
                                 .b("recent", w.today() - x.day <= 3 * kDaysPerMonth)
                                 .done());
         }
-        o.raw("heard", arr(heard));
+        o.raw("heard", arr(heard));  // (the old flat list, kept until every client reads "talk")
+        o.raw("talk", talk());
 
         // Plans: the one under way, or those that can be started and with whom.
         Id acting = w.actingHead();
@@ -654,13 +981,36 @@ public:
         // What happened since the last state, as the chronicle tells it.
         std::vector<std::string> lines;
         const auto& log = w.chronicle();
+        if (shown < log.size()) {
+            refreshNames();
+            refreshNear();
+        }
         for (; shown < log.size(); ++shown) {
             if (log[shown].importance == 2) continue;
             std::string t = log[shown].text;
             t.erase(0, t.find_first_not_of(' '));
             lines.push_back(Obj().n("year", w.config().startYear + log[shown].day / kDaysPerYear).n("kind", log[shown].importance).text("text", t).done());
+            takeLine(log[shown]);
         }
-        o.raw("chronicle", arr(lines));
+        o.raw("chronicle", arr(lines));  // (the old flat list, kept until every client reads "entries")
+        // Each season's books once it has closed, as an entry of that season (design/ui-text.md 這一季的帳).
+        for (const auto& b : w.seasonBooks())
+            if (b.day > lastBooksDay_) {
+                lastBooksDay_ = b.day;
+                if (b.day >= w.handedOver()) entries_.push_back(booksJson(seasonKey(b.day), b.start, b.end, b.items));
+            }
+        o.raw("entries", arr(entries_));
+        entries_.clear();
+        // The season so far, the same way.
+        if (seasonStart.head != kNone && hh != kNone) {
+            std::map<std::string, double> items;
+            for (const auto& [why, total] : w.ledger()) {
+                auto it = seasonStart.ledger.find(why);
+                double d = total - (it == seasonStart.ledger.end() ? 0 : it->second);
+                if (std::abs(d) >= 0.005) items[why] = d;
+            }
+            o.raw("ledger_now", booksJson(seasonKey(w.today()), seasonStart.money, w.households()[hh].money, items));
+        }
         // What the last season came to, until the next one; and what has moved since, so the header's money adds up.
         std::string sum = summary;
         // seasonChanges says 這一季 / 這 N 季 while the season is running; shown afterwards it is the one just past.
@@ -789,6 +1139,7 @@ int main(int argc, char** argv) {
             }
             w.startSeason();
             web.summary = w.seasonChanges(before);
+            web.lastSeason = before;
             before = w.snapshot();
             web.seasonStart = before;
             saveLog();
