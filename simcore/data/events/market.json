@@ -14,7 +14,7 @@
             "effects": [{"log": "  {target_first}嘆了口氣，答應了。"}, {"take_acres": {"acres": 4, "price": 200, "wanted": false}}, {"target_opinion": {"value": -8, "mod": "haggled", "years": 8}}, {"deed": {"type": "land_bought"}}],
             "else": [{"log": "  {target_first}搖頭：「別家出得比你高。」地賣給了別人。"}]}}],
         "ai": {"base": 6, "traits": {"greedy": 10, "kind": -6}}},
-       {"text": "不買", "log": "", "effects": [], "ai": {"base": 6, "traits": {"content": 6, "craven": 2}}}
+       {"text": "不買", "log": "{name} 算了算家裡的錢，這塊地沒買。", "effects": [], "ai": {"base": 6, "traits": {"content": 6, "craven": 2}}}
      ]},
 
     {"id": "lord_aid", "title": "莊園要用錢", "prompt": "{target}又要替國王出人出錢，莊園一時湊不出這麼多現錢。管家挨家找殷實的佃戶「幫襯」，翻著帳本對你說：「你家這些年攢下的，老爺都知道。」",
@@ -123,7 +123,7 @@
     {"id": "lay_subsidy_quota", "title": "國王的稅：村裡的配額", "institution": true,
      "prompt": "1334 年起，十五分之一不再挨家估了：國王給每個村子定了一筆數，村裡自己分攤。今晚各家家主聚在教堂前商量，照家當算，你家分到 {tax} 便士。",
      "prompts": ["1334 年起，十五分之一不再挨家估了：國王給每個村子定了一筆數，村裡自己分攤。今晚各家家主聚在教堂前商量，照家當算，你家分到 {tax} 便士。",
-                 "村裡的配額又下來了，跟上回一樣多，可這幾年死了人、空了地，剩下的人家得多擔一些。莊頭念著名單，念到你家：{tax} 便士。",
+                 "村裡的配額又下來了，跟上回一樣多，可這幾年死了人、空了地，剩下的人家得多擔一些。各家家主聚在教堂前，神父照著刻籤念名單，念到你家：{tax} 便士。",
                  "收稅官只認全村的總數。各家家主在酒館裡吵到半夜：誰家地多、誰家今年賣了豬。最後輪到你家，大家說你家該出 {tax} 便士。"],
      "scope": "anyone", "chance": 1, "on": {"signal": "manual"},
      "conditions": {},

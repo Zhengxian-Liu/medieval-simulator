@@ -466,6 +466,14 @@ void World::endPlan(size_t index, const std::string& requested) {
     const std::string& text = outcome == "success" ? pd->successLog : outcome == "exposed" ? pd->exposedLog : pd->failLog;
     const Json& effects = outcome == "success" ? pd->success : outcome == "exposed" ? pd->exposed : pd->fail;
     std::string line = text.empty() ? "" : ev.format(text, actor, plan.target);
+    // A plan of the family's never just stops: one that came to nothing says so, and why.
+    if (line.empty() && outcome == "fail" && actorHome && !pd->secret) {
+        int months = (day_ - plan.startDay) / kDaysPerMonth;
+        line = fullName(plan.actor) + " 的「" + pd->name + "」沒有成：" +
+               (months >= pd->maxMonths ? "拖了 " + std::to_string(months) + " 個月，" : "白忙了一場，") +
+               (plan.target != kNone ? people_[plan.target].firstName + " 對你家的好感還是 " + std::to_string(std::lround(opinion(plan.target, plan.actor))) + "。"
+                                     : "眼下只好先放下。");
+    }
     // The one keeping the player's house said yes to it (順水推舟): it is theirs as much as the actor's.
     const bool consented = std::find(plan.beatsSeen.begin(), plan.beatsSeen.end(), "_consent") != plan.beatsSeen.end();
     if (consented && !line.empty()) {
@@ -524,7 +532,9 @@ void World::monthlyPlans() {
             continue;
         }
         Household& h = households_[actor.household];
-        h.money = std::max(0.0, h.money - pd->monthlyCost);
+        double cost = std::min(pd->monthlyCost, std::max(0.0, h.money));
+        h.money -= cost;
+        book(h, pd->name, -cost);
 
         // Progress this month.
         const Json& pr = pd->progress;

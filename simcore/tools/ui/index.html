@@ -223,7 +223,7 @@ function renderTop() {
     <span class="stat"><b>${s.date.year}</b> 年 ${esc(s.date.season)}</span>
     <span class="stat">地位 <b>${esc(h.standing)}</b></span>
     <span class="stat">錢 <b>${h.money}</b> 便士</span>
-    <span class="stat">存糧 <b>${h.food_days}</b> 天${h.lean ? ' <span class="lean">今年缺糧</span>' : ""}</span>
+    <span class="stat">存糧 <b>${h.food_days}</b> 天${h.lean ? ` <span class="lean">到秋收還差 ${h.short_days} 天糧</span>` : ""}</span>
     <span class="stat">地 <b>${h.acres}</b> 畝${h.freehold > 0 ? `（自由地 ${h.freehold}）` : ""}</span>
     ${h.debt > 0 ? `<span class="stat lean" title="${esc(h.debt_text || "")}">欠債 ${h.debt} 便士${h.debt_text ? `<span class="muted" style="font-size:12px">（${esc(h.debt_text)}）</span>` : ""}</span>` : ""}
     ${s.contest && s.contest.fine ? `<span class="stat lean" title="家主過世，繼承要付給領主的入地費">入地費 ${s.contest.fine.amount} 便士，${s.contest.fine.year} 年 ${s.contest.fine.month} 月前${s.contest.fine.extended ? "（已寬限過）" : ""}</span>` : ""}

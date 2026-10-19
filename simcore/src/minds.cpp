@@ -115,7 +115,7 @@ std::string World::mindOf(const Person& p) const {
     if (p.household != kNone) {
         const Household& h = households_[p.household];
         s += "。家裡 " + std::to_string(int(h.acres)) + " 畝地，存錢 " + std::to_string(int(h.money)) + " 便士" +
-             (h.lean ? "，今年缺糧" : "") + (h.debt > 0.5 ? "，欠著債" : "") + "，是" + standingName(standing(h.id));
+             (breadShort(h) > 0 ? "，糧不夠吃到秋收" : "") + (h.debt > 0.5 ? "，欠著債" : "") + "，是" + standingName(standing(h.id));
     }
     if (const AmbitionDef* a = defs_.ambition(p.ambition)) s += "。這輩子想要：" + a->name;
     if (!p.intent.why.empty() && p.intent.kind != "none") s += "。今年的打算：" + p.intent.why;
@@ -225,7 +225,7 @@ bool World::draftIntention(Person& p, IntentDraft& d) {
     auto about = [&](Id t) -> std::string {
         if (t == kNone || people_[t].household == kNone) return "";
         const Household& th = households_[people_[t].household];
-        if (th.lean) return "；" + people_[t].firstName + " 家今年缺糧";
+        if (breadShort(th) > 0) return "；" + people_[t].firstName + " 家的糧不夠吃到秋收";
         if (th.debt > 0.5) return "；" + people_[t].firstName + " 家欠著債";
         return "";
     };
@@ -548,7 +548,7 @@ void World::helpFriend(Person& p) {
         if (r == 2 && flame) {
             log(1, "〔人情〕" + fullName(p.id) + " 想接濟 " + fullName(t) + " 家。" + fullName(head) + " 冷冷地說：「你以為我不知道你跟" +
                        people_[t].firstName + "的事？」" + p.firstName + "的臉一下子白了。（選擇：挑明了）");
-            addOpinion(p.id, head, "betrayed", -15, 10);
+            addOpinion(p.id, head, "found_out", -15, 10);  // the one found out remembers being found out, not a betrayal
             addOpinion(head, p.id, "betrayed", -5, 10);
             addStress(p.id, 15, "當年的事被挑明了");
             addStress(head, -5, "");

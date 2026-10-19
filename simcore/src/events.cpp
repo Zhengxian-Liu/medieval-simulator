@@ -129,6 +129,17 @@ std::pair<Id, Id> EventRunner::peaceMatch(const Person& p, Id target) const {
     return {kNone, kNone};
 }
 
+// The house that would take a child into service for bed and board: the best-off with a servant's place free.
+Id EventRunner::serviceMaster(const Household& h) const {
+    Id master = kNone;
+    double best = 0;
+    for (const auto& o : w_.households_)
+        if (!o.extinct && o.id != h.id && o.head != kNone && o.money > best && w_.placeOpen(o.id, "service") &&
+            w_.people_[o.head].occupation != "priest" && w_.people_[o.head].occupation != "lord")
+            best = o.money, master = o.head;
+    return master;
+}
+
 // The child a household would send out to work off a debt: the eldest at home who is free to go.
 Id EventRunner::serviceChild(const Household& h) const {
     Id best = kNone;
@@ -158,6 +169,10 @@ const std::string& EventRunner::pickLog(const OptionDef& o, Id who) {
 void EventRunner::natureStress(const EventDef& ev, const OptionDef& chosen, Person& p, Id target) {
     if (ev.options.size() < 2) return;
     if (ev.on.isObject() && ev.on.stringOr("signal", "") == "stress") return;  // breaking down is not itself a choice
+    // Paying what one owes in full is not yielding or money thrown away, however much welching would have suited.
+    if (chosen.effects.isArray())
+        for (const auto& e : chosen.effects.asArray())
+            if (e.isObject() && e["pay_off_debt"].isBool()) return;
     auto aff = [](const OptionDef& o, const std::string& t) {
         const Json& tr = o.aiWeight["traits"];
         return tr.isObject() ? tr.numberOr(t, 0) : 0.0;
@@ -199,9 +214,12 @@ void EventRunner::fire(const EventDef& ev, Person& p, Id target) {
     ++w_.counters_["event:" + ev.id];
     if (family) ++w_.counters_["event_family:" + ev.id];
     std::string line = o.log.empty() ? "" : format(pickLog(o, p.id), p, target);
+    // Never silent: what the player chose is on the record, even where the data writes no line for it.
+    const bool bare = line.empty() && asked_ && ev.options.size() > 1;
+    if (bare) line = format("{name}", p, target) + "選了：" + optionText(o, p, target) + "。";
     if (!line.empty()) {
         if (family) {
-            std::string choice = ev.options.size() > 1 && asked_ ? "（選擇：" + optionText(o, p, target) + "）" : "";
+            std::string choice = ev.options.size() > 1 && asked_ && !bare ? "（選擇：" + optionText(o, p, target) + "）" : "";
             w_.log(home ? 1 : 2, "〔" + ev.title + "〕" + line + choice);
         } else if (ev.npcLog) {
             w_.log(2, line);
@@ -219,8 +237,10 @@ void EventRunner::runEvent(const EventDef& ev, Person& p, Id target, int importa
     const OptionDef& o = ev.options[chooseOption(ev, p, target)];
     natureStress(ev, o, p, target);
     std::string line = o.log.empty() ? "" : format(pickLog(o, p.id), p, target);
+    const bool bare = line.empty() && asked_ && ev.options.size() > 1 && importance > 0;
+    if (bare) line = format("{name}", p, target) + "選了：" + optionText(o, p, target) + "。";
     if (!line.empty() && importance > 0) {
-        bool chose = ev.options.size() > 1 && asked_;  // only what the player was asked is the player's choice
+        bool chose = ev.options.size() > 1 && asked_ && !bare;  // only what the player was asked is the player's choice
         w_.log(importance, "  " + line + (chose ? "（選擇：" + optionText(o, p, target) + "）" : ""));
     }
     if (!w_.pendingReason_.empty()) {
@@ -736,11 +756,17 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     if (k == "gentle") return (w.cfg_.harshness == Harshness::Gentle) == v.asBool();
     // Someone of the family, other than the head and spouse, lives at home to inherit.
     if (k == "heir_at_home") {
-        bool any = false;
-        if (h)
-            for (Id m : h->members)
-                if (m != h->head && m != w.people_[h->head].spouse && w.people_[m].dynasty == p.dynasty && w.people_[m].home == kNone)
-                    any = true;
+        // Someone of the blood to carry the family on, wherever they live: a son at home or with a house of his own,
+        // a son's son, a nephew (as inheritance and followSurvivingBranch find them). A grandson by a daughter
+        // carries another name, and a wife married in is not the blood.
+        bool any = h && h->ward != kNone && w.people_[h->ward].alive();  // held for a child: the child is the heir
+        if (h && p.dynasty != kNone)
+            for (const auto& q : w.people_) {
+                if (!q.alive() || q.id == p.id || q.dynasty != p.dynasty || (q.household == kNone && !w.isAway(q))) continue;
+                bool blood = (q.father != kNone && w.people_[q.father].dynasty == p.dynasty) ||
+                             (q.mother != kNone && w.people_[q.mother].dynasty == p.dynasty);
+                if (blood && q.spouse != p.id) any = true;
+            }
         return any == v.asBool();
     }
     if (k == "deed_noted") return deed_ != kNone && w.deedNotes_.count({deed_, v.asString()}) > 0;
@@ -818,7 +844,7 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
         bool owes = h && target != kNone && ((h->debt > 0.5 && h->creditor == target) || (h->heldDebt > 0.5 && h->heldCreditor == target));
         return owes == v.asBool();
     }
-    if (k == "debt_ge") return h && h->debt >= v.asNumber();
+    if (k == "debt_ge") return h && std::floor(w.owedAll(h->id) + 1e-9) >= v.asNumber();  // as the header counts it
     if (k == "has_lender") return h && (w.findLender(*h) != kNone) == v.asBool();
     if (k == "feud_truce") {
         const Feud* f = target != kNone ? w.feudBetween(p.dynasty, w.people_[target].dynasty) : nullptr;
@@ -832,7 +858,7 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     if (k == "lean") return (h && h->lean) == v.asBool();
     if (k == "lodger") return (h && h->lodgerUntil > w.day_) == v.asBool();
     if (k == "no_ox") return (h && h->noOxUntil > w.day_) == v.asBool();
-    if (k == "service_child") return h && (serviceChild(*h) != kNone) == v.asBool();
+    if (k == "service_child") return h && (serviceChild(*h) != kNone && serviceMaster(*h) != kNone) == v.asBool();
     // The contested ledger (contest.cpp): a place free with a master of that trade, a servant's place in the
     // person's house, and the entry fine.
     if (k == "place_open") return w.openApprenticeship(v.asString(), p.household) != kNone;
@@ -1034,7 +1060,8 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 double val = v["value"].asNumber();
                 int years = static_cast<int>(v.numberOr("years", 10));
                 if (k != "target_opinion") w.addOpinion(p.id, target, mod, val, years);
-                if (k != "opinion") w.addOpinion(target, p.id, mod, val, years);
+                // back_mod: how the other side remembers it ("found_out" for the one whose affair was confronted).
+                if (k != "opinion") w.addOpinion(target, p.id, v.stringOr("back_mod", mod), val, years);
             } else if (k == "forfeit_land") {
                 // The manor court takes a share of the holding for the arrears.
                 if (!h) continue;
@@ -1435,9 +1462,9 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
             } else if (k == "pay_off_debt") {
                 // Pay the whole debt out of what the house has, to whoever it is owed.
                 if (!h || h->debt <= 0.5 || h->money + 0.5 < h->debt) continue;
-                double d = h->debt;
-                h->money = std::max(0.0, h->money - d);
-                w.book(*h, "還債", -d);
+                double d = h->debt, paid = std::min(d, h->money);
+                h->money -= paid;
+                w.book(*h, "還債", -paid);
                 Id cred = h->creditor != kNone ? h->creditor : w.lord_;
                 if (cred != kNone && w.people_[cred].household != kNone) {
                     w.households_[w.people_[cred].household].money += d;
@@ -1496,16 +1523,14 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 // One mouth fewer: a child goes to serve a better-off house for bed and board.
                 if (!h) continue;
                 Id child = serviceChild(*h);
-                Id master = kNone;
-                double best = 0;
-                for (const auto& o : w.households_)
-                    if (!o.extinct && o.id != h->id && o.head != kNone && o.money > best && w.placeOpen(o.id, "service") &&
-                        w.people_[o.head].occupation != "priest" && w.people_[o.head].occupation != "lord")
-                        best = o.money, master = o.head;
-                if (child == kNone || master == kNone) continue;
-                if (!w.sendToService(child, master, static_cast<int>(v.numberOr("years", 3)))) continue;
+                Id master = serviceMaster(*h);
+                if (child == kNone || master == kNone || !w.sendToService(child, master, static_cast<int>(v.numberOr("years", 3)))) {
+                    if (h->id == w.playerHousehold_) w.log(1, "  可是眼下沒有哪家肯收，孩子還是留在家裡。");
+                    continue;
+                }
                 h->food += w.consumption(*h) * 20;
-                if (h->id == w.playerHousehold_) w.log(1, "  " + w.fullName(child) + " 去了 " + w.fullName(master) + " 家幫傭，管吃管住。");
+                if (h->id == w.playerHousehold_)
+                    w.log(1, "  " + w.people_[child].firstName + "去了 " + w.fullName(master) + " 家，說好幹 " + std::to_string(static_cast<int>(v.numberOr("years", 3))) + " 年，管吃管住。");
             } else if (k == "borrow") {
                 // A better-off neighbour pays the steward; now the debt is to them.
                 if (!h || h->debt <= 0.5) continue;
@@ -1907,7 +1932,17 @@ std::string EventRunner::format(const std::string& tmpl, const Person& p, Id tar
             else if (key == "target") val = w_.fullName(target);
             else if (key == "target_first") val = target != kNone ? w_.shortName(target) : "";
             else if (key == "target_pron") val = target != kNone ? pron(w_.people_[target]) : "";
+            else if (key == "service_child" || key == "service_master") {  // who would go into service, and to whom
+                const Household* sh = p.household != kNone ? &w_.households_[p.household] : nullptr;
+                Id who = !sh ? kNone : key == "service_child" ? serviceChild(*sh) : serviceMaster(*sh);
+                val = who == kNone ? "一個孩子" : w_.fullName(who);
+            } else if (key == "target_keepsake") {  // what of a dead child is put away: a baby's shoes, a girl's dress
+                const Person* t = target != kNone ? &w_.people_[target] : nullptr;
+                double a = t ? ((t->alive() ? w_.day_ : t->deathDay) - t->birthDay) / double(kDaysPerYear) : 0;
+                val = a < 7 ? "小鞋子" : a < 14 ? "舊衣裳" : "東西";
+            }
             else if (key == "year") val = std::to_string(w_.year());
+            else if (key == "house") val = p.dynasty != kNone ? w_.dynasties_[p.dynasty].surname : "";
             else if (key == "subject") val = plan_ ? w_.fullName(plan_->subject) : "";
             else if (key == "plan") val = plan_ ? w_.defs_.plan(plan_->plan)->name : "";
             else if (key == "deed") {

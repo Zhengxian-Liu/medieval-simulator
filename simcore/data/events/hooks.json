@@ -154,7 +154,7 @@
        {"text": "關起門來跟{target_pron}對質，叫{target_pron}斷了", "log": "{name} 關上門跟 {target} 對質。{target_first}哭了，說往後再也不見 {deed_with}。",
         "logs": ["{name} 關上門跟 {target} 對質。{target_first}哭了，說往後再也不見 {deed_with}。",
                  "{name} 關上門跟 {target} 對質，兩人吵到半夜。第二天起，{target_first}再也沒往 {deed_with} 那邊去。"],
-        "effects": [{"note_deed": "confronted"}, {"end_affair": true}, {"mutual_opinion": {"value": -20, "mod": "betrayed", "years": 12}}, {"note_deed": "spoken"}, {"stress": 8}],
+        "effects": [{"note_deed": "confronted"}, {"end_affair": true}, {"mutual_opinion": {"value": -20, "mod": "betrayed", "back_mod": "found_out", "years": 12}}, {"note_deed": "spoken"}, {"stress": 8}],
         "ai": {"base": 8, "traits": {"wrathful": 6, "brave": 4, "calm": 2, "craven": -4}}},
        {"text": "告到教會法庭，讓兩人當眾悔罪", "log": "{name} 把 {target} 和 {deed_with} 告到教會法庭，罪名是私通。",
         "effects": [{"note_deed": "confronted"}, {"expose_affair": true}, {"opinion": {"value": -30, "mod": "betrayed", "years": 20}}, {"reputation": -2}],

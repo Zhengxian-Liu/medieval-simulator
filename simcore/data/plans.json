@@ -138,7 +138,7 @@
      "start_log": "{name} 想跟 {target} 交個朋友，往後有空就找{target_pron}說說話、搭把手。",
      "success_log": "{name} 和 {target} 成了交心的朋友。",
      "success": [{"deed": {"type": "sworn_friend"}}],
-     "fail_log": "", "fail": [],
+     "fail_log": "{name} 跟 {target} 來往了一年，到底沒交上心：{target_first}待你家還是不冷不熱。過一陣子可以再試。", "fail": [],
      "ai": {"base": 1.5, "traits": {"gregarious": 4, "kind": 2, "shy": -1}},
      "beats": [
        {"id": "drink_together", "prompt": "{name} 想和 {target} 走得近一些。", "chance": 0.2, "options": [

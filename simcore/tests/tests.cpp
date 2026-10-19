@@ -1,6 +1,8 @@
 // Headless tests for SimCore: determinism and state invariants over long runs.
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
+#include <functional>
 #include <map>
 #include <optional>
 #include <tuple>
@@ -147,6 +149,20 @@ struct WorldTest {
         w.addOpinion(w.lord_, h.head, "test", 60, 30);
     }
     static void rivalForLand(World& w) { w.rivalForLand(w.people_[w.playerHead()]); }
+    static void kill(World& w, Id id, const std::string& cause) { w.kill(id, cause); }
+    static void moveTo(World& w, Id id, Id house) { w.moveTo(id, house); }
+    static double rent(World& w, Id house) { return w.rentOf(w.households_[house]); }
+    static void houseStyle(World& w, Id house) { w.askHouseStyle(w.households_[house], 6, 40); }
+    static Id houseLine(World& w, Id head) { return w.houseLine(w.people_[head]); }
+    static void runEvent(World& w, const std::string& id, Id p, Id t) { w.runEventById(id, p, t); }
+    static void addDebt(World& w, Id house, double amount, Id creditor) { w.addDebt(w.households_[house], amount, creditor); }
+    static std::string startPlan(World& w, Id actor, const std::string& plan, Id target) { return w.startPlan(actor, plan, target, kNone); }
+    static bool failPlan(World& w, Id actor, const std::string& plan) {
+        for (size_t i = 0; i < w.plans_.size(); ++i)
+            if (w.plans_[i].actor == actor && w.plans_[i].plan == plan) return w.endPlan(i, "fail"), true;
+        return false;
+    }
+    static int toHarvest(World& w) { return w.daysToHarvest(); }
 };
 }  // namespace sim
 
@@ -782,6 +798,325 @@ int main() {
         CHECK(bid, "no rival came for the family's land");
         CHECK(pressed, "a rival refused his bid did not go after the land");
         checkInvariants(w, "first house");
+    }
+
+    // Round 6 B (design/fun-r6.md B): no silent outcomes, one ledger, no contradictions.
+    {
+        // Every option of every card the player is asked has a line of its own (or one on each branch of its odds).
+        std::function<bool(const Json&)> logged = [&](const Json& effects) {
+            if (!effects.isArray()) return false;
+            for (const auto& e : effects.asArray()) {
+                if (!e.isObject()) continue;
+                for (const auto& [k, v] : e.asObject()) {
+                    if ((k == "log" || k == "tell") && v.isString() && !v.asString().empty()) return true;
+                    if ((k == "random" || k == "odds") && v.isObject() && logged(v["effects"]) && logged(v["else"])) return true;
+                }
+            }
+            return false;
+        };
+        int unsaid = 0;
+        for (const auto& ev : defs.events) {
+            if (ev.options.size() < 2 || !ev.ask || ev.scope == "interaction") continue;
+            for (const auto& o : ev.options)
+                if (o.log.empty() && o.logs.empty() && !logged(o.effects)) std::printf("silent option: %s「%s」\n", ev.id.c_str(), o.text.c_str()), ++unsaid;
+        }
+        CHECK(unsaid == 0, "a card the player is asked has an option that leaves no line");
+
+        // Played, with every card answered: each answer leaves a line, every penny that moves the purse is on the
+        // books, each season's books add up (start + items = end), and every season's summary lists the money.
+        for (int seed : {72, 91}) {
+            Config c;
+            c.seed = seed;
+            c.prerun = 25;
+            World w(defs, c);
+            int k = 0, asked = 0, quiet = 0;
+            size_t at = 0;
+            std::string pending;
+            auto check = [&]() {
+                if (pending.empty()) return;
+                bool said = false;
+                for (size_t i = at; i < w.chronicle().size(); ++i) {
+                    const std::string& t = w.chronicle()[i].text;
+                    said = said || (w.chronicle()[i].importance == 1 && t.rfind("【消息】", 0) != 0 && t.rfind("【風聲】", 0) != 0);
+                }
+                if (!said) std::printf("silent answer (seed %d): %s\n", seed, pending.c_str()), ++quiet;
+                pending.clear();
+            };
+            w.setChooser([&](const World::ChoicePrompt& p) {
+                check();
+                int pick = (k++ * 7 + seed) % static_cast<int>(p.options.size());
+                pending = p.title + "「" + p.options[pick] + "」";
+                at = w.chronicle().size();
+                ++asked;
+                return pick;
+            });
+            World::FamilySnapshot snap = w.snapshot();
+            int seasons = 0, listed = 0;
+            for (int d = 0; d < 5 * kDaysPerYear && !w.gameOver(); ++d) {
+                w.stepDay();
+                check();
+                if (w.dayOfMonth() == 0 && w.month() % 3 == 0) {
+                    ++seasons;
+                    listed += w.seasonChanges(snap).find("存錢 ") != std::string::npos;
+                    snap = w.snapshot();
+                }
+            }
+            w.setChooser({});
+            CHECK(asked >= 10 && quiet == 0, "an answered card left no line");
+            CHECK(w.unbookedMoney() < 0.01, "money moved the purse without a book entry");
+            CHECK(seasons > 0 && listed == seasons, "a season's summary left out the money");
+            CHECK(w.seasonBooks().size() >= 12, "the seasons' books were not kept");
+            for (const auto& b : w.seasonBooks()) {
+                double sum = b.start;
+                for (const auto& [why, d] : b.items) sum += d;
+                CHECK(std::abs(sum - b.end) < 0.01, "a season's books do not add up to the purse");
+            }
+            std::printf("books (seed %d): %d cards answered, %s\n", seed, asked, w.seasonBooksText(w.seasonBooks().back()).c_str());
+        }
+        // Shown in whole pence, the items add up to the purse as the header shows it.
+        CHECK(World::booksText(10.0, 2.6, {{"甲", -2.4}, {"乙", -2.3}, {"丙", -2.7}}) == "存錢 10 → 2 便士（出：丙 -3、甲 -3、乙 -2）。",
+              "the books do not add up in whole pence");
+        CHECK(World::booksText(40.2, 40.9, {}) == "存錢 40 便士，沒有進出。", "a season with no money moving is not said so");
+
+        Config c;
+        c.seed = 58;  // a house with someone married in, kin in other houses, and land enough to hire a hand
+        c.prerun = 25;
+        World base(defs, c);
+        const Id hh = base.playerHousehold();
+        const Id head = base.playerHead();
+        auto saidSince = [](const World& w, size_t from, const std::string& a, const std::string& b = "") {
+            for (size_t i = from; i < w.chronicle().size(); ++i) {
+                const auto& e = w.chronicle()[i];
+                if (e.importance == 1 && e.text.find(a) != std::string::npos && e.text.find(b) != std::string::npos) return true;
+            }
+            return false;
+        };
+
+        // Births and deaths in the house (not only of the blood) and of the head's near kin elsewhere are told,
+        // a death with its cause; a grown life is summed up.
+        {
+            World w = base;
+            int deaths = 0, births = 0, untold = 0;
+            for (int d = 0; d < 8 * kDaysPerYear && !w.gameOver(); ++d) {
+                std::map<Id, std::string> watched;
+                for (const auto& p : w.people())
+                    if (p.alive() && w.familyTold(p.id)) watched[p.id] = w.fullName(p.id);
+                size_t from = w.chronicle().size();
+                Id first = static_cast<Id>(w.people().size());
+                w.stepDay();
+                for (const auto& [id, name] : watched)
+                    if (!w.person(id).alive()) {
+                        ++deaths;
+                        if (!saidSince(w, from, name)) std::printf("untold death: %s\n", name.c_str()), ++untold;
+                    }
+                for (Id id = first; id < static_cast<Id>(w.people().size()); ++id)
+                    if (w.person(id).alive() && w.familyTold(id)) {
+                        ++births;
+                        if (!saidSince(w, from, w.fullName(id))) std::printf("untold birth: %s\n", w.fullName(id).c_str()), ++untold;
+                    }
+            }
+            std::printf("family news: %d deaths, %d births told\n", deaths, births);
+            CHECK(untold == 0, "a birth or death in the family went untold");
+        }
+        {
+            World w = base;
+            Id stranger = kNone, kinAway = kNone;
+            for (Id m : w.household(hh).members)
+                if (m != head && w.person(m).dynasty != w.playerDynasty() && w.ageYears(w.person(m)) >= 14) stranger = m;
+            for (const auto& p : w.people())
+                if (p.alive() && p.household != kNone && p.household != hh && w.headsNearKin(p.id) && w.ageYears(p) >= 14) kinAway = p.id;
+            CHECK(stranger != kNone && kinAway != kNone, "no one married in and no near kin elsewhere to test with");
+            for (Id who : {stranger, kinAway}) {
+                if (who == kNone) continue;
+                std::string name = w.fullName(who), first = w.person(who).firstName;
+                std::string kin = who == kinAway ? w.kinWord(head, who) + " " : "";
+                size_t from = w.chronicle().size();
+                WorldTest::kill(w, who, "熱病");
+                CHECK(saidSince(w, from, kin + name, "因熱病去世"), "a death in the family has no line with its cause");
+                CHECK(saidSince(w, from, first + "這一生："), "a grown life in the family is not summed up");
+            }
+        }
+
+        // 後繼無人 is not said while a son of the blood lives, at home or in a house of his own.
+        {
+            World w = base;
+            EventRunner ev(w);
+            const Json heir = Json::parse("{\"heir_at_home\": true}");
+            Id son = kNone, other = kNone;
+            for (const auto& p : w.people())
+                if (p.alive() && p.father == head && p.household == hh) son = p.id;
+            for (const auto& h : w.households())
+                if (!h.extinct && h.id != hh && h.head != kNone && h.house != "manor") other = h.id;
+            if (son != kNone && other != kNone) {
+                WorldTest::moveTo(w, son, other);
+                CHECK(ev.eval(heir, w.person(head), kNone), "a son with a house of his own is not counted an heir");
+            }
+        }
+
+        // One number for what the house owes: the reeve's gate counts every debt, in the header's whole pence.
+        {
+            World w = base;
+            WorldTest::house(w, hh).debt = 10;
+            WorldTest::house(w, hh).heldDebt = 12;
+            for (const auto& g : w.officeGates(head, "reeve"))
+                if (g.label.find("欠債") != std::string::npos)
+                    CHECK(!g.ok && g.detail.find("欠債 22") != std::string::npos, "the reeve's debt gate does not count all the house owes");
+            WorldTest::house(w, hh).debt = 19.7;
+            WorldTest::house(w, hh).heldDebt = 0;
+            for (const auto& g : w.officeGates(head, "reeve"))
+                if (g.label.find("欠債") != std::string::npos) CHECK(g.ok && g.detail.find("欠債 19") != std::string::npos, "19.7 owed is not 19 as shown");
+        }
+
+        // 缺糧 is today's barn against the days to the harvest, not a flag from the last harvest.
+        {
+            World w = base;
+            w.setFoodForTest(hh, WorldTest::toHarvest(w) + 200);
+            WorldTest::house(w, hh).lean = true;
+            CHECK(w.breadShort(w.household(hh)) == 0, "a full barn is called short");
+            w.setFoodForTest(hh, WorldTest::toHarvest(w) - 30);
+            int s = w.breadShort(w.household(hh));
+            CHECK(s >= 29 && s <= 31, "the days short of the harvest are wrong");
+        }
+
+        // 家用排場 is asked, and the answer says what it costs and whether it can be changed.
+        {
+            World w = base;
+            std::string asked;
+            w.setChooser([&](const World::ChoicePrompt& p) { asked = p.title; return p.title == "家用排場" ? 1 : 0; });
+            size_t from = w.chronicle().size();
+            WorldTest::houseStyle(w, hh);
+            w.setChooser({});
+            CHECK(asked == "家用排場" && w.household(hh).frugal, "the house was not asked how it lives");
+            CHECK(saidSince(w, from, "〔家用排場〕", "五年後"), "the house's way of living has no line saying when it is decided again");
+        }
+
+        // A stepfather keeping the house wins its name for the house's line, not his own.
+        {
+            World w = base;
+            Id own = w.person(head).dynasty;
+            for (const auto& p : w.people())
+                if (p.dynasty != kNone && p.dynasty != own) {
+                    WorldTest::person(w, head).dynasty = p.dynasty;
+                    break;
+                }
+            CHECK(WorldTest::houseLine(w, head) == w.playerDynasty(), "the house's fame goes to the keeper's own surname");
+        }
+
+        // Paying a debt in full on the spot is not 「不得不忍讓的窩囊」, however cruel the head.
+        {
+            World w = base;
+            Person& hp = WorldTest::person(w, head);
+            hp.traits = {"cruel"};
+            hp.stressCause.clear();
+            Id lender = kNone;
+            for (const auto& h : w.households())
+                if (!h.extinct && h.id != hh && h.head != kNone && h.house != "manor") lender = h.head;
+            WorldTest::house(w, hh).money = 500;
+            WorldTest::addDebt(w, hh, 27, lender);
+            w.setChooser([&](const World::ChoicePrompt& p) {
+                for (size_t i = 0; i < p.options.size(); ++i)
+                    if (p.options[i].find("一次還清") != std::string::npos) return static_cast<int>(i);
+                return 0;
+            });
+            WorldTest::runEvent(w, "debt_neighbour", head, lender);
+            w.setChooser({});
+            CHECK(w.owedAll(hh) < 1, "the debt was not paid on the spot");
+            CHECK(w.person(head).stressCause.find("窩囊") == std::string::npos, "paying a debt in full weighed on the head as yielding");
+        }
+
+        // A confronted affair: the one wronged remembers a betrayal, the one found out remembers being found out.
+        {
+            World w = base;
+            Id wife = w.person(head).spouse;
+            if (wife != kNone) {
+                EventRunner ev(w);
+                ev.apply(Json::parse("[{\"mutual_opinion\": {\"value\": -20, \"mod\": \"betrayed\", \"back_mod\": \"found_out\", \"years\": 12}}]"),
+                         WorldTest::person(w, head), wife);
+                auto has = [&](Id from, Id to, const std::string& mod) {
+                    for (const auto& [label, v] : w.opinionBreakdown(from, to))
+                        if (label == mod) return true;
+                    return false;
+                };
+                CHECK(has(head, wife, "betrayed") && has(wife, head, "found_out") && !has(wife, head, "betrayed"),
+                      "the betrayal is remembered on the wrong side");
+            }
+        }
+
+        // A 結交 that comes to nothing says so.
+        {
+            World w = base;
+            bool started = false;
+            for (const auto& p : w.people()) {
+                if (!p.alive() || p.household == kNone || p.household == hh || w.ageYears(p) < 18) continue;
+                if (WorldTest::startPlan(w, head, "befriend", p.id).empty()) {
+                    size_t from = w.chronicle().size();
+                    CHECK(WorldTest::failPlan(w, head, "befriend"), "the befriend plan did not start");
+                    CHECK(saidSince(w, from, p.firstName, "沒交上心"), "a befriend plan that failed left no line");
+                    started = true;
+                    break;
+                }
+            }
+            CHECK(started, "no one to befriend");
+        }
+
+        // Michaelmas: a rent met in full is said; on the card, 租 − 手上 = 還差, and a few pence short can still be
+        // met with a little grain.
+        {
+            auto toRentDay = [&](World& w) {
+                while (!w.gameOver() && !(w.month() == 8 && w.dayOfMonth() == 29)) w.stepDay();
+            };
+            World w = base;
+            toRentDay(w);
+            w.setMoneyForTest(hh, 1000);
+            size_t from = w.chronicle().size();
+            w.stepDay();
+            CHECK(saidSince(w, from, "〔米迦勒節〕今年的地租", "照數交清"), "a rent paid in full is not said");
+
+            World s = base;
+            toRentDay(s);
+            double rent = WorldTest::rent(s, hh);
+            s.setMoneyForTest(hh, std::max(0.0, std::floor(rent) - 4.4));
+            s.setFoodForTest(hh, 600);
+            WorldTest::house(s, hh).debt = WorldTest::house(s, hh).heldDebt = 0;
+            bool smallSale = false, adds = false;
+            s.setChooser([&](const World::ChoicePrompt& p) {
+                if (p.title != "米迦勒節算帳") return -1;
+                auto after = [&](const std::string& key) {
+                    size_t at = p.situation.find(key);
+                    return at == std::string::npos ? -1L : std::atol(p.situation.c_str() + at + key.size());
+                };
+                adds = after("今年的租 ") - after("手上 ") == after("還差 ");
+                for (size_t i = 0; i < p.options.size(); ++i)
+                    if (p.options[i].rfind("賣 ", 0) == 0) return smallSale = true, static_cast<int>(i);
+                return static_cast<int>(p.options.size()) - 1;
+            });
+            s.stepDay();
+            s.setChooser({});
+            CHECK(adds, "the reckoning card's numbers do not add up");
+            CHECK(smallSale && s.owedAll(hh) < 1, "a few pence short, the card offered no grain to sell");
+        }
+
+        // The hand on the season's list is the hand hired; taking someone in says what it does to the barn.
+        {
+            World w = base;
+            int hires = 0;
+            int takes = 0;
+            for (int d = 0; d < 3 * kDaysPerYear && !w.gameOver(); ++d) {
+                if (w.dayOfMonth() == 0)
+                    for (const auto& a : w.seasonAgenda())
+                        if (a.id.rfind("hire_hand:", 0) == 0) {
+                            ++hires;
+                            CHECK(a.id == "hire_hand:" + std::to_string(a.target) && a.title.find(w.fullName(a.target)) != std::string::npos,
+                                  "the hand on the list is not the hand hired");
+                        } else if (a.id.rfind("help_take:", 0) == 0) {
+                            ++takes;
+                            CHECK(a.desc.find("存糧從夠吃") != std::string::npos, "taking someone in does not say what it does to the stores");
+                        }
+                w.stepDay();
+            }
+            std::printf("agenda: %d hire and %d take-in items checked\n", hires, takes);
+            CHECK(hires > 0 && takes > 0, "no hand to hire and no one to take in on the season's list");
+        }
     }
 
     if (failures == 0) std::printf("all tests passed\n");

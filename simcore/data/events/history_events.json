@@ -24,7 +24,7 @@
      "conditions": {"world_flag": "statute_labourers", "year": [1351, 1380], "occupation": ["peasant", "carpenter", "weaver", "shepherd"], "acres_lt": 15},
      "target": {"pick": "lord", "conditions": {}},
      "options": [
-       {"text": "照舊工錢做", "log": "", "effects": [{"money": -8}, {"target_opinion": {"value": 5, "mod": "obedient", "years": 5}}], "ai": {"base": 10, "traits": {"craven": 6, "calm": 4}}},
+       {"text": "照舊工錢做", "log": "{name} 守著《勞工法令》，照老工錢幹活，比鄰村少拿了一截。領主那邊記著{pron}守規矩。", "effects": [{"money": -8}, {"target_opinion": {"value": 5, "mod": "obedient", "years": 5}}], "ai": {"base": 10, "traits": {"craven": 6, "calm": 4}}},
        {"text": "去鄰村賺高工錢", "log": "{name} 不顧《勞工法令》，跑到鄰村去幫人收割，工錢多了一倍。",
         "effects": [{"money": 35}, {"target_opinion": {"value": -15, "mod": "defiant", "years": 8}},
                     {"random": {"percent": 30, "effects": [{"money": -25}, {"log": "{name} 被治安官抓到，罰了 25 便士。"}], "else": []}}],
@@ -33,7 +33,7 @@
     {"id": "poll_tax", "title": "人頭稅", "prompt": "收人頭稅的人來了，家裡每個十五歲以上的人都要繳錢。", "scope": "player_head", "chance": 0.5, "cooldown_years": 2,
      "conditions": {"world_flag": "poll_tax", "year": [1377, 1381]},
      "options": [
-       {"text": "照實繳", "log": "", "effects": [{"money": -16}], "ai": {"base": 10, "traits": {"pious": 4, "craven": 4}}},
+       {"text": "照實繳", "log": "{name} 照家裡的人頭如數繳了人頭稅，16 便士。", "effects": [{"money": -16}], "ai": {"base": 10, "traits": {"pious": 4, "craven": 4}}},
        {"text": "少報幾口人", "log": "收人頭稅的人來了，{name} 把兩個孩子藏進穀倉。",
         "effects": [{"money": -8}, {"random": {"percent": 30, "effects": [{"money": -30}, {"reputation": -4}, {"log": "{name} 少報人口被查出來，罰了 30 便士。"}], "else": []}}],
         "ai": {"base": 8, "traits": {"greedy": 8, "brave": 4}}}
@@ -46,7 +46,7 @@
         "effects": [{"random": {"percent": 25, "effects": [{"kill": "起義失敗後被絞死"}],
                      "else": [{"reputation": 10}, {"target_opinion": {"value": -40, "mod": "rebel", "years": 30}}, {"add_trait": "brave"}, {"log": "起義被鎮壓，{name} 逃回了村子，在村民眼裡成了英雄。"}]}}],
         "ai": {"base": 6, "traits": {"brave": 12, "wrathful": 8, "ambitious": 4, "craven": -8}}},
-       {"text": "留在家裡", "log": "", "effects": [], "ai": {"base": 10, "traits": {"calm": 6, "content": 6}}},
+       {"text": "留在家裡", "log": "{name} 關上門，沒跟著去鬧，只在家裡聽外頭的動靜。", "effects": [], "ai": {"base": 10, "traits": {"calm": 6, "content": 6}}},
        {"text": "向領主告密", "log": "{name} 把鄰居密謀造反的事告訴了 {target}。", "effects": [{"money": 20}, {"reputation": -15}, {"deed": {"type": "informed_lord"}}], "ai": {"base": 3, "traits": {"greedy": 8, "cruel": 8, "craven": 5}}}
      ]}
   ]

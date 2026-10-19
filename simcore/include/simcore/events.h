@@ -47,6 +47,7 @@ private:
     std::string bookAs_;   // what money the effects move is booked under: the event's title, or the plan's name
     void natureStress(const EventDef& ev, const OptionDef& chosen, Person& p, Id target);
     Id serviceChild(const Household& h) const;
+    Id serviceMaster(const Household& h) const;
     std::pair<Id, Id> peaceMatch(const Person& p, Id target) const;
     bool remembers(const Json& v, const Person& p, Id target) const;
     bool evalKey(const std::string& key, const Json& v, const Person& p, Id target) const;

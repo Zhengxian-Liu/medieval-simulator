@@ -8,7 +8,7 @@
         "effects": [{"money": -12}, {"set_flag": "schooled"}, {"set_flag": "school_decided"}, {"focus": "letters"}],
         "ai": {"base": 4, "traits": {"pious": 4, "ambitious": 4, "greedy": -4, "clever": 6, "dull": -6},
                "if": [{"cond": {"standing_ge": 2}, "add": 6}, {"cond": {"money_lt": 40}, "add": -3}, {"cond": {"tradition": "lettered"}, "add": 20}, {"cond": {"ambition": "educate_child"}, "add": 40}]}},
-       {"text": "留在家幫忙", "log": "", "effects": [{"set_flag": "school_decided"}, {"skill": {"farming": 1}}], "ai": {"base": 12}},
+       {"text": "留在家幫忙", "log": "{name} 沒去認字，留在家裡幫忙幹活。", "effects": [{"set_flag": "school_decided"}, {"skill": {"farming": 1}}], "ai": {"base": 12}},
        {"text": "送去別人家幫傭，換口飯吃", "conditions": {"any_place": "service", "money_lt": 30}, "log": "家裡揭不開鍋，{name} 才 {age} 歲就被送去別人家幫傭。",
         "effects": [{"set_flag": "school_decided"}, {"take_any_place": "service"}],
         "ai": {"base": 2, "if": [{"cond": {"food_days_lt": 60}, "add": 10}]}}
@@ -17,7 +17,7 @@
     {"id": "path_youth_m", "repeat": "person", "title": "出路", "prompt": "{name} {age} 歲了，往後走哪條路，家裡得拿個主意。", "scope": "anyone", "pulse": "yearly", "chance": 0.6, "parent_decides": true,
      "conditions": {"sex": "male", "age": [11, 13], "station": "home", "no_flag": "trade_decided", "is_head": false},
      "options": [
-       {"text": "留在家裡，跟著家裡的活", "log": "", "effects": [{"set_flag": "trade_decided"}],
+       {"text": "留在家裡，跟著家裡的活", "log": "{name} 留在家裡，跟著大人學種地。", "effects": [{"set_flag": "trade_decided"}],
         "ai": {"base": 12, "traits": {"content": 4}, "if": [{"cond": {"heir_apparent": true}, "add": 20}]}},
        {"text": "拜村裡的師傅學手藝（24 便士，{odds}）", "conditions": {"any_place": "apprentice", "money_ge": 24}, "log": "",
         "effects": [{"odds": {"base": 30, "skill": {"craft": 14}, "traits": {"diligent": 10, "lazy": -12, "clever": 6}, "depends": "他手巧不巧",
@@ -52,7 +52,7 @@
     {"id": "path_youth_f", "repeat": "person", "title": "出路", "prompt": "{name} {age} 歲了，往後走哪條路，家裡得拿個主意。", "scope": "anyone", "pulse": "yearly", "chance": 0.6, "parent_decides": true,
      "conditions": {"sex": "female", "age": [11, 14], "station": "home", "no_flag": "trade_decided", "is_head": false, "married": false},
      "options": [
-       {"text": "在家學持家", "log": "", "effects": [{"set_flag": "trade_decided"}], "ai": {"base": 12}},
+       {"text": "在家學持家", "log": "{name} 留在家裡，跟著學紡線、做飯、持家。", "effects": [{"set_flag": "trade_decided"}], "ai": {"base": 12}},
        {"text": "去莊園或大戶幫傭", "conditions": {"any_place": "service"}, "log": "{name} 被送去幫傭。",
         "effects": [{"set_flag": "trade_decided"}, {"take_any_place": "service"}],
         "ai": {"base": 4, "if": [{"cond": {"money_lt": 20}, "add": 6}]}},
@@ -66,7 +66,7 @@
     {"id": "path_grown_m", "repeat": "person", "title": "長大了", "prompt": "{name} {age} 歲了。家裡的地將來歸誰，大家心裡都有數。", "scope": "anyone", "pulse": "yearly", "chance": 0.5, "parent_decides": true,
      "conditions": {"sex": "male", "age": [16, 22], "station": "home", "no_flag": "grown_decided", "is_head": false, "married": false},
      "options": [
-       {"text": "留在家，等著接手或分地", "log": "", "effects": [{"set_flag": "grown_decided"}],
+       {"text": "留在家，等著接手或分地", "log": "{name} 留在家裡，等著將來接手家裡的地，或分出幾畝自立門戶。", "effects": [{"set_flag": "grown_decided"}],
         "ai": {"base": 10, "traits": {"content": 6}, "if": [{"cond": {"heir_apparent": true}, "add": 30}]}},
        {"text": "出去給人當雇工，自己掙錢", "log": "{name} 出去給人當雇工，按天拿工錢。",
         "effects": [{"set_flag": "grown_decided"}, {"station": {"id": "labourer", "years": [3, 6], "note": "出去當雇工"}}],
@@ -82,7 +82,7 @@
     {"id": "path_grown_f", "repeat": "person", "title": "長大了", "prompt": "{name} {age} 歲了，還沒說親。", "scope": "anyone", "pulse": "yearly", "chance": 0.4, "parent_decides": true,
      "conditions": {"sex": "female", "age": [15, 20], "station": "home", "no_flag": "grown_decided", "is_head": false, "married": false},
      "options": [
-       {"text": "在家等人說媒", "log": "", "effects": [{"set_flag": "grown_decided"}], "ai": {"base": 12}},
+       {"text": "在家等人說媒", "log": "{name} 留在家裡，等著有人上門說媒。", "effects": [{"set_flag": "grown_decided"}], "ai": {"base": 12}},
        {"text": "去鎮上幫傭，自己攢嫁妝", "log": "{name} 進城幫傭，想自己攢一份嫁妝。",
         "effects": [{"set_flag": "grown_decided"}, {"station": {"id": "town_servant", "years": [3, 5], "note": "進城幫傭攢嫁妝"}}],
         "ai": {"base": 3, "traits": {"ambitious": 5, "shy": -3}, "if": [{"cond": {"money_lt": 30}, "add": 4}]}},
@@ -99,7 +99,7 @@
                               "effects": [{"marry_target": true}, {"tell": "{target} 點了頭。{name} 娶了她，搬進她家，接手了她的地。"}],
                               "else": [{"tell": "{target} 回絕了 {name} 的提親。"}, {"need": {"spirit": -10}}]}}],
         "ai": {"base": 6, "traits": {"ambitious": 8, "greedy": 6, "shy": -4}, "if": [{"cond": {"heir_apparent": true}, "add": -8}]}},
-       {"text": "算了", "log": "", "effects": [], "ai": {"base": 8, "traits": {"content": 4, "shy": 4}}}
+       {"text": "算了", "log": "{name} 想了想，沒去那位寡婦家提親。", "effects": [], "ai": {"base": 8, "traits": {"content": 4, "shy": 4}}}
      ]},
 
     {"id": "commission_of_array", "repeat": "person", "title": "點兵", "prompt": "國王又要用兵了。領主的管家在教堂門口點人去當弓兵：管吃，一天三便士，搶到的東西歸自己。他點到了 {name}。", "scope": "anyone", "pulse": "yearly", "chance": 0.12, "cooldown_years": 4, "parent_decides": true,
@@ -123,7 +123,7 @@
      "options": [
        {"text": "回家幫忙種自家的地", "log": "{name} 不再給人做雇工，回家種自家的地。", "effects": [{"station": {"id": "home", "note": "雇工做完，回家種地"}}],
         "ai": {"base": 8, "traits": {"content": 4}, "if": [{"cond": {"heir_apparent": true}, "add": 15}]}},
-       {"text": "接著做，按天拿工錢", "log": "", "effects": [{"station": {"id": "labourer", "years": [2, 4], "note": "接著做雇工"}}],
+       {"text": "接著做，按天拿工錢", "log": "{name} 接著在外頭當雇工，按天拿工錢。", "effects": [{"station": {"id": "labourer", "years": [2, 4], "note": "接著做雇工"}}],
         "ai": {"base": 6, "traits": {"diligent": 3}, "if": [{"cond": {"acres_lt": 10}, "add": 4}]}},
        {"text": "進城找活路", "conditions": {"free": true}, "log": "{name} 做了幾年雇工，攢了點盤纏，進城找活路去了。",
         "effects": [{"station": {"id": "town_labourer", "note": "做完雇工進城"}}],
@@ -133,7 +133,7 @@
     {"id": "veteran_back", "repeat": "person", "parent_decides": true, "title": "老兵", "prompt": "{name} 打完仗回來了，身上有點積蓄，也見過了世面。", "scope": "anyone", "pulse": "yearly", "chance": 0.8,
      "conditions": {"station": "veteran", "is_head": false},
      "options": [
-       {"text": "安心回田裡", "log": "", "effects": [{"station": {"id": "home", "note": "回田裡"}}], "ai": {"base": 10, "traits": {"content": 6}}},
+       {"text": "安心回田裡", "log": "{name} 把刀掛上牆，安心回田裡幹活。", "effects": [{"station": {"id": "home", "note": "回田裡"}}], "ai": {"base": 10, "traits": {"content": 6}}},
        {"text": "去求領主收他當護衛（{odds}）", "log": "",
         "effects": [{"odds": {"base": 25, "skill": {"charm": 2}, "traits": {"brave": 15, "strong": 15, "veteran": 10}, "lord_opinion": 0.5, "depends": "領主看不看得上他",
                               "effects": [{"tell": "領主收下了 {name} 當護衛。"}, {"station": {"id": "retainer", "note": "當上領主的護衛"}}],
@@ -149,7 +149,7 @@
        {"text": "湊 40 便士本錢，農閒時挑擔子去賣", "log": "{name} 湊了 40 便士本錢，農閒時挑著擔子到鄰近的集上做起小買賣。",
         "effects": [{"money": -40}, {"station": {"id": "chapman", "years": [3, 5], "note": "農閒時做起小買賣"}}],
         "ai": {"base": 4, "traits": {"ambitious": 6, "greedy": 5, "gregarious": 5, "shy": -5, "content": -4}, "if": [{"cond": {"money_ge": 200}, "add": 3}]}},
-       {"text": "種地要緊，算了", "log": "", "effects": [], "ai": {"base": 10, "traits": {"content": 5, "craven": 3}}}
+       {"text": "種地要緊，算了", "log": "{name} 說種地要緊，挑擔子做買賣的事算了。", "effects": [], "ai": {"base": 10, "traits": {"content": 5, "craven": 3}}}
      ]},
 
     {"id": "chapman_loss", "title": "買賣賠了", "prompt": "{name} 去年的買賣賠了錢，貨主還等著結帳。地裡的活也荒了一些。", "scope": "anyone", "pulse": "yearly", "chance": 1,
@@ -171,7 +171,7 @@
     {"id": "chapman_due", "title": "做了幾年買賣", "prompt": "做了幾年小買賣，{name} 在集上也認得一些人了。往後還做不做？", "scope": "anyone", "pulse": "yearly", "chance": 1,
      "conditions": {"station": "chapman", "station_due": true},
      "options": [
-       {"text": "接著做", "log": "", "effects": [{"clear_flag": "chapman_lost"}, {"station": {"id": "chapman", "years": [3, 5], "note": "接著做買賣"}}],
+       {"text": "接著做", "log": "{name} 又挑起擔子，接著走村串鎮做買賣。", "effects": [{"clear_flag": "chapman_lost"}, {"station": {"id": "chapman", "years": [3, 5], "note": "接著做買賣"}}],
         "ai": {"base": 6, "traits": {"ambitious": 5, "gregarious": 4, "greedy": 4}}},
        {"text": "收手，專心種地", "log": "{name} 把手上的貨賣了，收回本錢，專心種自家的地。", "effects": [{"clear_flag": "chapman_lost"}, {"money": 35}, {"station": {"id": "home", "note": "收了買賣，回去種地"}}],
         "ai": {"base": 6, "traits": {"content": 6}}}
@@ -197,7 +197,7 @@
      "scope": "anyone", "pulse": "yearly", "chance": 0.3, "parent_decides": true,
      "conditions": {"age": [23, 45], "station": "home", "no_flag": "midlife_decided", "is_head": false, "married": false, "widowed": false},
      "options": [
-       {"text": "留在家裡", "log": "", "effects": [{"set_flag": "midlife_decided"}], "ai": {"base": 10, "traits": {"content": 6}, "if": [{"cond": {"heir_apparent": true}, "add": 40}]}},
+       {"text": "留在家裡", "log": "{name} 這半輩子就守著家裡的地，不再往外闖了。", "effects": [{"set_flag": "midlife_decided"}], "ai": {"base": 10, "traits": {"content": 6}, "if": [{"cond": {"heir_apparent": true}, "add": 40}]}},
        {"text": "進修道院（帶 40 便士入院的布施）", "conditions": {"sex": "male", "money_ge": 40},
         "log": "{name} 把頭髮剃了，進了山那邊的修道院。家裡少了一雙手，可往後在修士面前也有人說話了。",
         "effects": [{"money": -40}, {"set_flag": "midlife_decided"}, {"prestige": 3}, {"station": {"id": "monastery", "note": "進了修道院"}}],

@@ -48,6 +48,7 @@ void World::handOver(Id house, Id dynasty, int playYear) {
     playerHousehold_ = house;
     playerDynasty_ = dynasty;
     handedOver_ = day_;
+    openBooks();
     Household& h = households_[house];
     Person& head = people_[h.head];
     Dynasty& d = dynasties_[dynasty];

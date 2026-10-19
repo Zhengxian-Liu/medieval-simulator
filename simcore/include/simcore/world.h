@@ -167,6 +167,11 @@ struct Household {
     int lodgerUntil = -1;  // a lodger pays for the corner by the hearth
     std::string trade;     // the craft this house lives by, even while no one here can work it
     bool tradeLet = false; // the shop is let to a journeyman until a son grows into it
+    // 家用排場: a house with money put by lives as its standing expects (cloth, feasts, gifts), unless the family
+    // chose to save instead. Asked of the player when it would start, again under a new head or five years on.
+    bool frugal = false;
+    int styleAsked = -1;
+    Id styleHead = kNone;
     bool lean = false;     // last harvest fell short of the household's needs
     double lastYield = 0;  // last harvest, in days of the household's food
     double lastRent = 0, lastRentPaid = 0;
@@ -175,7 +180,6 @@ struct Household {
     int grainAsked = -1;     // the harvest (day / year) the family was last asked to get its bread through to, and what it chose
     int grainChoice = -1;
     // The head's time this season (design/season-loop.md): spent on people and plans, or else on the work.
-    std::map<std::string, double> ledger;  // the player's money, by what it came from or went on (running totals)
     int timeSeason = -1;   // year * 4 + season the budget belongs to
     int timeLeft = 0;
     double workBonus = 0;  // seasons spent bent over the work: a slightly better harvest
@@ -654,6 +658,7 @@ public:
     std::string occupationName(const Person& p) const;  // "主婦", or "閨女" for a girl not yet married
     bool isAway(const Person& p) const { return p.alive() && p.awayFrom != kNone && p.household == kNone; }
     std::vector<Id> livingAway() const;  // alive and living outside the village, in id order
+    std::string lifeSummary(Id id) const;  // lifeLine, or for a life with no turns written down, what it was; and the children
     std::string lifeLine(Id id) const;   // the road walked, as one line: "拜…為師，出師當鐵匠，娶了…，當了家"
     std::vector<Id> peopleToSee() const;  // family first, then those the head knows
     void runCommands() { processCommands(); }
@@ -676,12 +681,35 @@ public:
         int day = 0;
     };
     FamilySnapshot snapshot() const;
+    // A season's money, closed when the season ended: the purse at its start and end, and every item between.
+    struct SeasonBooks {
+        int day = 0;  // the season's first day
+        double start = 0, end = 0;
+        std::map<std::string, double> items;
+    };
+    const std::vector<SeasonBooks>& seasonBooks() const { return seasonBooks_; }
+    const std::map<std::string, double>& ledger() const { return ledger_; }
+    double unbookedMoney() const { return unbooked_; }
+    // How many days the barn falls short of the next harvest, as it stands today (bought grain, new mouths and all):
+    // what 「缺糧」 means wherever it is shown, so a full barn is never called short.
+    int breadShort(const Household& h) const;
+    // "存錢 120 → 98 便士（進：賣餘糧 +18；出：交租 -40）。": every item, rounded so that start + items = end as shown.
+    static std::string booksText(double start, double end, const std::map<std::string, double>& items);
+    std::string seasonBooksText(const SeasonBooks& b) const;  // "1350 年冬末：存錢 …"
+
     std::string seasonChanges(const FamilySnapshot& before) const;
     std::string moneySince(const FamilySnapshot& before) const;
     // What the house owes, to whom, and when it falls due ("欠莊園 62（拖了一年）、欠 艾倫·米勒 30（明年米迦勒節）").
     std::string debtText(Id household) const;
     double owedAll(Id household) const;  // the main debt and the one waiting behind it
+    // The player's family: the blood (the dynasty), and whoever lives under the family's roof or belongs to it while
+    // away (a stepfather holding the house for a child, a stepmother and her children, children taken in).
     bool isPlayerFamily(const Person& p) const;
+    // The head's (or the one keeping the house's) parents, children, grandchildren, brothers and sisters, husband or
+    // wife, wherever they live: their births and deaths are the family's news, not the village's.
+    bool headsNearKin(Id id) const;
+    // Whose births and deaths the chronicle tells the player as the family's own: the house and its near kin.
+    bool familyTold(Id id) const;
     bool closeKin(Id a, Id b) const;
     bool gentry(Id id) const;  // the lord's family: they do not marry tenants
     // Whether a and b may marry: the same class, or a small landholder's child the lord thinks well of
@@ -839,6 +867,13 @@ private:
     Id lordOverrode_ = kNone;       // the lord who last overrode the vote
     std::map<Id, int> matchQuietUntil_;  // a match the player turned down or put off: no matchmaker until this day
     mutable std::map<Id, std::string> bynames_;
+    std::map<std::string, double> ledger_;  // the player's books (book())
+    double ledgerOpen_ = 0;                 // the purse when the books were opened
+    double unbooked_ = 0;                   // money that moved without being booked (a bug: tests keep it at 0)
+    double seasonMoney_ = 0;                // the purse and the books when the running season began
+    std::map<std::string, double> seasonLedger_;
+    int seasonFrom_ = -1;
+    std::vector<SeasonBooks> seasonBooks_;
     std::vector<std::string> seasonNotes_;            // what the head did this season and what came of it
     mutable std::vector<std::string> lastSeasonNotes_;  // the ended season's, until the summary shows them
     Rng rngWants_;
@@ -1145,9 +1180,18 @@ private:
     // signals.cpp: typed signals and the delayed-event queue
     void emit(const Signal& s);
     void monthlyConcerns();
+    // The family's one ledger (design/fun-r6.md B): every penny that moves the player's purse is booked here, by what
+    // it came from or went on (running totals). Money at the hand-over plus the ledger is the purse, always.
     void book(Household& h, const std::string& why, double amount) {
-        if (h.id == playerHousehold_ && amount != 0) h.ledger[why] += amount;
+        if (h.id == playerHousehold_ && amount != 0) ledger_[why] += amount;
     }
+    // Whatever the purse holds that the books do not account for, booked under `why` (a branch of the family taken
+    // over with its money). Returns the gap.
+    double settleBooks(const std::string& why);
+    void closeSeasonBooks();  // on a season's first day: the season just ended goes into seasonBooks_
+    void openBooks();         // the family is handed over: its books begin with the purse it has
+    Id houseLine(const Person& head) const;  // the dynasty whose house this head keeps (a regent's is the ward's)
+    void askHouseStyle(Household& h, double monthly, double cap);  // 家用排場: live as the house's standing expects, or save
     void seasonWants();         // the family's wants: kept, let go and resented, or newly formed
     void rollSeason();          // starts the head's season budget, banking unspent days as work
     bool spendTime(int n);

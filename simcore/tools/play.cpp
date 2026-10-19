@@ -273,7 +273,7 @@ void planMenu(World& w) {
                           << "，他們對你 " << int(w.opinion(o.target, head));
                 if (tp.household != kNone) {
                     const Household& th = w.households()[tp.home != kNone ? tp.home : tp.household];  // a servant: their own family's
-                    std::cout << "；" << int(th.acres) << " 畝" << (th.lean ? "，今年缺糧" : "") << (th.debt > 0.5 ? "，欠著債" : "");
+                    std::cout << "；" << int(th.acres) << " 畝" << (w.breadShort(th) > 0 ? "，糧不夠吃到秋收" : "") << (th.debt > 0.5 ? "，欠著債" : "");
                 }
                 int st = w.feudStage(head, o.target);
                 if (st > 0) std::cout << "；" << (st == 3 ? "世仇" : st == 2 ? "結怨" : "嫌隙");

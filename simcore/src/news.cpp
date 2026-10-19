@@ -425,9 +425,8 @@ void World::learnNews(News& n, Id household, Id teller, double link) {
     }
     bool aboutFamily = inPlayerHouse(n.house) || (n.subject != kNone && inPlayerHouse(people_[n.subject].household)) ||
                        (n.other != kNone && inPlayerHouse(people_[n.other].household));
-    // The family's own births, deaths and weddings elsewhere are told in the chronicle already.
-    bool ownKin = n.deed == kNone && ((n.subject != kNone && isPlayerFamily(people_[n.subject])) ||
-                                      (n.other != kNone && isPlayerFamily(people_[n.other])));
+    // The house's and the head's near kin's births, deaths and weddings are told in the chronicle already (life.cpp).
+    bool ownKin = n.deed == kNone && (familyTold(n.subject) || familyTold(n.other));
     if (inPlayerHouse(household) && !aboutFamily && !ownKin) {
         Heard h;
         h.day = day_;

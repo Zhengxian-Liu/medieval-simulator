@@ -176,7 +176,8 @@ void World::chooseAmbition(Person& head, const std::string& why) {
     std::vector<int> metOf;  // steps already in hand (shown on the card)
     std::string nearly;      // left out for being half done: the plan that finishes it, for the card
     int nNearly = 0;
-    const std::string regret = head.dynasty != kNone ? dynasties_[head.dynasty].regret : "";
+    const Id line = houseLine(head);
+    const std::string regret = line != kNone ? dynasties_[line].regret : "";
     for (const auto& a : defs_.ambitions) {
         if (!ev.eval(a.offer, head, kNone)) continue;
         // Skip goals that are already met, or that could not be kept to.
@@ -363,6 +364,12 @@ void World::monthlyAmbition() {
     if (h.head == head.id && !head.ambition.empty()) lateGameMonth(head);
 }
 
+Id World::houseLine(const Person& head) const {
+    if (head.household != kNone && inPlayerHouse(head.household) && playerDynasty_ != kNone) return playerDynasty_;
+    if (head.household != kNone && households_[head.household].dynasty != kNone) return households_[head.household].dynasty;
+    return head.dynasty;
+}
+
 void World::reviewAmbition(Household& h, bool yearTurn) {
     EventRunner ev(*this);
     {
@@ -376,7 +383,8 @@ void World::reviewAmbition(Household& h, bool yearTurn) {
         const AmbitionDef* a = defs_.ambition(head.ambition);
         if (!a) return;
         if (!player) checkMilestones(head, true);
-        Dynasty* dyn = head.dynasty != kNone ? &dynasties_[head.dynasty] : nullptr;
+        // The house's line, not the head's own name: a stepfather holding the house wins its fame for it.
+        Dynasty* dyn = houseLine(head) != kNone ? &dynasties_[houseLine(head)] : nullptr;
         if (ev.eval(a->goal, head, kNone)) {
             bool regret = dyn && dyn->regret == a->id;
             ++counters_[std::string(player ? "ambition_family:" : "ambition:") + a->id + ":done"];

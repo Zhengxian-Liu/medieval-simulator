@@ -69,6 +69,7 @@ World::World(const Defs& defs, Config cfg)
         prerun();
         return;
     }
+    openBooks();
     // Each game opens on one of a few situations the family is already in (data/events/openings.json).
     std::vector<std::string> openings;
     for (const auto& ev : defs_.events)
@@ -163,6 +164,11 @@ void World::stepDay() {
         }
 
     ++day_;
+    // The family's books are kept to the penny: what moved the purse without a line is caught here (and is a bug).
+    if (playerHousehold_ != kNone) {
+        unbooked_ += std::abs(settleBooks("沒記上帳的"));
+        if (dayOfMonth() == 0 && month() % 3 == 0) closeSeasonBooks();
+    }
 }
 
 std::string World::fullName(Id id) const {
@@ -324,7 +330,27 @@ double World::param(const std::string& name, double fallback) const {
 }
 
 bool World::isPlayerFamily(const Person& p) const {
-    return p.dynasty == playerDynasty_ && p.dynasty != kNone;
+    if (p.dynasty == playerDynasty_ && p.dynasty != kNone) return true;
+    if (playerHousehold_ == kNone) return false;
+    // Under the roof (not a servant of another house's), out serving from it, or away on the road from it.
+    if (p.household == playerHousehold_ && (p.home == kNone || p.home == playerHousehold_)) return true;
+    return p.home == playerHousehold_ || (p.household == kNone && p.awayFrom == playerHousehold_);
+}
+
+bool World::headsNearKin(Id id) const {
+    for (Id head : {playerHead(), actingHead()}) {
+        if (head == kNone || head == id) continue;
+        const std::string t = kinTie(head, id);
+        if (t == "parent" || t == "child" || t == "spouse" || t == "sibling" || t == "grandchild" || t == "grandparent") return true;
+    }
+    return false;
+}
+
+bool World::familyTold(Id id) const {
+    if (id == kNone || playerHousehold_ == kNone) return false;
+    const Person& p = people_[id];
+    if (p.household == playerHousehold_ || p.home == playerHousehold_ || (p.household == kNone && p.awayFrom == playerHousehold_)) return true;
+    return headsNearKin(id);
 }
 
 bool World::gentry(Id id) const {
