@@ -98,6 +98,12 @@ void World::processCommands() {
             }
         } else if (c.type == "agenda") {
             doAgenda(c.plan);  // 這一季的事: plan = the item's id
+        } else if (c.type == "rule") {
+            // 家裡的規矩: plan = "occasions:<all|close|none|ask>", or "routine:1"/"routine:0" while a year is let run.
+            size_t at = c.plan.find(':');
+            std::string what = c.plan.substr(0, at), value = at == std::string::npos ? "" : c.plan.substr(at + 1);
+            if (what == "occasions") setOccasionRule(value);
+            else if (what == "routine") setRoutineByRule(value == "1");
         } else if (c.type == "interact") {
             // 陪家人 (keep_company): whichever of the company visits this person needs most now.
             std::string id = c.plan == "keep_company" && c.target != kNone ? companyEvent(c.target) : c.plan;

@@ -1,18 +1,18 @@
 {
   "events": [
-    {"id": "child_bell_tower", "title": "爬上鐘樓", "prompt": "{name} 偷爬上教堂鐘樓，被大人揪了下來。", "scope": "player_family", "chance": 0.006, "once": true, "cooldown_years": 3, "cooldown_scope": "household",
+    {"id": "child_bell_tower", "routine": true, "title": "爬上鐘樓", "prompt": "{name} 偷爬上教堂鐘樓，被大人揪了下來。", "scope": "player_family", "chance": 0.006, "once": true, "cooldown_years": 3, "cooldown_scope": "household",
      "conditions": {"age": [6, 11]},
      "options": [
        {"text": "狠狠罵一頓", "log": "{name} 偷爬上教堂鐘樓，被大人揪下來罵了一頓。", "effects": [{"set_flag": "childhood_craven"}], "ai": {"base": 10, "traits": {}}},
        {"text": "誇孩子膽子大", "log": "{name} 爬上了教堂鐘樓，全村孩子都佩服得不得了。", "effects": [{"set_flag": "childhood_brave"}, {"reputation": 1}], "ai": {"base": 10}}
      ]},
-    {"id": "child_helps", "title": "懂事的孩子", "prompt": "{name} 天沒亮就起來，想幫大人餵豬。", "scope": "player_family", "chance": 0.006, "once": true,
+    {"id": "child_helps", "routine": true, "title": "懂事的孩子", "prompt": "{name} 天沒亮就起來，想幫大人餵豬。", "scope": "player_family", "chance": 0.006, "once": true,
      "conditions": {"age": [7, 11]},
      "options": [
        {"text": "給孩子一塊蜂蜜餅", "log": "{name} 天沒亮就起來幫忙餵豬，大人給了{pron}一塊蜂蜜餅。", "effects": [{"set_flag": "childhood_diligent"}, {"skill": {"farming": 1}}], "ai": {"base": 10}},
        {"text": "叫孩子去河邊玩", "log": "{name} 想幫忙，大人笑著叫{pron}去河邊玩。", "effects": [{"set_flag": "childhood_content"}, {"need": {"social": 20}}], "ai": {"base": 8}}
      ]},
-    {"id": "child_fight", "title": "孩子打架", "prompt": "{name} 和 {target} 在泥地裡打了起來。", "scope": "player_family", "chance": 0.005, "once": true,
+    {"id": "child_fight", "routine": true, "title": "孩子打架", "prompt": "{name} 和 {target} 在泥地裡打了起來。", "scope": "player_family", "chance": 0.005, "once": true,
      "conditions": {"age": [7, 12]},
      "target": {"pick": "random_villager", "conditions": {"age": [6, 13]}},
      "options": [
@@ -36,7 +36,7 @@
        {"text": "答應", "log": "{target} 託人來說媒，{name} 答應嫁給{target_pron}。", "effects": [{"marry_target": true}], "ai": {"base": 10, "if": [{"cond": {"opinion_of_target_ge": 20}, "add": 15}]}},
        {"text": "拒絕", "log": "{target} 來說媒，被 {name} 一口回絕。", "effects": [{"deed": {"type": "refused_proposal"}}], "ai": {"base": 8, "if": [{"cond": {"opinion_of_target_lt": 0}, "add": 15}]}}
      ]},
-    {"id": "spouse_quarrel", "title": "夫妻吵架", "prompt": "{name} 和 {target} 又吵起來了，話越說越難聽。", "scope": "player_family", "chance": 0.05, "cooldown_years": 3,
+    {"id": "spouse_quarrel", "routine": true, "title": "夫妻吵架", "prompt": "{name} 和 {target} 又吵起來了，話越說越難聽。", "scope": "player_family", "chance": 0.05, "cooldown_years": 3,
      "conditions": {"married": true, "is_head": true, "stress_ge": 25},
      "target": {"pick": "spouse", "conditions": {}},
      "options": [
@@ -52,7 +52,7 @@
                                 "{name} 心裡壓著{stress_cause}，{target} 一句話不對，{pron}就摔門出去了。"],
         "effects": [{"mutual_opinion": {"value": -12, "mod": "bitter_words", "years": 5}}, {"need": {"social": -10}}], "ai": {"base": 6, "traits": {"wrathful": 15, "cruel": 6}}}
      ]},
-    {"id": "spouse_love", "title": "夏日黃昏", "scope": "player_family", "chance": 0.012, "cooldown_years": 6,
+    {"id": "spouse_love", "routine": true, "title": "夏日黃昏", "scope": "player_family", "chance": 0.012, "cooldown_years": 6,
      "conditions": {"married": true, "mood_ge": 55, "month": [4, 7]},
      "target": {"pick": "spouse", "conditions": {}},
      "options": [{"text": "好", "log": ["收工後，{name} 和 {target} 沿著麥田邊走回家。",
@@ -78,7 +78,7 @@
        {"text": "把心思放在孩子身上", "conditions": {"living_children_ge": 1}, "log": "{name} 把眼淚吞下去，照常下田。", "effects": [{"need": {"spirit": -10}}], "ai": {"base": 10, "traits": {"diligent": 8, "calm": 5}}},
        {"text": "把眼淚吞下去，照常下田", "conditions": {"living_children_ge": 0, "not": {"living_children_ge": 1}}, "log": "{name} 把眼淚吞下去，照常下田。", "effects": [{"need": {"spirit": -10}}], "ai": {"base": 10, "traits": {"diligent": 8, "calm": 5}}}
      ]},
-    {"id": "tavern", "title": "酒館", "prompt": "{name} 心裡煩，天黑了還不想回家。", "scope": "player_family", "chance": 0.04, "cooldown_years": 2,
+    {"id": "tavern", "routine": true, "title": "酒館", "prompt": "{name} 心裡煩，天黑了還不想回家。", "scope": "player_family", "chance": 0.04, "cooldown_years": 2,
      "conditions": {"sex": "male", "age": [16, 70], "stress_ge": 30},
      "options": [
        {"text": "喝悶酒", "log": "{name} 心裡煩，在酒館一喝就是一整晚。", "effects": [{"money": -8}, {"need": {"social": 25}}, {"trait_chance": {"trait": "drunkard", "chance": 25}}], "ai": {"base": 10, "traits": {"gregarious": 6, "pious": -6}}},

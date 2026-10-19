@@ -294,8 +294,31 @@ Id World::addNews(const std::string& kind, Id subject, Id other, Id house, Id de
     return idx;
 }
 
+const char* World::occasionRuleText(const std::string& rule) {
+    if (rule == "all") return "紅白事都好好去（帶禮，佔一段空閒）";
+    if (rule == "close") return "親近的人家才去，別家託人帶個話";
+    if (rule == "none") return "紅白事都不去";
+    return "每次都問我";
+}
+
+void World::setOccasionRule(const std::string& rule) {
+    if (rule != "all" && rule != "close" && rule != "none" && rule != "ask") return;
+    bool changed = rule != occasionRule_;
+    occasionRule_ = rule;
+    if (changed && playerHousehold_ != kNone && actingHead() != kNone)
+        log(1, std::string("【家裡的規矩】往後的紅白事：") + occasionRuleText(rule) + "。");
+}
+
 bool World::occasionByPolicy(const std::string& invite, Id subject, double link) {
-    if (occasionSeason_ != year() * 4 + month() / 3 || occasionPolicy_.empty() || subject == kNone) return false;
+    if (subject == kNone) return false;
+    // The family's standing rule. While the year is let run (setRoutineByRule), a rule not yet set, or "ask me", goes
+    // by custom: the close houses, and word sent to the rest.
+    std::string rule = occasionRule_;
+    bool byCustom = false;
+    if (rule.empty() || rule == "ask") {
+        if (!routineByRule_) return false;
+        rule = "close", byCustom = true;
+    }
     Id head = actingHead();
     if (head == kNone || playerHousehold_ == kNone) return false;
     Household& h = households_[playerHousehold_];
@@ -307,11 +330,12 @@ bool World::occasionByPolicy(const std::string& invite, Id subject, double link)
     // A wake is told as the invitation told it, by the house ("史密斯家的瑪麗的喪事"), not by her own maiden name.
     std::string where = funeral && dyn != kNone ? dynasties_[dyn].surname + "家的" + shortName(subject) + "的喪事"
                                                 : fullName(subject) + (funeral ? "的喪事" : "的喜酒") + (dyn != kNone ? "（" + dynasties_[dyn].surname + "家）" : "");
-    // The same answer as when asked: "all" goes properly (coin and a free day), "close" the plain way and only
-    // to close houses, "none" stays home.
+    // "all" goes properly (coin and a free day) to every house that asks, "close" so to the close houses and sends word
+    // to the rest, "none" stays home. Without the coin or a free day, going is the plain way.
     double cost = funeral ? 2 : 3;
-    bool full = occasionPolicy_ == "all" && h.money >= cost && timeLeft() > 0;
-    bool plain = !full && (occasionPolicy_ == "all" || (occasionPolicy_ == "close" && close));
+    bool goes = rule == "all" || (rule == "close" && close);
+    bool full = goes && h.money >= cost && timeLeft() > 0;
+    const std::string by = byCustom ? "家裡還沒定紅白事的規矩，照常例：" : "照家裡的規矩，";
     std::string line;
     if (full) {
         h.money -= cost;
@@ -319,17 +343,17 @@ bool World::occasionByPolicy(const std::string& invite, Id subject, double link)
         spendTime(1);
         attendOccasion(head, subject, true, funeral ? 8 : 7, funeral ? "came_to_wake" : "wedding_gift");
         people_[head].needs[Social] = std::min(100.0, people_[head].needs[Social] + 10);
-        line = "照這一季定的規矩，" + fullName(head) + "去了" + where + "（" + std::to_string(int(cost)) + " 便士）。";
-    } else if (plain) {
+        line = by + fullName(head) + "去了" + where + "（" + std::to_string(int(cost)) + " 便士）。";
+    } else if (goes) {
         attendOccasion(head, subject, true, funeral ? 4 : 2, funeral ? "came_to_wake" : "came_to_wedding");
-        std::string why = occasionPolicy_ == "all" ? (h.money < cost ? "手頭沒錢，" : "這一季沒空了，") : "";
-        line = why + fullName(head) + (funeral ? "去教堂墓地送了一程：" : "空著手去湊了個熱鬧：") + where + "。";
-    } else if (occasionPolicy_ == "close") {
-        attendOccasion(head, subject, false, funeral ? -3 : -1, funeral ? "missed_funeral" : "missed_wedding");
-        line = where + "，兩家不算太親近，照這一季的規矩沒有去。";
+        std::string why = h.money < cost ? "手頭沒錢，" : "這一季沒空了，";
+        line = by + why + fullName(head) + (funeral ? "去教堂墓地送了一程：" : "空著手去湊了個熱鬧：") + where + "。";
+    } else if (rule == "close") {
+        attendOccasion(head, subject, false, funeral ? -1 : 0, "sent_word");
+        line = by + where + "，兩家不算太親近，託人帶了個話" + (funeral ? "致哀" : "道喜") + "。";
     } else {
         attendOccasion(head, subject, false, funeral ? -6 : -3, funeral ? "missed_funeral" : "missed_wedding");
-        line = "照這一季定的規矩，" + where + "沒有去。";
+        line = by + where + "沒有去。";
     }
     log(1, "【紅白事】" + line);
     return true;

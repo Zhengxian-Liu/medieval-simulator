@@ -258,6 +258,7 @@ function renderTurn() {
     $("turn").className = "panel ask";
     html = `<h2>${s.date.year} 年 ${esc(s.date.season)} <small>還有 ${s.time_left} 段空閒</small></h2>
       ${agendaBlock(s)}
+      ${rulesBlock(s)}
       <p class="muted" style="margin:0 0 8px">也可以找家人或村民（左邊、右邊的按鈕），各用一段空閒，定計畫也用一段；沒用完的拿去下田，收成會好一點。</p>
       <div class="turnbar">
         <button class="primary" onclick="act({do:'pass'})">過這一季</button>
@@ -283,6 +284,17 @@ function agendaBlock(s) {
   return `<div class="agenda"><div class="lab">這一季的事</div>${items.map((it) =>
     `<div class="item"><button ${it.open ? "" : "disabled"} title="${esc(it.open ? "用一段空閒" : it.why)}" onclick='act(${JSON.stringify({ do: "agenda", id: it.id }).replace(/'/g, "&#39;")})'>${esc(it.title)}</button>
       <span class="desc">${esc(it.desc)}${it.open ? "" : `（${esc(it.why)}）`}</span></div>`).join("")}</div>`;
+}
+
+// 家裡的規矩: standing rules (wakes and weddings), set once, changed here at any time; a year let run follows them.
+function rulesBlock(s) {
+  const rules = s.rules || [];
+  if (!rules.length) return "";
+  return `<div class="agenda"><div class="lab">家裡的規矩</div>${rules.map((r) =>
+    `<div class="item"><span>${esc(r.name)}：${esc(r.text)}</span>
+      <select onchange='if(this.value)act({do:"rule",rule:${JSON.stringify(r.id)},value:this.value})'>
+        <option value="">改成……</option>${(r.choices || []).filter((c) => c.value !== r.value).map((c) => `<option value="${esc(c.value)}">${esc(c.text)}</option>`).join("")}
+      </select></div>`).join("")}</div>`;
 }
 
 function needBars(needs) {

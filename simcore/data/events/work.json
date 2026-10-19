@@ -83,7 +83,7 @@
     {"id": "sheep_rot", "title": "羊瘟", "scope": "anyone", "chance": 0.02, "cooldown_years": 4,
      "conditions": {"occupation": "shepherd"},
      "options": [{"text": "好", "log": "{name} 的羊群得了肝蛭病，死了一大半。", "effects": [{"money": -30}, {"need": {"spirit": -15}}]}]},
-    {"id": "hard_winter", "repeat": "free", "budget": "hunger", "title": "難熬的冬天", "prompt": "糧食快吃完了，離開春還有好幾個月。", "scope": "player_head", "chance": 0.25, "cooldown_years": 1,
+    {"id": "hard_winter", "repeat": "free", "budget": "hunger", "title": "難熬的冬天", "prompt": "糧食快吃完了，離開春還有好幾個月。{hunger_why}", "scope": "player_head", "chance": 0.25, "cooldown_years": 1,
      "conditions": {"winter": true, "food_days_lt": 30},
      "options": [
        {"text": "宰了豬", "log": "糧食快吃完了，{name} 只好把家裡的豬宰了。", "effects": [{"food": 120}, {"money": -10}], "ai": {"base": 10}},
@@ -106,7 +106,7 @@
        {"text": "靠打短工再撐一陣", "log": "{name} 決定還是靠打短工過日子，有活就幹。", "effects": [],
         "ai": {"base": 4, "traits": {"content": 4, "lazy": 4}}}
      ]},
-    {"id": "empty_larder", "repeat": "free", "budget": "hunger", "title": "米缸見底", "prompt": "家裡的糧食只剩不到二十天了，離下一次收成還遠。再這樣下去，最先撐不住的是孩子。",
+    {"id": "empty_larder", "repeat": "free", "budget": "hunger", "title": "米缸見底", "prompt": "家裡的糧食只剩不到二十天了，離下一次收成還遠。{hunger_why}再這樣下去，最先撐不住的是孩子。",
      "scope": "player_head", "chance": 0.5, "cooldown_years": 1,
      "conditions": {"food_days_lt": 20},
      "options": [
@@ -139,7 +139,7 @@
         "effects": [{"food_days": 8}, {"stress": 10}],
         "ai": {"base": 2, "traits": {"content": 4, "diligent": 2}}}
      ]},
-    {"id": "empty_larder_dire", "repeat": "free", "budget": "hunger", "title": "斷糧", "prompt": "家裡已經斷糧了。孩子餓得哭不出聲，再不想辦法就要出人命。",
+    {"id": "empty_larder_dire", "repeat": "free", "budget": "hunger", "title": "斷糧", "prompt": "家裡已經斷糧了。{hunger_why}孩子餓得哭不出聲，再不想辦法就要出人命。",
      "scope": "player_head", "chance": 1, "cooldown_years": 1,
      "conditions": {"food_days_lt": 3},
      "options": [

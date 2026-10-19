@@ -20,6 +20,7 @@ Actions (the page's buttons):
   {"do":"focus","who":12,"focus":"letters"}          年度重心 (free, during a season)
   {"do":"pass"}   end this season          {"do":"year"}   let the AI play a whole year
   {"do":"regency"}   holding the house for a child: hand the years to the steward until they come of age
+  {"do":"rule","rule":"occasions","value":"close"}   家裡的規矩 (standing rules, e.g. wakes and weddings: all|close|none|ask)
                      (big questions are still asked on the way)
 """
 import json
@@ -146,6 +147,11 @@ def render(v, full=False):
             press = {"do": "ask", "who": la["who"], "ask": la["ask"], "object": la["object"], "subject": la["subject"],
                      "office": la.get("office", ""), "lever": lv}
             out.append(f"  再爭取一次：{names.get(lv, lv)} → act '{json.dumps(press, ensure_ascii=False)}'")
+    if season and s.get("rules"):
+        for r in s["rules"]:
+            alts = "；".join(f"{c['text']} → act '" + json.dumps({"do": "rule", "rule": r["id"], "value": c["value"]}, ensure_ascii=False) + "'"
+                            for c in r.get("choices", []) if c["value"] != r.get("value"))
+            out.append(f"家裡的規矩・{r['name']}：{r['text']}（改成：{alts}）")
     if season and s.get("agenda"):
         out.append("―― 這一季的事 ――（各用一段空閒）")
         for it in s["agenda"]:
@@ -292,7 +298,7 @@ elif cmd == "act":
         bad = "現在沒有在問你（遊戲還在跑或已結束），先 view。"
     elif a.get("kind") == "choice" and not (do == "ai" or (do == "choose" and 0 <= int(obj.get("index", -1)) < len(a.get("options", [])))):
         bad = "現在是在問一個問題：只能 choose（index 在選項範圍內）或 ai。"
-    elif a.get("kind") == "season" and do not in ("agenda", "interact", "ask", "plan", "cancel", "want", "focus", "pass", "year", "regency", "quit"):
+    elif a.get("kind") == "season" and do not in ("agenda", "interact", "ask", "plan", "cancel", "want", "focus", "rule", "pass", "year", "regency", "quit"):
         bad = "現在是一季的空閒：choose / ai 只能用在問題上。"
     if bad:
         print("不行：" + bad + "\n")

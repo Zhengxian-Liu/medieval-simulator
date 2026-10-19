@@ -15,6 +15,7 @@
 //       {"do":"focus","who":12,"focus":"letters"}   (年度重心; free, any time in the season)
 //       {"do":"agenda","id":"sell_grain"}            (這一季的事: one of the state's "agenda" items)
 //       {"do":"interact","who":12,"event":"keep_company"}   (陪家人: the company visit this person needs most)
+//       {"do":"rule","rule":"occasions","value":"close"}     (家裡的規矩: one of the state's "rules", set to one of its choices)
 #include <algorithm>
 #include <cmath>
 #include <fstream>
@@ -195,8 +196,7 @@ public:
         if (head == kNone || hh == kNone) return o.done();
         const Household& h = w.households()[hh];
         const Person& hp = w.people()[head];
-        double perDay = 0;  // as the economy counts it: a child under ten eats a little over half
-        for (Id m : h.members) perDay += w.ageYears(w.people()[m]) < 10 ? 0.6 : 1.0;
+        double perDay = w.dailyBread(hh);  // as the economy counts it
         int rung = w.standing(hh);
         o.raw("house", Obj()
                            .text("surname", w.dynasties()[w.playerDynasty()].surname)
@@ -217,6 +217,16 @@ public:
             for (const auto& a : w_.seasonAgenda())
                 items.push_back(Obj().text("id", a.id).text("title", a.title).text("desc", a.desc).b("open", a.open).text("why", a.why).done());
             o.raw("agenda", arr(items));
+        }
+        // 家裡的規矩: standing rules, each with what it is now and what it could be ({"do":"rule","rule":..,"value":..}).
+        {
+            std::vector<std::string> choices;
+            for (const char* v : {"close", "all", "none", "ask"})
+                choices.push_back(Obj().text("value", v).text("text", World::occasionRuleText(v)).done());
+            const std::string& now = w.occasionRule();
+            o.raw("rules", arr({Obj().text("id", "occasions").text("name", "紅白事").text("value", now)
+                                    .text("text", now.empty() ? "還沒定（下次有人來請時問你；讓 AI 過一年時照常例：親近的人家才去）" : World::occasionRuleText(now))
+                                    .raw("choices", arr(choices)).done()}));
         }
         // Holding the house for a child: the head may hand the years to the steward and answer only what is asked.
         if (const Household& ph = w.households()[w.playerHousehold()]; ph.ward != kNone && w.people()[ph.ward].alive()) {
@@ -686,6 +696,7 @@ int main(int argc, char** argv) {
     npc.attach(w, npcModel, npcLogPath, npcScope);
 
     int skipUntil = 0;
+    bool routine = false;  // a year (or a regency) let run: routine questions go by the family's rules (World::setRoutineByRule)
     Id regencyFor = kNone;  // the child a regency skip is for: if they die or the house passes, the skip ends
     World::FamilySnapshot before = w.snapshot();
     for (int d = 0; d < years * kDaysPerYear && !w.gameOver() && !aiPlays; ++d) {
@@ -694,6 +705,11 @@ int main(int argc, char** argv) {
             skipUntil = 0;
         }
         if (d > 0 && w.dayOfMonth() == 0 && w.month() % 3 == 0 && w.today() >= skipUntil) {
+            if (routine) {
+                w.issue({w.today(), "rule", w.actingHead(), "routine:0", kNone, kNone});
+                w.runCommands();
+                routine = false;
+            }
             w.startSeason();
             web.summary = w.seasonChanges(before);
             before = w.snapshot();
@@ -728,9 +744,16 @@ int main(int argc, char** argv) {
                 } else if (what == "cancel") {
                     w.issue({w.today(), "cancel_plan", w.actingHead(), m["plan"], kNone, kNone});
                     w.runCommands();
+                } else if (what == "rule") {
+                    // 家裡的規矩: {"do":"rule","rule":"occasions","value":"close"}
+                    w.issue({w.today(), "rule", head, m["rule"] + ":" + m["value"], kNone, kNone});
+                    w.runCommands();
                 } else if (what == "year") {
                     skipUntil = w.today() + kDaysPerYear;
                     regencyFor = kNone;
+                    w.issue({w.today(), "rule", head, "routine:1", kNone, kNone});
+                    w.runCommands();
+                    routine = true;
                     leave = true;
                 } else if (what == "regency") {
                     // Until the child the house is held for comes of age; questions are still asked on the way.
@@ -738,6 +761,9 @@ int main(int argc, char** argv) {
                     if (ph.ward != kNone && w.people()[ph.ward].alive()) {
                         skipUntil = std::max(w.today() + 1, w.people()[ph.ward].birthDay + 16 * kDaysPerYear);
                         regencyFor = ph.ward;
+                        w.issue({w.today(), "rule", head, "routine:1", kNone, kNone});
+                        w.runCommands();
+                        routine = true;
                     }
                     leave = true;
                 } else if (what == "quit") {

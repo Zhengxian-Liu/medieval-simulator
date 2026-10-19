@@ -39,6 +39,7 @@ EventDef parseEvent(const Json& e) {
     d.quietLog = e.stringOr("quiet_log", "");
     d.ask = !e["ask"].isBool() || e["ask"].asBool();
     d.parentDecides = e["parent_decides"].isBool() && e["parent_decides"].asBool();
+    d.routine = e["routine"].isBool() && e["routine"].asBool();
     d.pulse = e.stringOr("pulse", "monthly");
     d.chance = e.numberOr("chance", 0.01);
     d.scope = e.stringOr("scope", "anyone");
