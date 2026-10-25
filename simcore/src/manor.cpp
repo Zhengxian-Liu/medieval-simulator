@@ -34,7 +34,7 @@ void World::chargeMerchet(Id woman, bool outsideManor) {
     book(households_[people_[lord_].household], "收婚姻稅", paid);
     if (h.head != kNone) addOpinion(h.head, lord_, "merchet", -3, 4);
     if (inPlayerHouse(h.id) && paid >= 1)
-        log(1, "  照莊園的規矩，嫁 " + w.firstName + " 要先向領主繳 " + std::to_string(int(paid)) + " 便士婚姻稅" +
+        log(1, "照莊園的規矩，嫁 " + w.firstName + " 要先向領主繳 " + std::to_string(int(paid)) + " 便士婚姻稅" +
                    (outsideManor ? "（嫁出莊園，加倍）。" : "。"));
 }
 

@@ -171,7 +171,7 @@ def top_bar(s):
             + (f"（{'！' if h.get('lean') else ''}差 {short} 天，{'錢不夠買' if h.get('lean') else '手上的錢買得起'}）" if short > 0 else ""))
     line1 = (f"=== {h['surname']}家｜{d['year']} 年 {d['season']}｜{h['standing']}｜錢 {h['money']} 便士｜{food}｜地 {h['acres']} 畝"
              + (f"（自由地 {h['freehold']} 畝）" if h.get("freehold") else "") + f"｜{debt}"
-             + (f"｜名聲 {signed(rep['value'])}（{rep.get('word', '')}）" if rep else ""))
+             + (f"｜名聲 {signed(rep['value'])}（{rep.get('word', '')}；最多 ±50，過了 ±20 越來越難動）" if rep else ""))
     out = [line1]
     amb = s.get("ambition")
     fine = (s.get("contest") or {}).get("fine")
@@ -279,6 +279,8 @@ def family(s, season):
         out.append("孩子（5 歲以下）：" + "、".join(small))
     for p in s.get("away") or []:
         out.append(f"在外：{p['name']}（{p.get('kin', '')}，{p.get('age', '?')} 歲）{p.get('station', '')}")
+    if s.get("succession"):
+        out.append(f"傳家：{s['succession']}")
     return out
 
 

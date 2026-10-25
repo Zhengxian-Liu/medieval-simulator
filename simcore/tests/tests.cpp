@@ -2110,9 +2110,20 @@ int main() {
                                 ++hires;
                                 CHECK(a.id == "hire_hand:" + std::to_string(a.target) && a.title.find(w.fullName(a.target)) != std::string::npos,
                                       "the hand on the list is not the hand hired");
-                            } else if (a.id.rfind("help_take:", 0) == 0) {
-                                ++takes;
-                                CHECK(a.desc.find("存糧從夠吃") != std::string::npos, "taking someone in does not say what it does to the stores");
+                            } else if (a.id.rfind("help_feed:", 0) == 0) {
+                                // (round 11: the hungry house is one line that opens the card with every way to help;
+                                // taking a child in is one of them, and still says what it does to the stores)
+                                w.setChooser([&](const World::ChoicePrompt& p) {
+                                    if (p.title != "親友挨餓") return -1;
+                                    for (const auto& o : p.options)
+                                        if (o.find("接到家裡來住") != std::string::npos) {
+                                            ++takes;
+                                            CHECK(o.find("存糧從夠吃") != std::string::npos, "taking someone in does not say what it does to the stores");
+                                        }
+                                    return static_cast<int>(p.options.size()) - 1;
+                                });
+                                w.doAgenda(a.id);
+                                w.setChooser({});
                             }
                     w.stepDay();
                 }
@@ -2742,10 +2753,19 @@ int main() {
         int grain = 0, worst = 0, grainYear = 0;
         std::map<int, int> grainIn;  // grain cards by harvest year (as the feed test counts them)
         std::string worstCard;
+        // fun-r11 1: the yearly round (tax, letters, a child's way, the manor's call for money, the muster, the reeve's
+        // books) is asked twice a generation, whatever its words; one hungry house a season.
+        static const std::set<std::string> folds = {"國王的稅", "認字", "出路", "莊園要用錢", "點兵", "莊頭的帳本", "老兵"};
+        std::map<std::pair<size_t, std::string>, int> foldAsked;
+        std::map<int, int> feedSeason;
+        int foldWorst = 0, feedWorst = 0;
         w.setChooser([&](const World::ChoicePrompt& p) {
             const auto& heads = w.dynasties()[w.playerDynasty()].heads;
             int& n = seen[{heads.size(), p.title, p.situation}];
             if (++n > worst) worst = n, worstCard = p.title;
+            const std::string group = p.title.substr(0, p.title.find("："));
+            if (folds.count(group)) foldWorst = std::max(foldWorst, ++foldAsked[{heads.size(), group}]);
+            if (p.title == "親友挨餓") feedWorst = std::max(feedWorst, ++feedSeason[w.today() / (3 * kDaysPerMonth)]);
             if (p.title == "缺糧：跟誰開口") ++grain, grainYear = std::max(grainYear, ++grainIn[(w.today() + kDaysPerYear - 8 * kDaysPerMonth) / kDaysPerYear]);
             return 0;
         });
@@ -2758,6 +2778,9 @@ int main() {
         std::printf("15 years on seed 118: grain cards %d, a card's same words at most %d times a generation (%s), rival %s\n", grain, worst,
                     worstCard.c_str(), w.rivalName().c_str());
         CHECK(worst <= 2, ("a card came more than twice a generation in the same words: " + worstCard).c_str());
+        std::printf("   yearly round asked at most %d times a generation, hungry houses at most %d a season\n", foldWorst, feedWorst);
+        CHECK(foldWorst <= 2, "a card of the yearly round was asked more than twice a generation");
+        CHECK(feedWorst <= 1, "more than one hungry house was put to the family in a season");
         // Round 10: the 25-year pre-run now runs the family's own quarrels and passings too, and this seed's family starts
         // poorer than it did (5 acres, not 13), so a hungry house asks most years. What the test guards is the card coming
         // back within the harvest year: at most one a harvest year, and no more than one for each year played (plus the first).

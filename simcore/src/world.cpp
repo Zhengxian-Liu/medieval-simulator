@@ -156,6 +156,7 @@ void World::stepDay() {
         if (playerHousehold_ != kNone && actingHead() != kNone && !inOpening()) {
             famineAsk();
             rivalStrike();
+            rivalHeadOn();
         }
         settlePledges();
         events.pulse("monthly");
@@ -426,7 +427,16 @@ void World::addReputation(Id who, double by, const std::string& why) {
     if (who == kNone || by == 0) return;
     Person& p = people_[who];
     double before = p.reputation;
-    p.reputation = std::clamp(p.reputation + by, -50.0, 50.0);
+    // fun-r11 6: past ±20 a name moves ever more slowly (a good deed at +45 is worth a sixth of one at +10), so the
+    // last points are hard won rather than a wall at +50 that every later kindness hits without a word.
+    double r = p.reputation, left = std::abs(by);
+    const double sign = by > 0 ? 1 : -1;
+    while (left > 1e-9) {
+        const double step = std::min(1.0, left);
+        r += sign * step * repRate(sign * r);
+        left -= step;
+    }
+    p.reputation = std::clamp(r, -50.0, 50.0);
     double moved = p.reputation - before;
     // A whole point or more is a thing people talk about; less is a drift that is told once it comes to a point.
     if (std::abs(moved) < 1) {
@@ -440,6 +450,9 @@ void World::addReputation(Id who, double by, const std::string& why) {
     if (p.repNotes.size() > 24) p.repNotes.erase(p.repNotes.begin());
 }
 
+// How much of a point a deed moves the name by, going further the way it already leans (lean: the name signed that way).
+double World::repRate(double lean) { return lean > 20 ? std::max(0.15, (50 - lean) / 30) : 1.0; }
+
 // Bands as the asking counts them (ask.cpp: half the reputation, at most ±12, said aloud from +6 / −5 on).
 World::RepView World::reputationView(Id who) const {
     RepView v;
@@ -451,6 +464,11 @@ World::RepView World::reputationView(Id who) const {
     v.effect = p.reputation >= 12 ? "開口求人時，人家會說「你家在村裡名聲好」，多給幾分面子（+" + std::to_string(std::lround(pull)) + "）"
                : p.reputation <= -10 ? "開口求人（買地、租地、拉票）時，人家會拿「你家名聲不好」推你（−" + std::to_string(std::lround(-pull)) + "）；選差事也吃虧"
                                      : "不好不壞，開口時不算數";
+    if (std::abs(p.reputation) > 20) {
+        const int share = static_cast<int>(std::lround(repRate(std::abs(p.reputation)) * 10));
+        v.effect += std::string("。名聲過了 ") + (p.reputation > 0 ? "+20 越高越難漲" : "−20 越低越難再掉") + "（最多 " + (p.reputation > 0 ? "+50" : "−50") +
+                    "）：眼下一件事只算約 " + std::to_string(std::max(1, share)) + " 成";
+    }
     // The last three things that moved it; the same thing year after year (a good year's trade) is one line,
     // so it does not push out the one bad thing people still talk about.
     for (auto it = p.repNotes.rbegin(); it != p.repNotes.rend() && v.recent.size() < 3;) {

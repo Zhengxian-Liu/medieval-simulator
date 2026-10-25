@@ -46,7 +46,7 @@
      "neglect_note": "{first}擔心家裡撐不下去，你卻一句也沒跟{pron}商量。"},
 
     {"id": "neglected", "text": "覺得你這陣子冷落了{pron}",
-     "when": {"is_spouse": true, "not_sought_months": 9},
+     "when": {"is_spouse": true, "not_sought_months": 9, "opinion_of_target_lt": 60},
      "answered_by": ["talk_heart", "talk_church", "talk_comfort"], "patience": 2, "chance": 0.6,
      "fulfil": [{"opinion": {"value": 5, "mod": "heeded", "years": 8}}],
      "fulfil_note": "你總算抽空陪了{first}，{pron}臉上有了笑容。",

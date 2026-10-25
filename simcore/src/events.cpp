@@ -272,7 +272,11 @@ void EventRunner::fire(const EventDef& ev, Person& p, Id target) {
     if (ev.once) p.flags.insert("ev_" + ev.id);
     if (auto key = storyKey(ev, p); key.first != kNone) w_.meetStory(key.first, key.second);
     if (!ev.budget.empty()) ++w_.budgetUsed_[{p.household, ev.budget, w_.budgetYear(ev.budget)}];
-    if (ev.cooldownMonths > 0) w_.cooldowns_[{p.id, ev.id}] = w_.day_ + ev.cooldownMonths * kDaysPerMonth;
+    if (ev.cooldownMonths > 0) {
+        w_.cooldowns_[{p.id, ev.id}] = w_.day_ + ev.cooldownMonths * kDaysPerMonth;
+        if (ev.householdCooldown && p.household != kNone)
+            for (Id m : w_.households_[p.household].members) w_.cooldowns_[{m, ev.id}] = w_.day_ + ev.cooldownMonths * kDaysPerMonth;
+    }
     if (ev.cooldownYears > 0) {
         w_.cooldowns_[{p.id, ev.id}] = w_.day_ + ev.cooldownYears * kDaysPerYear;
         if (ev.householdCooldown && p.household != kNone)
@@ -286,11 +290,12 @@ void EventRunner::fire(const EventDef& ev, Person& p, Id target) {
     if (family) ++w_.counters_["event_family:" + ev.id];
     std::string line = o.log.empty() ? "" : format(pickLog(o, p.id), p, target);
     // Never silent: what the player chose is on the record, even where the data writes no line for it.
-    const bool bare = line.empty() && asked_ && ev.options.size() > 1;
+    const bool bare = line.empty() && (asked_ || folded_) && ev.options.size() > 1;
     if (bare) line = choseLine(p, target, optionText(o, p, target));
     if (!line.empty()) {
         if (family) {
             std::string choice = ev.options.size() > 1 && asked_ && !bare ? "（選擇：" + optionText(o, p, target) + "）" : "";
+            if (folded_) choice = foldedAsLast_ ? "（老問題，照上回的做法，沒再問你）" : "（老問題，照家裡的習慣辦了，沒再問你）";
             w_.log(home ? 1 : 2, "〔" + ev.title + "〕" + line + choice);
         } else if (ev.npcLog) {
             w_.log(2, line);
@@ -303,7 +308,7 @@ void EventRunner::fire(const EventDef& ev, Person& p, Id target) {
     apply(o.effects, p, target);
 }
 
-void EventRunner::runEvent(const EventDef& ev, Person& p, Id target, int importance) {
+void EventRunner::runEvent(const EventDef& ev, Person& p, Id target, int importance, const std::string& tag) {
     bookAs_ = ev.title;
     const OptionDef& o = ev.options[chooseOption(ev, p, target)];
     natureStress(ev, o, p, target);
@@ -312,7 +317,9 @@ void EventRunner::runEvent(const EventDef& ev, Person& p, Id target, int importa
     if (bare) line = choseLine(p, target, optionText(o, p, target));
     if (!line.empty() && importance > 0) {
         bool chose = ev.options.size() > 1 && asked_ && !bare;  // only what the player was asked is the player's choice
-        w_.log(importance, "  " + line + (chose ? "（選擇：" + optionText(o, p, target) + "）" : ""));
+        // A step of a plan stands as its own line under the plan's name: indented, it was hung under whatever the
+        // chronicle showed last (fun-r10: a haggled land price shown under a funeral).
+        w_.log(importance, (tag.empty() ? std::string("  ") : "〔" + tag + "〕") + line + (chose ? "（選擇：" + optionText(o, p, target) + "）" : ""));
     }
     if (!w_.pendingReason_.empty()) {
         if (!line.empty() && importance > 0) w_.log(importance, "  （" + w_.pendingReason_ + "）");
@@ -581,6 +588,7 @@ int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
     bool asks = playersToAnswer(ev, p);
     asked_ = ev.ask && asks && !(ev.routine && w_.routineByRule_);
     picked_ = false;
+    folded_ = foldedAsLast_ = false;
     // While a year is let run, an everyday moment is not a stop: the AI answers it as the family would.
     if (w_.chooser_ && ev.ask && asks && !(ev.routine && w_.routineByRule_)) {
         std::vector<int> open;
@@ -654,12 +662,35 @@ int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
         const bool story = ev.on.isNull() && ev.interaction.isNull() && (ev.pulse == "monthly" || ev.pulse == "yearly") &&
                            ev.repeat != "free" && !ev.institution && ev.budget != "hunger";
         int& told = w_.genCards_[{w_.generation(), ev.title + "\n" + prompt.situation}];
-        if ((open.size() > 1 || (!open.empty() && !prompt.unavailable.empty())) && (!story || told < 2)) {
+        // fun-r11 1: a card that comes round every year (fold) is asked twice a generation, whatever its words; the
+        // second time it says what was chosen the first, and after that the house does as it did last time.
+        const std::string group = ev.title.substr(0, ev.title.find("："));
+        World::FoldSeen& seen = w_.foldSeen_[{w_.generation(), group}];
+        const bool real = open.size() > 1 || (!open.empty() && !prompt.unavailable.empty());
+        if (ev.fold && real && w_.repeatRule_ != "ask" && seen.n >= 2) {
+            asked_ = false;
+            folded_ = true;
+            auto last = w_.foldLast_.find(ev.id);
+            if (last != w_.foldLast_.end() && last->second < static_cast<int>(ws.size()) && ws[last->second] > 0 &&
+                optionOpen(ev.options[last->second], p, target)) {
+                foldedAsLast_ = true;
+                return last->second;
+            }
+            // Last time's answer is not open now (or this one was never asked): the house's ways, below.
+        } else if (real && (!story || told < 2)) {
+            if (ev.fold && seen.n == 1 && !seen.choice.empty())
+                prompt.situation = "（" + std::to_string(seen.year) + " 年也問過一回，那回選的是「" + seen.choice + "」。）" + prompt.situation;
             w_.noteCardAsked();
             ++told;
             int r = w_.chooser_(prompt);
+            // Put to the player counts toward the two, even when the player let the AI answer it.
+            if (ev.fold) ++seen.n, seen.year = w_.year();
             if (r >= 0 && r < static_cast<int>(open.size())) {
                 picked_ = true;
+                if (ev.fold) {
+                    seen.choice = prompt.options[r].substr(0, prompt.options[r].find("（"));
+                    w_.foldLast_[ev.id] = open[r];
+                }
                 return open[r];
             }
         }
@@ -800,6 +831,7 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     if (k == "opinion_from_target_lt") return target != kNone && w.opinion(target, p.id) < v.asNumber();
     if (k == "target_mood_lt") return target != kNone && w.mood(w.people_[target]) < v.asNumber();
     if (k == "mood_lt") return w.mood(p) < v.asNumber();
+    if (k == "opinion_of_spouse_lt") return p.spouse != kNone && w.people_[p.spouse].alive() && w.opinion(p.id, p.spouse) < v.asNumber();
     // The head has not sought this person out for so many months (or ever, since the game began).
     if (k == "news_link_ge")  // how close the family's house is to the target's (design/news.md)
         return target != kNone && w.houseLink(p.household, w.people_[target].household) >= v.asNumber();
@@ -1011,6 +1043,22 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
         return target != kNone && (p.dynasty == kNone || p.dynasty != w.people_[target].dynasty) == v.asBool();
     if (k == "sworn_friends_lt") return w.swornFriends(p.id) < v.asNumber();
     if (k == "has_plan") return (w.activePlan(p.id) != nullptr) == v.asBool();
+    if (k == "grief_about_age") {
+        // How old the one they grieve for was when they died: a baby leaves no share of the work to hand over.
+        const Concern* c = nullptr;
+        for (const auto& x : p.concerns)
+            if (x.kind == "grief" && !aboutFormerSpouse(w.people_, p, x) && (!c || x.strength > c->strength)) c = &x;
+        if (!c || c->about == kNone) return false;
+        const Person& d = w.people_[c->about];
+        const int at = d.alive() ? w.day_ : d.deathDay;
+        return inRange((at - d.birthDay) / double(kDaysPerYear), v);
+    }
+    if (k == "in_plan") {
+        // {"in_plan": "school_child"}: someone is already seeing to this for them (the plan's subject).
+        for (const auto& ap : w.plans_)
+            if (ap.subject == p.id && ap.plan == v.asString()) return true;
+        return false;
+    }
     if (k == "marriageable") return w.marriageable(p) == v.asBool();
     if (k == "match_pending") {
         // Someone is already arranging this person's marriage.
@@ -1388,11 +1436,16 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 } else {
                     double moved = w.moveLand(th.id, h->id, d.acres, LandPick::CustomaryFirst, "買來");
                     price = std::round(price * moved / d.acres);
+                    if ((h->id == w.playerHousehold_ || th.id == w.playerHousehold_) && moved >= 0.5 && th.dynasty != kNone && h->dynasty != kNone)
+                        w.log(1, "  " + std::to_string(static_cast<long>(std::lround(moved))) + " 畝地從" + w.dynasties_[th.dynasty].surname + "家到了" +
+                                     w.dynasties_[h->dynasty].surname + "家，換了 " + std::to_string(static_cast<long>(price)) + " 便士。");
                 }
+                // On the books under what it was (a sale under a threat is not a plain sale, fun-r10).
+                const std::string why = bookAs_.empty() ? "" : "（" + bookAs_ + "）";
                 th.money += price;
-                w.book(th, "賣地", price);
+                w.book(th, "賣地" + why, price);
                 h->money -= price;
-                w.book(*h, "買地", -price);
+                w.book(*h, "買地" + why, -price);
             } else if (k == "deed") {
                 // {"type": "arson", "doer": "self"|"target", "scale": 1}; the other party is the victim.
                 // "to": "subject" makes the plan's subject the other party; "to": "none" for no one;
@@ -2074,8 +2127,10 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 if (w.timeLeft() > 0) w.spendTime(static_cast<int>(v.asNumber()));
             } else if (k == "tell") {
                 // A line for the family's chronicle only: how a try turned out, news from someone away.
-                if (!w.isPlayerFamily(p)) continue;
+                // Anyone under the family's roof counts, a lodger as much as a son (fun-r10: a lodger's plea to the
+                // lord for a place as guard was never answered on screen).
                 bool home = w.inPlayerHouse(p.household) || w.inPlayerHouse(p.home) || (w.isAway(p) && w.inPlayerHouse(p.awayFrom));
+                if (!home && !w.isPlayerFamily(p)) continue;
                 w.log(home ? 1 : 2, format(v.asString(), p, target));
             } else if (k == "log") {
                 w.log(p.household == w.playerHousehold_ ? 1 : 2, format(v.asString(), p, target));

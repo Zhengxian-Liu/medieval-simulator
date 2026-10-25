@@ -41,6 +41,7 @@ EventDef parseEvent(const Json& e) {
     d.ask = !e["ask"].isBool() || e["ask"].asBool();
     d.parentDecides = e["parent_decides"].isBool() && e["parent_decides"].asBool();
     d.routine = e["routine"].isBool() && e["routine"].asBool();
+    d.fold = e["fold"].isBool() && e["fold"].asBool();
     d.pulse = e.stringOr("pulse", "monthly");
     d.chance = e.numberOr("chance", 0.01);
     d.scope = e.stringOr("scope", "anyone");

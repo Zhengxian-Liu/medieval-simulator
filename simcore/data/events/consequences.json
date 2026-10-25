@@ -32,14 +32,14 @@
         "ai": {"base": 8, "traits": {"craven": 8, "cynical": 8, "ambitious": 4}}}
      ]},
 
-    {"id": "rejected_suitor", "title": "被拒之後", "prompt": "{target} 家回絕了這門親事，村裡已經有人在笑了。", "chance": 0.35, "cooldown_years": 2,
+    {"id": "rejected_suitor", "title": "被拒之後", "prompt": "{target_house}家回絕了這門親事，村裡已經有人在笑了。", "chance": 0.35, "cooldown_years": 2,
      "on": {"signal": "deed", "deed_type": "refused_proposal", "as": "target", "after_months": [2, 12]},
-     "conditions": {"age": [16, 60]},
+     "conditions": {"age": [16, 60], "married": false, "same_household": false, "target": {"married": false}},
      "options": [
-       {"text": "在酒館說她家壞話", "log": "被 {target} 家拒婚之後，{name} 逢人就說他們家眼高手低，女兒脾氣壞。",
+       {"text": "在酒館說她家壞話", "log": "被{target_house}家拒婚之後，{name} 逢人就說他們家眼高手低，女兒脾氣壞。",
         "effects": [{"deed": {"type": "public_insult"}}],
         "ai": {"base": 6, "traits": {"wrathful": 8, "cruel": 8, "vengeful": 10, "kind": -6}}},
-       {"text": "趕緊另說一門親", "log": "被 {target} 家拒婚的事傳開了，{name} 為了爭一口氣，趕緊託人另說親事。",
+       {"text": "趕緊另說一門親", "log": "被{target_house}家拒婚的事傳開了，{name} 為了爭一口氣，趕緊託人另說親事。",
         "effects": [{"need": {"social": -10}}, {"rematch": true}],
         "ai": {"base": 8, "traits": {"ambitious": 6}}},
        {"text": "算了", "log": "{name} 嘆了口氣，說強扭的瓜不甜，這門親事就算了。", "effects": [], "ai": {"base": 8, "traits": {"calm": 8, "forgiving": 10}}}

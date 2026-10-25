@@ -187,8 +187,30 @@ OfficeGate EventRunner::gate(const std::string& k, const Json& v, const Person& 
     } else if (k == "family_offices_ge") {
         int now = w.familyOffices(p.dynasty);
         set("家裡有 " + num(v.asNumber()) + " 個人當著村裡的差事", "家裡眼下有 " + std::to_string(now) + " 個人當差（要 " + num(v.asNumber()) + " 個）");
+    } else if (k == "opinion_of_spouse_lt") {
+        double op = p.spouse != kNone ? w.opinion(p.id, p.spouse) : 0;
+        set("對配偶的好感不到 " + num(v.asNumber()), who + "對配偶的好感 " + num(op) + "（要不到 " + num(v.asNumber()) + "）");
+    } else if (k == "mood_lt") {
+        set("心情很差", who + "心情還好");
+    } else if (k == "all") {
+        std::string all = describe(v, p, target);
+        set(all.empty() ? "另有條件" : all, "不合（" + all + "）");
+    } else if (k == "reeve_terms_ge") {
+        int now = w.reeveTerms(p.dynasty);
+        set("家裡的人當過 " + num(v.asNumber()) + " 任莊頭", "家裡的人眼下當過 " + std::to_string(now) + " 任莊頭（要 " + num(v.asNumber()) + " 任）");
+    } else if (k == "money_gain_ge" || k == "acres_gain_ge" || k == "freehold_gain_ge") {
+        // An ambition's step, counted from what the house had when the head set it (fun-r11 7: no bare 「還不合條件」).
+        const bool cash = k == "money_gain_ge";
+        const std::string what = cash ? "money" : k == "acres_gain_ge" ? "acres" : "freehold";
+        const double base = cash ? p.ambitionBase.money : what == "acres" ? p.ambitionBase.acres : p.ambitionBase.freehold;
+        const double now = !h ? 0 : cash ? h->money : what == "acres" ? h->acres : h->freehold;
+        const double target = base + w.ambitionGain(p, what, v);
+        const std::string unit = cash ? " 便士" : " 畝";
+        const std::string noun = cash ? "存錢" : what == "acres" ? "地" : "自由地";
+        set(noun + "到 " + num(target) + unit, noun + " " + num(now) + unit + "（要到 " + num(target) + unit + "，還差 " + num(std::max(0.0, target - now)) + "）");
     } else {
-        set(k, k);
+        // A key with no wording of its own: never show the id itself.
+        set("另有條件", "還不合條件");
         hush();
     }
     return g;

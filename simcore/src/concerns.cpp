@@ -379,7 +379,7 @@ std::string World::familyGlance() const {
         MoodView mv = moodView(p);
         bool wants = !p.want.empty();
         if (mv.word == "平靜" && mv.cause.empty() && !wants && p.health >= 40 && std::abs(opinion(m, head)) < 30)
-            fine += (fine.empty() ? "" : "、") + shortName(m) + "（" + kinWord(head, m) + "）";
+            fine += (fine.empty() ? "" : "、") + shortName(m) + (kinWord(head, m).empty() ? std::string() : "（" + kinWord(head, m) + "）");
         else
             o += line(m);
     }
@@ -781,7 +781,7 @@ void World::takeIn(Id who, Id house, Id giver) {
     const Household& fh = households_[from];
     if (fh.head != kNone && giver != kNone) {
         addOpinion(fh.head, giver, "took_us_in", 15, 20);
-        oweFavour(fh.head, giver, 15, "收留了家裡的人");
+        oweFavour(fh.head, giver, 15, "收留了他家的人");
     }
     ++feedHelped_[from];
 }
@@ -970,52 +970,24 @@ std::vector<World::AgendaItem> World::seasonAgenda(bool all) {
             bool kin = false;
             for (Id m : h.members) kin = kin || closeKin(head, m) || !kinTie(head, m).empty();
             if (!kin && opinion(head, h.head) < 40) continue;
+            // Asked about lately (helped, or left be): not on the list again before its time.
+            if (auto at = feedAskedUntil_.find(h.id); at != feedAskedUntil_.end() && at->second > day_) continue;
             hungry.push_back({days, h.id});
         }
         std::sort(hungry.begin(), hungry.end());
-        std::set<Id> offered;  // one spare parcel is offered to one house
-        for (size_t k = 0; k < hungry.size() && k < 2; ++k) {
-            const Household& h = households_[hungry[k].second];
+        // One hungry house a season, card or list (fun-r11 2): the hungriest, unless the month's card already asked
+        // about one this season. Every way to help is on the card it opens.
+        if (!hungry.empty() && hungerSeason_ != day_ / (3 * kDaysPerMonth)) {
+            const Household& h = households_[hungry.front().second];
             std::string who = fullName(h.head) + " 家";
-            std::string state = "只剩 " + std::to_string(int(hungry[k].first)) + " 天的糧" + (h.lean ? "，今年的收成也不夠" : "");
-            if (canHireKin(h.id)) {
-                AgendaItem a;
-                a.id = "help_hire:" + std::to_string(h.id);
-                a.title = "雇" + who + "的人當長工";
-                a.desc = who + state + "。讓他家能幹活的人來你家做一年，管吃，每月每人 4 便士：他家有了口糧，你家多了人手。";
-                a.kind = "effects", a.target = h.head, a.effects = "[{\"hire_kin\": true}]";
-                a.done = fullName(head) + " 雇了" + who + "的人來家裡當長工，管吃管住，做到明年這時候。";
-                a.rank = 92;
-                items.push_back(a);
-            }
-            if (Id pc = spareParcel(h.id); pc != kNone && offered.insert(pc).second) {
-                AgendaItem a;
-                a.id = "help_land:" + std::to_string(h.id);
-                a.title = "分" + parcelName(parcels_[pc]) + "給" + who;
-                a.desc = who + state + "。把這塊地讓給他們種（再送一個月的糧撐到收成），往後他們自己就吃得上飯；你家少了這幾畝" +
-                         std::string(parcels_[pc].free ? "，而且這是你家的自由地，送出去自家的身分可能跟著降一等。" : "。");
-                a.kind = "effects", a.target = h.head, a.effects = "[{\"give_parcel\": " + std::to_string(pc) + "}]";
-                a.done = fullName(head) + " 把" + parcelName(parcels_[pc]) + "分給了" + who + "，讓他們往後自己種糧。";
-                a.rank = 90;
-                items.push_back(a);
-            }
-            // Another mouth at the table only when the family's own bread will stretch to it.
-            bool room = ph.food >= consumption(ph) * 120 && !ph.lean;
-            if (Id t = room ? takeInWho(h.id) : kNone; t != kNone) {
-                AgendaItem a;
-                a.id = "help_take:" + std::to_string(t);
-                a.title = "把" + fullName(t) + "接到家裡來住";  // (a 小馬修 of theirs is not the 小馬修 at home)
-                // The same grain then feeds one more: say up front what that does to the days of bread at home.
-                double mouths = consumption(ph), mouth = portion(people_[t]);  // as the barn will count it
-                std::string stores = "家裡的存糧從夠吃 " + std::to_string(int(foodDays(ph))) + " 天變成夠吃 " +
-                                     std::to_string(int(ph.food / std::max(0.5, mouths + mouth))) + " 天";
-                a.desc = who + state + "。" + fullName(t) + "（" + std::to_string(int(ageYears(people_[t]))) + " 歲）搬來你家，吃你家的飯；他家少一張嘴，" +
-                         stores + "（糧還是那些，多一個人吃）。";
-                a.kind = "effects", a.target = t, a.effects = "[{\"take_in\": true}]";
-                a.done = fullName(head) + " 把 " + fullName(t) + " 從" + who + "接到家裡來住，往後吃住都在你家；" + stores + "。";
-                a.rank = 88;
-                items.push_back(a);
-            }
+            std::string state = "只剩 " + std::to_string(int(hungry.front().first)) + " 天的糧" + (h.lean ? "，今年的收成也不夠" : "");
+            AgendaItem a;
+            a.id = "help_feed:" + std::to_string(h.id);
+            a.title = "接濟" + who;
+            a.desc = who + state + "。" + hungerWhy(h.id) + "借糧、送糧、替他家找活、分地或接一個孩子來住，挑一樣（每樣的代價都寫在上頭；佔一段空閒）。";
+            a.kind = "feed", a.target = h.head;
+            a.rank = 92;
+            items.push_back(a);
         }
     }
 
@@ -1035,7 +1007,7 @@ std::vector<World::AgendaItem> World::seasonAgenda(bool all) {
             a.id = "comfort:" + std::to_string(worst);
             a.title = "安慰" + shortName(worst);
             std::string why = heavy ? concernText(people_[worst], *heavy) : "";
-            a.desc = shortName(worst) + "（" + kinWord(head, worst) + "）" + (why.empty() ? "心裡不好受" : why) + "。";
+            a.desc = shortName(worst) + "（" + (kinWord(head, worst).empty() ? std::string("住在家裡") : kinWord(head, worst)) + "）" + (why.empty() ? "心裡不好受" : why) + "。";
             a.kind = "interact", a.who = worst, a.event = "talk_comfort";
             a.rank = 80;
             items.push_back(a);
@@ -1373,7 +1345,7 @@ std::string World::agendaGoneWhy(const AgendaItem& a) {
     }
     if (kind == "hire_hand") return a.target != kNone && people_[a.target].household != kNone && households_[people_[a.target].household].hiredUntil > day_
                                        ? shortName(a.target) + "已經被別家雇走了" : ph.money < 54 ? "錢不夠了（雇工錢之外還得留 30 便士）" : "今年已經雇過幫手了";
-    if (kind == "help_hire" || kind == "help_land" || kind == "help_take") {
+    if (kind == "help_hire" || kind == "help_land" || kind == "help_take" || kind == "help_feed") {
         Id hid = a.target != kNone ? people_[a.target].household : kNone;
         if (hid == kNone) return "那一家已經不在了";
         const Household& h = households_[hid];
@@ -1381,6 +1353,7 @@ std::string World::agendaGoneWhy(const AgendaItem& a) {
         if (days >= 45 && !(h.lean && days < 120)) return houseOf(a.target) + "的糧接上了（有 " + std::to_string(int(days)) + " 天）";
         if (kind == "help_take") return "你家的糧撐不起多一張嘴了（要 120 天以上、今年不缺糧）";
         if (kind == "help_land") return "你家沒有分得出去、自己又吃得飽的那幾畝地了";
+        if (kind == "help_feed") return "這一季已經為挨餓的人家拿過主意了";
         return "他家的人眼下雇不了";
     }
     if (kind == "spare") {
@@ -1477,6 +1450,15 @@ void World::doAgenda(const std::string& id) {
         EventRunner er(*this);
         er.apply(Json::parse(a.effects), people_[head], a.target);
         seasonNotes_.push_back(a.done);
+    } else if (a.kind == "feed") {
+        // The hungry house's card, every way out on it; going to see them takes the day, whatever the family then does.
+        Id hid = a.target != kNone && people_[a.target].alive() ? people_[a.target].household : kNone;
+        if (hid == kNone) {
+            log(1, "〔這一季的事〕" + a.title + "辦不成了：那一家已經不在了。");
+            return;
+        }
+        if (feedMenu(households_[hid], true)) spendTime(1);
+        else log(1, "〔這一季的事〕" + a.title + "辦不成了：你家眼下沒有拿得出手的接濟（糧、錢、活、地都不夠）。");
     }
 }
 

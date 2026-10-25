@@ -263,7 +263,7 @@ function renderTop() {
     <span class="stat${h.lean ? " lean" : ""}">存糧 <b>${h.food_days}</b> 天・離秋收 ${h.to_harvest} 天${h.short_days > 0 ? `（${h.lean ? "！" : ""}差 ${h.short_days} 天${h.lean ? "，錢不夠買" : "，手上的錢買得起"}）` : ""}</span>
     <span class="stat">地 <b>${h.acres}</b> 畝${h.freehold > 0 ? `（自由地 ${h.freehold} 畝）` : ""}</span>
     ${h.debt > 0 ? `<span class="stat lean">欠債 ${h.debt} 便士${h.debt_text ? `（${esc(h.debt_text)}）` : ""}</span>` : `<span class="stat">欠債：沒有</span>`}
-    ${rep ? `<span class="stat${rep.value <= -10 ? " lean" : ""}">名聲 <b>${signed(rep.value)}</b>（${esc(rep.word)}）</span>` : ""}
+    ${rep ? `<span class="stat${rep.value <= -10 ? " lean" : ""}" title="${esc(rep.effect || "")}">名聲 <b>${signed(rep.value)}</b>（${esc(rep.word)}；最多 ±50，過了 ±20 越來越難動）</span>` : ""}
     ${fine ? `<span class="stat lean">入地費 ${fine.amount} 便士，${fine.year} 年 ${fine.month} 月前${fine.extended ? "（已寬限過）" : ""}</span>` : ""}
     ${s.notice ? `<span class="stat lean">不行：${esc(s.notice)}</span>` : ""}</div>`;
   const rv = s.rival;
@@ -447,7 +447,8 @@ function renderFamily() {
       <div class="top"><span class="name">${esc(p.name)}</span><span class="sub">${esc(p.kin)} ${p.age} 歲</span></div>
       <div class="l2">${esc(p.station)}</div>
     </div>`).join("");
-  $("family").innerHTML = cards + kids + away;
+  const succ = s.succession ? `<div class="kids"><b>傳家</b>：${esc(s.succession)}</div>` : "";
+  $("family").innerHTML = cards + kids + away + succ;
 }
 
 // 人生路: the turns a life has taken, oldest first.

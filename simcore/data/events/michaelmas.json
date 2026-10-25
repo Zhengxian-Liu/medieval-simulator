@@ -36,6 +36,7 @@
     "vote.feud": "不會投你",
     "vote.debt": "你還欠我 {owed}",
     "vote.favour": "記得 {year} 年{why}",
+    "vote.favour_but": "{year} 年{why}，這份情記著；可這一票另有打算",
     "vote.we_owe": "你家還欠我一份情",
     "vote.promised": "答應過投{man}"
   }

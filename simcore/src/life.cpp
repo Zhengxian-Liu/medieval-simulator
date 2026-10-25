@@ -1266,7 +1266,7 @@ void World::marry(Id man, Id woman) {
             Id loser = households_[wt.house].head;
             Id winner = ohh != kNone ? households_[ohh].head : kNone;
             if (loser != kNone && winner != kNone && winner != loser) addOpinion(loser, winner, "took_our_want", -6, 6);
-            if (inPlayerHouse(wt.house)) log(1, "  （你家看中的" + thing + "，" + lost + "。）");
+            if (inPlayerHouse(wt.house)) log(1, "你家看中的" + thing + "，" + lost + "。");
         } else if (wt.subject == man || wt.subject == woman) {
             dropWant(wt, "另結了親");
         }

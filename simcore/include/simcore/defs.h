@@ -68,6 +68,9 @@ struct EventDef {
     bool ask = true;     // false: routine, the AI chooses even for a human player
     bool parentDecides = false;  // the head chooses for their unmarried children living at home
     bool routine = false;        // an everyday moment: while a year is let run (World::setRoutineByRule) the AI answers it
+    bool fold = false;           // a card that comes round every year or so (the king's tax, a child's schooling): asked
+                                 // twice a generation, the second time with what was chosen the first; after that the
+                                 // house answers it as it did last time (fun-r11 1), unless the rule says to ask each time
     std::string pulse;  // monthly | yearly
     double chance = 0;  // per pulse, after conditions pass
     std::string scope;  // anyone | player_family | village_head

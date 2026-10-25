@@ -30,7 +30,7 @@
      "progress": {"base": 7, "skill": {"charm": 0.8}, "reputation": 0.4, "opinion": 3},
      "start_log": "{name} 託媒人去 {target} 家，替 {subject} 說親。",
      "success_log": "兩家談妥了：{subject} 要和 {target} 成親。", "success": [{"money": -20}, {"marry_subject_target": true}],
-     "fail_log": "{target} 家回絕了這門親事。",
+     "fail_log": "{target_home}家回絕了這門親事。",
      "fail": [{"reputation": -1}, {"deed": {"type": "refused_proposal", "doer": "target"}},
               {"if": {"cond": {"feud_ge": 1}, "then": [{"log": "  媒人回來說：「兩家的舊帳還沒算清，人家不想結這門親。」"}],
                       "else": [{"if": {"cond": {"reputation_lt": 0}, "then": [{"log": "  媒人回來說：「人家嫌我們家名聲不好。」"}],
@@ -162,8 +162,9 @@
          {"text": "在法庭上替領主作證", "log": "莊園法庭上，{name} 站出來替 {target} 作證，鄰居們看{pron}的眼神變了。", "effects": [{"progress": 30}, {"reputation": -4}], "ai": {"base": 6, "traits": {"ambitious": 6, "kind": -4, "craven": 4}}}]}
      ]},
 
-    {"id": "affair", "name": "私通", "personal": true, "requires": "已婚", "consent": true, "desc": "背著配偶和人私通。教會法庭會罰，鄰居會說閒話。",
-     "actor": {"married": true, "age": [18, 50], "has_lover": false},
+    {"id": "affair", "name": "私通", "personal": true, "requires": "已婚，跟配偶處得不好（生性風流、心情很差的，處得還行也可能）", "consent": true, "desc": "背著配偶和人私通。教會法庭會罰，鄰居會說閒話。",
+     "actor": {"married": true, "age": [18, 50], "has_lover": false,
+               "any": [{"opinion_of_spouse_lt": 40}, {"all": {"trait": "lustful", "opinion_of_spouse_lt": 70}}, {"all": {"mood_lt": 25, "opinion_of_spouse_lt": 70}}]},
      "target": {"pick": "villager", "conditions": {"opposite_sex": true, "not_kin": true, "age": [18, 50], "has_lover": false}},
      "secret": true, "discovery": 0.03, "max_months": 10, "retry_years": 5,
      "progress": {"base": 5, "skill": {"charm": 0.8}, "opinion": 8, "traits": {"lustful": 5, "comely": 3, "chaste": -5}},
@@ -267,7 +268,7 @@
           ]},
 
     {"id": "buy_freehold", "name": "買自由地", "requires": "自由身、20 到 70 歲的家主，存錢 200 便士以上，手上有 6 畝以上佃來的地", "notify_target": true,
-     "desc": "向領主把 6 畝佃來的地買成自由地。從此這幾畝只交一點象徵性的租，領主也收不回去。家族從自由佃農變成自耕農。",
+     "desc": "向領主把 6 畝佃來的地買成自由地。從此這幾畝只交一點象徵性的租，領主也收不回去。自由地滿 6 畝是自耕農，滿 20 畝、地 40 畝以上是小地主。",
      "actor": {"is_head": true, "free": true, "money_ge": 200, "customary_ge": 6, "age": [20, 70], "not": {"occupation": ["lord", "priest"]}},
      "target": {"pick": "lord", "conditions": {}},
      "max_months": 12, "retry_years": 1,
@@ -279,7 +280,7 @@
      "ai": {"base": 1.5, "traits": {"ambitious": 6, "greedy": 3}},
      "beats": [
        {"id": "freehold_price", "prompt": "管家傳話回來：老爺聽說你家這些年攢了不少錢，開的價比說好的高出一大截。", "chance": 1, "conditions": {"money_ge": 400}, "options": [
-         {"text": "照{target_pron}開的價（再多付家裡存錢的四分之一，最多 300 便士）", "log": "{name} 咬咬牙，答應了 {target} 開的價。", "effects": [{"pay_share": {"share": 0.25, "max": 300, "label": "買自由地加價"}}, {"progress": 30}], "ai": {"base": 8, "traits": {"greedy": -8, "ambitious": 6}}},
+         {"text": "照{target_pron}開的價（再多付家裡存錢的四分之一，最多 300 便士；這個月就成交）", "log": "{name} 咬咬牙，答應了 {target} 開的價。", "effects": [{"pay_share": {"share": 0.25, "max": 300, "label": "買自由地加價"}}, {"progress": 100}], "ai": {"base": 8, "traits": {"greedy": -8, "ambitious": 6}}},
          {"text": "討價還價（一半一半）", "log": "{name} 托管家去跟 {target} 講價。", "effects": [{"random": {"percent": 50,
              "effects": [{"log": "  {target} 哼了一聲，到底還是按原來的價。"}, {"progress": 10}],
              "else": [{"log": "  {target} 惱了：「嫌貴就別買。」這事眼看要黃。"}, {"progress": -40}, {"lord_opinion": {"value": -5, "mod": "haggled", "years": 5}}]}}], "ai": {"base": 8, "traits": {"greedy": 8, "brave": 4}}},

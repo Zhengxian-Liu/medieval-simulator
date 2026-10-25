@@ -34,7 +34,7 @@ public:
     void fireScheduled(const EventDef& ev, Person& p, Id target, Id deed);
     bool refire(const EventDef& ev, Person& p, Id target);  // a card held back at the opening, if it still fits
     // Picks an option, logs it at `importance` (0 = silent) and applies it.
-    void runEvent(const EventDef& ev, Person& p, Id target, int importance);
+    void runEvent(const EventDef& ev, Person& p, Id target, int importance, const std::string& tag = "");
 
 private:
     World& w_;
@@ -54,6 +54,8 @@ private:
     const std::string& pickLog(const OptionDef& o, Id who);  // a variant this person was not told last time
     bool asked_ = false;   // the last chooseOption was the player's to make (the 「選擇」 is theirs)
     bool picked_ = false;  // ...and the player (not the AI standing in) picked it: a standing rule is set only then
+    bool foldedAsLast_ = false;  // (folded with the player's own last answer, not the house's ways)
+    bool folded_ = false;  // ...or it was an old question answered as last time, not asked (EventDef::fold)
     std::string bookAs_;   // what money the effects move is booked under: the event's title, or the plan's name
     void natureStress(const EventDef& ev, const OptionDef& chosen, Person& p, Id target);
     Id serviceChild(const Household& h) const;

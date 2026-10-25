@@ -1,6 +1,7 @@
 // Plans (schemes): long-running intentions started by the player through commands, or by NPCs.
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
 #include "simcore/events.h"
 
@@ -105,6 +106,7 @@ void World::processCommands() {
             if (what == "occasions") setOccasionRule(value);
             else if (what == "grain") setGrainRule(value);
             else if (what == "routine") setRoutineByRule(value == "1");
+            else if (what == "repeats") setRepeatRule(value);
         } else if (c.type == "interact") {
             // 陪家人 (keep_company): whichever of the company visits this person needs most now.
             std::string id = c.plan == "keep_company" && c.target != kNone ? companyEvent(c.target) : c.plan;
@@ -503,6 +505,9 @@ void World::monthlyPlans() {
         const PlanDef* pd = defs_.plan(plan.plan);
         Person& actor = people_[plan.actor];
         if (!actor.alive() || actor.household == kNone) {
+            // The one doing it died or left: said, when it was the family's (a match set going and never heard of again).
+            if (pd && (inPlayerHouse(actor.home) || (actor.household == kNone && inPlayerHouse(actor.awayFrom)) || isPlayerFamily(actor)))
+                log(1, "「" + pd->name + "」擱下了：" + fullName(actor.id) + (actor.alive() ? " 已經不在家裡" : " 已經過世") + "，沒人接著辦。");
             plans_.erase(plans_.begin() + static_cast<long>(i));
             continue;
         }
@@ -528,6 +533,11 @@ void World::monthlyPlans() {
         // The pair married each other another way (her family came asking): the suit has nothing left to do.
         auto wedEachOther = [&](Id x, Id other) { return x != kNone && other != kNone && people_[x].spouse == other; };
         if ((plan.plan == "arrange_match" && wedEachOther(plan.subject, plan.target)) || (plan.plan == "court" && wedEachOther(plan.actor, plan.target))) {
+            // Never just gone from the list: the money and the time spent on it came to this.
+            if (inPlayerHouse(actor.household) && pd) {
+                Id one = plan.plan == "court" ? plan.actor : plan.subject;
+                log(1, "【成功】「" + pd->name + "」不用再辦了：" + fullName(one) + " 和 " + fullName(plan.target) + " 已經成了親。");
+            }
             plans_.erase(plans_.begin() + static_cast<long>(i));
             continue;
         }
@@ -555,6 +565,22 @@ void World::monthlyPlans() {
 
         bool actorHome = inPlayerHouse(actor.household);
         bool victimHome = plan.target != kNone && inPlayerHouse(people_[plan.target].household);
+        // An affair under the family's roof shows before it happens (fun-r11 5): a sign goes round when it is half
+        // made, and it cannot come off until two months after (never out of a clear sky).
+        if (pd->id == "affair" && (actorHome || victimHome) && plan.target != kNone && plan.actor != actingHead() && plan.target != actingHead()) {
+            int signDay = -1;
+            for (const auto& b : plan.beatsSeen)
+                if (b.rfind("_sign:", 0) == 0) signDay = std::atoi(b.c_str() + 6);
+            if (signDay < 0 && plan.progress >= 35) {
+                signDay = day_;
+                plan.beatsSeen.push_back("_sign:" + std::to_string(day_));
+                const Id home = actorHome ? plan.actor : plan.target, other = actorHome ? plan.target : plan.actor;
+                const Person& hp = people_[home];
+                const std::string spouse = hp.spouse != kNone && people_[hp.spouse].alive() ? "，對" + shortName(hp.spouse) + "也淡了" : "";
+                log(1, "【苗頭】" + shortName(home) + "這陣子常找藉口出門，好幾回有人看見往 " + fullName(other) + " 家那邊去" + spouse + "。");
+            }
+            if (signDay < 0 || day_ - signDay < 2 * kDaysPerMonth) plan.progress = std::min(plan.progress, 99.0);
+        }
 
         // At most one beat a month.
         {
@@ -580,7 +606,7 @@ void World::monthlyPlans() {
                 if (actorHome) meetStory(actor.household, houseBeat);
                 // A beat is the doer's side of it (their haggling, their doubts): told only when the doer is the family.
                 int importance = actorHome ? 1 : 0;
-                ev.runEvent(beat, actor, plan.target, importance);
+                ev.runEvent(beat, actor, plan.target, importance, pd->name);
                 break;
             }
             // Effects may have added people; re-find the plan by actor and plan (a head may have two going).

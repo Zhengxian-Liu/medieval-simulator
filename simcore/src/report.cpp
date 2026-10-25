@@ -45,7 +45,12 @@ const std::map<std::string, std::string>& modNames() {
         {"fed_us", "挨餓時送過糧"}, {"left_us_hungry", "挨餓時沒伸手"},
         // design/fun-r5.md B: family plans asked, affairs, illness.
         {"forbade_plan", "不准我的打算"}, {"rebuffed", "拒絕過我"}, {"struck_the_lord", "對我動過手"}, {"doubted_paternity", "疑心不是親生的"},
-        {"cold_father", "對我冷淡"}, {"stood_by", "護著我"}, {"nursed", "病中照顧過我"}};
+        {"cold_father", "對我冷淡"}, {"stood_by", "護著我"}, {"nursed", "病中照顧過我"},
+        // (fun-r11: ids that had no words and showed raw)
+        {"dodged_array", "點兵時躲著不去"}, {"forgave_debt", "免過我的債"}, {"forgave_manor", "免了莊園的債"}, {"gave_time", "抽空陪過我"},
+        {"keeps_accounts", "帳記得清楚"}, {"land_rival", "跟我家搶過地"}, {"lent_to_manor", "借過錢給莊園"}, {"lent_us", "借過錢給我家"},
+        {"lost_in_court", "在法庭上輸給你家"}, {"made_peace", "講和過"}, {"patient_lender", "肯寬限的債主"}, {"took_demesne", "包下了莊園的自營地"},
+        {"trusty_lender", "靠得住的債主"}, {"rival_outbid", "搶過我看中的東西"}};
     return names;
 }
 
@@ -103,6 +108,16 @@ std::string tidyText(const std::string& text) {
         prev = cp;
         i += n;
     }
+    // A note in brackets that came out empty (a name with no kin word for it) goes, and so do stray commas at its edges.
+    auto drop = [&](const std::string& from, const std::string& to) {
+        for (size_t at = out.find(from); at != std::string::npos; at = out.find(from, at + to.size())) out.replace(at, from.size(), to);
+    };
+    drop("（，", "（");
+    drop("，）", "）");
+    drop("（、", "（");
+    drop("、）", "）");
+    drop("（）", "");
+    drop("()", "");
     return out;
 }
 

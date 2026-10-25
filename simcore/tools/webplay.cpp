@@ -356,7 +356,7 @@ public:
     // A sub-line (indented) belongs to the entry before it: none when that line was dropped or folded (the road's
     // conditions, a grain buy), and it stands alone when that entry is in another season.
     bool dropSubs_ = false;
-    int parentKey_ = -1;
+    int parentKey_ = -1, parentDay_ = -1;
     static double numberBefore(const std::string& t, const std::string& mark) {
         size_t at = t.find(mark);
         if (at == std::string::npos) return 0;
@@ -370,7 +370,7 @@ public:
         // The family's turning points: births, deaths, marriages, the ambition and posts, contests, debts, standing.
         for (const char* k : {"出生", "生了", "去世", "過世", "夭折", "死了", "死於", "娶了", "嫁給", "嫁到", "入贅", "成了親", "訂了親", "立志", "志向",
                               "達成", "當上", "選上", "落選", "連任", "爭到", "拿到了", "讓給", "輸給", "贏了", "欠債", "借了", "借來", "還清", "地位",
-                              "繼承", "當了家", "接下", "贖身", "自由人", "法庭", "判了", "罰", "世仇", "結了怨", "和好", "開局", "【命案】", "【判決】", "【官司】", "【分家", "【寡婦產】", "【養老】", "【離家】", "【血仇】", "【避難】", "【沒收】", "【謀害】", "【家醜】", "【懸案】", "【苗頭】", "〔身後的家業〕"})
+                              "繼承", "當了家", "接下", "贖身", "自由人", "法庭", "判了", "罰", "世仇", "結了怨", "和好", "開局", "【命案】", "【判決】", "【官司】", "【分家", "【寡婦產】", "【養老】", "【離家】", "【繼承人】", "【血仇】", "【避難】", "【沒收】", "【謀害】", "【家醜】", "【懸案】", "【苗頭】", "〔身後的家業〕"})
             if (t.find(k) != std::string::npos) return true;
         return false;
     }
@@ -379,7 +379,7 @@ public:
     static bool topLine(const std::string& t) {
         for (const char* k : {"當上了", "當選", "選上", "落選", "連任", "【死後稅】", "牽走", "【欠債】", "【抵押】", "【租約】", "還清", "債清了", "劃掉了",
                               "欠債 ", "借了", "【宿敵】", "回到家裡", "回村", "回來了", "離家", "幫傭去了", "打了個小包袱", "出發", "入贅", "嫁到", "嫁給",
-                              "娶了", "出生", "生下了", "去世", "夭折", "當了家", "【命案】", "【判決】", "【官司】", "【分家", "【寡婦產】", "【沒收】", "【謀害】", "【血仇】", "【避難】", "【懸案】"})
+                              "娶了", "出生", "生下了", "去世", "夭折", "當了家", "【命案】", "【判決】", "【官司】", "【分家", "【寡婦產】", "【沒收】", "【謀害】", "【血仇】", "【避難】", "【懸案】", "【繼承人】", "〔他的那一份〕"})
             if (t.find(k) != std::string::npos) return true;
         return false;
     }
@@ -401,7 +401,7 @@ public:
         // the line it follows from) and stands as its own entry.
         bool sub = indented;
         if (sub && dropSubs_) return;
-        if (sub && parentKey_ != key) sub = false;
+        if (sub && (parentKey_ != key || parentDay_ != e.day)) sub = false;  // (not under a line of another day)
         if (!sub) dropSubs_ = false;
         std::string cls = sub ? "sub" : "fam";
         bool near = false;
@@ -456,7 +456,7 @@ public:
             size_t open = t.rfind("（", at);
             if (open != std::string::npos) origin = t.substr(open + 3, at - open - 3);
         }
-        if (!sub) parentKey_ = key;
+        if (!sub) parentKey_ = key, parentDay_ = e.day;
         t = shortenNames(houseStyle(t), key);
         Obj o;
         o.n("skey", key).text("season", seasonLabel(key)).n("year", key / 4).text("cls", cls).text("text", t);
@@ -587,7 +587,12 @@ public:
             refreshNear();
         }
         for (; shown < log.size(); ++shown) {
-            if (log[shown].importance == 2) continue;
+            if (log[shown].importance == 2) {
+                // A line left out is still a parent: what is indented under it stands on its own, not under the
+                // entry before (fun-r10: a land price's outcome shown under a funeral).
+                if (!log[shown].text.empty() && log[shown].text[0] != ' ') parentKey_ = -1;
+                continue;
+            }
             std::string t = log[shown].text;
             t.erase(0, t.find_first_not_of(' '));
             lines.push_back(Obj().n("year", w.config().startYear + log[shown].day / kDaysPerYear).n("kind", log[shown].importance).text("text", t).done());
@@ -643,7 +648,7 @@ public:
             for (const auto& r : rv.recent) recent.push_back(str(r));
             o.raw("reputation", Obj().n("value", rv.value).text("word", rv.word).text("effect", rv.effect).raw("recent", arr(recent))
                                     .text("mend", rv.mend).done());
-            o.text("ladder", w.ladderText()).text("regret", w.regretText()).text("inherit", w.inheritText());
+            o.text("ladder", w.ladderText()).text("regret", w.regretText()).text("inherit", w.inheritText()).text("succession", w.successionLine());
         }
         o.n("time_left", w.timeLeft());
         // fun-r9 D: this generation's rival house, what it contends with the family for now, and where they have met.
@@ -680,7 +685,12 @@ public:
                                     .raw("choices", arr(choices)).done(),
                                 Obj().text("id", "grain").text("name", "買糧").text("value", g)
                                     .text("text", g.empty() ? "還沒定（頭一回缺糧時問你；讓 AI 過一年時每月買一個月的）" : World::grainRuleText(g))
-                                    .raw("choices", arr(grain)).done()}));
+                                    .raw("choices", arr(grain)).done(),
+                                Obj().text("id", "repeats").text("name", "老問題").text("value", w.repeatRule())
+                                    .text("text", World::repeatRuleText(w.repeatRule()))
+                                    .raw("choices", arr({Obj().text("value", "fold").text("text", World::repeatRuleText("fold")).done(),
+                                                         Obj().text("value", "ask").text("text", World::repeatRuleText("ask")).done()}))
+                                    .done()}));
         }
         // Holding the house for a child: the head may hand the years to the steward and answer only what is asked.
         if (const Household& ph = w.households()[w.playerHousehold()]; ph.ward != kNone && w.people()[ph.ward].alive()) {

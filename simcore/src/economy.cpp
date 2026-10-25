@@ -182,6 +182,14 @@ std::string World::hungerWhy(Id house) const {
                     break;
                 }
     }
+    // Land the house had a few years ago and has no longer (sold, pledged, taken): why it holds less than the talk
+    // of the village remembers it getting (fun-r10: the card said 5 acres, the gossip 10).
+    {
+        double lost = 0;
+        for (const auto& pc : parcels_)
+            if (!pc.gone && pc.from == house && pc.holder != house && day_ - pc.since < 6 * kDaysPerYear) lost += pc.acres;
+        if (lost >= 1) why.push_back("這幾年家裡的地讓出去了 " + num(lost) + " 畝（賣掉、抵債或被收走），如今只剩 " + num(h.acres) + " 畝");
+    }
     if (int more = static_cast<int>(h.members.size()) - h.harvestMembers; more > 0 && h.harvestMembers > 0)
         why.push_back("秋收以後家裡多了 " + std::to_string(more) + " 口人");
     if (h.soldForRent >= daily * 15) why.push_back("米迦勒節為了交租賣掉了 " + num(h.soldForRent / daily) + " 天的糧");
@@ -617,6 +625,15 @@ void World::ensureFood(Household& h) {
 // or "ask me" (asked once a harvest year, the answer holding until the harvest). Every grain bought is on the books;
 // the first buy of a harvest year by the rule is a line in the chronicle. Nothing is bought beyond what the rule (or
 // the card) says, and a rule the purse cannot keep is said once, then the hunger cards carry the other ways out.
+const char* World::repeatRuleText(const std::string& rule) {
+    if (rule == "ask") return "每回都問我";
+    return "每年都來的老問題（國王的稅、孩子認字、出路……）一代問兩回，之後照上回的做法辦，記錄裡會寫明";
+}
+
+void World::setRepeatRule(const std::string& rule) {
+    if (rule == "fold" || rule == "ask") repeatRule_ = rule;
+}
+
 const char* World::grainRuleText(const std::string& rule) {
     if (rule == "harvest") return "缺糧時一次買到收成";
     if (rule == "monthly") return "缺糧時每月初買一個月的";
@@ -1055,6 +1072,22 @@ double World::dowryCap(const Household& h) const {
     return rung >= 3 ? 480.0 : rung == 2 ? 240.0 : 100.0;
 }
 
+// Whose house a hungry one is to the family: the nearest of kin in it (kNone: a friend of the head's).
+Id World::feedKin(const Household& h) const {
+    Id ours = actingHead();
+    Id kin = kNone;
+    if (ours == kNone) return kNone;
+    for (Id m : h.members)
+        if (closeKin(ours, m) || !kinTie(ours, m).empty()) {
+            if (kin == kNone || ageYears(people_[m]) > ageYears(people_[kin])) kin = m;
+        }
+    return kin;
+}
+
+// 〔親友挨餓〕 (fun-r11 2): one hungry house a season at most, asked by the month's check or chosen off the season's
+// list. The card was a gift of grain the first time and land or a lodger after; now every way out is on it each time
+// (lend grain, give it, find them work, give land, take a child in, or leave them be), each with what it costs the
+// family and what it does to the other house's bread, and the line after says how many days they have now.
 void World::askToFeed(Household& h) {
     Id ours = actingHead();
     if (ours == kNone || h.head == kNone) return;
@@ -1062,58 +1095,87 @@ void World::askToFeed(Household& h) {
     // Asked while there is still time (a month and a half of bread left), not when the children are already wasting.
     if (h.food >= daily * 45) return;
     if (auto it = feedAskedUntil_.find(h.id); it != feedAskedUntil_.end() && it->second > day_) return;
-    // One such card a month at most, whoever is hungry (kAnyHouse holds when the last one was).
+    // One hungry house a season, whoever it is (kAnyHouse holds until the next season begins), card or list.
     constexpr Id kAnyHouse = -2;
     if (auto it = feedAskedUntil_.find(kAnyHouse); it != feedAskedUntil_.end() && it->second > day_) return;
-    // Whose house it is to the family: the nearest of kin in it, or a friend of the head's.
-    Id kin = kNone;
-    for (Id m : h.members)
-        if (closeKin(ours, m) || !kinTie(ours, m).empty()) {
-            if (kin == kNone || ageYears(people_[m]) > ageYears(people_[kin])) kin = m;
-        }
+    if (hungerSeason_ == day_ / (3 * kDaysPerMonth)) return;
+    Id kin = feedKin(h);
     if (kin == kNone && opinion(ours, h.head) < 40) return;
     // However many kin houses are short, the family is asked at most kFeedCardsPerYear times a harvest year.
     int harvestYear = (day_ + kDaysPerYear - 8 * kDaysPerMonth) / kDaysPerYear;
     if (harvestYear != feedCardYear_) feedCardYear_ = harvestYear, feedCardsThisYear_ = 0;
     if (feedCardsThisYear_ >= kFeedCardsPerYear) return;
+    feedMenu(h, false);
+}
+
+bool World::feedMenu(Household& h, bool chosen) {
+    Id ours = actingHead();
+    if (ours == kNone || h.head == kNone || playerHousehold_ == kNone) return false;
+    const double daily = std::max(0.5, consumption(h));
+    const Id kin = feedKin(h);
     Household& ph = households_[playerHousehold_];
-    double spare = ph.food - consumption(ph) * 120;
-    double price = param("grain_price", 0.5);
+    const double ourDaily = std::max(0.5, consumption(ph));
+    const double spare = ph.food - ourDaily * 120;
+    const double price = param("grain_price", 0.5);
     // A handout sized to the family's own means: two months of their bread at most, never more than half the spare
     // grain or a quarter of the purse (a gift of most of what the family has is no first offer).
-    double grain = std::min(daily * 60, spare / 2);
-    double coin = std::round(std::min(daily * 60 * price, std::floor(ph.money / 4)));
-    std::vector<std::string> opts;
-    std::vector<int> what;
-    // Helped once already and hungry again: the want is in the holding, not the season. Only a lasting way out is
-    // offered from then on (the same as the season's list offers).
-    bool again = feedHelped_[h.id] > 0;
-    Id parcel = again ? spareParcel(h.id) : kNone;
-    Id lodger = again && ph.food >= consumption(ph) * 120 && !ph.lean ? takeInWho(h.id) : kNone;
-    bool hire = again && canHireKin(h.id);
-    if (hire) opts.push_back("雇他家能幹活的人來當長工（管吃，每月每人 4 便士，做一年）"), what.push_back(4);
-    if (parcel != kNone) opts.push_back("把" + parcelName(parcels_[parcel]) + "分給他家種（再送一個月的糧" + std::string(parcels_[parcel].free ? "；這是自由地" : "") + "）"), what.push_back(5);
-    if (lodger != kNone) opts.push_back("把" + shortName(lodger) + "（" + std::to_string(int(ageYears(people_[lodger]))) + " 歲）接到家裡來住"), what.push_back(6);
-    // Fed twice and nothing lasting to offer: the family has done what handouts can do; the card stops coming
-    // (their want is in the holding, and the season's list still offers to take a child in when there is room).
-    if (opts.empty() && feedHelped_[h.id] >= 2) return;
-    if (opts.empty()) {
-        if (grain >= daily * 20)
-            opts.push_back("從自家糧倉送去夠他們吃 " + std::to_string(int(grain / daily)) + " 天的糧（自家存糧 " + std::to_string(int(foodDays(ph))) + " 天 → " +
-                           std::to_string(int((ph.food - grain) / std::max(0.5, consumption(ph)))) + " 天）"),
-                what.push_back(0);
-        if (coin >= daily * 20 * price && ph.money >= coin + 20)
-            opts.push_back("送 " + std::to_string(int(coin)) + " 便士讓他們買糧（夠吃 " + std::to_string(int(coin / price / daily)) + " 天；你家有 " +
-                           std::to_string(int(ph.money)) + " 便士）"),
-                what.push_back(1);
-        if (h.debt > 0.5 && h.creditor != kNone && inPlayerHouse(people_[h.creditor].household)) opts.push_back("免了他們欠你家的債"), what.push_back(2);
+    const double grain = std::min(daily * 60, spare / 2);
+    const double coin = std::round(std::min(daily * 60 * price, std::floor(ph.money / 4)));
+    const int theirDays = static_cast<int>(h.food / daily);
+    auto theirs = [&](double after) { return "他家 " + std::to_string(theirDays) + " 天 → " + std::to_string(static_cast<int>(after)) + " 天"; };
+    auto barn = [&](double give) {
+        return "自家存糧 " + std::to_string(static_cast<int>(foodDays(ph))) + " 天 → " + std::to_string(static_cast<int>((ph.food - give) / ourDaily)) + " 天";
+    };
+    const bool again = feedHelped_[h.id] > 0;
+    struct Way { int what; std::string text, label; };
+    std::vector<Way> ways;
+    if (grain >= daily * 20 && debtRoom(h, ours))
+        ways.push_back({7, "借他們夠吃 " + std::to_string(int(grain / daily)) + " 天的糧，明年米迦勒節前還（記一筆 " + std::to_string(int(std::round(grain * price))) +
+                               " 便士的帳；" + barn(grain) + "；" + theirs(h.food / daily + grain / daily) + "）",
+                        "借糧"});
+    if (grain >= daily * 20)
+        ways.push_back({0, "從自家糧倉送去夠他們吃 " + std::to_string(int(grain / daily)) + " 天的糧（" + barn(grain) + "；" + theirs(h.food / daily + grain / daily) + "）", "送糧"});
+    if (coin >= daily * 20 * price && ph.money >= coin + 20)
+        ways.push_back({1, "送 " + std::to_string(int(coin)) + " 便士讓他們買糧（夠吃 " + std::to_string(int(coin / price / daily)) + " 天；你家有 " +
+                               std::to_string(int(ph.money)) + " 便士）",
+                        "送錢"});
+    if (h.debt > 0.5 && h.creditor != kNone && inPlayerHouse(people_[h.creditor].household))
+        ways.push_back({2, "免了他們欠你家的 " + std::to_string(int(h.debt)) + " 便士債（他們手上的錢留著買糧）", "免債"});
+    const int hands = hiredHands(h);
+    if (canHireKin(h.id))
+        ways.push_back({4, "雇他家能幹活的 " + std::to_string(hands) + " 個人來當長工（管吃，每月每人 4 便士，做一年；他家每月多約 " +
+                               std::to_string(int(hands * 40 / daily)) + " 天的糧）",
+                        "雇他家的人當長工"});
+    const Id master = !canHireKin(h.id) && h.hiredUntil <= day_ && hands > 0 ? hireMaster(h.id) : kNone;
+    if (master != kNone)
+        ways.push_back({8, "替他家能幹活的人在" + (households_[master].head != kNone && master != (lord_ != kNone ? people_[lord_].household : kNone)
+                                                      ? " " + fullName(households_[master].head) + " 家"
+                                                      : std::string("莊園")) +
+                               "找一年長工（不花你家的錢；他家每月多約 " + std::to_string(int(hands * 40 / daily)) + " 天的糧）",
+                        "替他家找活"});
+    const Id parcel = spareParcel(h.id);
+    if (parcel != kNone) {
+        const double bridge = std::min(daily * 30, std::max(0.0, spare));
+        ways.push_back({5, "把" + parcelName(parcels_[parcel]) + "分給他家種（你家少了這幾畝" + std::string(parcels_[parcel].free ? "，這是自由地" : "") + "；再送 " +
+                               std::to_string(int(bridge / daily)) + " 天的糧撐到收成，" + theirs(h.food / daily + bridge / daily) + "；往後每年多收約 " +
+                               std::to_string(int(keepsHouse(parcels_[parcel].acres) / daily / kDaysPerMonth)) + " 個月的口糧）",
+                        "分地"});
     }
-    if (opts.empty()) return;
-    opts.push_back(again ? "這回先不管" : "自家也不寬裕，先不管");
-    what.push_back(3);
+    const Id lodger = ph.food >= ourDaily * 120 && !ph.lean ? takeInWho(h.id) : kNone;
+    if (lodger != kNone) {
+        const double mouth = portion(people_[lodger]);
+        ways.push_back({6, "把" + shortName(lodger) + "（" + std::to_string(int(ageYears(people_[lodger]))) + " 歲）接到家裡來住（家裡的存糧從夠吃 " +
+                               std::to_string(int(foodDays(ph))) + " 天變成夠吃 " + std::to_string(int(ph.food / (ourDaily + mouth))) + " 天；" +
+                               theirs(h.food / std::max(0.5, daily - mouth)) + "）",
+                        "接進門"});
+    }
+    if (ways.empty()) return false;
+    ways.push_back({3, chosen ? "去看過了，這回先不幫（這一天就算白走一趟）" : again ? "這回先不管" : "自家也不寬裕，先不管", "不管"});
+    constexpr Id kAnyHouse = -2;
     feedAskedUntil_[h.id] = day_ + (again ? kDaysPerYear : kDaysPerYear / 2);  // the same house not every season
-    feedAskedUntil_[kAnyHouse] = day_ + kDaysPerMonth;
-    if (chooser_ && day_ >= handedOver_) ++feedCardsThisYear_;  // (the years before the hand-over are not the player's)
+    feedAskedUntil_[kAnyHouse] = (day_ / (3 * kDaysPerMonth) + 1) * 3 * kDaysPerMonth;  // nobody else's this season
+    hungerSeason_ = day_ / (3 * kDaysPerMonth);
+    if (!chosen && chooser_ && day_ >= handedOver_) ++feedCardsThisYear_;  // (the years before the hand-over are not the player's)
     int children = 0;
     for (Id m : h.members)
         if (ageYears(people_[m]) < 12) ++children;
@@ -1126,54 +1188,84 @@ void World::askToFeed(Household& h) {
                       : kin != kNone ? fullName(h.head) + " 家（你家的" + kinWord(ours, kin) + " " + shortName(kin) + (marriedIn ? " 入贅在" : marriedTo ? " 嫁到" : " 在") +
                                            (sheHeads ? "她" : "他") + "家）"
                                      : "好朋友 " + fullName(h.head) + " 家";
-    int days = static_cast<int>(h.food / std::max(1.0, daily));
-    std::string sit = who + (again ? "又缺糧了：只剩 " : "只剩 ") + std::to_string(days) + " 天的糧" +
-                      (children ? "，家裡有 " + std::to_string(children) + " 個孩子" : "") + "。" +
-                      (again ? "上回送去的吃完了，他家的地本來就不夠一家人吃，送糧只撐得了一季。" : "");
+    std::string sit = who + (again ? "又缺糧了：只剩 " : "只剩 ") + std::to_string(theirDays) + " 天的糧" +
+                      (children ? "，家裡有 " + std::to_string(children) + " 個孩子" : "") + "。";
+    std::vector<std::string> opts;
+    for (const auto& x : ways) opts.push_back(x.text);
     int r = askPlayer("親友挨餓", sit + hungerWhy(h.id), opts);  // (the reasons are for the card; the chronicle keeps the plain line)
-    // No one to ask: a well-off family feeds its own kin; otherwise it keeps the house's bread.
-    // Land and a new mouth at the table are the player's to give, never the rules'.
-    if (r < 0) r = kin != kNone && (what.front() == 0 || what.front() == 4 || ph.money >= 300) && what.front() != 5 && what.front() != 6
-                       ? 0 : static_cast<int>(opts.size()) - 1;
-    int w = what[r];
-    if (w == 3) {
-        log(1, "〔親友挨餓〕" + sit + "家裡沒有伸手。");
-        if (kin != kNone) addOpinion(kin, ours, "left_us_hungry", -10, 10);
-        // Asked and refused: not asked again for a year; the lasting ways refused, not the same card for three.
-        feedAskedUntil_[h.id] = day_ + (again ? kRepeatYears : 1) * kDaysPerYear;
-        return;
+    // No one to ask: a well-off family feeds its own kin; otherwise it keeps the house's bread. Land, a new mouth at
+    // the table and a loan are the player's to give, never the rules'.
+    if (r < 0) {
+        r = static_cast<int>(ways.size()) - 1;
+        if (kin != kNone)
+            for (size_t k = 0; k < ways.size(); ++k)
+                if (ways[k].what == 0 || ways[k].what == 4 || ways[k].what == 8 || (ways[k].what == 1 && ph.money >= 300)) {
+                    r = static_cast<int>(k);
+                    break;
+                }
     }
-    if (w == 0) {
-        ph.food -= grain;
-        h.food += grain;
-        log(1, "〔親友挨餓〕" + fullName(ours) + " 讓人背了幾袋麥子送到 " + fullName(h.head) + " 家，夠他們吃 " + std::to_string(int(grain / daily)) + " 天。");
-    } else if (w == 1) {
-        ph.money -= coin;
-        book(ph, "接濟別人", -coin);
-        h.money += coin;
-        log(1, "〔親友挨餓〕" + fullName(ours) + " 送了 " + std::to_string(int(coin)) + " 便士到 " + fullName(h.head) + " 家買糧。");
-    } else if (w == 2) {
-        log(1, "〔親友挨餓〕" + fullName(ours) + " 把 " + fullName(h.head) + " 家欠的債一筆勾銷，讓他們先顧著吃。");
-        clearDebt(h);
-    } else if (w == 4) {
-        log(1, "〔親友挨餓〕" + sit + "（選擇：雇他家的人當長工）" + fullName(h.head) + " 家能幹活的人搬來你家做一年，吃住都在你家。");
-        hireKin(h.id, playerHousehold_);
-    } else if (w == 5) {
-        log(1, "〔親友挨餓〕" + sit + "（選擇：分地）" + fullName(ours) + " 把" + parcelName(parcels_[parcel]) + "分給了 " + fullName(h.head) + " 家，往後他們自己種糧。");
-        giveParcelTo(parcel, h.id, ours);
-    } else if (w == 6) {
-        log(1, "〔親友挨餓〕" + sit + "（選擇：接進門）" + fullName(lodger) + " 搬到你家來住了。");
-        takeIn(lodger, playerHousehold_, ours);
+    const Way& way = ways[r];
+    const std::string head = "〔親友挨餓〕" + sit + "（選擇：" + way.label + "）";
+    auto after = [&] { return "如今他家的糧夠吃 " + std::to_string(int(h.food / std::max(0.5, consumption(h)))) + " 天。"; };
+    switch (way.what) {
+        case 3:
+            log(1, head + "家裡沒有伸手。");
+            if (kin != kNone) addOpinion(kin, ours, "left_us_hungry", -10, 10);
+            // Asked and refused: not asked again for a year; the lasting ways refused, not the same card for three.
+            feedAskedUntil_[h.id] = day_ + (again ? kRepeatYears : 1) * kDaysPerYear;
+            return true;
+        case 7: {
+            ph.food -= grain;
+            h.food += grain;
+            const double owed = std::round(grain * price);
+            addDebt(h, owed, ours);
+            log(1, head + fullName(ours) + " 借了夠吃 " + std::to_string(int(grain / daily)) + " 天的糧給 " + fullName(h.head) + " 家，記下 " +
+                       std::to_string(int(owed)) + " 便士的帳，米迦勒節前還。" + after());
+            break;
+        }
+        case 0:
+            ph.food -= grain;
+            h.food += grain;
+            log(1, head + fullName(ours) + " 讓人背了幾袋麥子送到 " + fullName(h.head) + " 家。" + after());
+            break;
+        case 1:
+            ph.money -= coin;
+            book(ph, "接濟別人", -coin);
+            h.money += coin;
+            ensureFood(h);
+            log(1, head + fullName(ours) + " 送了 " + std::to_string(int(coin)) + " 便士到 " + fullName(h.head) + " 家買糧。" + after());
+            break;
+        case 2:
+            clearDebt(h);
+            ensureFood(h);
+            log(1, head + fullName(ours) + " 把 " + fullName(h.head) + " 家欠的債一筆勾銷，讓他們先顧著吃。" + after());
+            break;
+        case 4:
+            hireKin(h.id, playerHousehold_);
+            log(1, head + fullName(h.head) + " 家能幹活的人搬來你家做一年，吃住都在你家，他家每月多約 " + std::to_string(int(hands * 40 / daily)) + " 天的糧。");
+            break;
+        case 8:
+            hireKin(h.id, master);
+            log(1, head + fullName(ours) + " 托了人，" + fullName(h.head) + " 家能幹活的人去" +
+                       (households_[master].head != kNone ? " " + fullName(households_[master].head) + " 家" : std::string("莊園")) + "做一年長工，他家每月多約 " +
+                       std::to_string(int(hands * 40 / daily)) + " 天的糧。");
+            break;
+        case 5:
+            giveParcelTo(parcel, h.id, ours);
+            log(1, head + fullName(ours) + " 把" + parcelName(parcels_[parcel]) + "分給了 " + fullName(h.head) + " 家，往後他們自己種糧。" + after());
+            break;
+        case 6:
+            takeIn(lodger, playerHousehold_, ours);
+            log(1, head + fullName(lodger) + " 搬到你家來住了。" + after());
+            break;
     }
-    if (w <= 2) {
-        ensureFood(h);
-        ++feedHelped_[h.id];
-    }
+    if (way.what <= 2 || way.what == 7) ++feedHelped_[h.id];
     // Help that came in time: nobody in the house goes to bed hungry this month (the month's health is reckoned today).
     feedHouse(h);
-    if (w != 5) recordDeed("kindness", ours, h.head);  // (giving land records its own)
-    oweFavour(h.head, ours, 20, "挨餓時的接濟");
-    if (kin != kNone && kin != h.head) addOpinion(kin, ours, "fed_us", 15, 20);
+    if (way.what != 5) recordDeed("kindness", ours, h.head);  // (giving land records its own)
+    oweFavour(h.head, ours, way.what == 7 ? 8 : 20, way.what == 7 ? "挨餓時借糧" : "挨餓時的接濟");
+    if (kin != kNone && kin != h.head) addOpinion(kin, ours, "fed_us", way.what == 7 ? 8 : 15, 20);
+    return true;
 }
 
 double World::taxDue(const Household& h) const {

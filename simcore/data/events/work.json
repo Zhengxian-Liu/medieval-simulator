@@ -82,7 +82,7 @@
         "ai": {"base": 6, "traits": {"diligent": 4, "greedy": 4, "craven": -4}}},
        {"text": "推託（罰 6 便士，領主不高興；村裡倒覺得你有骨氣）", "log": "{name} 推說家裡有病人，沒去替領主割麥子，被罰了 6 便士。", "effects": [{"money": -6}, {"target_opinion": {"value": -10, "mod": "shirker", "years": 5}}, {"reputation": 1}], "ai": {"base": 5, "traits": {"lazy": 8, "wrathful": 6, "brave": 4}}}
      ]},
-    {"id": "reeve_temptation", "title": "莊頭的帳本", "prompt": "領主的帳本在 {name} 手上。少記幾筆，沒人看得出來。",
+    {"id": "reeve_temptation", "title": "莊頭的帳本", "fold": true, "prompt": "領主的帳本在 {name} 手上。少記幾筆，沒人看得出來。",
      "prompts": ["領主的帳本在 {name} 手上。少記幾筆，沒人看得出來。", "賣羊毛的錢經 {name} 的手交給管家。少報一點，管家也不會去羊圈裡數。", "今年莊園的麥子是 {name} 帶人賣到集上的。說價錢跌了，誰也查不出來。"],
      "scope": "player_family", "chance": 0.08, "cooldown_years": 3,
      "conditions": {"reeve": true},

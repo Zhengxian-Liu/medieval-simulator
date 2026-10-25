@@ -249,6 +249,7 @@ double World::moveLand(Id from, Id to, double acres, LandPick pick, const std::s
         pc.holder = to;
         pc.since = day_;
         pc.how = how;
+        pc.from = from;
         if (to == kNone) pc.free = false;  // land that falls back to the lord is his to grant again on his terms
         left -= pc.acres;
         lastMoved_.push_back(take);
@@ -277,6 +278,7 @@ void World::moveParcel(Id parcel, Id to, const std::string& how) {
     pc.holder = to;
     pc.since = day_;
     pc.how = how;
+    pc.from = from;
     if (to != kNone && (how == "買來" || how == "向領主租來") && households_[to].head != kNone)
         noteLife(households_[to].head, (how == "買來" ? "買下了" : "租下了") + parcelName(pc));
     if (to == kNone) pc.free = false;

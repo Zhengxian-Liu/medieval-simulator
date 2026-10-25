@@ -271,6 +271,7 @@ struct Parcel {
     std::vector<int> cells;  // map cells, y * width + x
     int since = 0;           // day it came to its holder
     std::string how;         // how it came to them: 祖傳, 買來, 抵債收來...
+    Id from = kNone;         // the house it came from (kNone: the lord, or always theirs)
     bool gone = false;       // merged away
 };
 
@@ -674,6 +675,7 @@ public:
     double opinion(Id from, Id to) const;
     // The village's name for someone (「你家名聲」 is the head's): every change goes through here with its reason.
     void addReputation(Id who, double by, const std::string& why);
+    static double repRate(double lean);  // the share of a point a deed moves the name by, past ±20
     struct RepView {
         int value = 0;                    // -50 .. +50
         std::string word;                 // 好 / 平常 / 不好 / 很壞
@@ -825,6 +827,11 @@ public:
     const std::string& grainRule() const { return grainRule_; }
     static const char* grainRuleText(const std::string& rule);
     void setGrainRule(const std::string& rule, bool quiet = false);
+    // 老問題 (fun-r11 1): a card that comes round every year (EventDef::fold) is asked twice a generation; after that
+    // "fold" answers it as last time (said in the chronicle), "ask" asks every time.
+    const std::string& repeatRule() const { return repeatRule_; }
+    static const char* repeatRuleText(const std::string& rule);
+    void setRepeatRule(const std::string& rule);
     // While the year is let run (play's year mode), routine questions go by the family's rules, or by custom where
     // none is set: no card for each wake and wedding.
     void setRoutineByRule(bool on) { routineByRule_ = on; }
@@ -911,8 +918,10 @@ public:
         Id forHead = kNone;  // the head whose generation it is
         int since = -1;
         bool struck = false;  // the once-a-generation blow while the family is down has fallen
+        int headOn = -1;      // the day he last went after the same thing as the family (rivalHeadOn)
     };
     const Rival& rival() const { return rival_; }
+    void rivalHeadOn();                          // monthly: now and then he goes after the family's match or a field
     Id rivalHouse() const;                       // kNone when there is none (yet) this generation
     std::string rivalName() const;               // 「卡特家（雷金納德）」
     std::vector<std::string> rivalClashes() const;  // where the two houses have met: 「1332 年 南田那 5 畝：他家拿到」, newest first
@@ -971,6 +980,7 @@ public:
     // How the player's holding will pass, priced as things stand now: who gets what, the widow's third, and how the
     // name passes to the heir (for the state's 「身後的家業」 line).
     std::string inheritText() const;
+    std::string successionLine() const;  // 家裡: who takes the house as things stand, each son's share, who is sore
     // A grievance someone holds against one of their own (or the rival against the family), worked out each year from
     // how things stand: what is blocked, the slights, the debts, the temper. It climbs a ladder one rung at a time,
     // and every rung past a complaint is seen coming (signs) before it lands.
@@ -993,6 +1003,7 @@ public:
         double bitter = 0;        // what the climb itself left (a suit lost, caught, sent off), fading a little each year
         std::string bitterWhy;
         std::string chain;        // cause → signs → acts, for the chronicle's 「為什麼」
+        std::string sued;         // the claim and reason last heard in court ("" never): the same suit is not heard twice
     };
     const std::vector<Grievance>& grievances() const { return griefs_; }
     // The old parent's keep (養老契約): the holding handed to the heir in the manor court for written terms.
@@ -1238,6 +1249,9 @@ private:
     double dowryCap(const Household& h) const;  // what a house of its standing is expected to give with a daughter  // the king's fifteenth on what the house has: coin, spare grain, beasts
     void yearlyTax();
     void askToFeed(Household& h);           // kin or a close friend near the end of their bread: the player is asked
+    bool feedMenu(Household& h, bool chosen);  // every way to help a hungry house, asked; true when the card was put (helped or not)
+    Id feedKin(const Household& h) const;      // the nearest of kin in a house (kNone: none)
+    int hungerSeason_ = -1;                     // the season a hungry house was last asked about (one a season)
     std::map<Id, int> feedHelped_;          // house -> times the family has helped it through hunger
     void feedHouse(Household& h);           // help came: nobody in it goes hungry this month
     // The season agenda's deeds (also effects: sell_grain, hire_hand, give_parcel, take_in, hire_kin).
@@ -1339,6 +1353,10 @@ private:
     // page (家裡的規矩); wakes and weddings then follow it without a card, unless it is "ask".
     std::string occasionRule_;
     std::string grainRule_;
+    std::string repeatRule_ = "fold";
+    struct FoldSeen { int n = 0; int year = 0; std::string choice; };
+    std::map<std::pair<int, std::string>, FoldSeen> foldSeen_;  // (generation, card's name) -> asked so far, and last answer
+    std::map<std::string, int> foldLast_;                       // event -> the option the player chose last time
     bool routineByRule_ = false;
     bool occasionByPolicy(const std::string& invite, Id subject, double link);
     std::vector<double> houseLinks(Id hh) const;  // link of every household to this one
@@ -1620,6 +1638,12 @@ private:
     struct Purse { double money = 0; Id from = kNone; };
     std::map<Id, Purse> purse_;
     void pursesMonth();
+    std::string heirTag(Id x) const;
+    std::set<Id> homeKin() const;
+    void watchSuccession();               // monthly: the heir changed (【繼承人】), a son or brother left (his share)
+    void askShare(Id x);
+    Id lastHeir_ = kNone, heirWatchHead_ = kNone;
+    std::set<Id> homeKin_;
     bool quietSetUp_ = false;            // applyPassing says it in one 【分家產】 line
     void applyDower(Id hid, Id dead, Id line, double acres);  // the widow's third, for her life
     std::string dowerNote(Id widow) const;  // for a match card: what she takes with her if she marries again
@@ -1634,8 +1658,17 @@ private:
     void kinSign(Grievance& g, int rung);  // what is seen before an act
     void kinAct(Grievance& g, int rung);
     void kinRespond(Grievance& g);       // the target's side answers a sign (an NPC by the rules, the player on a card)
-    bool kinCourt(Id plaintiff, Id defendant, const std::string& claim, double merit, const std::string& about);
-    int neighbourJury(Id accused, Id accuser, double truth, std::vector<Id>& ayes, int& panel, const std::string& what);
+    bool kinCourt(Id plaintiff, Id defendant, const std::string& claim, double merit, const std::string& about, const std::vector<Id>* pool = nullptr);
+    int neighbourJury(Id accused, Id accuser, double truth, std::vector<Id>& ayes, int& panel, const std::string& what,
+                      const std::vector<Id>* drawn = nullptr);
+    std::vector<Id> pickJury(Id accused, Id accuser);
+    void hearDocket();                      // the year's kin suits, heard on one court day
+    void sueHear(Grievance& g, const std::vector<Id>* pool);
+    std::string suitCause(const Grievance& g) const;
+    bool docketing_ = false;
+    std::vector<std::pair<Id, Id>> docket_;  // suits waiting for the court day: (plaintiff, defendant)
+    int juryStance_ = -1;                    // the head's way of sitting on this court day (-1: asked case by case)
+    std::string juryNote_;                   // how the head voted in the case just heard, by that way
     std::string killing(Id felon, Id victim, Id deed, bool poison, bool watched);  // hanged | abjured | acquitted | unsolved | unseen
     void forfeitGoods(Id felon);
     std::string kinWhy(const Grievance& g) const;

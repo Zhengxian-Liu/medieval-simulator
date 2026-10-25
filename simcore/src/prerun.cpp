@@ -97,6 +97,7 @@ void World::handOver(Id house, Id dynasty, int playYear) {
     pendingAmbition_ = true;
     computeRings();
     for (const auto& hh : households_) lastStanding_[hh.id] = standing(hh.id);
+    watchSuccession();  // the line as it stands at the start: an heir lost in the first month is told
 }
 
 }  // namespace sim

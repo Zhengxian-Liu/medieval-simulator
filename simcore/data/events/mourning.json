@@ -3,14 +3,39 @@
   // each mourner with the dead as {target}; "concern:<kind>" fires when a concern first takes hold, and with
   // "as": "head" it comes to the head of the holder's house, the holder as {target}.
   "events": [
-    {"id": "mourn_child", "title": "喪子", "scope": "player_family", "chance": 1, "cooldown_years": 2, "cooldown_scope": "household",
+    // A baby lost: a small card of its own, and a second one inside the year is a quiet line (many did not live).
+    {"id": "mourn_infant", "title": "孩子沒保住", "scope": "player_family", "chance": 1, "cooldown_months": 12, "cooldown_scope": "household",
+     "quiet_log": "家裡又埋了一個小的。{name}把{target_first}的小衣裳收進箱底，沒有再多說什麼。",
+     "on": {"signal": "bereaved:child", "after_months": [0, 0]},
+     "conditions": {"age": [16, 120], "target": {"age": [0, 2]}},
+     "prompt": "{target}沒能熬過這一季。小小的一個，用一塊舊麻布包著就放得下。{name}抱著不肯撒手。",
+     "prompt_if": [
+       {"cond": {"target": {"died_suddenly": true}}, "prompt": "早上{target_first}還好好的，到了下午就沒了氣息。{name}抱著那小小的身子，怎麼也焐不熱。"},
+       {"cond": {"food_days_lt": 40}, "prompt": "{target}沒能熬過這一季。這一冬家裡本來就吃不飽，奶水也少，{name}總想，要是家裡多一口吃的，是不是就保住了。"}
+     ],
+     "options": [
+      {"text": "求神父替孩子做一場彌撒（6 便士）",
+       "log": "{name}求神父替小{target_first}做了一場彌撒，埋在教堂墓地靠牆的一角。",
+       "effects": [{"money": -6}, {"ease_concern": {"kind": "grief", "by": 18}}, {"ease_concern_house": {"kind": "grief", "by": 10}}, {"need": {"spirit": 40}}, {"stress": -5}],
+       "ai": {"base": 8, "traits": {"pious": 10, "generous": 3, "greedy": -6}}},
+      {"text": "點一盞長明燈，一家人守一夜（1 便士）",
+       "log": "{name}點了一盞長明燈，一家人守著小{target_first}過了一夜。",
+       "effects": [{"money": -1}, {"ease_concern": {"kind": "grief", "by": 10}}, {"ease_concern_house": {"kind": "grief", "by": 8}}, {"need": {"spirit": 20}}],
+       "ai": {"base": 10, "traits": {"pious": 4, "kind": 4}}},
+      {"text": "悄悄埋了，第二天照常幹活（不花錢，心裡憋著）",
+       "log": "{name}悄悄把小{target_first}埋了，第二天照常下田，一句話也沒說。",
+       "effects": [{"work_bonus": 0.01}, {"stress": 6}],
+       "ai": {"base": 6, "traits": {"diligent": 6, "calm": 4, "greedy": 3}}}
+     ]},
+
+    // An older child: one card for each death (both parents grieve it, the house answers once).
+    {"id": "mourn_child", "title": "喪子", "scope": "player_family", "chance": 1, "cooldown_months": 2, "cooldown_scope": "household",
      "quiet_log": "家裡又埋了一個孩子。{name}把{target_first}的{target_keepsake}收進箱底，沒有再多說什麼。",
      "on": {"signal": "bereaved:child", "after_months": [0, 0]},
-     "conditions": {"age": [16, 120]},
+     "conditions": {"age": [16, 120], "target": {"age": [3, 120]}},
      "prompt": "{target}走了。{name}坐在{target_first}睡過的草墊旁，一整天沒說話。",
      "prompt_if": [
        {"cond": {"target": {"died_suddenly": true}}, "prompt": "早上{target_first}還在院子裡追雞，到了下午，人是讓鄰居抱回來的。{name}跪在地上，怎麼搖也搖不醒。"},
-       {"cond": {"target": {"age": [0, 2]}}, "prompt": "{target}沒能熬過這一季。小小的一個，用一塊舊麻布包著就放得下。{name}抱著不肯撒手。"},
        {"cond": {"target": {"age": [12, 40]}}, "prompt": "{target}走了。那麼大的人了，眼看就能頂起家裡一半的活。{name}站在墳前，想起還沒替{target_first}辦成的那些事。"},
        {"cond": {"food_days_lt": 40}, "prompt": "{target}走了。這一冬家裡本來就吃不飽，{name}總想，要是多給{target_first}一口吃的，是不是就熬過去了。"}
      ],
@@ -25,7 +50,7 @@
        "ai": {"base": 8, "traits": {"pious": 10, "generous": 3, "greedy": -6}}},
       // Spare grain turned into the village's goodwill: a public thing, so it moves the name.
       {"text": "開一桶麥酒、蒸幾籠麵包，請鄰居來送{target_first}一程（約 10 天的糧；來的人家都會記得）",
-       "conditions": {"not": {"food_days_lt": 100}, "target": {"age": [3, 120]}},
+       "conditions": {"not": {"food_days_lt": 100}},
        "log": "{name}開了一桶麥酒，請鄰居來喝喪酒。半個村子的人擠在院子裡，說起{target_first}小時候的淘氣事，說著說著都紅了眼眶。",
        "effects": [{"food_days": -10}, {"ease_concern": {"kind": "grief", "by": 12}}, {"ease_concern_house": {"kind": "grief", "by": 8}}, {"reputation": 1}, {"village_opinion": {"value": 2, "mod": "gift", "years": 3}}, {"need": {"social": 15}}],
        "ai": {"base": 5, "traits": {"generous": 8, "gregarious": 5, "greedy": -6, "shy": -4}}},
@@ -169,7 +194,7 @@
        "ai": {"base": 7, "traits": {"lazy": 3, "diligent": -2}}},
       // Work as the cure: the house gains a pair of hands, the grief is only pushed down.
       {"text": "把{target_about:grief}留下的那份活交給{target_pron}，讓{target_pron}忙起來（家裡多一把力，可心事是壓下去的）",
-       "conditions": {"target": {"age": [14, 70]}},
+       "conditions": {"target": {"age": [14, 70], "grief_about_age": [12, 120]}},
        "log": "{name}把{target_about:grief}從前管的那攤活交給了{target_first}。{target_first}從早忙到晚，累得沒力氣哭了。",
        "effects": [{"work_bonus": 0.01}, {"on_target": [{"ease_concern": {"kind": "grief", "by": 10}}, {"stress": 6}, {"skill": {"farming": 0.5}}]}],
        "ai": {"base": 6, "traits": {"diligent": 8, "ambitious": 3, "kind": -3}}},

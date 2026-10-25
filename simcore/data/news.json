@@ -45,7 +45,7 @@
     {"id": "deed:granted_freedom",   "text": "{subject}准{other}成了自由人", "heat": 0.7, "fade_months": 5, "instant": 0.5},
     {"id": "deed:reconciled",        "text": "{subject}和{other}兩家和解了", "heat": 0.75, "fade_months": 4, "instant": 0.5, "wide": true},
     {"id": "deed:made_amends",       "text": "{subject}上門向{other}賠了罪", "heat": 0.65, "fade_months": 3, "instant": 0.6},
-    {"id": "deed:refused_proposal",  "text": "{subject}家回絕了{other}的提親", "heat": 0.7, "fade_months": 4, "instant": 0.6, "wide": true},
+    {"id": "deed:refused_proposal",  "text": "{house}家回絕了{other}的提親", "heat": 0.7, "fade_months": 4, "instant": 0.6, "wide": true},
     {"id": "deed:helped_in_plague",  "text": "瘟疫裡{subject}挨家挨戶地幫忙", "heat": 0.7, "fade_months": 6, "instant": 0.5, "wide": true},
     {"id": "deed:imposed_reeve",     "text": "領主不管票數，硬讓{subject}當了莊頭", "heat": 0.8, "fade_months": 4, "instant": 0.5},
     {"id": "deed:reeve_strict",      "text": "莊頭{subject}上門逼{other}家交租", "heat": 0.55, "fade_months": 3, "instant": 0.7},
