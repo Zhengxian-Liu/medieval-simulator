@@ -267,6 +267,7 @@ struct Defs {
     std::vector<std::string> femaleNames;
     std::vector<std::string> surnames;
     Json village;  // starting village layout
+    std::map<std::string, std::string> texts;  // "texts" in data/events/*.json: the words of the cards the code builds
 
     static Defs loadFromDir(const std::string& dataDir);
 

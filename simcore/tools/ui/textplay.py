@@ -179,7 +179,10 @@ def top_bar(s):
         yl = amb.get("years_left", "?")
         when = "今年是最後一年！" if isinstance(yl, (int, float)) and yl <= 1 else f"還剩 {yl} 年（含今年）"
         left = f"到 {amb['deadline']} 年底，{when}" if amb.get("deadline") else when
-        out.append(f"志向：{amb['name']}（{left}）｜下一步 {amb.get('blocker', '')}　（全部條件：more）")
+        out.append(f"志向：{amb.get('race') or amb['name']}（{amb['name']}，{left}）｜下一步 {amb.get('blocker', '')}　（全部條件：more）")
+    rv = s.get("rival")
+    if rv:
+        out.append(f"他在跟你搶：{rv.get('after', '')}（宿敵 {rv['name']}；people 看兩家撞過的事）")
     if fine:
         out.append(f"！入地費 {fine['amount']} 便士，{fine['year']} 年 {fine['month']} 月前交給領主{'（已寬限過）' if fine.get('extended') else ''}")
     if s.get("notice"):
@@ -202,7 +205,7 @@ def decision(v, s, a):
     elif a and a.get("kind") == "season":
         d = s["date"]
         out.append(f"{d['year']} 年 {d['season']}：這一季還有 {s.get('time_left')} 段空閒（每件事用一段；沒用完的拿去下田）")
-        for it in (s.get("agenda") or [])[:5]:
+        for it in s.get("agenda") or []:
             line = f"  ・{'★ ' if it.get('amb') else ''}{it['title']}：{it.get('desc', '')}"
             line += f"  → {act_json({'do': 'agenda', 'id': it['id']})}" if it.get("open", True) else f"（✗ {it.get('why', '')}）"
             out.append(line)
@@ -303,12 +306,29 @@ def talk_lines(s, everything=False):
     return out
 
 
+def top_events(v):
+    """The big things since the last view (fun-r9 C: a post, the ox taken, the debt moving, someone coming or going),
+    above the decision: the newest season's, or the two before it when the view has been away longer."""
+    try:
+        since = int(open(CURSOR, encoding="utf-8").read().strip())
+    except (OSError, ValueError):
+        since = None
+    tops = [e for e in (v.get("entries") or []) if e.get("top")]
+    if not tops:
+        return []
+    newest = max(e["skey"] for e in tops)
+    lo = since if since is not None else newest
+    shown = [e for e in tops if e["skey"] >= min(lo, newest)][-8:]
+    return ["■ 大事：" + "／".join(f"{e['season']} {e['text']}" for e in shown)] if shown else []
+
+
 def render(v):
     s, a = v.get("state") or {}, v.get("ask")
     if not s or "house" not in s:  # the line has ended: the last state has only the date
         return "―― 遊戲結束 ―― " + json.dumps(v.get("ended") or {}, ensure_ascii=False)[:2000]
     season = bool(a) and a.get("kind") == "season"
     out = top_bar(s)
+    out += top_events(v)
     out += decision(v, s, a)
     out += family(s, season)
     try:
@@ -390,6 +410,11 @@ def render_more(s):
 
 def render_people(s, full=False):
     out = ["―― 村民 ――"]
+    rv = s.get("rival")
+    if rv:
+        out.append(f"宿敵：{rv['name']}｜他在跟你搶：{rv.get('after', '')}")
+        if rv.get("clashes"):
+            out.append("  兩家撞過：" + "；".join(rv["clashes"]))
     people = s.get("people", [])
     if not full:
         # The closest, and anyone who can be asked for something or wants something of the family.

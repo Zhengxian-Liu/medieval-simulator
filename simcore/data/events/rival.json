@@ -1,0 +1,31 @@
+{
+  // fun-r9 D (design/stitching-fable.md 三 2): one rival house a generation, the one the family has met most often in
+  // contests, feuds and elections, and its one blow while the family is down. Built by src/exchange.cpp.
+  "events": [],
+  "texts": {
+    "rival.chosen": "【宿敵】這一代跟你家撞得最多的是{house}：{clashes}。他在跟你搶：{after}。",
+    "rival.no_clash": "兩家的仇和爭的東西都還在",
+    "rival.title": "宿敵上門",
+    "rival.weak_fine": "入地費到期、手上又拿不出錢",
+    "rival.weak_death": "剛辦完喪事",
+    "rival.weak_bread": "缺糧又缺錢",
+    "rival.weak_debt": "欠了一身債",
+    "rival.lease_situation": "趁你家{weak}，{name}找上門來：他願意替你家把入地費 {fine} 便士交給管家，條件是{parcel}歸他家種三年，三年後還你。",
+    "rival.lease_yes": "答應｜{surname}付入地費 {fine}，{parcel}歸他種三年",
+    "rival.lease_no": "不答應，自己湊｜入地費 {fine} 照樣到期",
+    "rival.lease_done": "{name} 當著管家的面把入地費交了。{parcel}這三年歸他家種。",
+    "rival.lease_refused": "你家沒答應。{name} 走的時候說：「那就看你們湊不湊得出來。」",
+    "rival.lease_back": "【租約】{parcel}給宿敵種的三年滿了，收回來了。",
+    "rival.sell_situation": "趁你家{weak}，{name}找上門來，要買你家的{parcel}，出 {price} 便士。平常年景這塊地值 {value}。荒年和難關，就是村裡的地換手的時候。",
+    "rival.sell_yes": "賣｜{parcel}歸{surname}，拿 {price} 便士（平常值 {value}）",
+    "rival.sell_no": "不賣｜{name}放話：等著瞧",
+    "rival.sell_done": "你家把{parcel}賣給了 {name}，拿了 {price} 便士。",
+    "rival.sell_refused": "你家沒賣。{name} 冷笑一聲：「等著瞧，總有你們撐不住的時候。」",
+    "rival.also_house": "跟{surname}的仇",
+    "rival.also_steward": "管家",
+    "rival.also_debt": "你家的債",
+    "favour.rival_lease": "他替你家墊了入地費",
+    "clash.lease": "{parcel}的租約",
+    "clash.price": "壓價買{parcel}"
+  }
+}

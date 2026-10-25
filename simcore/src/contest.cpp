@@ -473,6 +473,9 @@ void World::chooseOfficers() {
         if (id == "aletaster") wh.money += 8, book(wh, "品酒官的罰款分成", 8);  // a share of the fines he presents
         else wh.food += consumption(wh) * 30;  // a sheaf from every house at harvest
         if (winner != old) addReputation(winner, 2, "當選" + name);
+        for (Id c : cands)
+            if (c != winner && people_[c].household != kNone)
+                noteClash(people_[c].household, people_[winner].household, name + "：" + (people_[winner].dynasty != kNone ? dynasties_[people_[winner].dynasty].surname : fullName(winner)) + "家選上");
         if (familyIn && cands.size() > 1) {
             log(1, "【選" + name + "】" + tallyText(cands, t, false) + "。" + tie + voteWhy(t, winner) + fullName(winner) + " 當選，做到明年米迦勒節。");
             log(1, "  開票時各家當眾說了投誰：" + ballotText(t) + "。");
@@ -717,6 +720,8 @@ void World::settleWants(const std::string& kind, Id object, const std::string& o
         bool again = kind == "office" && inPlayerHouse(wt->house);
         if (!again) dropWant(*wt, lost);
         Id loser = households_[wt->house].head;
+        // Where two houses met (exchange.cpp, the rival): the posts are noted by the vote itself.
+        if (kind != "office" && winnerHouse != kNone && winnerHouse != lordHouse) noteClash(wt->house, winnerHouse, thing + "：" + surname(winnerHouse) + "家拿到");
         if (loser != kNone && winnerHead != kNone && winnerHouse != lordHouse) {
             addOpinion(loser, winnerHead, "took_our_want", -10, 8);
             addConcern(loser, "grievance", winnerHead, 12);

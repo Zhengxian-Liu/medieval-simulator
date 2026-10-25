@@ -156,6 +156,9 @@ void World::electReeve() {
         log(2, how);
     }
     if (winner != old) addReputation(winner, 5, "當選莊頭");
+    for (Id c : cands)
+        if (c != winner && people_[c].household != kNone && r.household != kNone)
+            noteClash(people_[c].household, r.household, "莊頭：" + (r.dynasty != kNone ? dynasties_[r.dynasty].surname : fullName(winner)) + "家選上");
     // Terms on end of one blood: a son after his father carries the count on (「十年莊頭」 is the family's).
     const bool sameBlood = old != kNone && winner != old && r.dynasty != kNone && people_[old].dynasty == r.dynasty;
     reeveTerms_[winner] = winner == old ? reeveTerms_[winner] + 1 : sameBlood ? reeveTerms_[old] + 1 : 1;

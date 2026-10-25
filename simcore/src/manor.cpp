@@ -63,10 +63,10 @@ void World::chargeHeriot(Household& h, Id dead, double acres, double money) {
     if (owed > 1) addDebt(h, owed, lord_);
     if (!inPlayerHouse(h.id)) return;
     if (owed > 1) {
-        log(1, "  領主的管家來收死後稅，家裡已經沒有像樣的牲口可牽，他在帳上記了 " + std::to_string(int(owed)) +
+        log(1, "【死後稅】領主的管家來收死後稅，家裡已經沒有像樣的牲口可牽，他在帳上記了 " + std::to_string(int(owed)) +
                    " 便士的欠款。");
     } else {
-        log(1, "  領主的管家來牽走了家裡最好的一頭牛當死後稅（約 " + std::to_string(int(heriot)) +
+        log(1, "【死後稅】領主的管家牽走了家裡最好的一頭牛當死後稅（約 " + std::to_string(int(heriot)) +
                    " 便士），神父也照例收走了第二好的牲口。");
     }
 }
@@ -136,15 +136,16 @@ void World::yearlyService() {
             if (mh->occupation == "lord") skill = Charm;
             p.skills[skill] += 0.8;
         }
-        double wage = 6 * param("wage_mult", 1);
+        double wage = p.flags.count("grain_service") ? 0 : 6 * param("wage_mult", 1);  // serving for the grain: no wage
         home.money += wage;
-        book(home, "孩子幫傭的工錢", wage);
+        if (wage > 0) book(home, "孩子幫傭的工錢", wage);
         if (ageYears(p) >= 21 || day_ >= p.serviceEnd || p.spouse != kNone) {
             bool family = inPlayerHouse(p.home);
             Id h = p.home;
             p.home = kNone;
             p.serviceEnd = -1;
             p.flags.erase("in_service");
+            p.flags.erase("grain_service");
             if (p.spouse != kNone && people_[p.spouse].alive()) continue;  // married: stays where they are
             moveTo(p.id, h);
             if (p.station == "servant") setStation(p.id, "home", 0, "幫傭期滿");

@@ -24,6 +24,7 @@ std::vector<std::string> readStrings(const Json& j) {
 }
 
 void loadEvents(const Json& root, std::vector<EventDef>& out) {
+    if (!root.has("events")) return;  // a file of card texts only (data/events/exchange.json)
     for (const auto& e : root["events"].asArray()) out.push_back(parseEvent(e));
 }
 
@@ -204,6 +205,12 @@ Defs Defs::loadFromDir(const std::string& dir) {
         Json root = Json::parseFile(p.string());
         checkStations(root, p.filename().string());
         loadEvents(root, d.events);
+        // The words of the cards the code builds (fun-r9: the grain that changes hands, the rival, Michaelmas).
+        if (root.has("texts"))
+            for (const auto& [k, v] : root["texts"].asObject()) {
+                if (d.texts.count(k)) throw JsonError(p.filename().string() + ": text " + k + " twice");
+                d.texts[k] = v.asString();
+            }
     }
 
     Json historyRoot = Json::parseFile(dir + "/history.json");

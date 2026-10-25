@@ -20,6 +20,11 @@ using Id = int32_t;
 constexpr Id kNone = -1;
 // What a standing affair with someone's husband or wife takes off one's opinion of them (World::opinion).
 constexpr double kGuilt = 25;
+// What an acre and the croft bring in an ordinary summer, in a grown man's days of bread (fun-r9 0: a family of 6–8 on
+// 10 acres feeds itself and pays the rent from its own land in an ordinary year). keepsHouse is the rough sum the
+// cards use (after the tithe, at an ordinary family's hands and skill).
+constexpr double kAcreBread = 165, kCroftBread = 260;
+inline double keepsHouse(double acres) { return acres * kAcreBread * 0.85 + kCroftBread; }
 
 // Calendar: 12 months of 30 days. Day 0 is 1 January of the start year.
 constexpr int kDaysPerMonth = 30;
@@ -581,7 +586,8 @@ public:
     void setChooser(Chooser c) { chooser_ = std::move(c); }
     // Puts a decision the code makes (not an event) to the human player, if there is one: the
     // option index they chose, or -1 to let the AI decide.
-    int askPlayer(const std::string& title, const std::string& situation, const std::vector<std::string>& options);
+    int askPlayer(const std::string& title, const std::string& situation, const std::vector<std::string>& options,
+                  const std::vector<std::string>& unavailable = {}, bool single = false);  // single: a one-option screen is shown too
     // What the family knows: opinions with their reasons, feuds, debts, believed secrets, inquiries.
     std::string familyReport() const;
     std::string ladderText() const;   // 「自由佃農（第 2 階，共 4 階）。下一階……」
@@ -889,6 +895,35 @@ public:
     const FocusDef* focusDefault(const Person& p) const;  // what a family like theirs would do
     bool steersFocus(Id who) const;  // the family decides where this person's days go: its own, at home or in service
     void setFocus(Id who, const std::string& id);
+
+    // fun-r9 (design/stitching-fable.md 三): the rival house of this generation, the grain that changes hands between
+    // named houses, and Michaelmas on one screen (src/exchange.cpp; the cards' words in data/events/exchange.json,
+    // rival.json, michaelmas.json).
+    struct Rival {
+        Id dynasty = kNone, house = kNone;
+        Id forHead = kNone;  // the head whose generation it is
+        int since = -1;
+        bool struck = false;  // the once-a-generation blow while the family is down has fallen
+    };
+    const Rival& rival() const { return rival_; }
+    Id rivalHouse() const;                       // kNone when there is none (yet) this generation
+    std::string rivalName() const;               // 「卡特家（雷金納德）」
+    std::vector<std::string> rivalClashes() const;  // where the two houses have met: 「1332 年 南田那 5 畝：他家拿到」, newest first
+    std::string rivalAfter() const;              // what he is contending with the family for now: 「看籬人的位子、南田那 5 畝」
+    // The ambition as a race (「在 X 之前拿到 Y」): before the rival house when there is one, else before its deadline.
+    std::string ambitionRace(const Person& head) const;
+    // What 買到收成 keeps back in the purse: a year's rent and the entry fine still owed (fun-r9 0).
+    double grainFloor(const Household& h) const;
+    // A card's words (Defs::texts) with {name} filled from vars; the key itself when the data has no such text.
+    std::string cardText(const std::string& key, const std::map<std::string, std::string>& vars = {}) const;
+    // A land pledge (抵押): if what the house owes the creditor is not paid by that Michaelmas, the parcel is theirs.
+    struct Pledge {
+        Id house = kNone, creditor = kNone, parcel = kNone;  // creditor: a person
+        int due = 0;           // year
+        bool lease = false;    // a lease (the rival's): the parcel comes back on `back`
+        int back = -1;         // day
+    };
+    const std::vector<Pledge>& pledges() const { return pledges_; }
 
     // --- player interface
     void issue(const Command& c);
@@ -1466,6 +1501,26 @@ private:
     void applyHistoryEffects(const Json& effects);
 
     void log(int importance, const std::string& text);
+    // exchange.cpp (fun-r9)
+    Rival rival_;
+    struct Clash { int day = 0; Id a = kNone, b = kNone; std::string what; };  // dynasties
+    std::vector<Clash> clashes_;
+    std::vector<Pledge> pledges_;
+    std::map<std::pair<int, std::string>, int> genCards_;  // (generation, card + its words) -> times shown
+    int generation() const;  // which head of the family's line this is (counting from the first)
+    void noteClash(Id houseA, Id houseB, const std::string& what);
+    void updateRival();
+    int grainExchange(Household& h);     // the player's house short of bread: whom to ask (1 answered, -1 left to custom, 0 not asked)
+    void famineAsk();                    // a famine, and grain to spare: someone comes to ask for it
+    void rivalStrike();                  // the rival moves once a generation while the family is down
+    void michaelmasScreen(Household& h); // rent, the fine, the creditors, the votes, the offers: one card
+    void settlePledges();                // Michaelmas: a pledge not redeemed is forfeit, a lease runs out
+    void favourLine(Id debtor, Id creditor, double weight, const std::string& why);  // oweFavour, and the family is told
+    std::vector<std::pair<Id, std::string>> voterLeans(const std::string& office);   // the vote, house by house, why
+    void payCreditor(Household& h, Id creditor, double amount);  // 拿錢還債: kNone (or the lord) = the manor
+    int lastDeathDay_ = -100000;         // the last death in the family's house
+    int famineAsked_ = -1;               // the season the last famine asker came
+    int famineAsks_ = 0, famineYear_ = -1;
     std::vector<Id> livingInVillage() const;
 };
 

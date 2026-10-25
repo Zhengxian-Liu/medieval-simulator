@@ -88,6 +88,13 @@ bool EventRunner::eligible(const EventDef& ev, const Person& p, Id playerHead) c
         if (it != w_.budgetUsed_.end() && it->second >= 2) return false;
     }
     if (auto key = storyKey(ev, p); key.first != kNone && w_.metLately(key.first, key.second)) return false;
+    // fun-r9 0: a card the player is asked comes at most twice a generation in the same words (each way of telling it
+    // twice). What comes round by law or custom (the king's tax) is not held back.
+    if (ev.ask && ev.options.size() > 1 && !ev.institution && w_.chooser_ && playersToAnswer(ev, p)) {
+        const int variants = std::max<int>(1, static_cast<int>(ev.prompts.size())) + (ev.promptIf.isArray() ? static_cast<int>(ev.promptIf.asArray().size()) : 0);
+        auto it = w_.genCards_.find({w_.generation(), ev.id});
+        if (it != w_.genCards_.end() && it->second >= 2 * variants) return false;
+    }
     auto cd = w_.cooldowns_.find({p.id, ev.id});
     return cd == w_.cooldowns_.end() || cd->second <= w_.day_;
 }
@@ -650,6 +657,7 @@ int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
         }
         if (open.size() > 1 || (!open.empty() && !prompt.unavailable.empty())) {
             w_.noteCardAsked();
+            ++w_.genCards_[{w_.generation(), ev.id}];
             int r = w_.chooser_(prompt);
             if (r >= 0 && r < static_cast<int>(open.size())) {
                 picked_ = true;

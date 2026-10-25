@@ -39,8 +39,12 @@ def check_layout(v):
     for head in ("―― 現在要你決定 ――", "―― 家裡 ――", "―― 編年記錄"):
         assert head in tp, f"textplay view lacks {head}"
     lines = tp.splitlines()
-    # Two lines of top bar, then a blank line (or the notice of the action just refused).
-    assert lines[0].startswith("=== ") and (lines[2].strip() == "" or lines[2].startswith("不行")), f"textplay top bar not two lines: {lines[:4]}"
+    # Two lines of top bar, then (fun-r9) the rival's line and the big news, then a blank line (or the notice of the
+    # action just refused).
+    k = 2
+    while k < len(lines) and (lines[k].startswith("他在跟你搶：") or lines[k].startswith("■ 大事：")):
+        k += 1
+    assert lines[0].startswith("=== ") and k <= 4 and (lines[k].strip() == "" or lines[k].startswith("不行")), f"textplay top bar not two lines: {lines[:6]}"
 
 
 def main():

@@ -266,7 +266,12 @@ function renderTop() {
     ${rep ? `<span class="stat${rep.value <= -10 ? " lean" : ""}">名聲 <b>${signed(rep.value)}</b>（${esc(rep.word)}）</span>` : ""}
     ${fine ? `<span class="stat lean">入地費 ${fine.amount} 便士，${fine.year} 年 ${fine.month} 月前${fine.extended ? "（已寬限過）" : ""}</span>` : ""}
     ${s.notice ? `<span class="stat lean">不行：${esc(s.notice)}</span>` : ""}</div>`;
-  const line2 = `<div class="row">${amb ? `<span>志向 <b>${esc(amb.name)}</b>（到 ${amb.deadline || "?"} 年底，${amb.years_left <= 1 ? "<b class=\"lean\">今年是最後一年</b>" : `還剩 ${amb.years_left} 年（含今年）`}）</span>
+  const rv = s.rival;
+  const tops = entries.filter((e) => e.top);
+  const newestTop = tops.length ? Math.max(...tops.map((e) => e.skey)) : null;
+  const line3 = (rv ? `<div class="row"><span>他在跟你搶：<b>${esc(rv.after || "")}</b>（宿敵 ${esc(rv.name)}）</span></div>` : "") +
+    (newestTop !== null ? `<div class="row"><span>■ 大事：${tops.filter((e) => e.skey >= newestTop - 1).slice(-6).map((e) => esc(e.season + " " + e.text)).join("／")}</span></div>` : "");
+  const line2 = `<div class="row">${amb ? `<span>志向 <b>${esc(amb.race || amb.name)}</b>（${amb.race ? esc(amb.name) + "，" : ""}到 ${amb.deadline || "?"} 年底，${amb.years_left <= 1 ? "<b class=\"lean\">今年是最後一年</b>" : `還剩 ${amb.years_left} 年（含今年）`}）</span>
       <span>下一步 <span class="blocker">${esc(amb.blocker || "")}</span></span>` : `<span class="muted">還沒立志</span>`}
     <button class="link" onclick="topOpen=!topOpen;renderTop()">${topOpen ? "收起 ▴" : "全部條件、名聲、地位 ▾"}</button></div>`;
   let more = "";
@@ -284,7 +289,7 @@ function renderTop() {
     more += rulesBlock(s);
   }
   $("top").className = topOpen ? "open" : "";
-  $("top").innerHTML = line1 + line2 + `<div class="more">${more}</div>`;
+  $("top").innerHTML = line1 + line2 + line3 + `<div class="more">${more}</div>`;
   $("timeleft").textContent = seasonOpen() ? `這一季還有 ${s.time_left} 段空閒` : "";
 }
 
@@ -323,7 +328,7 @@ function renderTurn() {
 
 // 這一季的事: at most five, what pushes the ambition first (★), each a button that spends one free day.
 function agendaBlock(s) {
-  const items = (s.agenda || []).slice(0, 5);
+  const items = s.agenda || [];  // the four, and the standing ones (sell grain, pay a debt)
   if (!items.length) return "";
   return `<div class="agenda"><div class="lab">這一季的事</div>${items.map((it) =>
     `<div class="item"><button ${it.open ? "" : "disabled"} title="${esc(it.open ? "用一段空閒" : it.why)}" onclick='act(${JSON.stringify({ do: "agenda", id: it.id }).replace(/'/g, "&#39;")})'>${it.amb ? "★ " : ""}${esc(it.title)}</button>
@@ -673,12 +678,14 @@ function renderNet(s) {
 
 function renderPeople(s) {
   const ppl = s.people || [];
-  $("tab-body").innerHTML = ppl.length ? ppl.map((p) => `<div class="person">
+  const rv = s.rival;
+  const head = rv ? `<div class="person"><b>宿敵：${esc(rv.name)}</b>｜他在跟你搶：${esc(rv.after || "")}${(rv.clashes || []).length ? `<div class="muted" style="font-size:12px">兩家撞過：${rv.clashes.map(esc).join("；")}</div>` : ""}</div>` : "";
+  $("tab-body").innerHTML = head + (ppl.length ? ppl.map((p) => `<div class="person">
       <div class="top"><span><b>${p.busy ? '<span class="busy" title="跟你家有事">★</span> ' : ""}${esc(p.name)}</b> <span class="muted">${esc(p.familiarity)}${p.house ? "・" + esc(p.house) + "家" : ""}・${p.age} 歲</span></span>
       <button class="link" onclick="look({do:'inspect',who:${p.id}}, '${esc(p.name)}')">詳情</button></div>
       <div class="op" onclick="toggle(this)">對你 <b class="${cls(p.opinion)}">${esc(p.opinion_word)} ${signed(p.opinion)}</b>　你對他們 <span class="${cls(p.yours)}">${signed(p.yours)}</span>${p.feud ? `　<span class="neg">${["", "嫌隙", "結怨", "世仇"][p.feud]}</span>` : ""} <span class="muted">▾</span><div class="reasons">${reasonsLine(p.reasons)}</div></div>
       <div class="muted" style="font-size:12px">${esc(p.line)}</div>
-      ${actionButtons(p)}${askButtons(p)}</div>`).join("") : '<p class="muted">眼下沒有誰跟你家特別有關係。</p>';
+      ${actionButtons(p)}${askButtons(p)}</div>`).join("") : '<p class="muted">眼下沒有誰跟你家特別有關係。</p>');
 }
 
 // 村裡在爭什麼: the things more than one house is after, as far as the family has heard.

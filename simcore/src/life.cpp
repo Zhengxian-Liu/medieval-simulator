@@ -338,6 +338,7 @@ void World::kill(Id id, const std::string& cause) {
     else if (lingering) deathbedConfession(id);
     p.deathDay = day_;
     p.deathCause = cause;
+    if (p.household != kNone && inPlayerHouse(p.household)) lastDeathDay_ = day_;  // the rival's moment (exchange.cpp)
     p.pregnantDue = -1;
     officeVacated(id);
     Id hid = p.household;
@@ -1429,11 +1430,12 @@ void World::marry(Id man, Id woman) {
     }
 }
 
-int World::askPlayer(const std::string& title, const std::string& situation, const std::vector<std::string>& options) {
-    if (!chooser_ || options.size() < 2) return -1;
+int World::askPlayer(const std::string& title, const std::string& situation, const std::vector<std::string>& options,
+                     const std::vector<std::string>& unavailable, bool single) {
+    if (!chooser_ || options.empty() || (options.size() < 2 && unavailable.empty() && !single)) return -1;
     // Past the opening's questions (World::openingFull) the family's own ways answer it, as when nobody is asked.
     if (inOpening() && openingAsked_ >= kOpeningCards) return -1;
-    ChoicePrompt c{title, situation, options, {}};
+    ChoicePrompt c{title, situation, options, unavailable};
     noteCardAsked();
     int r = chooser_(c);
     return r >= 0 && r < static_cast<int>(options.size()) ? r : -1;

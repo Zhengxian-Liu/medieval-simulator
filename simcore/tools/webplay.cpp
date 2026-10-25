@@ -166,7 +166,9 @@ public:
                 const World::Interaction* use = &in;
                 for (const auto& x : ins)
                     if (x.ev->id == pick) use = &x;
-                bool wanted = want && !pick.empty() && std::find(want->answeredBy.begin(), want->answeredBy.end(), pick) != want->answeredBy.end();
+                // A visit that cannot be made now is not listed (fun-r9 0: no 「最近才陪過」 button).
+                if (pick.empty() || !use->open) continue;
+                bool wanted = want && std::find(want->answeredBy.begin(), want->answeredBy.end(), pick) != want->answeredBy.end();
                 out.push_back(Obj()
                                   .text("event", "keep_company")
                                   .text("title", pick.empty() ? std::string("陪伴") : "陪伴：" + use->ev->title)
@@ -372,6 +374,15 @@ public:
             if (t.find(k) != std::string::npos) return true;
         return false;
     }
+    // fun-r9 C: what goes to the top of the view, above the decision: a post won or lost, the heriot or the steward
+    // taking the ox, the debt moving, someone of the family coming or going.
+    static bool topLine(const std::string& t) {
+        for (const char* k : {"當上了", "當選", "選上", "落選", "連任", "【死後稅】", "牽走", "【欠債】", "【抵押】", "【租約】", "還清", "債清了", "劃掉了",
+                              "欠債 ", "借了", "【宿敵】", "回到家裡", "回村", "回來了", "離家", "幫傭去了", "打了個小包袱", "出發", "入贅", "嫁到", "嫁給",
+                              "娶了", "出生", "生下了", "去世", "夭折", "當了家"})
+            if (t.find(k) != std::string::npos) return true;
+        return false;
+    }
     std::vector<std::string> entries_;  // built since the last state
     int lastBooksDay_ = -1;
     void takeLine(const ChronicleEntry& e) {
@@ -450,6 +461,7 @@ public:
         Obj o;
         o.n("skey", key).text("season", seasonLabel(key)).n("year", key / 4).text("cls", cls).text("text", t);
         if (near) o.b("near", true);
+        if (!sub && cls != "news" && topLine(t)) o.b("top", true);
         if (!origin.empty()) o.text("origin", origin);
         entries_.push_back(o.done());
     }
@@ -634,6 +646,13 @@ public:
             o.text("ladder", w.ladderText()).text("regret", w.regretText());
         }
         o.n("time_left", w.timeLeft());
+        // fun-r9 D: this generation's rival house, what it contends with the family for now, and where they have met.
+        if (Id rh = w.rivalHouse(); rh != kNone) {
+            std::vector<std::string> clashes;
+            for (const auto& c : w.rivalClashes()) clashes.push_back(str(c));
+            o.raw("rival", Obj().text("name", w.rivalName()).n("house", rh).n("head", w.households()[rh].head).text("after", w.rivalAfter())
+                               .raw("clashes", arr(clashes)).b("struck", w.rival().struck).done());
+        }
         // 這一季的事: the few things worth a free day now, each a button ({"do":"agenda","id":...}).
         if (withActions) {
             // What pushes the ambition first (design/ui-text.md), then the rest in the game's order.
@@ -708,7 +727,7 @@ public:
                     }
                 }
             if (blocker.empty()) blocker = "◎ " + w.ambitionFinal(hp);
-            o.raw("ambition", Obj().text("name", a->name).text("desc", w.ambitionDesc(hp)).raw("steps", arr(steps)).text("hint", a->hint)
+            o.raw("ambition", Obj().text("name", a->name).text("race", w.ambitionRace(hp)).text("desc", w.ambitionDesc(hp)).raw("steps", arr(steps)).text("hint", a->hint)
                                    .text("blocker", houseStyle(blocker))
                                    .raw("plans", arr(helps)).n("years_left", std::max(0, left)).n("deadline", w.ambitionDeadline(hp))
                                    .text("gates", gates).text("rival", w.rivalLine(hp)).text("note", note).done());

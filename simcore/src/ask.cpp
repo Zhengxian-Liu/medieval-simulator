@@ -273,7 +273,7 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
         // Two things no friendship buys: the land a farming house lives on, and land when they are after more.
         bool farms = true;
         if (const OccupationDef* od = defs_.occupation(t.occupation)) farms = od->farms || t.occupation == "peasant";
-        double need = consumption(th) * kDaysPerYear, left = (th.acres - pc.acres) * 100 + 220;
+        double need = consumption(th) * kDaysPerYear, left = keepsHouse(th.acres - pc.acres);
         if (farms && left < need * 0.75) {
             if (th.debt > 0.5) fs.push_back({-25, "賣了這塊，家裡就不太夠吃了"});
             else hardNo = true, hardWhy = "賣了我家就不夠吃了";

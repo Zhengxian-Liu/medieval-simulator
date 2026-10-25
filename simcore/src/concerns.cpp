@@ -665,7 +665,7 @@ Id World::spareParcel(Id toHouse) const {
     Id best = kNone;
     for (const auto& pc : parcels_) {
         if (pc.gone || pc.holder != playerHousehold_ || pc.acres < 1.5 || pc.acres > 6) continue;
-        if ((ph.acres - pc.acres) * 100 + 220 < need * 1.1) continue;
+        if (keepsHouse(ph.acres - pc.acres) < need * 1.1) continue;
         // Customary (rented) land first: giving away charter land can cost the family its standing.
         if (best == kNone || (parcels_[best].free && !pc.free) || (parcels_[best].free == pc.free && pc.acres < parcels_[best].acres))
             best = pc.id;
@@ -894,10 +894,10 @@ std::vector<World::AgendaItem> World::spareWorkItems() {
     if (days < 30 && priest_ != kNone && people_[priest_].alive() && ready("alms")) {
         AgendaItem a;
         a.id = "spare:alms";
-        a.title = "去教堂領救濟（約 15 天的糧，名聲會差一點）";
+        a.title = "去教堂領救濟（約 15 天的糧；濟貧箱 −1 名聲）";
         a.desc = "存糧只夠 " + std::to_string(int(days)) + " 天。神父的濟貧箱是給揭不開鍋的人家的；排在寡婦和乞丐後面，村裡的人都看得見。（用一段空閒，一季一回）";
         a.kind = "effects", a.target = priest_;
-        a.effects = "[{\"spare_work\": {\"kind\": \"alms\", \"days\": 15}}, {\"reputation\": -1}, {\"stress\": 3}]";
+        a.effects = "[{\"spare_work\": {\"kind\": \"alms\", \"days\": 15}}, {\"stress\": 3}]";  // the −1 is spareWork's, named
         a.done = me + " 排在教堂門口領了救濟：一袋豆子和兩條黑麵包，夠全家吃半個月。";
         a.rank = 77;
         items.push_back(a);
@@ -939,6 +939,8 @@ void World::spareWork(Household& h, Id worker, const Json& what, Id target) {
     } else if (kind == "alms") {
         h.food += consumption(h) * what.numberOr("days", 15);
         cooldowns_[{h.id, "spare_alms"}] = nextSeason;
+        // In the line at the church door the whole village sees: a public act, and the only thing here that moves the name.
+        if (h.head != kNone) addReputation(h.head, -1, "去濟貧箱領救濟");
     }
 }
 
@@ -1084,7 +1086,7 @@ std::vector<World::AgendaItem> World::seasonAgenda(bool all) {
     if (!hiding) {
         double c = std::max(0.5, consumption(ph));
         double spare = ph.food / c - daysToHarvest() - 90;
-        if (spare >= 60) {
+        if (spare >= 15) {  // a standing action (fun-r9 0): whenever there is grain beyond what must be kept
             double days = std::min(spare, 180.0);
             double got = std::round(c * days * param("grain_price", 0.5) * 0.9);
             AgendaItem a;
@@ -1098,12 +1100,34 @@ std::vector<World::AgendaItem> World::seasonAgenda(bool all) {
             items.push_back(a);
         }
     }
+    // 拿錢還債 (fun-r9 0, standing): what the purse holds against what the house owes, one creditor at a time.
+    if (!hiding) {
+        auto payItem = [&](Id cred, double owed) {
+            if (owed <= 0.5) return;
+            const double cash = std::floor(std::max(0.0, ph.money));
+            const double pay = std::min(std::ceil(owed - 1e-9), cash);
+            if (pay < 5) return;
+            const bool lord = cred == kNone || cred == lord_;
+            const std::string whom = lord ? std::string("莊園") : fullName(cred);
+            AgendaItem a;
+            a.id = "pay_debt:" + std::to_string(lord ? -1 : cred);
+            a.title = pay >= owed - 0.5 ? "拿錢還債：還清欠" + whom + "的 " + pence(pay) : "拿錢還債：先還" + whom + " " + pence(pay) + "（還欠 " + pence(owed - pay) + "）";
+            a.desc = "手上 " + pence(cash) + "，欠" + whom + " " + pence(owed) + "。還了就少一筆債，" + (lord ? std::string("管家不會再上門催。") : whom + "也會記得你家說話算話。") +
+                     "（不用空閒）";
+            a.kind = "pay", a.who = lord ? kNone : cred, a.target = static_cast<Id>(pay);
+            a.done = fullName(head) + " 拿錢去還了" + whom + " " + pence(pay) + "。";
+            a.rank = 54;
+            items.push_back(a);
+        };
+        payItem(ph.creditor, ph.debt);
+        payItem(ph.heldCreditor, ph.heldDebt);
+    }
 
     // The lord's waste land for rent (design/fun-r6.md A): a family whose acres do not feed it is told of the strips
     // nobody holds, and can ask for one from the list (開口 the lord: the entry fine, then rent like any holding).
     if (!hiding && lord_ != kNone && people_[lord_].alive() && head != lord_) {
         double need = consumption(ph) * kDaysPerYear;
-        bool short_ = ph.lean || ph.acres * 100 + 220 < need * 1.05;
+        bool short_ = ph.lean || keepsHouse(ph.acres) < need * 1.05;
         int vacant = 0;
         const AskOption* best = nullptr;
         std::vector<AskOption> asks = short_ ? asksFor(lord_) : std::vector<AskOption>{};
@@ -1285,6 +1309,13 @@ std::vector<World::AgendaItem> World::seasonAgenda(bool all) {
     items.erase(std::remove_if(items.begin(), items.end(), [&](const AgendaItem& x) {
                     return !ids.insert(x.id).second || (x.kind == "plan" && !plansNamed.insert({x.event, x.target, x.subject}).second);
                 }), items.end());
+    // Standing actions (sell spare grain, pay a debt) are always there, beside the four.
+    std::vector<AgendaItem> standing;
+    if (!all) {
+        auto isStanding = [](const AgendaItem& x) { return x.id == "sell_grain" || x.id.rfind("pay_debt:", 0) == 0; };
+        std::copy_if(items.begin(), items.end(), std::back_inserter(standing), isStanding);
+        items.erase(std::remove_if(items.begin(), items.end(), isStanding), items.end());
+    }
     // At most four, and the company kept among them when there is room: the season's list, not the village's.
     if (items.size() > 4 && !all) {
         auto company = std::find_if(items.begin(), items.end(), [](const AgendaItem& x) { return x.id.rfind("company:", 0) == 0; });
@@ -1302,6 +1333,9 @@ std::vector<World::AgendaItem> World::seasonAgenda(bool all) {
         if (left < 1) a.open = false, a.why = "這一季沒有空了";
         else if (money > ph.money + 0.5) a.open = false, a.why = "錢不夠";
     }
+    // A company visit that cannot be made is not offered (fun-r8: 「最近才陪過」 on a button that was there).
+    items.erase(std::remove_if(items.begin(), items.end(), [](const AgendaItem& x) { return !x.open && x.id.rfind("company:", 0) == 0; }), items.end());
+    items.insert(items.end(), standing.begin(), standing.end());
     if (!all) {
         // Everything shown this season, not only the last list: a button pressed after its item was done or
         // dropped off is still known, and told why.
@@ -1329,6 +1363,7 @@ std::string World::agendaGoneWhy(const AgendaItem& a) {
         return "最近才陪過" + shortName(a.who);
     }
     const std::string kind = a.id.substr(0, a.id.find(':'));
+    if (kind == "pay_debt") return "這筆債已經還了，或手上的錢不夠了";
     if (kind == "sell_grain") {
         double c = std::max(0.5, consumption(ph));
         return "存糧只剩 " + std::to_string(int(ph.food / c)) + " 天，要留到收成後三個月（" + std::to_string(daysToHarvest() + 90) + " 天），沒有多的可賣了";
@@ -1388,6 +1423,17 @@ void World::doAgenda(const std::string& id) {
         }
         a.open = timeLeft() >= 1;
         a.why = a.open ? "" : "這一季沒有空了";
+    }
+    if (a.kind == "pay") {
+        payCreditor(households_[playerHousehold_], a.who, static_cast<double>(a.target));
+        log(1, "〔這一季的事〕" + a.done);
+        return;
+    }
+    if (a.id == "sell_grain") {
+        log(1, "〔這一季的事〕" + a.done);
+        EventRunner er(*this);
+        er.apply(Json::parse(a.effects), people_[head], a.target);
+        return;
     }
     if (!a.open) {
         log(1, "〔這一季的事〕" + a.title + "：" + a.why + "。");

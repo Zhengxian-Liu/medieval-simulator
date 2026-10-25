@@ -145,13 +145,23 @@ void World::stepDay() {
         actOnIntentions();
         checkStandings();
         monthlyAmbition();
+        // fun-r9: the rival of this generation, the famine's askers, the rival's blow, leases running out.
+        updateRival();
+        if (playerHousehold_ != kNone && actingHead() != kNone && !inOpening()) {
+            famineAsk();
+            rivalStrike();
+        }
+        settlePledges();
         events.pulse("monthly");
     }
     // The cards held back at the opening: one a month, in the middle of the month, once the first season is on.
     if (dayOfMonth() == 14 && !deferredCards_.empty() && !inOpening() && !openingFull()) releaseDeferredCard();
     if (month() == 8 && dayOfMonth() == 29) {
+        // Michaelmas on one screen (fun-r9 4): rent, fine, creditors, the votes and the offers for them, first.
+        if (playerHousehold_ != kNone && households_[playerHousehold_].head != kNone) michaelmasScreen(households_[playerHousehold_]);
         yearlyDebts();
         payRent();
+        settlePledges();
     }
 
     if (!gameOver_) followSurvivingBranch();
