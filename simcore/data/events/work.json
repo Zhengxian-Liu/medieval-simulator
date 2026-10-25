@@ -105,7 +105,7 @@
         "effects": [{"borrow_grain": {"days": 60}}, {"stress": 4}], "ai": {"base": 7, "traits": {"gregarious": 4, "shy": -4}}},
        {"text": "把耕牛賣了換糧（得 40 便士，往後犁地要借別人的牲口，收成少一成多）", "conditions": {"no_ox": false, "in_debt": false},
         "log": "{name} 牽著耕牛去了市集。回來的時候，車上裝的是兩袋燕麥。",
-        "effects": [{"sell_ox": true}, {"buy_food_days": 60}, {"stress": 8}], "ai": {"base": 4, "traits": {"content": 3, "ambitious": -4}}}
+        "effects": [{"sell_ox": true}, {"buy_food_days": {"days": 60, "pence": 40}}, {"stress": 8}], "ai": {"base": 4, "traits": {"content": 3, "ambitious": -4}}}
      ]},
     {"id": "no_land", "repeat": "free", "title": "沒有地的人家", "prompt": "家裡只剩巴掌大的一塊園子，種不出一家人的口糧。米迦勒節前後，是村裡換佃、雇長工的時候，得想個長久的辦法。",
      "prompts": ["家裡只剩巴掌大的一塊園子，種不出一家人的口糧。米迦勒節前後，是村裡換佃、雇長工的時候，得想個長久的辦法。",

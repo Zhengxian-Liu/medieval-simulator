@@ -661,7 +661,8 @@ public:
             std::vector<std::string> items;
             for (const auto& a : list)
                 items.push_back(Obj().text("id", a.id).text("title", a.title).text("desc", a.desc).b("open", a.open).text("why", a.why)
-                                    .b("amb", a.id.rfind("step:", 0) == 0).done());
+                                    .b("amb", a.id.rfind("step:", 0) == 0)
+                                    .b("free", a.id == "sell_grain" || a.id.rfind("pay_debt:", 0) == 0).done());  // standing: no free day (fun-r9 0)
             o.raw("agenda", arr(items));
         }
         // 家裡的規矩: standing rules, each with what it is now and what it could be ({"do":"rule","rule":..,"value":..}).

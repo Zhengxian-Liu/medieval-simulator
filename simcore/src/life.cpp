@@ -338,7 +338,8 @@ void World::kill(Id id, const std::string& cause) {
     else if (lingering) deathbedConfession(id);
     p.deathDay = day_;
     p.deathCause = cause;
-    if (p.household != kNone && inPlayerHouse(p.household)) lastDeathDay_ = day_;  // the rival's moment (exchange.cpp)
+    // The rival's moment (exchange.cpp): a head or a grown worker lost, not an infant.
+    if (p.household != kNone && inPlayerHouse(p.household) && (households_[p.household].head == id || (ageYears(p) >= 16 && ageYears(p) < 60))) lastDeathDay_ = day_;
     p.pregnantDue = -1;
     officeVacated(id);
     Id hid = p.household;

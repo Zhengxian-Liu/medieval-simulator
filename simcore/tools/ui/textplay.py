@@ -204,9 +204,9 @@ def decision(v, s, a):
         out.append('回答：act \'{"do":"choose","index":N}\'，或 act \'{"do":"ai"}\'（讓 AI 決定）')
     elif a and a.get("kind") == "season":
         d = s["date"]
-        out.append(f"{d['year']} 年 {d['season']}：這一季還有 {s.get('time_left')} 段空閒（每件事用一段；沒用完的拿去下田）")
+        out.append(f"{d['year']} 年 {d['season']}：這一季還有 {s.get('time_left')} 段空閒（每件事用一段，標「不佔空閒」的除外；沒用完的拿去下田）")
         for it in s.get("agenda") or []:
-            line = f"  ・{'★ ' if it.get('amb') else ''}{it['title']}：{it.get('desc', '')}"
+            line = f"  ・{'★ ' if it.get('amb') else ''}{it['title']}{'（不佔空閒）' if it.get('free') else ''}：{it.get('desc', '')}"
             line += f"  → {act_json({'do': 'agenda', 'id': it['id']})}" if it.get("open", True) else f"（✗ {it.get('why', '')}）"
             out.append(line)
         la = s.get("last_ask")
@@ -307,18 +307,14 @@ def talk_lines(s, everything=False):
 
 
 def top_events(v):
-    """The big things since the last view (fun-r9 C: a post, the ox taken, the debt moving, someone coming or going),
-    above the decision: the newest season's, or the two before it when the view has been away longer."""
-    try:
-        since = int(open(CURSOR, encoding="utf-8").read().strip())
-    except (OSError, ValueError):
-        since = None
-    tops = [e for e in (v.get("entries") or []) if e.get("top")]
-    if not tops:
+    """The big things of this season and the last (fun-r9 C: a post, the ox taken, the debt moving, someone coming or
+    going), above the decision; the same rule as the browser's (index.html): seasons are counted from the newest entry
+    of the chronicle, so old news does not stay on top."""
+    entries = v.get("entries") or []
+    if not entries:
         return []
-    newest = max(e["skey"] for e in tops)
-    lo = since if since is not None else newest
-    shown = [e for e in tops if e["skey"] >= min(lo, newest)][-8:]
+    now = max(e["skey"] for e in entries)
+    shown = [e for e in entries if e.get("top") and e["skey"] >= now - 1][-6:]
     return ["■ 大事：" + "／".join(f"{e['season']} {e['text']}" for e in shown)] if shown else []
 
 

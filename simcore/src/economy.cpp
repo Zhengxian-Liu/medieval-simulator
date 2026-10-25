@@ -708,6 +708,21 @@ bool World::askGrain(Household& h) {
     const bool said = h.grainBroke == season;
     keepBack = keep;
     double b = buy(upTo);
+    // The month's bread comes before the rent kept back (fun-r9 review H3): when keeping it would leave the barn short of
+    // the next check, the month is bought out of it, and that is said.
+    if (keep > 0 && foodDays(h) < kToNextCheck && h.money > 0.5) {
+        const double moneyBefore = h.money;
+        keepBack = 0;
+        const double more = buy(std::min(have + 35, all));
+        b += more;
+        if (more * price >= 1 && !said) {
+            h.grainBroke = season;
+            log(1, "存糧只夠 " + dn(have) + " 天，離秋收 " + std::to_string(toHarvest) + " 天：照家裡的規矩要留下地租和入地費 " + num(keep) +
+                       " 便士，可是糧比租要緊，先從裡面拿 " + num(moneyBefore - h.money) + " 便士買了一個月的糧（手上剩 " + num(h.money) +
+                       " 便士，米迦勒節的租會不夠）。");
+            return true;
+        }
+    }
     if (b < daily * 3) {
         if (!said && h.money < daily * 5 * price) {
             h.grainBroke = season;
@@ -762,6 +777,17 @@ Id World::borrowGrain(Household& h, Id asker, double days, Id cause) {
 }
 
 void World::monthlyEconomy() {
+    // Grain kept beyond two years of the house's bread spoils (damp, rats, the weevil): a share of the excess each month,
+    // so a run of good harvests does not leave a house sitting on its grandchildren's corn (fun-r9 review M7).
+    for (auto& h : households_) {
+        if (h.extinct || h.members.empty()) continue;
+        const double cap = std::max(0.5, consumption(h)) * 2 * kDaysPerYear;
+        if (h.food > cap) {
+            const double lost = (h.food - cap) * 0.04;
+            h.food -= lost;
+            bookFood(h, "存久了壞掉的糧", -lost);
+        }
+    }
     double wage = param("wage_mult", 1);
     // A trade's prices follow wages up only halfway: the smith's customers are the same village, no richer for the plague.
     double craftWage = 1 + 0.5 * (wage - 1);

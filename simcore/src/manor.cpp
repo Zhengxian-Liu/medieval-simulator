@@ -110,6 +110,7 @@ void World::recallServants(Id household) {
             p.home = kNone;
             p.serviceEnd = -1;
             p.flags.erase("in_service");
+            p.flags.erase("grain_service");
             if (households_[p.household].head == p.id) continue;  // heads their master's house now: stays
             moveTo(p.id, household);
             if (p.station == "servant") setStation(p.id, "home", 0, "被家裡叫回來");
@@ -126,6 +127,7 @@ void World::yearlyService() {
         if (home.extinct || home.head == kNone) {
             p.home = kNone;
             p.flags.erase("in_service");
+            p.flags.erase("grain_service");
             continue;
         }
         const Household& master = households_[p.household];

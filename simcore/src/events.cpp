@@ -88,13 +88,6 @@ bool EventRunner::eligible(const EventDef& ev, const Person& p, Id playerHead) c
         if (it != w_.budgetUsed_.end() && it->second >= 2) return false;
     }
     if (auto key = storyKey(ev, p); key.first != kNone && w_.metLately(key.first, key.second)) return false;
-    // fun-r9 0: a card the player is asked comes at most twice a generation in the same words (each way of telling it
-    // twice). What comes round by law or custom (the king's tax) is not held back.
-    if (ev.ask && ev.options.size() > 1 && !ev.institution && w_.chooser_ && playersToAnswer(ev, p)) {
-        const int variants = std::max<int>(1, static_cast<int>(ev.prompts.size())) + (ev.promptIf.isArray() ? static_cast<int>(ev.promptIf.asArray().size()) : 0);
-        auto it = w_.genCards_.find({w_.generation(), ev.id});
-        if (it != w_.genCards_.end() && it->second >= 2 * variants) return false;
-    }
     auto cd = w_.cooldowns_.find({p.id, ev.id});
     return cd == w_.cooldowns_.end() || cd->second <= w_.day_;
 }
@@ -655,9 +648,15 @@ int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
             }
             prompt.situation = cut != std::string::npos && cut >= 9 ? common.substr(0, cut) + "……" : "";
         }
-        if (open.size() > 1 || (!open.empty() && !prompt.unavailable.empty())) {
+        // fun-r9 0: a story card (one the monthly or yearly pulse turns up by chance) is put to the player at most twice
+        // a generation in the same words; after that the house's ways answer it, as the AI would. What the rules, a
+        // signal or a state bring (a fine falling due, a reckoning, hunger, a funeral) is always asked.
+        const bool story = ev.on.isNull() && ev.interaction.isNull() && (ev.pulse == "monthly" || ev.pulse == "yearly") &&
+                           ev.repeat != "free" && !ev.institution && ev.budget != "hunger";
+        int& told = w_.genCards_[{w_.generation(), ev.title + "\n" + prompt.situation}];
+        if ((open.size() > 1 || (!open.empty() && !prompt.unavailable.empty())) && (!story || told < 2)) {
             w_.noteCardAsked();
-            ++w_.genCards_[{w_.generation(), ev.id}];
+            ++told;
             int r = w_.chooser_(prompt);
             if (r >= 0 && r < static_cast<int>(open.size())) {
                 picked_ = true;
@@ -963,6 +962,15 @@ bool EventRunner::evalKey(const std::string& k, const Json& v, const Person& p, 
     if (k == "owes_target") {  // this house owes the target (a loan, an old debt) money
         bool owes = h && target != kNone && ((h->debt > 0.5 && h->creditor == target) || (h->heldDebt > 0.5 && h->heldCreditor == target));
         return owes == v.asBool();
+    }
+    if (k == "lends_to_target") {  // p's house is owed money by the target's house now (a neighbour's loan, not the manor's)
+        bool lends = false;
+        if (h && target != kNone && w.people_[target].household != kNone) {
+            const Household& th = w.households_[w.people_[target].household];
+            auto ours = [&](Id c) { return c != kNone && c != w.lord_ && w.people_[c].household == h->id; };
+            lends = (th.debt > 0.5 && ours(th.creditor)) || (th.heldDebt > 0.5 && ours(th.heldCreditor));
+        }
+        return lends == v.asBool();
     }
     if (k == "debt_ge") return h && std::floor(w.owedAll(h->id) + 1e-9) >= v.asNumber();  // as the header counts it
     if (k == "has_lender") return h && (w.findLender(*h) != kNone) == v.asBool();
@@ -1311,8 +1319,36 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 Id man = p.sex == Sex::Male ? p.id : t.id;
                 Id woman = p.sex == Sex::Male ? t.id : p.id;
                 w.marry(man, woman);
+            } else if (k == "target_owes_favour") {
+                // {"weight": N, "why": "..."}: the target now owes p a favour (the currency the grain cards run on).
+                if (target != kNone) w.oweFavour(target, p.id, v.numberOr("weight", 6), v.stringOr("why", "幫過他家"));
+            } else if (k == "use_up_memory") {
+                // A favour called in is spent: the holder's good memories of the other's family that the "remembers"
+                // condition with the same keys would count are gone.
+                const bool targetHolds = v.stringOr("holder", "self") == "target";
+                const Id holder = targetHolds ? target : p.id, other = targetHolds ? p.id : target;
+                if (holder == kNone || other == kNone) continue;
+                const std::string type = v.stringOr("type", ""), tag = v.stringOr("tag", "");
+                const Id otherDyn = w.people_[other].dynasty;
+                auto& mems = w.memories_[holder];
+                mems.erase(std::remove_if(mems.begin(), mems.end(),
+                                          [&](const Memory& m) {
+                                              if (m.deed == kNone && type.empty() && tag.empty()) return false;
+                                              if (!type.empty() && m.label != type) return false;
+                                              if (!tag.empty()) {
+                                                  const DeedDef* d = w.defs_.deed(m.label);
+                                                  if (!d || std::find(d->tags.begin(), d->tags.end(), tag) == d->tags.end()) return false;
+                                              }
+                                              const bool them = m.about == other || (otherDyn != kNone && (m.aboutDynasty == otherDyn ||
+                                                                                                          (m.about != kNone && w.people_[m.about].dynasty == otherDyn)));
+                                              return them && w.memoryValue(m) > 0;
+                                          }),
+                           mems.end());
             } else if (k == "random") {
-                bool hit = w.rngEvents_.chance(v["percent"].asNumber() / 100.0);
+                // "opinion": percent points per point of the target's opinion of p (成不成看他心情).
+                double pct = v["percent"].asNumber();
+                if (v.has("opinion") && target != kNone) pct = std::clamp(pct + w.opinion(target, p.id) * v.numberOr("opinion", 0), 5.0, 95.0);
+                bool hit = w.rngEvents_.chance(pct / 100.0);
                 apply(hit ? v["effects"] : v["else"], p, target);
                 if (!p.alive()) return;
             } else if (k == "progress") {
@@ -1564,6 +1600,8 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 double amount = std::min(w.consumption(*h) * v.asNumber(), std::max(0.0, th.food - w.consumption(th) * 120));
                 th.food -= amount;
                 h->food += amount;
+                w.bookFood(th, "送人的糧", -amount);
+                w.bookFood(*h, "別人送的糧", amount);
             } else if (k == "forgive_target_debt") {
                 // What p's house owes the target is written off.
                 if (!h || target == kNone) continue;
@@ -1605,8 +1643,9 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
             } else if (k == "sell_ox") {
                 if (!h) continue;
                 h->noOxUntil = w.day_ + 40 * kDaysPerYear;  // until they can buy another
-                if (h->debt > 0) h->debt = std::max(0.0, h->debt - 40);
-                else h->money += 40, w.book(*h, "賣耕牛", 40);
+                h->money += 40, w.book(*h, "賣耕牛", 40);
+                // Against a debt, the 40 pence go to the creditor (not just off the books).
+                if (h->debt > 0.5) w.payCreditor(*h, h->creditor, 40);
             } else if (k == "service_for_debt") {
                 // A child goes to work for the creditor; the first years' wages pay the debt.
                 if (!h) continue;
@@ -1624,7 +1663,55 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                     w.log(1, "  " + w.fullName(child) + " 去了 " + w.fullName(master) + " 家幹活，頭 " + std::to_string(years) +
                                  " 年的工錢先拿來抵債。");
             } else if (k == "food_days") {
-                if (h) h->food = std::max(0.0, h->food + w.consumption(*h) * v.asNumber());
+                if (!h) continue;
+                const double before = h->food;
+                h->food = std::max(0.0, h->food + w.consumption(*h) * v.asNumber());
+                w.bookFood(*h, v.asNumber() >= 0 ? "得來的糧" : "糧食耗用", h->food - before);
+            } else if (k == "give_food_target") {
+                // p's house carries v days of its bread to the target's house: it arrives there, and both books show it.
+                if (!h || target == kNone) continue;
+                // The dead are out of every house: the grain goes to the family they leave (a spouse's house, else
+                // their own name's).
+                Id to = w.people_[target].household;
+                if (to == kNone && w.people_[target].spouse != kNone && w.people_[w.people_[target].spouse].alive()) to = w.people_[w.people_[target].spouse].household;
+                if (to == kNone)
+                    for (const auto& o : w.households_)
+                        if (!o.extinct && o.head != kNone && o.dynasty == w.people_[target].dynasty && o.id != h->id) to = o.id;
+                if (to == kNone || to == h->id) continue;
+                Household& th = w.households_[to];
+                const double amount = std::min(w.consumption(*h) * v.asNumber(), std::max(0.0, h->food));
+                h->food -= amount;
+                th.food += amount;
+                w.bookFood(*h, "送人的糧", -amount);
+                w.bookFood(th, "別人送的糧", amount);
+            } else if (k == "give_food_priest") {
+                // v days of p's bread to the priest's house (school paid in grain).
+                if (!h || w.priest_ == kNone || !w.people_[w.priest_].alive() || w.people_[w.priest_].household == kNone) continue;
+                Household& th = w.households_[w.people_[w.priest_].household];
+                if (th.id == h->id) continue;
+                const double amount = std::min(w.consumption(*h) * v.asNumber(), std::max(0.0, h->food));
+                h->food -= amount;
+                th.food += amount;
+                w.bookFood(*h, "送人的糧", -amount);
+                w.bookFood(th, "別人送的糧", amount);
+            } else if (k == "give_food_village") {
+                // v days of p's bread shared out among the (up to three) houses with the least in their barns.
+                if (!h) continue;
+                Id lordHouse = w.lord_ != kNone ? w.people_[w.lord_].household : kNone;
+                std::vector<std::pair<double, Id>> poor;
+                for (const auto& o : w.households_)
+                    if (!o.extinct && o.head != kNone && !o.members.empty() && o.id != h->id && o.id != lordHouse)
+                        poor.push_back({w.foodDays(o), o.id});
+                std::sort(poor.begin(), poor.end());
+                if (poor.size() > 3) poor.resize(3);
+                const double amount = std::min(w.consumption(*h) * v.asNumber(), std::max(0.0, h->food));
+                if (poor.empty() || amount <= 0) continue;
+                h->food -= amount;
+                w.bookFood(*h, "送人的糧", -amount);
+                for (const auto& [d, id] : poor) {
+                    w.households_[id].food += amount / poor.size();
+                    w.bookFood(w.households_[id], "別人送的糧", amount / poor.size());
+                }
             } else if (k == "borrow_grain") {
                 // A neighbour who thinks well of the family lends grain against the next harvest (economy.cpp).
                 if (h) w.borrowGrain(*h, p.id, v.numberOr("days", 60), cause_);
@@ -1632,7 +1719,10 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 // Grain from the market at its price, as many days of it as the purse covers.
                 if (!h) continue;
                 double price = w.param("grain_price", 0.5);
-                double b = std::clamp(w.consumption(*h) * v.asNumber(), 0.0, std::max(0.0, h->money) / price);
+                // {"days": N, "pence": P}: no more than P pence of it (the ox's 40, not the whole purse).
+                const double days = v.isObject() ? v.numberOr("days", 0) : v.asNumber();
+                const double purse = v.isObject() && v.has("pence") ? std::min(h->money, v.numberOr("pence", 0)) : h->money;
+                double b = std::clamp(w.consumption(*h) * days, 0.0, std::max(0.0, purse) / price);
                 h->food += b;
                 h->money = std::max(0.0, h->money - b * price);
                 w.book(*h, "買糧", -b * price);
@@ -1686,6 +1776,10 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                                  " 還給莊園，這下欠的是" + (w.people_[lender].sex == Sex::Male ? "他" : "她") + "的人情和錢。");
             } else if (k == "debt_grace") {
                 if (h) h->debtYears = 0;
+            } else if (k == "debt_grace_target") {  // grace on the debt owed to the target's house only (never the manor's)
+                if (h && target != kNone && h->debt > 0.5 && h->creditor != kNone && h->creditor != w.lord_ &&
+                    w.people_[h->creditor].household == w.people_[target].household)
+                    h->debtYears = 0;
             } else if (k == "peace_marriage") {
                 auto [mine, theirs] = peaceMatch(p, target);
                 if (mine == kNone) continue;

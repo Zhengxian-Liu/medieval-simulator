@@ -37,7 +37,7 @@
        // Grain as the coin of politics (design/stitching.md A): the fuller barn is the louder voice.
        {"text": "給村裡缺糧的幾家各送一袋麥子（約 20 天的糧；收了的人家記你的情，全村都看在眼裡）", "conditions": {"not": {"food_days_lt": 150}},
         "log": "選莊頭前，{name} 叫兒子推著車，給村裡幾家揭不開鍋的人家各送了一袋麥子。",
-        "effects": [{"food_days": -20}, {"village_opinion": {"value": 4, "mod": "gift", "years": 2}}, {"reputation": 1}],
+        "effects": [{"give_food_village": 20}, {"village_opinion": {"value": 4, "mod": "gift", "years": 2}}, {"reputation": 1}],
         "ai": {"base": 5, "traits": {"generous": 8, "ambitious": 4, "greedy": -6}, "if": [{"cond": {"ambition": "become_reeve"}, "add": 12}]}},
        {"text": "順其自然（什麼也不花，選上選不上看各家）", "log": "{name} 沒去拉票，選莊頭的事由各家自己拿主意。",
         "effects": [],

@@ -221,7 +221,7 @@
         "ai": {"base": 5, "traits": {"ambitious": 6, "cynical": 4, "gregarious": 4, "pious": -4}}},
        {"text": "去跟{target_first}透個口風：外頭在傳你的閒話（把柄不要了，{target_pron}欠你一份情）",
         "log": "{name}找了個沒人的時候對{target}說：「村裡有人在說你的事，小心些。」{target_first}愣了半天，低聲道了謝。",
-        "effects": [{"target_opinion": {"value": 10, "mod": "heeded", "years": 10}}],
+        "effects": [{"target_opinion": {"value": 10, "mod": "heeded", "years": 10}}, {"target_owes_favour": {"weight": 6, "why": "替他擋了閒話"}}],
         "ai": {"base": 6, "traits": {"kind": 8, "forgiving": 4, "cruel": -6}}},
        {"text": "把聽來的閒話再添幾句傳出去（{target_house}家的名聲要受損；萬一傳回{target_pron}耳裡，就是你造謠）",
         "log": "{name}在磨坊、井邊把聽來的話又說了幾遍，每說一遍就多一分。",

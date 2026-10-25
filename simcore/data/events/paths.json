@@ -20,7 +20,7 @@
         "ai": {"base": 8, "traits": {"pious": 4, "ambitious": 4, "clever": 6, "dull": -6}, "if": [{"cond": {"tradition": "lettered"}, "add": 20}, {"cond": {"ambition": "educate_child"}, "add": 40}]}},
        {"text": "跟神父認字，學費拿一袋麥子抵（約 15 天的糧，不花現錢）", "conditions": {"not": {"food_days_lt": 120}},
         "log": "家裡扛了一袋麥子去神父家抵學費，{name} 開始跟神父認字。",
-        "effects": [{"food_days": -15}, {"set_flag": "schooled"}, {"set_flag": "school_decided"}, {"focus": "letters"}],
+        "effects": [{"give_food_priest": 15}, {"set_flag": "schooled"}, {"set_flag": "school_decided"}, {"focus": "letters"}],
         "ai": {"base": 3, "traits": {"pious": 3, "ambitious": 3, "clever": 6, "dull": -6}, "if": [{"cond": {"money_lt": 30}, "add": 4}, {"cond": {"ambition": "educate_child"}, "add": 30}]}},
        {"text": "留在家幫忙（不花錢，多一雙手；這孩子往後就不識字）", "log": "{name} 沒去認字，留在家裡幫忙幹活。", "effects": [{"set_flag": "school_decided"}, {"skill": {"farming": 1}}], "ai": {"base": 12}},
        {"text": "送去別人家幫傭，換口飯吃（家裡少一張嘴，孩子要吃苦）", "conditions": {"any_place": "service", "money_lt": 30}, "log": "家裡揭不開鍋，{name} 才 {age} 歲就被送去別人家幫傭。",

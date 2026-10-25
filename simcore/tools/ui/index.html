@@ -267,10 +267,11 @@ function renderTop() {
     ${fine ? `<span class="stat lean">入地費 ${fine.amount} 便士，${fine.year} 年 ${fine.month} 月前${fine.extended ? "（已寬限過）" : ""}</span>` : ""}
     ${s.notice ? `<span class="stat lean">不行：${esc(s.notice)}</span>` : ""}</div>`;
   const rv = s.rival;
-  const tops = entries.filter((e) => e.top);
-  const newestTop = tops.length ? Math.max(...tops.map((e) => e.skey)) : null;
+  // This season's big news and the last's, counted from the newest entry (as textplay's top_events).
+  const nowKey = entries.length ? Math.max(...entries.map((e) => e.skey)) : null;
+  const tops = nowKey === null ? [] : entries.filter((e) => e.top && e.skey >= nowKey - 1).slice(-6);
   const line3 = (rv ? `<div class="row"><span>他在跟你搶：<b>${esc(rv.after || "")}</b>（宿敵 ${esc(rv.name)}）</span></div>` : "") +
-    (newestTop !== null ? `<div class="row"><span>■ 大事：${tops.filter((e) => e.skey >= newestTop - 1).slice(-6).map((e) => esc(e.season + " " + e.text)).join("／")}</span></div>` : "");
+    (tops.length ? `<div class="row"><span>■ 大事：${tops.map((e) => esc(e.season + " " + e.text)).join("／")}</span></div>` : "");
   const line2 = `<div class="row">${amb ? `<span>志向 <b>${esc(amb.race || amb.name)}</b>（${amb.race ? esc(amb.name) + "，" : ""}到 ${amb.deadline || "?"} 年底，${amb.years_left <= 1 ? "<b class=\"lean\">今年是最後一年</b>" : `還剩 ${amb.years_left} 年（含今年）`}）</span>
       <span>下一步 <span class="blocker">${esc(amb.blocker || "")}</span></span>` : `<span class="muted">還沒立志</span>`}
     <button class="link" onclick="topOpen=!topOpen;renderTop()">${topOpen ? "收起 ▴" : "全部條件、名聲、地位 ▾"}</button></div>`;
@@ -311,7 +312,7 @@ function renderTurn() {
     $("turn").className = "panel ask";
     html = `<h2>${s.date.year} 年 ${esc(s.date.season)} <small>還有 ${s.time_left} 段空閒</small></h2>
       ${agendaBlock(s)}
-      <p class="muted" style="margin:0 0 8px;font-size:13px">每件事用一段空閒；也可以找家人（★）或去「村民」開口、「計畫」定計畫。沒用完的拿去下田，收成會好一點。</p>
+      <p class="muted" style="margin:0 0 8px;font-size:13px">每件事用一段空閒（標「不佔空閒」的除外）；也可以找家人（★）或去「村民」開口、「計畫」定計畫。沒用完的拿去下田，收成會好一點。</p>
       <div class="turnbar">
         <button class="primary" onclick="act({do:'pass'})">過這一季</button>
         <button onclick="act({do:'year'})">一口氣過一年</button>
@@ -331,7 +332,7 @@ function agendaBlock(s) {
   const items = s.agenda || [];  // the four, and the standing ones (sell grain, pay a debt)
   if (!items.length) return "";
   return `<div class="agenda"><div class="lab">這一季的事</div>${items.map((it) =>
-    `<div class="item"><button ${it.open ? "" : "disabled"} title="${esc(it.open ? "用一段空閒" : it.why)}" onclick='act(${JSON.stringify({ do: "agenda", id: it.id }).replace(/'/g, "&#39;")})'>${it.amb ? "★ " : ""}${esc(it.title)}</button>
+    `<div class="item"><button ${it.open ? "" : "disabled"} title="${esc(it.open ? (it.free ? "不佔空閒" : "用一段空閒") : it.why)}" onclick='act(${JSON.stringify({ do: "agenda", id: it.id }).replace(/'/g, "&#39;")})'>${it.amb ? "★ " : ""}${esc(it.title)}${it.free ? "（不佔空閒）" : ""}</button>
       <span class="desc">${esc(it.desc)}${it.open ? "" : `（✗ ${esc(it.why)}）`}</span></div>`).join("")}</div>`;
 }
 

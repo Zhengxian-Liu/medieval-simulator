@@ -218,7 +218,7 @@
     // A death opens a negotiation (design/stitching-fable.md: death into the loop). The house has just lost a pair
     // of hands, and a better-off neighbour who never cared much for it comes for the land.
     {"id": "widow_rival", "title": "趁虛而入", "scope": "player_head", "chance": 0.08, "cooldown_years": 3,
-     "conditions": {"is_head": true, "recently_widowed": true, "acres_ge": 6},
+     "conditions": {"is_head": true, "recently_widowed": true, "acres_ge": 6, "not": {"money_ge": 150}},
      "target": {"pick": "random_villager", "conditions": {"is_head": true, "other_dynasty": true, "money_ge": 140, "acres_ge": 6, "opinion_of_target_lt": 15,
                                                           "not": {"occupation": ["lord", "lady", "priest"]}}},
      "prompt": "喪事才辦完，{target}就上門了。坐下來沒說兩句就切入正題：「你家少了一個勞力，那幾畝地荒著也是荒著，不如 2 畝讓給我家，120 便士，現錢。」",
@@ -226,10 +226,6 @@
                  "{target}在教堂門口攔住{name}，先說了幾句節哀，接著壓低聲音：「一個人哪種得了那麼多地？2 畝，120 便士，我替你分憂。」",
                  "墳上的土還沒乾，{target}托人捎話來：願意出 120 便士買你家 2 畝地。捎話的人還加了一句：「他說你家今年一定忙不過來。」"],
      "options": [
-      {"text": "賣 2 畝給{target_pron}家（得 120 便士；地就沒了，往後每年少收兩畝的糧）",
-       "log": "{name}想了一夜，還是把 2 畝地賣給了{target}。",
-       "effects": [{"on_target": [{"take_acres": {"acres": 2, "price": 120, "wanted": false}}]}, {"deed": {"type": "land_bought", "doer": "target"}}, {"stress": 6}],
-       "ai": {"base": 5, "traits": {"greedy": 4, "content": 4, "ambitious": -6}, "if": [{"cond": {"in_debt": true}, "add": 6}]}},
       {"text": "不賣，叫家裡的人頂上（地保住了，全家要累一整年）", "conditions": {"household_size_ge": 3},
        "log": "{name}回絕了{target}：「地是我家的，再苦也自己種。」那一年，家裡大大小小天不亮就下田。",
        "effects": [{"work_bonus": 0.02}, {"stress": 8}, {"target_opinion": {"value": -4, "mod": "rebuffed", "years": 6}}],
@@ -245,7 +241,11 @@
       {"text": "當面回絕：「人還沒涼透，你就來搶地？」（{target_house}家會記仇）",
        "log": "{name}把{target}轟出了門。這話第二天就傳遍了村子。",
        "effects": [{"feud_heat": 6}, {"target_opinion": {"value": -12, "mod": "hard_words", "years": 10}}, {"need": {"spirit": 5}}],
-       "ai": {"base": 4, "traits": {"wrathful": 10, "brave": 4, "calm": -6}}}
+       "ai": {"base": 4, "traits": {"wrathful": 10, "brave": 4, "calm": -6}}},
+      {"text": "賣 2 畝給{target_pron}家（得 120 便士；地就沒了，往後每年少收兩畝的糧）",
+       "log": "{name}想了一夜，還是把 2 畝地賣給了{target}。",
+       "effects": [{"on_target": [{"take_acres": {"acres": 2, "price": 120, "wanted": false}}]}, {"deed": {"type": "land_bought", "doer": "target"}}, {"stress": 6}],
+       "ai": {"base": 5, "traits": {"greedy": 4, "content": 4, "ambitious": -6}, "if": [{"cond": {"in_debt": true}, "add": 6}]}}
      ]},
 
     // The other side of it: a neighbour just widowed would let land go, and the wake is where it is said.
@@ -271,7 +271,7 @@
        "ai": {"base": 5, "traits": {"greedy": 10, "cruel": 4, "kind": -8}}},
       {"text": "不買地，叫家裡的人去幫{target_pron}家把這一季的活做完（佔一段空閒，自家田裡少幾天工；{target_first}欠你一份情）",
        "log": "{name}沒提地的事，帶著家裡的人去{target}家，幫著把這一季的活做完了。",
-       "effects": [{"spend_time": 1}, {"work_bonus": -0.01}, {"deed": {"type": "kindness"}}, {"mutual_opinion": {"value": 6, "mod": "helped_them", "years": 10}}],
+       "effects": [{"spend_time": 1}, {"work_bonus": -0.01}, {"deed": {"type": "kindness"}}, {"target_owes_favour": {"weight": 8, "why": "喪事後幫他家把一季的活做完"}}, {"mutual_opinion": {"value": 6, "mod": "helped_them", "years": 10}}],
        "ai": {"base": 6, "traits": {"kind": 8, "generous": 6, "greedy": -6}}},
       {"text": "不在這時候談地（什麼也不花，{target_first}心裡敬你一分）",
        "log": "{name}說：「這種時候不談這個。」{target_first}點點頭，沒再開口。",

@@ -24,7 +24,7 @@
         "ai": {"base": 6, "traits": {"greedy": 10, "kind": -6}}},
        {"text": "提起從前幫過{target_pron}家的事，請{target_pron}讓到 230 便士（230 便士；這份情就算還了）", "conditions": {"remembers": {"holder": "target", "tag": "help", "negative": false, "min": 3}},
         "log": "{name} 提起從前那件事，{target_first}點點頭：「就 230，算我還你家的情。」",
-        "effects": [{"take_acres": {"acres": 4, "price": 230, "wanted": false}}, {"deed": {"type": "land_bought"}}],
+        "effects": [{"take_acres": {"acres": 4, "price": 230, "wanted": false}}, {"deed": {"type": "land_bought"}}, {"use_up_memory": {"holder": "target", "tag": "help"}}],
         "ai": {"base": 9, "traits": {"ambitious": 6, "greedy": 4}}},
        {"text": "不買（錢留著；地會落到別家手上）", "log": "{name} 算了算家裡的錢，這塊地沒買。", "effects": [], "ai": {"base": 6, "traits": {"content": 6, "craven": 2}}}
      ]},

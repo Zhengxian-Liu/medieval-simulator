@@ -23,7 +23,7 @@ constexpr double kGuilt = 25;
 // What an acre and the croft bring in an ordinary summer, in a grown man's days of bread (fun-r9 0: a family of 6–8 on
 // 10 acres feeds itself and pays the rent from its own land in an ordinary year). keepsHouse is the rough sum the
 // cards use (after the tithe, at an ordinary family's hands and skill).
-constexpr double kAcreBread = 165, kCroftBread = 260;
+constexpr double kAcreBread = 145, kCroftBread = 330;
 inline double keepsHouse(double acres) { return acres * kAcreBread * 0.85 + kCroftBread; }
 
 // Calendar: 12 months of 30 days. Day 0 is 1 January of the start year.
@@ -918,11 +918,20 @@ public:
     std::string cardText(const std::string& key, const std::map<std::string, std::string>& vars = {}) const;
     // A land pledge (抵押): if what the house owes the creditor is not paid by that Michaelmas, the parcel is theirs.
     struct Pledge {
-        Id house = kNone, creditor = kNone, parcel = kNone;  // creditor: a person
-        int due = 0;           // year
+        Id house = kNone, creditor = kNone, parcel = kNone;  // creditor: the person it was made with
+        int due = 0;           // year: the Michaelmas the debt itself falls due (what the card said)
         bool lease = false;    // a lease (the rival's): the parcel comes back on `back`
         int back = -1;         // day
+        Id credHouse = kNone;  // the creditor's house: the debt outlives him (his heir holds it)
+        double amount = 0;     // what was owed on it at the start
+        bool warned = false;   // the Michaelmas screen of the due year has said the field is at stake
     };
+    // The Michaelmas (a year) at which what the house owes its first creditor falls due, as debtText tells it.
+    int debtDueYear(const Household& h) const;
+    // The Michaelmas a loan from `lender` made today falls due (addDebt's terms; an account with him keeps its own day).
+    int loanDueYear(const Household& h, Id lender) const;
+    // Whoever casts the family's ballot (the house head, 21 or over), or kNone.
+    Id ballotHead() const;
     const std::vector<Pledge>& pledges() const { return pledges_; }
 
     // --- player interface

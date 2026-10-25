@@ -8,6 +8,7 @@
 //    why, the offers made for the family's vote.
 // The cards' words are in data/events/exchange.json, rival.json and michaelmas.json ("texts").
 #include <algorithm>
+#include <cstdio>
 #include <cmath>
 #include <map>
 #include <set>
@@ -52,6 +53,25 @@ double World::grainFloor(const Household& h) const {
     for (const auto& f : fines_)
         if (f.house == h.id) fine += f.amount;
     return std::round(rentOf(h)) + fine;
+}
+
+int World::debtDueYear(const Household& h) const {
+    const bool past = month() > 8 || (month() == 8 && dayOfMonth() == 29);  // this year's rent day is behind us
+    if (h.debtYears >= 1) return year() + (past ? 1 : 0);                    // overdue: the next one
+    return year() + (past ? 1 : 0) - h.debtYears;                            // as debtText: 1 - debtYears Michaelmases ahead
+}
+
+int World::loanDueYear(const Household& h, Id lender) const {
+    if (h.debt > 0.5 && h.creditor != kNone && lender != kNone && people_[h.creditor].household == people_[lender].household) return debtDueYear(h);
+    const bool past = month() > 8 || (month() == 8 && dayOfMonth() == 29);
+    return year() + (past ? 1 : 0) + (lender != lord_ && month() >= 2 ? 1 : 0);
+}
+
+Id World::ballotHead() const {
+    if (playerHousehold_ == kNone) return kNone;
+    Id hd = households_[playerHousehold_].head;
+    if (hd == kNone || !people_[hd].alive() || people_[hd].occupation == "priest" || ageYears(people_[hd]) < 21) return kNone;
+    return hd;
 }
 
 void World::favourLine(Id debtor, Id creditor, double weight, const std::string& why) {
@@ -252,17 +272,33 @@ int World::grainExchange(Household& h) {
         if (child == kNone || c.birthDay < people_[child].birthDay) child = m;
     }
     // Our smallest customary parcel, for a pledge (a holding of one parcel is not pledged: it is the croft).
+    // The parcel he wants only when it is such a parcel too (small, customary, not the last, a quarter of the holding
+    // at most).
     auto pledgeable = [&](Id wanted) -> Id {
-        if (wanted != kNone && parcels_[wanted].holder == h.id && !parcels_[wanted].gone) return wanted;
         Id best = kNone;
         int n = 0;
+        auto fits = [&](const Parcel& pc) { return !pc.free && pc.acres <= 4 && pc.acres <= h.acres * 0.25 + 0.01; };
         for (const auto& pc : parcels_)
             if (!pc.gone && pc.holder == h.id) {
                 ++n;
-                if (!pc.free && pc.acres <= 4 && (best == kNone || pc.acres < parcels_[best].acres)) best = pc.id;
+                if (fits(pc) && (best == kNone || pc.acres < parcels_[best].acres)) best = pc.id;
             }
-        return n >= 2 ? best : kNone;
+        if (n < 2) return kNone;
+        if (wanted != kNone && parcels_[wanted].holder == h.id && !parcels_[wanted].gone && fits(parcels_[wanted])) return wanted;
+        return best;
     };
+    // What the house could pay back at Michaelmas without losing the roof: two years' rent at most, less what it
+    // already owes; a loan is never more than sixty days (fun-r9 review M1).
+    const double perDay = std::max(0.01, grainLoanOwed(h, 1));
+    const double loanDays = std::floor(std::max(0.0, std::max(30.0, 2 * std::round(rentOf(h))) - owedAll(h.id)) / perDay);
+    // The family's ballot, and the posts it seeks itself (no vote is sold against its own man).
+    const Id ballot = ballotHead();
+    auto ownStake = [&](const std::string& officeId) {
+        for (const auto& wt : wants_)
+            if (wt.open && wt.kind == "office" && wt.office == officeId && inPlayerHouse(wt.house)) return true;
+        return false;
+    };
+    auto dueYearFor = [&](Id lender) { return loanDueYear(h, lender); };
     // An election before the harvest is in: the house's man who stands for it.
     auto standing = [&](const Household& o, std::string& officeId) -> Id {
         auto mid = [](double m) { return m / 2; };
@@ -272,7 +308,11 @@ int World::grainExchange(Household& h) {
             const Office* of = office(id);
             if (!of) continue;
             Id old = id == "reeve" ? currentReeve() : of->holder;
-            for (Id c : officeCandidates(id, old, mid))
+            std::vector<Id> cands = officeCandidates(id, old, mid);
+            if (ownStake(id) || promises_.count({ballot, id}) ||
+                std::any_of(cands.begin(), cands.end(), [&](Id c) { return inPlayerHouse(people_[c].household); }))
+                continue;
+            for (Id c : cands)
                 if (people_[c].household == o.id) {
                     officeId = id;
                     return c;
@@ -286,7 +326,7 @@ int World::grainExchange(Household& h) {
         const Person& oh = people_[o.head];
         if (!oh.alive() || oh.occupation == "priest" || ageYears(oh) < 18) continue;
         const double spare = o.food / std::max(0.5, consumption(o)) - (toHarvest + 45);
-        const double give = std::min({need, 120.0, spare * consumption(o) / daily});
+        const double give = std::min({need, 60.0, spare * consumption(o) / daily});
         if (give < std::min(need, 20.0)) continue;
         GrainOffer f;
         f.who = o.head;
@@ -304,21 +344,25 @@ int World::grainExchange(Household& h) {
         f.score = op / 2 + (f.rival ? 100 : 0) + (owesUs >= 4 ? 60 + owesUs : 0) + (creditor ? 50 : 0) + (wantsParcel != kNone ? 40 : 0) + (intends ? 30 : 0);
         // What he wants for it: one plain thing.
         std::string officeId;
-        Id man = standing(o, officeId);
+        Id man = ballot != kNone ? standing(o, officeId) : kNone;
         Id pledge = pledgeable(wantsParcel);
-        const double loanOwed = grainLoanOwed(h, f.days) * (f.rival ? 1.5 : 1.0);
+        // Lent at the neighbours' price, the rival too (his terms are harder in kind, not dearer than the corn dealer),
+        // and no more than the house can pay back. A pledge goes on the first account, so its day is the card's.
+        const double lendDays = std::min(f.days, loanDays);
+        const bool canLend = lendDays >= std::min(need, 15.0) && debtRoom(h, o.head);
+        const bool firstAccount = h.debt <= 0.5 || (h.creditor != kNone && people_[h.creditor].household == o.id);
         if (owesUs >= 4 && !f.rival) {
             f.kind = "favour";
         } else if (f.rival && child != kNone) {
-            f.kind = "service", f.child = child, f.years = f.days >= 60 ? 3 : 2;
-        } else if ((creditor || wantsParcel != kNone || f.rival) && pledge != kNone && debtRoom(h, o.head)) {
-            f.kind = "pledge", f.parcel = pledge, f.owed = std::round(loanOwed);
+            f.kind = "service", f.child = child, f.years = f.days >= 45 ? 3 : 2;
+        } else if ((creditor || wantsParcel != kNone || f.rival) && pledge != kNone && canLend && firstAccount) {
+            f.kind = "pledge", f.parcel = pledge, f.days = lendDays, f.owed = grainLoanOwed(h, lendDays);
         } else if (man != kNone && !inPlayerHouse(people_[man].household)) {
             f.kind = "vote", f.office = officeId, f.man = man;
-        } else if (debtRoom(h, o.head)) {
-            f.kind = "loan", f.owed = std::round(loanOwed);
+        } else if (canLend) {
+            f.kind = "loan", f.days = lendDays, f.owed = grainLoanOwed(h, lendDays);
         } else if (child != kNone) {
-            f.kind = "service", f.child = child, f.years = f.days >= 60 ? 3 : 2;
+            f.kind = "service", f.child = child, f.years = f.days >= 45 ? 3 : 2;
         } else {
             continue;
         }
@@ -334,7 +378,8 @@ int World::grainExchange(Household& h) {
         const GrainOffer& f = offers[i];
         const std::string name = fullName(f.who) + (f.rival ? cardText("tag.rival") : "");
         const std::string surname = people_[f.who].dynasty != kNone ? dynasties_[people_[f.who].dynasty].surname + "家" : name;
-        std::map<std::string, std::string> v{{"name", name}, {"days", num(f.days)}, {"owed", num(f.owed)}, {"surname", surname}};
+        std::map<std::string, std::string> v{{"name", name}, {"days", num(f.days)}, {"owed", num(f.owed)}, {"surname", surname},
+                                             {"due", std::to_string(dueYearFor(f.who))}};
         std::string wants, also;
         if (f.kind == "favour") {
             int y = cfg_.startYear;
@@ -351,7 +396,7 @@ int World::grainExchange(Household& h) {
         } else if (f.kind == "pledge") {
             v["parcel"] = parcelName(parcels_[f.parcel]);
             wants = cardText("short.pledge", v);
-            also = touches({v["parcel"], cardText("short.also_debt", v)});
+            also = touches({parcels_[f.parcel].place + "那塊地", cardText("short.also_debt", v)});
         } else if (f.kind == "vote") {
             const Office* of = office(f.office);
             v["office"] = of ? of->name : f.office;
@@ -395,15 +440,16 @@ int World::grainExchange(Household& h) {
     ++budgetUsed_[{h.id, "hunger", budgetYear("hunger")}];
     h.grainAsked = season;
     h.grainCard = season;
-    h.grainChoice = 1;  // the rest of the harvest year: a month at a time, as far as the purse goes
+    // The rest of the harvest year: the house's own rule if it is 買到收成 (its floor kept), else a month at a time.
+    h.grainChoice = grainRule_ == "harvest" ? 0 : 1;
     ++counters_["grain_card"];
     const std::string me = fullName(head);
     const int t = tag[r];
-    const double before = h.money, foodBefore = foodDays(h);
-    auto ledger = [&](const std::string& whom) {
+    const double before = h.money, grainBefore = h.food;
+    auto ledger = [&](const std::string& whom) {  // the grain in the days the card counted (before a child went into service)
         std::vector<std::string> parts;
         if (std::abs(h.money - before) >= 0.5) parts.push_back("錢 " + std::string(h.money > before ? "+" : "−") + num(std::abs(h.money - before)));
-        parts.push_back("存糧 " + std::string(foodDays(h) >= foodBefore ? "+" : "−") + num(std::abs(foodDays(h) - foodBefore)) + " 天");
+        parts.push_back("存糧 " + std::string(h.food >= grainBefore ? "+" : "−") + num(std::abs(h.food - grainBefore) / daily) + " 天");
         log(1, "  記帳：" + join(parts, "、") + "（" + whom + "）。");
     };
     if (t == -2) {
@@ -431,36 +477,49 @@ int World::grainExchange(Household& h) {
     }
     const GrainOffer& f = offers[static_cast<size_t>(t)];
     Household& oh = households_[people_[f.who].household];
+    const std::string them = fullName(f.who);
+    // The child goes first: if the service cannot be (he is wanted elsewhere), there is no grain either.
+    if (f.kind == "service" && !sendToService(f.child, f.who, f.years)) {
+        log(1, "〔" + cardText("short.title") + "〕" + cardText("short.service_failed", {{"name", them}, {"child", fullName(f.child)}}) + "（選擇：跟" + them + "開口）");
+        return 1;
+    }
     const double grain = f.days * daily;
     oh.food = std::max(0.0, oh.food - grain);
+    bookFood(oh, "借糧給人", -grain);
     h.food += grain;
     bookFood(h, "借來的糧", grain);
-    const std::string them = fullName(f.who);
     std::string what;
     if (f.kind == "favour") {
         what = cardText("short.done_favour", {{"name", them}, {"days", num(f.days)}});
         callInFavour(f.who, head);
         addOpinion(f.who, head, "helped_them", 4, 5);
     } else if (f.kind == "loan" || f.kind == "pledge") {
+        const int due = dueYearFor(f.who);
         addDebt(h, f.owed, f.who);  // paid back at Michaelmas, out of the next harvest (addDebt: a neighbour's, the one after next)
-        if (f.kind == "pledge") pledges_.push_back({h.id, f.who, f.parcel, year() + (month() >= 2 ? 1 : 0), false, -1});
+        if (f.kind == "pledge") {
+            Pledge pl;
+            pl.house = h.id, pl.creditor = f.who, pl.parcel = f.parcel, pl.due = due, pl.credHouse = oh.id, pl.amount = f.owed;
+            pledges_.push_back(pl);
+        }
         what = cardText(f.kind == "loan" ? "short.done_loan" : "short.done_pledge",
-                        {{"name", them}, {"days", num(f.days)}, {"owed", num(f.owed)}, {"parcel", f.parcel != kNone ? parcelName(parcels_[f.parcel]) : ""}});
+                        {{"name", them}, {"days", num(f.days)}, {"owed", num(f.owed)}, {"due", std::to_string(due)},
+                         {"parcel", f.parcel != kNone ? parcelName(parcels_[f.parcel]) : ""}});
         recordDeed("lent_money", f.who, head);
     } else if (f.kind == "vote") {
-        promises_[{head, f.office}] = f.man;
+        promises_[{ballot, f.office}] = f.man;
         const Office* of = office(f.office);
         what = cardText("short.done_vote", {{"name", them}, {"days", num(f.days)}, {"man", fullName(f.man)}, {"office", of ? of->name : f.office}});
     } else {
-        sendToService(f.child, f.who, f.years);
         people_[f.child].flags.insert("grain_service");
         what = cardText("short.done_service", {{"name", them}, {"days", num(f.days)}, {"child", fullName(f.child)}, {"years", std::to_string(f.years)}});
     }
     log(1, "〔" + cardText("short.title") + "〕" + what + "（選擇：跟" + them + "開口）");
     ledger(them);
     const std::string why = cardText("favour.short_" + f.kind, {{"year", std::to_string(year())}, {"days", num(f.days)}});
-    if (f.kind != "favour") favourLine(head, f.who, f.kind == "loan" ? 8 : f.kind == "vote" ? 12 : 6, why);
-    else log(1, "【人情】" + them + " 還了欠你家的那份情：" + why + "。");
+    // A loan is a kindness owed on top of the pence; a vote or a child's service pays for the grain: settled, said so.
+    if (f.kind == "loan" || f.kind == "pledge") favourLine(head, f.who, f.kind == "loan" ? 8 : 6, why);
+    else if (f.kind == "favour") log(1, "【人情】" + them + " 還了欠你家的那份情：" + why + "。");
+    else log(1, cardText("favour.settled", {{"name", them}, {"why", why}}));
     if (f.rival) noteClash(h.id, oh.id, cardText("clash.grain", {{"name", them}}));
     return 1;
 }
@@ -513,27 +572,39 @@ void World::famineAsk() {
     const std::string surname = oh.dynasty != kNone ? dynasties_[oh.dynasty].surname + "家" : name;
     std::string wantsOurs, officeNote;
     for (const auto& wt : wants_)
-        if (wt.open && wt.house == pick && wt.kind == "parcel" && wt.object != kNone && parcels_[wt.object].holder == ph.id) wantsOurs = parcelName(parcels_[wt.object]);
+        if (wt.open && wt.house == pick && wt.kind == "parcel" && wt.object != kNone && parcels_[wt.object].holder == ph.id) wantsOurs = parcels_[wt.object].place + "那塊地";  // (也牽動 names it, not its size)
     for (const auto& wt : wants_)
         if (wt.open && wt.house == pick && wt.kind == "office") {
             if (const Office* of = office(wt.office)) officeNote = cardText("famine.also_office", {{"office", of->name}});
         }
+    const bool room = debtRoom(oh, head);
+    const double times = market > 0 ? std::floor(dear / market * 10 + 0.5) / 10 : 0;
+    char timesText[16];
+    std::snprintf(timesText, sizeof timesText, times == std::floor(times) ? "%.0f" : "%.1f", times);
     std::map<std::string, std::string> v{{"name", name}, {"surname", surname}, {"asker", asker == oh.head ? fullName(asker) : fullName(oh.head) + "的" + kinWord(oh.head, asker) + shortName(asker)},
                                          {"days", num(days)}, {"our_days", num(ourDays)}, {"owed", num(owed)}, {"dear", num(dear)},
+                                         {"times", timesText},
+                                         {"due", std::to_string(loanDueYear(oh, head))},
                                          {"have", num(foodDays(ph))}, {"to_harvest", std::to_string(daysToHarvest())}, {"wants", wantsOurs}};
-    std::vector<std::string> opts{
-        cardText("famine.lend", v) + "｜" + touches({cardText("famine.also_favour", v), officeNote}),
-        cardText("famine.sell", v) + "｜" + touches({cardText("famine.also_name"), cardText("famine.also_opinion", v)}),
-        cardText("famine.give", v) + "｜" + touches({cardText("famine.also_name"), cardText("famine.also_bigfavour", v)}),
-        cardText("famine.keep", v) + "｜" + touches({cardText("famine.also_opinion", v), wantsOurs.empty() ? "" : wantsOurs})};
-    std::vector<std::string> unavailable;
-    std::vector<int> tag{0, 1, 2, 3};
-    if (dear < market * 1.5) {
-        unavailable.push_back(cardText("famine.sell_no", v));
-        opts.erase(opts.begin() + 1);
-        tag.erase(tag.begin() + 1);
+    // A loan the asker's books have no room for would be a gift called a loan: not offered as one (fun-r9 review M2).
+    std::vector<std::string> opts, unavailable;
+    std::vector<int> tag;
+    if (room) {
+        opts.push_back(cardText("famine.lend", v) + "｜" + touches({cardText("famine.also_favour", v), officeNote}));
+        tag.push_back(0);
+    } else {
+        unavailable.push_back(cardText("famine.lend_no", v));
     }
-    const bool room = debtRoom(oh, head);
+    if (dear >= market * 1.5) {
+        opts.push_back(cardText("famine.sell", v) + "｜" + touches({cardText("famine.also_name"), cardText("famine.also_opinion", v)}));
+        tag.push_back(1);
+    } else {
+        unavailable.push_back(cardText("famine.sell_no", v));
+    }
+    opts.push_back(cardText("famine.give", v) + "｜" + touches({cardText("famine.also_name"), cardText("famine.also_bigfavour", v)}));
+    tag.push_back(2);
+    opts.push_back(cardText("famine.keep", v) + "｜" + touches({cardText("famine.also_opinion", v), wantsOurs.empty() ? "" : wantsOurs}));
+    tag.push_back(3);
     std::string sit = cardText("famine.situation", v) + (rival ? cardText("famine.rival", v) : "");
     int r = askPlayer(cardText("famine.title", v), sit, opts, unavailable);
     int t = r < 0 ? (opinion(head, oh.head) >= 30 && room ? 0 : 3) : tag[r];
@@ -553,7 +624,7 @@ void World::famineAsk() {
     if (t == 0) {
         hand();
         bookFood(ph, "借糧給人", -grain);
-        if (room) addDebt(oh, owed, head);
+        addDebt(oh, owed, head);  // (offered only when his books have room)
         log(1, title + cardText("famine.done_lend", v) + "（選擇：借）");
         ledger();
         favourLine(oh.head, head, 15, cardText("favour.famine_lend", {{"year", std::to_string(year())}, {"days", num(days)}}));
@@ -565,7 +636,7 @@ void World::famineAsk() {
         ph.money += dear;
         book(ph, "荒年高價賣糧", dear);
         book(oh, "高價買糧", -dear);
-        log(1, title + cardText("famine.done_sell", v) + "（選擇：三倍價賣）");
+        log(1, title + cardText("famine.done_sell", v) + "（選擇：高價賣）");
         ledger();
         addReputation(head, -6, cardText("rep.famine_sell", v));
         log(1, "  " + cardText("famine.rep_sell"));
@@ -600,35 +671,56 @@ void World::rivalStrike() {
     const EntryFine* fine = nullptr;
     for (const auto& f : fines_)
         if (f.house == ph.id) fine = &f;
+    // Only real weakness (fun-r9 review H4): the purse below what the year still needs (bread to the harvest, the rent
+    // and the fine), with a fine falling due, a head or grown worker just buried, a famine, or debts beyond the purse.
+    const double need = costToHarvest(ph) + grainFloor(ph);
+    const bool famine = lastWeather_ < 0.85 || param("harvest_mult", 1) < 0.85;
+    // 趁虛而入 (widow_rival) asked within the year is the same blow: not twice after one death.
+    auto wr = cooldowns_.find({head, "widow_rival"});
+    const bool landAskedLately = wr != cooldowns_.end() && wr->second > day_ + 2 * kDaysPerYear;
     std::string weak;
-    if (fine && ph.money < fine->amount) weak = cardText("rival.weak_fine");
-    else if (day_ - lastDeathDay_ < 90) weak = cardText("rival.weak_death");
-    else if (breadShort(ph) > 30 && ph.money < costToHarvest(ph)) weak = cardText("rival.weak_bread");
-    else if (owedAll(ph.id) >= 40 && ph.money < owedAll(ph.id)) weak = cardText("rival.weak_debt");
+    if (ph.money < need && !landAskedLately) {
+        if (fine && ph.money < fine->amount) weak = cardText("rival.weak_fine");
+        else if (day_ - lastDeathDay_ < 90) weak = cardText("rival.weak_death");
+        else if (famine && breadShort(ph) > 0) weak = cardText("rival.weak_bread");
+        else if (breadShort(ph) > 30 && ph.money < costToHarvest(ph)) weak = cardText("rival.weak_bread");
+        else if (owedAll(ph.id) >= 40 && ph.money < owedAll(ph.id)) weak = cardText("rival.weak_debt");
+    }
     if (weak.empty() || !rngContest_.chance(0.5)) return;
-    // The parcel he has his eye on, else the family's smallest customary one (never the last).
+    // The smallest customary parcel (never the last, a quarter of the holding at most, and the house still able to
+    // feed itself without it); the one he has his eye on only when it is such a parcel too.
+    const double yearNeed = consumption(ph) * kDaysPerYear;
+    auto fits = [&](const Parcel& pc) {
+        return !pc.free && pc.acres <= ph.acres * 0.25 + 0.01 && keepsHouse(ph.acres - pc.acres) >= std::min(yearNeed, keepsHouse(ph.acres)) * 0.9;
+    };
     Id parcel = kNone;
-    for (const auto& wt : wants_)
-        if (wt.open && wt.house == rh && wt.kind == "parcel" && wt.object != kNone && parcels_[wt.object].holder == ph.id) parcel = wt.object;
     int held = 0;
     for (const auto& pc : parcels_)
         if (!pc.gone && pc.holder == ph.id) {
             ++held;
-            if (parcel == kNone && !pc.free && (pc.acres < 6) ) parcel = pc.id;
+            if (fits(pc) && (parcel == kNone || pc.acres < parcels_[parcel].acres)) parcel = pc.id;
         }
+    for (const auto& wt : wants_)
+        if (wt.open && wt.house == rh && wt.kind == "parcel" && wt.object != kNone && parcels_[wt.object].holder == ph.id && fits(parcels_[wt.object]))
+            parcel = wt.object;
     if (parcel == kNone || held < 2) return;
+    cooldowns_[{head, "widow_rival"}] = std::max(cooldowns_[{head, "widow_rival"}], day_ + kDaysPerYear);  // and not 趁虛而入 on top
     rival_.struck = true;
     const Parcel& pc = parcels_[parcel];
     const std::string pname = parcelName(pc);
     const std::string them = fullName(rv.head), surname = dynasties_[rival_.dynasty].surname + "家";
     std::map<std::string, std::string> v{{"name", them}, {"surname", surname}, {"weak", weak}, {"parcel", pname}};
+    // The refusal first: the first line of a card is not the one that gives the land away.
     std::vector<std::string> opts;
     int kind;
-    if (fine && ph.money < fine->amount && rv.money >= fine->amount + 20) {
+    double fineTotal = 0;
+    for (const auto& f : fines_)
+        if (f.house == ph.id) fineTotal += f.amount;
+    if (fine && ph.money < fine->amount && rv.money >= fineTotal + 20) {
         kind = 0;
-        v["fine"] = num(fine->amount);
-        opts = {cardText("rival.lease_yes", v) + "｜" + touches({pname, cardText("rival.also_house", v)}),
-                cardText("rival.lease_no", v) + "｜" + touches({cardText("rival.also_steward"), cardText("rival.also_house", v)})};
+        v["fine"] = num(fineTotal);
+        opts = {cardText("rival.lease_no", v) + "｜" + touches({cardText("rival.also_steward"), cardText("rival.also_house", v)}),
+                cardText("rival.lease_yes", v) + "｜" + touches({pc.place + "那塊地", cardText("rival.also_house", v)})};
     } else {
         kind = 1;
         const double value = std::round(pc.acres * kAcreValue);
@@ -639,26 +731,31 @@ void World::rivalStrike() {
         }
         v["price"] = num(offer);
         v["value"] = num(value);
-        opts = {cardText("rival.sell_yes", v) + "｜" + touches({pname, owedAll(ph.id) > 0.5 ? cardText("rival.also_debt") : ""}),
-                cardText("rival.sell_no", v) + "｜" + touches({cardText("rival.also_house", v)})};
+        opts = {cardText("rival.sell_no", v) + "｜" + touches({cardText("rival.also_house", v)}),
+                cardText("rival.sell_yes", v) + "｜" + touches({pc.place + "那塊地", owedAll(ph.id) > 0.5 ? cardText("rival.also_debt") : ""})};
     }
     std::string sit = cardText(kind == 0 ? "rival.lease_situation" : "rival.sell_situation", v);
     int r = askPlayer(cardText("rival.title", v), sit, opts);
-    if (r < 0) r = 1;  // the family's ways: not to the rival
+    const bool yes = r == 1;  // the family's ways (r < 0): not to the rival
     const std::string title = "〔" + cardText("rival.title", v) + "〕";
     const double before = ph.money;
-    if (kind == 0 && r == 0) {
-        EntryFine copy = *fine;
+    if (kind == 0 && yes) {
+        // Every fine of the house is paid, as the card says, and the manor's books show it.
         fines_.erase(std::remove_if(fines_.begin(), fines_.end(), [&](const EntryFine& f) { return f.house == ph.id; }), fines_.end());
-        rv.money -= copy.amount;
-        book(rv, "替人墊入地費", -copy.amount);
-        if (lord_ != kNone && people_[lord_].household != kNone) households_[people_[lord_].household].money += copy.amount;
+        rv.money -= fineTotal;
+        book(rv, "替人墊入地費", -fineTotal);
+        if (lord_ != kNone && people_[lord_].household != kNone) {
+            households_[people_[lord_].household].money += fineTotal;
+            book(households_[people_[lord_].household], "入地費", fineTotal);
+        }
         moveParcel(parcel, rh, "租給宿敵三年");
-        pledges_.push_back({ph.id, rv.head, parcel, year() + 3, true, day_ + 3 * kDaysPerYear});
+        Pledge pl;
+        pl.house = ph.id, pl.creditor = rv.head, pl.parcel = parcel, pl.due = year() + 3, pl.lease = true, pl.back = day_ + 3 * kDaysPerYear, pl.credHouse = rh;
+        pledges_.push_back(pl);
         log(1, title + cardText("rival.lease_done", v) + "（選擇：答應）");
-        log(1, "  記帳：入地費 " + num(copy.amount) + " 由" + surname + "代交；" + pname + "三年歸他種。");
+        log(1, "  記帳：入地費 " + num(fineTotal) + " 由" + surname + "代交；" + pname + "三年歸他種。");
         favourLine(head, rv.head, 6, cardText("favour.rival_lease", {{"year", std::to_string(year())}}));
-    } else if (kind == 1 && r == 0) {
+    } else if (kind == 1 && yes) {
         double price = std::stod(v["price"]);
         rv.money -= price;
         book(rv, "買地", -price);
@@ -672,7 +769,7 @@ void World::rivalStrike() {
         feudHeat(ph.dynasty, rv.dynasty, 8, kNone);
         addOpinion(rv.head, head, "turned_down_terms", -8, 8);
     }
-    noteClash(ph.id, rh, cardText(kind == 0 ? "clash.lease" : "clash.price", v) + (r == 0 ? "：他家得手" : "：你家沒讓"));
+    noteClash(ph.id, rh, cardText(kind == 0 ? "clash.lease" : "clash.price", v) + (yes ? "：他家得手" : "：你家沒讓"));
 }
 
 // ---- 抵押與租約到期 ------------------------------------------------------------------------------
@@ -682,26 +779,48 @@ void World::settlePledges() {
         Pledge& pl = pledges_[i];
         Parcel& pc = parcels_[pl.parcel];
         Household& h = households_[pl.house];
-        Id credHouse = pl.creditor != kNone ? people_[pl.creditor].household : kNone;
-        bool drop = pc.gone || h.extinct;
+        // The creditor's house holds the debt and the land after him (his heir takes his accounts: life.cpp).
+        Id credHouse = pl.credHouse != kNone ? pl.credHouse : pl.creditor != kNone ? people_[pl.creditor].household : kNone;
+        bool drop = pc.gone || h.extinct || credHouse == kNone || households_[credHouse].extinct;
         if (!drop && pl.lease) {
             if (day_ >= pl.back) {
-                if (credHouse != kNone && pc.holder == credHouse) moveParcel(pl.parcel, pl.house, "租約到期收回");
+                if (pc.holder == credHouse) moveParcel(pl.parcel, pl.house, "租約到期收回");
                 if (inPlayerHouse(pl.house)) log(1, cardText("rival.lease_back", {{"parcel", parcelName(pc)}}));
                 drop = true;
             }
         } else if (!drop && month() == 8 && dayOfMonth() == 29 && year() >= pl.due) {
+            // fun-r9 review H2: only at the Michaelmas the card named, only once the Michaelmas screen has said the field
+            // is at stake, and only for a debt still half unpaid; the field then goes at its ordinary worth, the creditor
+            // paying back what it is worth above the debt.
+            auto ownedTo = [&](Id c) { return c != kNone && c != lord_ && people_[c].household == credHouse; };
             double owed = 0;
-            if (h.debt > 0.5 && h.creditor == pl.creditor) owed += h.debt;
-            if (h.heldDebt > 0.5 && h.heldCreditor == pl.creditor) owed += h.heldDebt;
-            if (owed > 0.5 && credHouse != kNone && pc.holder == pl.house) {
+            if (h.debt > 0.5 && ownedTo(h.creditor)) owed += h.debt;
+            if (h.heldDebt > 0.5 && ownedTo(h.heldCreditor)) owed += h.heldDebt;
+            const Id holder = households_[credHouse].head != kNone ? households_[credHouse].head : pl.creditor;
+            if (owed > 0.5 && !pl.warned && h.head != kNone && inPlayerHouse(pl.house)) {
+                ++i;  // not said yet: held over to the next Michaelmas
+                continue;
+            }
+            if (owed >= pl.amount * 0.5 && pc.holder == pl.house) {
+                const double worth = std::round(pc.acres * kAcreValue);
+                const double refund = std::max(0.0, worth - owed);
                 moveParcel(pl.parcel, credHouse, "抵押收去");
-                if (h.debt > 0.5 && h.creditor == pl.creditor) clearDebt(h);
-                else if (h.heldDebt > 0.5 && h.heldCreditor == pl.creditor) h.heldDebt = 0, h.heldCreditor = kNone;
-                if (inPlayerHouse(pl.house)) log(1, cardText("pledge.forfeit", {{"name", fullName(pl.creditor)}, {"parcel", parcelName(pc)}, {"owed", num(owed)}}));
+                if (h.debt > 0.5 && ownedTo(h.creditor)) clearDebt(h);
+                if (h.heldDebt > 0.5 && ownedTo(h.heldCreditor)) h.heldDebt = 0, h.heldCreditor = kNone;
+                if (refund >= 1) {
+                    Household& ch = households_[credHouse];
+                    ch.money -= refund;
+                    book(ch, "收抵押地補差價", -refund);
+                    h.money += refund;
+                    book(h, "抵押地補的差價", refund);
+                }
+                if (inPlayerHouse(pl.house))
+                    log(1, cardText("pledge.forfeit", {{"name", fullName(holder)}, {"parcel", parcelName(pc)}, {"owed", num(owed)},
+                                                       {"refund", refund >= 1 ? cardText("pledge.refund", {{"refund", num(refund)}}) : ""}}));
                 noteClash(pl.house, credHouse, cardText("clash.pledge", {{"parcel", parcelName(pc)}}));
             } else if (inPlayerHouse(pl.house) && pc.holder == pl.house) {
-                log(1, cardText("pledge.redeemed", {{"name", fullName(pl.creditor)}, {"parcel", parcelName(pc)}}));
+                if (owed > 0.5) log(1, cardText("pledge.half_paid", {{"name", fullName(holder)}, {"parcel", parcelName(pc)}, {"owed", num(owed)}}));
+                else log(1, cardText("pledge.redeemed", {{"name", fullName(holder)}, {"parcel", parcelName(pc)}}));
             }
             drop = true;
         }
@@ -761,10 +880,20 @@ void World::michaelmasScreen(Household& h) {
     auto credLine = [&](Id c, double amount, bool first) {
         if (amount <= 0.5) return;
         bool lord = c == kNone || c == lord_;
+        // When it falls due, as the books have it (a neighbour's loan after the winter is not due this year).
+        const int dueYear = first ? debtDueYear(h) : year() + 1;
+        const std::string when = dueYear <= year() ? cardText("mich.when_now") : dueYear == year() + 1 ? cardText("mich.when_next")
+                                                                                                        : cardText("mich.when_year", {{"year", std::to_string(dueYear)}});
         std::string next = lord ? (first && h.debtYears >= 2 ? cardText("mich.next_court") : first && h.debtYears >= 1 ? cardText("mich.next_ox") : cardText("mich.next_lord"))
-                                : (first && h.debtYears >= 1 ? cardText("mich.next_court") : cardText("mich.next_due"));
-        for (const auto& pl : pledges_)
-            if (pl.house == h.id && pl.creditor == c && !pl.lease) next = cardText("mich.next_pledge", {{"parcel", parcelName(parcels_[pl.parcel])}});
+                                : (first && h.debtYears >= 1 ? cardText("mich.next_court") : !first ? cardText("mich.next_held") : cardText("mich.next_due", {{"when", when}}));
+        const Id ch = lord || c == kNone ? kNone : people_[c].household;
+        for (auto& pl : pledges_)
+            if (pl.house == h.id && !pl.lease && ch != kNone && (pl.credHouse == ch || pl.creditor == c)) {
+                const std::string pw = pl.due <= year() ? cardText("mich.when_now") : pl.due == year() + 1 ? cardText("mich.when_next")
+                                                                                                           : cardText("mich.when_year", {{"year", std::to_string(pl.due)}});
+                next = cardText("mich.next_pledge", {{"parcel", parcelName(parcels_[pl.parcel])}, {"when", pw}});
+                if (pl.due <= year()) pl.warned = true;  // said on the screen before the reckoning
+            }
         creds.push_back((lord ? std::string("莊園") : fullName(c)) + " " + num(amount) + "（" + next + "）");
     };
     credLine(h.creditor, h.debt, true);
@@ -790,15 +919,18 @@ void World::michaelmasScreen(Household& h) {
     struct Offer { Id from = kNone, man = kNone; std::string office; double forgive = 0; bool manor = false; };
     std::vector<Offer> offers;
     auto mid = [](double m) { return m / 2; };
+    // Only a ballot the family really casts (its head, 21 or over), and never against a post it seeks itself.
+    const Id ballot = ballotHead();
     for (const char* oid : {"aletaster", "hayward"}) {
         const std::string id = oid;
         const Office* of = office(id);
-        if (!of) continue;
+        if (!of || ballot == kNone) continue;
         Id old = of->holder;
         std::vector<Id> cands = officeCandidates(id, old, mid);
         bool ours = false;
         for (Id c : cands) ours = ours || inPlayerHouse(people_[c].household);
-        if (ours || cands.size() < 2 || promises_.count({head, id})) continue;
+        for (const auto& wt : wants_) ours = ours || (wt.open && wt.kind == "office" && wt.office == id && inPlayerHouse(wt.house));
+        if (ours || cands.size() < 2 || promises_.count({ballot, id})) continue;
         for (Id c : cands) {
             const Id ch = people_[c].household;
             Id cred = kNone;
@@ -810,8 +942,12 @@ void World::michaelmasScreen(Household& h) {
         Id reeve = currentReeve();
         if (reeve != kNone && !inPlayerHouse(people_[reeve].household) && owedLord(h) >= 10 && offers.size() < 2) {
             Id pick = kNone;
+            // His own house's man if it stands, else the one he likes best.
             for (Id c : cands)
-                if (people_[c].household == people_[reeve].household || (pick == kNone || opinion(reeve, c) > opinion(reeve, pick))) pick = c;
+                if (people_[c].household == people_[reeve].household) pick = c;
+            if (pick == kNone)
+                for (Id c : cands)
+                    if (pick == kNone || opinion(reeve, c) > opinion(reeve, pick)) pick = c;
             bool dup = std::any_of(offers.begin(), offers.end(), [](const Offer& o) { return o.manor; });
             if (pick != kNone && !dup) offers.push_back({reeve, pick, id, std::min(20.0, std::floor(owedLord(h))), true});
         }
@@ -859,7 +995,7 @@ void World::michaelmasScreen(Household& h) {
         return;
     }
     const Offer& o = offers[static_cast<size_t>(t)];
-    promises_[{head, o.office}] = o.man;
+    promises_[{ballot, o.office}] = o.man;
     if (o.manor) {
         double off = reduceLordDebt(h, o.forgive);
         log(1, "〔" + cardText("mich.title", {{"year", std::to_string(year())}}) + "〕" + cardText("mich.done_reeve", {{"name", fullName(o.from)}, {"man", fullName(o.man)}, {"forgive", num(off)}}) +
@@ -878,7 +1014,8 @@ void World::michaelmasScreen(Household& h) {
                    "（選擇：答應）");
         log(1, "  記帳：欠 " + fullName(o.from) + " 的債 −" + num(off) + "。");
     }
-    favourLine(o.from, head, 4, cardText("favour.vote_deal", {{"year", std::to_string(year())}}));
+    // A trade, settled: the vote for the debt, no favour on top (fun-r9 review M3).
+    log(1, cardText("favour.settled", {{"name", fullName(o.from)}, {"why", cardText("favour.vote_deal")}}));
 }
 
 }  // namespace sim

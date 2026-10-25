@@ -196,6 +196,8 @@ struct WorldTest {
     // fun-r9 (src/exchange.cpp)
     static void setWeather(World& w, double v) { w.lastWeather_ = v; }
     static void famineAsk(World& w) { w.famineAsk(); }
+    static int famineAsks(const World& w) { return w.famineAsks_; }
+    static void clearFamineAsks(World& w) { w.famineAsks_ = 0, w.famineAsked_ = -1; }  // a fresh famine season
     static int grainExchange(World& w) { return w.grainExchange(w.households_[w.playerHousehold_]); }
     static void michaelmas(World& w) { w.michaelmasScreen(w.households_[w.playerHousehold_]); }
     static void setRival(World& w, Id house) {
@@ -206,6 +208,11 @@ struct WorldTest {
     }
     static void rivalStrike(World& w) { w.rivalStrike(); }
     static void addFine(World& w, Id house, double amount) { w.fines_.push_back({house, w.households_[house].head, amount, w.day_ + 150, false}); }
+    static double grainDaysBought(const World& w) { return w.grainDays_; }  // days of bread the family has bought (bookFood)
+    static void clearFines(World& w) { w.fines_.clear(); }
+    static std::vector<World::Pledge>& pledges(World& w) { return w.pledges_; }
+    static void settlePledges(World& w) { w.settlePledges(); }
+    static void setLastDeath(World& w, int day) { w.lastDeathDay_ = day; }
 };
 }  // namespace sim
 
@@ -432,8 +439,11 @@ int main() {
             runTo(w, 7, 0);
             w.setMoneyForTest(hh, 300);
             w.setFoodForTest(hh, 10);
+            const double bought = WorldTest::grainDaysBought(w);
             w.stepDay();  // month 7, day 0: thirty days to the harvest
-            CHECK(foodDays(w) > 30 && foodDays(w) < 47, "grain was bought past the harvest");
+            // What was bought (an event on the same day may also take grain from the barn).
+            const double to = 10 + WorldTest::grainDaysBought(w) - bought;
+            CHECK(to > 31 && to < 48, "grain was bought past the harvest");
         }
         // fun-r9 A: asked, the card is whom to ask (缺糧：跟誰開口): how far the barn is from the harvest and why it is
         // short; at most four lines, each 「對方｜他要什麼｜也牽動」 with at most two things touched, by name; the corn
@@ -503,8 +513,9 @@ int main() {
             double booked = bought();
             CHECK(cardAt(5, 10) == 0 && foodDays(w) > 35 && foodDays(w) < 47, "the rule did not buy the next month, or bought more");
             CHECK((w.ledger().count("買糧") ? w.ledger().at("買糧") : 0) < booked - 1, "the grain bought by the rule is not on the books");
-            // 買到收成 with only the rent and the fine in the purse: nothing of it goes on bread, and the family is asked
-            // (once) whom to turn to instead.
+            // 買到收成 keeps the rent and the fine back from what it buys, and the family is asked (once) whom to turn
+            // to when the purse cannot do both. But the month's bread comes before the rent (review H3): a barn going
+            // empty is filled for the month out of what was kept back, and that is said.
             runTo(w, 9, 0);
             w.issue({w.today(), "rule", w.actingHead(), "grain:harvest", kNone, kNone});
             w.runCommands();
@@ -513,8 +524,15 @@ int main() {
             const double keep = w.grainFloor(w.household(hh));
             CHECK(keep >= WorldTest::rent(w, hh) + 19, "the harvest rule's floor leaves out the rent or the entry fine");
             dealer = false;
-            CHECK(cardAt(3, 20, keep + 3) == 1 && w.household(hh).money >= keep - 0.5, "買到收成 spent the rent and the entry fine on bread");
-            CHECK(cardAt(4, 10, keep + 3) == 0, "the harvest rule's card came twice in a harvest year");
+            size_t from = w.chronicle().size();
+            CHECK(cardAt(3, 20, keep + 3) == 1, "買到收成 with the purse at its floor did not ask whom to turn to");
+            bool saidDip = false;
+            for (size_t i = from; i < w.chronicle().size(); ++i) saidDip = saidDip || w.chronicle()[i].text.find("糧比租要緊") != std::string::npos;
+            CHECK(foodDays(w) >= 30 && saidDip, "買到收成 let the barn run down to keep the rent, or did not say it spent the rent on bread");
+            CHECK(cardAt(4, 10, keep + 3) == 0 && foodDays(w) >= 30, "the harvest rule's card came twice in a harvest year, or the barn ran down");
+            // With enough above the floor for a month, the month is bought and the rent and fine stay in the purse.
+            CHECK(cardAt(5, 20, keep + w.dailyBread(hh) * 40 * 0.5) == 0 && foodDays(w) >= 30 && w.household(hh).money >= keep - 0.5,
+                  "買到收成 spent the rent and the entry fine on bread it could buy without them");
             dealer = true;
             // "Ask me": once in a harvest year.
             runTo(w, 9, 0);
@@ -536,10 +554,11 @@ int main() {
             w.setMoneyForTest(hh, 400);
             w.setFoodForTest(hh, 20);
             size_t lines = w.chronicle().size();
+            const double bought = WorldTest::grainDaysBought(w);
             w.stepDay();  // thirty days to the harvest
             bool said = false;
             for (size_t i = lines; i < w.chronicle().size(); ++i) said = said || w.chronicle()[i].text.find("夠吃到收成") != std::string::npos;
-            CHECK(cards == 0 && said && foodDays(w) > 40, "a small gap with a full purse was put to the family as a hunger card");
+            CHECK(cards == 0 && said && 20 + WorldTest::grainDaysBought(w) - bought > 41, "a small gap with a full purse was put to the family as a hunger card");
             w.setChooser({});
         }
         // Michaelmas with an empty purse: the reckoning card comes before any debt, and its levers work.
@@ -2491,6 +2510,8 @@ int main() {
         const double median = cover.empty() ? 0 : cover[cover.size() / 2];
         std::printf("ordinary year, 10 acres for 6-8 mouths: %zu harvests, median %.2f of the bread after the rent\n", cover.size(), median);
         CHECK(cover.size() >= 5 && median >= 1.0, "in an ordinary year a family of 6-8 on 10 acres cannot live on its own land");
+        // ...and no more than that with a margin (review M7): the land feeds the house, it does not make it rich.
+        CHECK(median <= 1.3, "in an ordinary year a family of 6-8 on 10 acres grows far more than it eats and pays");
     }
     // fun-r9 A, C, D, 4: the grain that changes hands, the rival, Michaelmas on one screen, the standing actions.
     {
@@ -2538,6 +2559,7 @@ int main() {
         auto famine = [&](const std::string& pick, double& moved, std::string& title) {
             World w = base;
             WorldTest::setWeather(w, 0.7);
+            WorldTest::clearFamineAsks(w);  // (the year played so far may have had its own famine and its asks)
             w.setFoodForTest(hh, 400);
             WorldTest::setRival(w, other);  // the one who comes to ask
             WorldTest::house(w, other).food = 0;
@@ -2558,7 +2580,7 @@ int main() {
             double give = 0, sell = 0, lend = 0;
             std::string t1, t2, t3;
             famine("送", give, t1);
-            famine("三倍價賣", sell, t2);
+            famine("高價賣", sell, t2);
             famine("借", lend, t3);
             CHECK(t1 == "荒年有人上門", "no one came to ask for grain in a famine");
             CHECK(give >= 5 && sell <= -5 && std::abs(lend) < 0.5, "the name did not move by real amounts on a famine gift and sale, or moved on a loan");
@@ -2575,6 +2597,99 @@ int main() {
             WorldTest::michaelmas(w);
             CHECK(title.find("年米迦勒節") != std::string::npos && sit.find("地租") != std::string::npos && sit.find("債主：") != std::string::npos,
                   "Michaelmas was not one screen with the rent and the creditors");
+        }
+        // review H2: a land pledge goes only at the Michaelmas the card named, only once the Michaelmas screen has said
+        // the field is at stake, and only for a debt still half unpaid; the creditor then pays what the field is worth
+        // above the debt.
+        if (other != kNone) {
+            auto runTo = [&](World& w, int month, int day) {
+                while (!w.gameOver() && !(w.month() == month && w.dayOfMonth() == day)) w.stepDay();
+            };
+            // 0 kept, 1 taken at the due Michaelmas, 2 taken a year early, -1 no case to make.
+            auto pledged = [&](double owedAtEnd, bool screen, double& refund) {
+                World w = base;
+                w.setChooser([](const World::ChoicePrompt&) { return -1; });
+                Id parcel = kNone;
+                int n = 0;
+                for (const auto& pc : w.parcels())
+                    if (!pc.gone && pc.holder == hh) {
+                        ++n;
+                        if (parcel == kNone || pc.acres < w.parcels()[parcel].acres) parcel = pc.id;
+                    }
+                if (n < 2) return -1;
+                Household& ph = WorldTest::house(w, hh);
+                ph.debt = 0, ph.creditor = kNone, ph.heldDebt = 0, ph.heldCreditor = kNone;
+                const Id cred = w.household(other).head;
+                WorldTest::addDebt(w, hh, 100, cred);
+                World::Pledge pl;
+                pl.house = hh, pl.creditor = cred, pl.parcel = parcel, pl.credHouse = other, pl.amount = 100;
+                pl.due = w.debtDueYear(w.household(hh));
+                if (pl.due != w.year() + 1) return -1;  // a loan after the winter is due at the Michaelmas after next
+                WorldTest::pledges(w).push_back(pl);
+                runTo(w, 8, 29);
+                WorldTest::settlePledges(w);
+                if (w.parcels()[parcel].holder != hh) return 2;
+                w.stepDay();
+                runTo(w, 8, 29);  // the due Michaelmas, before it runs
+                if (w.parcels()[parcel].holder != hh || WorldTest::pledges(w).empty()) return -1;  // (lost some other way)
+                Household& ph2 = WorldTest::house(w, hh);
+                ph2.debt = owedAtEnd, ph2.creditor = cred, ph2.heldDebt = 0, ph2.heldCreditor = kNone;
+                w.setMoneyForTest(hh, 0);
+                if (screen) WorldTest::michaelmas(w);
+                WorldTest::settlePledges(w);
+                refund = w.household(hh).money;
+                return w.parcels()[parcel].holder == hh ? 0 : 1;
+            };
+            double refund = 0, none = 0;
+            const int unsaid = pledged(100, false, none), taken = pledged(100, true, refund), half = pledged(30, true, none);
+            std::printf("pledge: unsaid %d, said %d (refund %.0f), mostly paid %d\n", unsaid, taken, refund, half);
+            CHECK(unsaid != -1 && taken != -1 && half != -1, "no case to try a land pledge on");
+            CHECK(unsaid == 0, "a pledged field was taken before the Michaelmas screen said it was at stake");
+            CHECK(taken == 1 && refund >= 0, "a pledged field still unpaid at the Michaelmas named was not taken");
+            CHECK(half == 0, "a pledged field was taken for a debt mostly paid");
+        }
+        // review H4: the rival does not strike a house with a full purse, whoever has died; when he does, the first line
+        // of the card is the refusal, and the field he asks for is a quarter of the holding at most.
+        if (other != kNone) {
+            int rich = 0, poor = 0;
+            bool refusalFirst = true, small = true;
+            for (int k = 0; k < 2; ++k) {
+                World w = base;
+                while (!w.gameOver() && w.month() < 7) w.stepDay();  // half a year after the hand-over
+                WorldTest::setRival(w, other);
+                WorldTest::house(w, other).money = 5000;
+                w.setMoneyForTest(hh, k == 0 ? 5000 : 0);
+                WorldTest::setLastDeath(w, w.today());
+                const double acres = w.household(hh).acres;
+                w.setChooser([&](const World::ChoicePrompt& p) {
+                    if (p.title.find("宿敵上門") == std::string::npos) return -1;
+                    ++(k == 0 ? rich : poor);
+                    refusalFirst = refusalFirst && !p.options.empty() && p.options[0].rfind("不", 0) == 0;
+                    return -1;
+                });
+                for (int t = 0; t < 30 && !w.rival().struck; ++t) WorldTest::rivalStrike(w);
+                small = small && w.household(hh).acres >= acres * 0.75 - 0.01;
+            }
+            std::printf("rival strike: full purse %d, empty purse %d\n", rich, poor);
+            CHECK(rich == 0, "the rival struck a house with a full purse");
+            CHECK(poor <= 1 && refusalFirst && small, "the rival struck twice, or the card's first line gives the land away, or he took more than a quarter");
+        }
+        // review H1: what the rules bring is always asked, however often it comes in a generation (an entry fine falling
+        // due three times is three cards, not two and then silence).
+        {
+            World w = base;
+            int asked = 0;
+            w.setChooser([&](const World::ChoicePrompt& p) {
+                asked += p.title == "入地費";
+                return -1;
+            });
+            for (int k = 0; k < 3; ++k) {  // three fines in turn, each falling due with an empty purse
+                WorldTest::clearFines(w);
+                WorldTest::addFine(w, hh, 50);
+                w.setMoneyForTest(hh, 0);
+                WorldTest::runEvent(w, "entry_fine_due", w.playerHead(), kNone);
+            }
+            CHECK(asked == 3, ("an entry fine falling due was not always asked: " + std::to_string(asked) + " of 3").c_str());
         }
         // Standing actions: grain beyond what must be kept can always be sold, and money can always pay a debt.
         {

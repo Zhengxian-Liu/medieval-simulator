@@ -42,7 +42,7 @@
       {"text": "扛一袋麥子去，給{target_home}家辦喪宴撐場面（約 10 天的糧，佔一段空閒；全村都看在眼裡）",
        "conditions": {"not": {"food_days_lt": 120}},
        "log": "{name}扛著一袋麥子去{target_home}家守靈。喪宴上的麵包是用{house}家的麥子烤的，來的人都知道。",
-       "effects": [{"food_days": -10}, {"spend_time": 1}, {"occasion": {"came": true, "value": 12, "mod": "came_to_wake"}}, {"reputation": 1}, {"need": {"social": 15, "spirit": 10}}],
+       "effects": [{"give_food_target": 10}, {"spend_time": 1}, {"occasion": {"came": true, "value": 12, "mod": "came_to_wake"}}, {"reputation": 1}, {"need": {"social": 15, "spirit": 10}}],
        "ai": {"base": 3, "traits": {"generous": 8, "gregarious": 3, "greedy": -6}, "if": [{"cond": {"news_link_ge": 0.6}, "add": 4}]}},
       {"text": "替{target_first}點一對蠟燭、請神父多念一段（4 便士，佔一段空閒；{target_home}家會記得）",
        "conditions": {"money_ge": 4},
@@ -92,7 +92,7 @@
       {"text": "扛一桶麥酒、一袋麵粉去辦喜宴（約 10 天的糧，佔一段空閒；全村都看在眼裡）",
        "conditions": {"not": {"food_days_lt": 120}},
        "log": "{name}扛著一桶麥酒、一袋麵粉去喝{target}的喜酒。那天喜宴上的酒，有一半是{house}家的。",
-       "effects": [{"food_days": -10}, {"spend_time": 1}, {"occasion": {"came": true, "value": 12, "mod": "wedding_gift"}}, {"reputation": 1}, {"need": {"social": 25}}],
+       "effects": [{"give_food_target": 10}, {"spend_time": 1}, {"occasion": {"came": true, "value": 12, "mod": "wedding_gift"}}, {"reputation": 1}, {"need": {"social": 25}}],
        "ai": {"base": 3, "traits": {"generous": 8, "gregarious": 4, "greedy": -6}}},
       // A wedding feast before an election: the whole village is at the tables.
       {"text": "喜宴上請滿桌的人喝酒，替家裡攢人緣（8 便士，佔一段空閒；到選村裡的差事時，各家都記得）",
