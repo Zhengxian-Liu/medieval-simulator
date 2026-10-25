@@ -114,6 +114,10 @@ RunResult runOne(const Defs& defs, Config cfg, int years) {
         }
     }
     r.counters = w.counters();
+    // Generations played (src/kin.cpp targets are per generation): heads since the hand-over, not one only holding for a child.
+    for (size_t i = 0; i < dyn.heads.size() && i < dyn.headSince.size(); ++i)
+        if (dyn.headSince[i] >= w.handedOver() && !dyn.heldFor.count(i)) ++r.counters["kin_gens"];
+    ++r.counters["kin_gens"];  // the one handed the family counts as the first
     return r;
 }
 
@@ -273,6 +277,14 @@ int main(int argc, char** argv) {
     md << "\n往上爬一階（每局平均，家族 / 全村其他）：";
     for (int k = 1; k <= 3; ++k)
         md << World::standingName(k) << " " << cnt("rise_family:" + std::to_string(k)) << " / " << cnt("rise:" + std::to_string(k)) << "　";
+    // The drive inside the family (src/kin.cpp, design/stages-and-drive.md 六): per run, and per generation for the family.
+    md << "\n\n## 家裡的 drive（每局平均；kin_player:* 是玩家家裡、kin_village:* 是村裡別家）\n\n";
+    for (const auto& [k, v] : counters)
+        if (k.rfind("kin", 0) == 0) md << k << " " << v / n << "　";
+    if (double g = cnt("kin_gens"); g > 0)
+        md << "\n- 每代：嚴重的家內衝突 " << cnt("kin_player:serious") / g << "，下毒或謀殺（含未遂）" << cnt("kin_player:violent") / g
+           << "（另有起了殺心、風聲已出卻被攔下的 " << cnt("kin_player:violent_stopped") / g << "）"
+           << "，聽到村裡別家的事 " << cnt("kin_heard") / g << " 則\n";
     md << "\n\n## 人心（每局平均）\n\n";
     md << "- 幫朋友 " << cnt("help_given") << " 次，其中幫到你家 " << cnt("help_to_player") << " 次\n";
     md << "- 決定者：問了 " << cnt("npc_decider:asked") << " 次，回答 " << cnt("npc_decider:answered") << " 次\n";

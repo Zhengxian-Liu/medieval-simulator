@@ -430,6 +430,7 @@ void World::kill(Id id, const std::string& cause) {
     // Died away from home: word comes to the one keeping the house, who decides what is done for them.
     if (wordAway) emit({"bereaved:away", kNone, actingHead(), id, false, 0});
     inheritMemories(id);
+    dowerReturns(id);  // a widow's third goes back to the house it came from (src/kin.cpp)
     if (hid == kNone) return;
     Household& h = households_[hid];
     emit({"death", kNone, id, p.spouse != kNone && people_[p.spouse].alive() ? p.spouse : kNone, h.head == id});
@@ -517,8 +518,10 @@ void World::obituary(Id id) {
 Id World::heirOf(const Household& h, Id dead) const {
     const Person& d = people_[dead];
     if (h.ward != kNone && h.ward != dead && wardHeld(h)) return h.ward;
+    // A felon takes nothing (src/kin.cpp): hanged, fled the realm, or named so by the court.
+    auto barred = [&](Id x) { return x != kNone && people_[x].flags.count("felon") > 0; };
     auto inHouse = [&](Id x) {
-        if (x == kNone || x == dead || !people_[x].alive()) return false;
+        if (x == kNone || x == dead || !people_[x].alive() || barred(x)) return false;
         const Person& q = people_[x];
         if (q.home != kNone && q.home != h.id) return false;  // a servant from another house: theirs, not ours
         if (q.household == h.id || q.home == h.id) return true;
@@ -539,6 +542,8 @@ Id World::heirOf(const Household& h, Id dead) const {
     for (Id c : d.children)
         if ((d.dynasty == kNone || people_[c].dynasty == d.dynasty) && !(people_[c].flags.count("disowned") && people_[c].father == dead))
             children.push_back(c);
+    // An heir named in the lord's court (src/kin.cpp) comes before the eldest, while they live and are the house's.
+    if (h.head == dead && h.passBy == "named" && inHouse(h.passHeir)) return h.passHeir;
     heir = eldest(children, Sex::Male);
     if (heir == kNone) {
         std::vector<Id> grandsons;
@@ -548,7 +553,7 @@ Id World::heirOf(const Household& h, Id dead) const {
     }
     if (heir == kNone)
         for (Id m : h.members)
-            if (m != dead && people_[m].alive() && people_[m].flags.count("designated_heir") && people_[m].home == kNone &&
+            if (m != dead && !barred(m) && people_[m].alive() && people_[m].flags.count("designated_heir") && people_[m].home == kNone &&
                 (heir == kNone || people_[m].birthDay < people_[heir].birthDay))
                 heir = m;
     if (heir == kNone) heir = eldest(children, Sex::Female);
@@ -604,7 +609,7 @@ Id World::heirOf(const Household& h, Id dead) const {
         Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
         for (const auto& q : people_)
             // Blood, not name: a wife takes her husband's name but is no kin of his brother's.
-            if (q.alive() && q.id != dead && closeKin(q.id, line) && q.household != kNone && q.household != h.id &&
+            if (q.alive() && !barred(q.id) && q.id != dead && closeKin(q.id, line) && q.household != kNone && q.household != h.id &&
                 (h.id != lordHouseId || q.dynasty == h.dynasty) &&  // the manor stays in the lord's own family
                 q.household != lordHouse && households_[q.household].house != "manor" &&  // the manor is not given up for a cottage
                 households_[q.household].head == q.id && households_[q.household].ward == kNone &&  // not one holding for a child
@@ -612,16 +617,16 @@ Id World::heirOf(const Household& h, Id dead) const {
                 q.occupation != "priest" && (heir == kNone || nearer(q, people_[heir])))
                 heir = q.id;
     }
-    if (heir == kNone && d.spouse != kNone && people_[d.spouse].alive() && people_[d.spouse].household == h.id) heir = d.spouse;
+    if (heir == kNone && d.spouse != kNone && people_[d.spouse].alive() && !barred(d.spouse) && people_[d.spouse].household == h.id) heir = d.spouse;
     if (heir == kNone)
         for (Id m : h.members)
-            if (m != dead && people_[m].alive() && people_[m].home == kNone &&
+            if (m != dead && !barred(m) && people_[m].alive() && people_[m].home == kNone &&
                 (heir == kNone || people_[m].birthDay < people_[heir].birthDay))
                 heir = m;
     // Last, a child settled away for good (a master in town, a wife in town): better than the land going back.
     if (heir == kNone)
         for (Id c : d.children)
-            if (c != dead && isAway(people_[c]) && people_[c].awayFrom == h.id && people_[c].station != "priest_away" &&
+            if (c != dead && !barred(c) && isAway(people_[c]) && people_[c].awayFrom == h.id && people_[c].station != "priest_away" &&
                 people_[c].station != "monastery" && people_[c].station != "nunnery" &&  // under vows: no land, no line
                 (heir == kNone || people_[c].birthDay < people_[heir].birthDay))
                 heir = c;
@@ -661,6 +666,7 @@ World::Estate World::onHeadDied(Household& h, Id dead) {
                 people_[m].flags.erase("in_service");
                 moveTo(m, home);
             }
+        dowerHouseEnds(h.id);  // a widow's third held here goes back first (src/kin.cpp)
         double lost = moveLand(h.id, kNone, h.acres, LandPick::CustomaryFirst, "絕戶後收回");
         log(2, dynasties_[h.dynasty].surname + " 家絕戶了，" + std::to_string(int(lost)) +
                    " 畝地回到領主手上。");
@@ -766,6 +772,8 @@ World::Estate World::onHeadDied(Household& h, Id dead) {
     if (!left.regent) {
         inheritRegard(dead, heir);
         if (h.ward != kNone) inheritRegard(dead, h.ward);
+        // The name passes in part, by a rule the hand-over scene says (fun-r9: 「+35 → 0」 at the hand-over).
+        passReputation(dead, h.ward != kNone ? h.ward : heir);
     }
     if (player && outside(h.ward != kNone ? h.ward : heir)) {
         log(1, "房子和地傳給了 " + fullName(heir) + "，可是" + fullName(heir) + "不姓 " + dynasties_[playerDynasty_].surname + "。");
@@ -777,6 +785,7 @@ World::Estate World::onHeadDied(Household& h, Id dead) {
     for (Id it : h.items) items_[it].owners.push_back(heir);
     if (!player) {
         carryPlans(dead, heir, false);  // a village house: its new head takes up what the old one had in hand
+        if (!left.regent) applyPassing(h, dead, heir);  // the younger sons and the widow get what was settled
         return left;
     }
 
@@ -826,6 +835,7 @@ World::Estate World::onHeadDied(Household& h, Id dead) {
     }
     // What the dead head did not live to finish stays with the family.
     if (!d.ambition.empty()) dynasties_[playerDynasty_].regret = d.ambition;
+    if (!left.regent) applyPassing(h, dead, heir);  // the younger sons and the widow get what was settled (src/kin.cpp)
     left.scene = heir;
     return left;
 }
@@ -897,6 +907,7 @@ void World::takeOverScene(const Household& h, Id newHead, Id from, bool regencyE
         for (size_t i = 0; i < away.size() && i < 3; ++i) t += (i ? "、" : "") + away[i];
     }
     log(1, "【接下的】" + lead + (h.ward != kNone && h.ward != newHead ? np.firstName + "替" + people_[h.ward].firstName + "持家，" : np.firstName) + "接下：" + t + "。");
+    if (!repPassed_.empty()) log(1, "  " + repPassed_), repPassed_.clear();
     if (from == kNone) return;
     // What the generation before saw to its end, and what the new head carries of the one before.
     // Four at most: the quarrels and the ambitions first, then the roads; of each, the latest. Told in the order they came.
@@ -974,6 +985,8 @@ void World::mergeHousehold(Household& from, Household& to, const std::string& ho
         people_[x].household = to.id;
         to.members.push_back(x);
     }
+    for (auto& d : dowers_)  // a widow's third goes with the land into the house it merges with
+        if (d.open && d.in == from.id) d.in = to.id;
     for (Id it : from.items) {
         items_[it].household = to.id;
         to.items.push_back(it);

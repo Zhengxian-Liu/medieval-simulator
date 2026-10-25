@@ -1867,39 +1867,30 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 double want = v.numberOr("acres", 8);
                 double vac = std::min(w.vacantAcres(), want);
                 double own = std::clamp(want - vac, 0.0, std::max(0.0, w.households_[hid].acres - 8));
-                // No land to rent or spare: the son still goes, to a cottage and its garden, and lives by day labour.
-                const bool croft = vac + own < 2;
-                if (croft) vac = own = 0;
+                if (vac + own < 2) vac = own = 0;  // no land to rent or spare: a cottage and its garden, and day labour
                 double gift = std::min(v.numberOr("money", 30), std::max(0.0, w.households_[hid].money));
-                Id nh = w.addHousehold(sub.dynasty, 0, gift);  // households_ may move: by index from here on
-                w.households_[hid].money -= gift;
-                w.book(w.households_[hid], "給" + sub.firstName + "分家的錢", -gift);
-                if (vac >= 1) w.moveLand(kNone, nh, vac, LandPick::CustomaryFirst, "分家時向領主租來");
-                if (own >= 1) w.moveLand(hid, nh, own, LandPick::CustomaryFirst, "分給" + sub.firstName + "成家");
-                std::vector<Id> going{sub.id};
-                bool wife = sub.spouse != kNone && w.people_[sub.spouse].alive() && w.people_[sub.spouse].household == hid;
-                if (wife) going.push_back(sub.spouse);
-                int kids = 0;
-                for (Id c : sub.children)
-                    if (w.people_[c].alive() && w.people_[c].household == hid && w.people_[c].home == kNone) going.push_back(c), ++kids;
-                Household& old = w.households_[hid];
-                Household& fresh = w.households_[nh];
-                for (Id who : going) {
-                    if (who == kNone || w.people_[who].household != hid) continue;
-                    old.members.erase(std::remove(old.members.begin(), old.members.end(), who), old.members.end());
-                    w.people_[who].household = nh;
-                    fresh.members.push_back(who);
+                // fun-r9 (seed 118): the price is said before the son goes, not found in a 「·」 line after (8 acres).
+                if (w.inPlayerHouse(hid)) {
+                    const Household& ph = w.households_[hid];
+                    auto n = [](double x) { return std::to_string(static_cast<long>(std::lround(x))); };
+                    std::string sit = "給 " + w.fullName(sub.id) + " 分家：" +
+                                      (vac + own < 2 ? std::string("村裡沒有空地，自家的地也分不出來，只能給他一間小屋和屋後的菜園，靠做工過活；")
+                                                     : (vac >= 1 ? "向領主租村裡的空地 " + n(vac) + " 畝" : std::string()) + (vac >= 1 && own >= 1 ? "、" : "") +
+                                                           (own >= 1 ? "從自家的地分出 " + n(own) + " 畝" : std::string()) + "；") +
+                                      "再給 " + n(gift) + " 便士起家。你家的地從 " + n(ph.acres) + " 畝剩 " + n(ph.acres - own) + " 畝（平常年景收的糧夠家裡吃 " +
+                                      n(keepsHouse(ph.acres - own) / std::max(1.0, w.consumption(ph) * kDaysPerMonth)) + " 個月，" + sub.firstName +
+                                      "一家搬走後少幾張嘴），錢從 " + n(ph.money) + " 剩 " + n(ph.money - gift) + " 便士。";
+                    std::vector<std::string> opts = {"照這樣分（地 −" + n(own) + " 畝，錢 −" + n(gift) + "）"};
+                    if (own >= 1) opts.push_back("只給錢和村裡的空地，自家的地不動（" + n(vac) + " 畝空地、" + n(gift) + " 便士）");
+                    opts.push_back("先不分了");
+                    int r = w.askPlayer("分家", sit, opts);
+                    if (r == static_cast<int>(opts.size()) - 1) {
+                        w.log(1, "〔分家〕" + sub.firstName + "的分家先擱下了。（選擇：先不分了）");
+                        continue;
+                    }
+                    if (r == 1 && own >= 1) own = 0;
                 }
-                fresh.head = sub.id;
-                w.settleAsHead(sub.id);
-                double food = std::min(old.food * 0.3, w.consumption(fresh) * 120);
-                fresh.food = food;
-                old.food -= food;
-                fresh.firewood = 20;
-                w.noteLife(sub.id, "分家自立門戶");
-                if (w.inPlayerHouse(hid))
-                    w.log(1, "  " + w.fullName(sub.id) + (wife && kids ? " 帶著妻兒" : wife ? " 帶著妻子" : kids ? " 帶著孩子" : " 一個人") + "搬出去，自立門戶：" + (croft ? std::string("村裡沒有空地，自家的地也分不出來，只有屋後一塊菜園，靠做工過活；") : std::to_string(int(fresh.acres)) + " 畝地、") +
-                                 std::to_string(int(gift)) + " 便士。往後他家是另一戶，可還是你家的血脈。");
+                w.setUpSon(hid, sub.id, own, vac, gift, "分給" + sub.firstName + "成家");
             } else if (k == "lease_demesne") {
                 // Take the lord's own fields on a lease of so many years.
                 // One lease at a time; the deposit goes to the manor, as much of it as the house still has.

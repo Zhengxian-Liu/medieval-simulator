@@ -42,6 +42,7 @@ World::World(const Defs& defs, Config cfg)
     rngNews_.reseed(cfg.seed, hashString("news"));
     rngLand_.reseed(cfg.seed, hashString("land"));
     rngContest_.reseed(cfg.seed, hashString("contest"));
+    rngKin_.reseed(cfg.seed, hashString("kin"));
     baseParams_ = {
         {"mortality_mult", 1.0}, {"harvest_mult", 1.0}, {"grain_price", 0.4},
         {"wage_mult", 1.0},      {"rent_mult", 1.0},    {"plague_monthly", 0.0},
@@ -85,6 +86,9 @@ void World::runYears(int years) {
 
 void World::stepDay() {
     if (gameOver_) return;
+    // Room for the houses a day can found (sons set up, a widow's cottage) without moving the ones in hand: a
+    // Household& held across a succession stays good (src/kin.cpp).
+    if (households_.capacity() < households_.size() + 64) households_.reserve(households_.size() * 2 + 64);
     EventRunner events(*this);
     if (dayOfMonth() == 0 && month() % 3 == 0) rollSeason();
     processCommands();
@@ -115,6 +119,7 @@ void World::stepDay() {
             events.pulse("yearly");
             pruneOpinions();
         }
+        if (month() == 1) yearlyKin();
         if (month() == 7) electReeve();
         if (month() == 8) harvest();
         if (month() == 10) yearlyTax();
@@ -143,6 +148,7 @@ void World::stepDay() {
         monthlyPlans();
         npcStartPlans();
         actOnIntentions();
+        monthlyKin();
         checkStandings();
         monthlyAmbition();
         // fun-r9: the rival of this generation, the famine's askers, the rival's blow, leases running out.

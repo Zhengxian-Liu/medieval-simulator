@@ -1301,6 +1301,8 @@ std::vector<World::AgendaItem> World::seasonAgenda(bool all) {
         }
     }
 
+    // The family's own drive (src/kin.cpp): what is brewing at home, how the holding will pass, the ladder in the head's hand.
+    if (!hiding) kinAgenda(items);
     std::stable_sort(items.begin(), items.end(), [](const AgendaItem& x, const AgendaItem& y) { return x.rank > y.rank; });
     // One plan once: the ambition's step may be the match or the courting found below it.
     // And every item once: two hungry houses can name the same child to take in (help_take:<child>).
@@ -1312,7 +1314,7 @@ std::vector<World::AgendaItem> World::seasonAgenda(bool all) {
     // Standing actions (sell spare grain, pay a debt) are always there, beside the four.
     std::vector<AgendaItem> standing;
     if (!all) {
-        auto isStanding = [](const AgendaItem& x) { return x.id == "sell_grain" || x.id.rfind("pay_debt:", 0) == 0; };
+        auto isStanding = [](const AgendaItem& x) { return x.id == "sell_grain" || x.id.rfind("pay_debt:", 0) == 0 || x.kind == "kin"; };
         std::copy_if(items.begin(), items.end(), std::back_inserter(standing), isStanding);
         items.erase(std::remove_if(items.begin(), items.end(), isStanding), items.end());
     }
@@ -1327,6 +1329,7 @@ std::vector<World::AgendaItem> World::seasonAgenda(bool all) {
     }
     for (auto& a : items) {
         double money = 0;
+        if (a.kind == "kin") continue;  // a card of its own, which says what it costs (time included)
         if (a.kind == "interact")
             for (const auto& ev : defs_.events)
                 if (ev.id == a.event) money = ev.interaction.numberOr("money", 0);
@@ -1433,6 +1436,10 @@ void World::doAgenda(const std::string& id) {
         log(1, "〔這一季的事〕" + a.done);
         EventRunner er(*this);
         er.apply(Json::parse(a.effects), people_[head], a.target);
+        return;
+    }
+    if (a.kind == "kin") {
+        doKinAgenda(a);
         return;
     }
     if (!a.open) {

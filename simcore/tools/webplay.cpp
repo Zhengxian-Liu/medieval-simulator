@@ -370,7 +370,7 @@ public:
         // The family's turning points: births, deaths, marriages, the ambition and posts, contests, debts, standing.
         for (const char* k : {"出生", "生了", "去世", "過世", "夭折", "死了", "死於", "娶了", "嫁給", "嫁到", "入贅", "成了親", "訂了親", "立志", "志向",
                               "達成", "當上", "選上", "落選", "連任", "爭到", "拿到了", "讓給", "輸給", "贏了", "欠債", "借了", "借來", "還清", "地位",
-                              "繼承", "當了家", "接下", "贖身", "自由人", "法庭", "判了", "罰", "世仇", "結了怨", "和好", "開局"})
+                              "繼承", "當了家", "接下", "贖身", "自由人", "法庭", "判了", "罰", "世仇", "結了怨", "和好", "開局", "【命案】", "【判決】", "【官司】", "【分家", "【寡婦產】", "【養老】", "【離家】", "【血仇】", "【避難】", "【沒收】", "【謀害】", "【家醜】", "【懸案】", "【風聲】", "〔身後的家業〕"})
             if (t.find(k) != std::string::npos) return true;
         return false;
     }
@@ -379,7 +379,7 @@ public:
     static bool topLine(const std::string& t) {
         for (const char* k : {"當上了", "當選", "選上", "落選", "連任", "【死後稅】", "牽走", "【欠債】", "【抵押】", "【租約】", "還清", "債清了", "劃掉了",
                               "欠債 ", "借了", "【宿敵】", "回到家裡", "回村", "回來了", "離家", "幫傭去了", "打了個小包袱", "出發", "入贅", "嫁到", "嫁給",
-                              "娶了", "出生", "生下了", "去世", "夭折", "當了家"})
+                              "娶了", "出生", "生下了", "去世", "夭折", "當了家", "【命案】", "【判決】", "【官司】", "【分家", "【寡婦產】", "【沒收】", "【謀害】", "【血仇】", "【避難】", "【懸案】"})
             if (t.find(k) != std::string::npos) return true;
         return false;
     }
@@ -643,7 +643,7 @@ public:
             for (const auto& r : rv.recent) recent.push_back(str(r));
             o.raw("reputation", Obj().n("value", rv.value).text("word", rv.word).text("effect", rv.effect).raw("recent", arr(recent))
                                     .text("mend", rv.mend).done());
-            o.text("ladder", w.ladderText()).text("regret", w.regretText());
+            o.text("ladder", w.ladderText()).text("regret", w.regretText()).text("inherit", w.inheritText());
         }
         o.n("time_left", w.timeLeft());
         // fun-r9 D: this generation's rival house, what it contends with the family for now, and where they have met.

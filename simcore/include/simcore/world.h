@@ -209,6 +209,13 @@ struct Household {
     double focusYield = 0; // this year's 年度重心 and side roads against the defaults (more hands in the field, a pack to the fair)
     Id ward = kNone;       // the heir under 16 while a widow or kinsman holds the land for them (寡婦產 / 代管)
     Id wardLine = kNone;   // the head whose heir the ward is: should the ward be lost, the land goes to the next of that line
+    // How the holding is to pass (src/kin.cpp, design/stages-and-drive.md 三): "" = by custom (the eldest son takes it
+    // all, the younger given a little coin); eldest | split | named. With eldest, what the younger sons get: cash |
+    // trade | portion. named: the heir the lord's court accepted (passHeir), the fine paid. passSince: day it was settled.
+    std::string passBy, passYounger;
+    Id passHeir = kNone;
+    int passSince = -1;
+    int passAsked = -1;    // the year the head was last asked (once a generation, or when the sons change)
 };
 
 // A quarrel between two families that grows by stages (Crusader Kings-style story arc).
@@ -960,6 +967,53 @@ public:
     // Instrumentation for the stats tool (not part of the digest): event fires, plan outcomes.
     const std::map<std::string, int>& counters() const { return counters_; }
 
+    // --- kin.cpp: the drive inside the family (design/stages-and-drive.md 三、四、六)
+    // How the player's holding will pass, priced as things stand now: who gets what, the widow's third, and how the
+    // name passes to the heir (for the state's 「身後的家業」 line).
+    std::string inheritText() const;
+    // A grievance someone holds against one of their own (or the rival against the family), worked out each year from
+    // how things stand: what is blocked, the slights, the debts, the temper. It climbs a ladder one rung at a time,
+    // and every rung past a complaint is seen coming (signs) before it lands.
+    enum Rung { kNothing = 0, kComplain, kSue, kLeave, kSteal, kCollude, kPoison, kMurder };
+    struct Grievance {
+        Id who = kNone, against = kNone;
+        double motive = 0;
+        std::string why;          // the reasons, in words, strongest first
+        std::string claim;        // what a court could be asked for ("" when nothing a court hears)
+        double merit = 0;         // how good that claim is by custom (0..1)
+        int rung = 0;             // the highest rung taken
+        int signs = 0;            // signs that went round before an act
+        int lastSign = -100000;
+        int lastStep = -100000;
+        int pending = 0;          // a rung decided on and coming (its signs are out), on pendingDay
+        int pendingDay = -1;
+        int watchUntil = -1;      // the target's side keeps an eye on them
+        int calmUntil = -1;       // placated: the grievance sleeps until then
+        bool open = true;
+        double bitter = 0;        // what the climb itself left (a suit lost, caught, sent off), fading a little each year
+        std::string bitterWhy;
+        std::string chain;        // cause → signs → acts, for the chronicle's 「為什麼」
+    };
+    const std::vector<Grievance>& grievances() const { return griefs_; }
+    // The old parent's keep (養老契約): the holding handed to the heir in the manor court for written terms.
+    struct Upkeep {
+        Id parent = kNone, heir = kNone, house = kNone;
+        int since = 0;
+        int state = 0;            // 0 kept, 1 cut short, 2 turned out
+        int breaches = 0;
+        int ordered = -1;         // the court ordered the terms kept on this day
+        bool open = true;
+    };
+    const std::vector<Upkeep>& upkeeps() const { return upkeeps_; }
+    // The widow's dower: a third of the holding for her life, back to the house it came from when she dies.
+    struct Dower {
+        Id widow = kNone, from = kNone, in = kNone;  // in: the household the acres are held in now
+        double acres = 0;
+        int since = 0;
+        bool open = true;
+    };
+    const std::vector<Dower>& dowers() const { return dowers_; }
+
 private:
     friend class EventRunner;
     friend struct WorldTest;  // tests/tests.cpp: sets up the cases a run rarely reaches (a rich head, a manor short of coin)
@@ -1531,6 +1585,48 @@ private:
     int famineAsked_ = -1;               // the season the last famine asker came
     int famineAsks_ = 0, famineYear_ = -1;
     std::vector<Id> livingInVillage() const;
+
+    // kin.cpp (design/stages-and-drive.md 三、四)
+    std::vector<Grievance> griefs_;
+    std::vector<Upkeep> upkeeps_;
+    std::vector<Dower> dowers_;
+    Rng rngKin_;
+    struct Share { Id who = kNone; double acres = 0, money = 0; std::string what; };  // what one son gets
+    // What the passing of a holding left someone owed or short of (a son passed over, the heir with a widow's third
+    // out of the house): it feeds their grievance for years, fading.
+    struct PassGrudge { Id who = kNone, against = kNone; double points = 0; int day = 0; std::string why, claim; double merit = 0; };
+    std::vector<PassGrudge> passGrudges_;
+    std::vector<Share> passPlan(const Household& h, Id head, const std::string& by, const std::string& younger, Id named) const;
+    std::string passWords(const Household& h, Id head, const std::string& by, const std::string& younger, Id named) const;
+    double dowerOf(const Household& h, Id head, Id heir) const;  // the widow's third that would leave the house (0: none, or it stays with her son)
+    std::vector<Id> sonsOf(const Household& h, Id head) const;   // living sons of the head, eldest first
+    double namingFine(const Household& h) const;
+    void yearlyKin();                    // the turn of the year: settle the passing, the old parent's keep, every grievance
+    void monthlyKin();                   // acts coming due, the keep kept or not
+    void settlePassing(Household& h, bool change);  // the head chooses how the holding passes (asked of the player)
+    void applyPassing(Household& h, Id dead, Id heir);  // onHeadDied: the younger sons and the widow get what was settled
+    Id setUpSon(Id hid, Id son, double ownAcres, double vacantAcres, double money, const std::string& how);
+    void dowerReturns(Id widow);         // the widow dies: her third goes back
+    void dowerMoves(Id widow, Id to);    // the widow marries again: her third goes with her
+    void passReputation(Id from, Id to);  // the name passes in part (shown on screen)
+    void considerUpkeep(Household& h);   // an old head may hand over in the court for terms
+    void upkeepYear(Upkeep& u);          // the heir keeps the terms, or not
+    void kinMotives();                   // every grievance worked out afresh from the state
+    void kinDecide(Grievance& g);        // the ladder: the rules list, the decider picks
+    void kinSign(Grievance& g, int rung);  // what is seen before an act
+    void kinAct(Grievance& g, int rung);
+    void kinRespond(Grievance& g);       // the target's side answers a sign (an NPC by the rules, the player on a card)
+    bool kinCourt(Id plaintiff, Id defendant, const std::string& claim, double merit, const std::string& about);
+    int neighbourJury(Id accused, Id accuser, double truth, std::vector<Id>& ayes, int& panel, const std::string& what);
+    void killing(Id felon, Id victim, Id deed, bool poison, bool watched);
+    void forfeitGoods(Id felon);
+    std::string kinWhy(const Grievance& g) const;
+    void kinAgenda(std::vector<AgendaItem>& items);  // seasonAgenda: the family's answers to what is brewing at home
+    void doKinAgenda(const AgendaItem& a);
+    void playerStrike(Id target);        // the player takes the ladder against someone (same rules, same risks)
+    double payLord(Household& h, double amount, const std::string& why);  // what the purse holds of it, booked both sides
+    std::string repPassed_;              // how the name passed at the last succession, for the hand-over scene
+    void dowerHouseEnds(Id house);       // a house holding a dower ends or merges: the acres go where they belong
 };
 
 }  // namespace sim

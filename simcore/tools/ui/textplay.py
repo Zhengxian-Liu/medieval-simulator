@@ -353,6 +353,8 @@ def render_more(s):
             out.append("  怎麼修：" + rep["mend"])
     if s.get("ladder"):
         out.append(f"家族地位：{s['ladder']}")
+    if s.get("inherit"):
+        out.append(f"身後的家業：{s['inherit']}")
     if s.get("regret"):
         out.append(f"上一代沒做完的心願：「{s['regret']}」")
     amb = s.get("ambition")

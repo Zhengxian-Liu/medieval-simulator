@@ -408,6 +408,7 @@ void World::attendOccasion(Id person, Id about, bool came, double value, const s
 
 void World::learnNews(News& n, Id household, Id teller, double link) {
     if (household == kNone || !n.heard.insert(household).second) return;
+    if (household == playerHousehold_ && n.kind.rfind("kin:", 0) == 0) ++counters_["kin_heard"];  // a family's case, heard
     // A teller who goes by the same name as the one it is about (a son named for his dead father) reads as the
     // dead telling of their own death: name them by what they are to that one instead.
     if (teller != kNone) {

@@ -284,6 +284,7 @@ function renderTop() {
       ${["gates", "rival", "note"].filter((k) => amb[k]).map((k) => `<br>${esc(amb[k])}`).join("")}</div>`;
     if (rep) more += `<div><b>名聲 ${signed(rep.value)}</b>（${esc(rep.word)}；−50 到 +50）：${esc(rep.effect)}<br><span class="muted">最近：${esc((rep.recent || []).join("；") || "沒什麼事")}</span>${rep.value <= -10 ? `<br>怎麼修：${esc(rep.mend)}` : ""}</div>`;
     if (s.ladder) more += `<div><b>家族地位</b>：${esc(s.ladder)}</div>`;
+    if (s.inherit) more += `<div><b>身後的家業</b>：${esc(s.inherit)}</div>`;
     if (s.regret) more += `<div><b>上一代沒做完的心願</b>：${esc(s.regret)}</div>`;
     more += threadsHtml(s);
     for (const g of s.plans_going || []) more += `<div>進行中的計畫：<b>${esc(g.name)}</b>${g.target ? "（對象 " + esc(g.target) + "）" : ""} 進度 ${g.progress}/100</div>`;

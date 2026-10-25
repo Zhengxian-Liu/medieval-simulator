@@ -228,9 +228,14 @@ double World::moveLand(Id from, Id to, double acres, LandPick pick, const std::s
     std::vector<Id> mine;
     for (const auto& pc : parcels_)
         if (!pc.gone && pc.holder == from && !(pick == LandPick::CustomaryOnly && pc.free)) mine.push_back(pc.id);
-    // Customary land goes first unless freehold is wanted; within that, small parcels first so whole ones move.
+    // Customary land goes first unless freehold is wanted; within that, small parcels first so whole ones move. A field
+    // pledged for a debt goes last: it is promised to the creditor (a share to a son, a court's award take others first).
+    std::set<Id> pledged;
+    for (const auto& pl : pledges_)
+        if (!pl.lease && pl.house == from) pledged.insert(pl.parcel);
     std::stable_sort(mine.begin(), mine.end(), [&](Id a, Id b) {
         const Parcel &pa = parcels_[a], &pb = parcels_[b];
+        if (pledged.count(a) != pledged.count(b)) return pledged.count(a) < pledged.count(b);
         bool fa = pick == LandPick::FreeFirst ? !pa.free : pa.free, fb = pick == LandPick::FreeFirst ? !pb.free : pb.free;
         if (fa != fb) return !fa;
         return pa.acres < pb.acres;
