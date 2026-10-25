@@ -165,9 +165,9 @@
      "conditions": {"age": [18, 70]},
      "target": {"pick": "rival", "conditions": {"age": [16, 80], "other_dynasty": true}},
      "options": [
-       {"text": "告上莊園法庭", "log": "{name} 告 {target} 的豬拱壞了籬笆，莊園法庭判對方賠錢。", "effects": [{"money": 6}, {"target": [{"money": -10}]}, {"deed": {"type": "court_case"}}, {"reputation": 1}], "ai": {"base": 10, "traits": {"ambitious": 5, "greedy": 5}}},
+       {"text": "告上莊園法庭", "family_act": true, "log": "{name} 告 {target} 的豬拱壞了籬笆，莊園法庭判對方賠錢。", "effects": [{"money": 6}, {"target": [{"money": -10}]}, {"deed": {"type": "court_case"}}, {"reputation": 1}], "ai": {"base": 10, "traits": {"ambitious": 5, "greedy": 5}}},
        {"text": "忍下來", "log": "{target} 又來找麻煩，{name} 忍了下來。", "effects": [{"reputation": -1}, {"need": {"spirit": -10}}], "ai": {"base": 8, "traits": {"calm": 10, "craven": 8}}},
-       {"text": "打一架", "log": "{name} 和 {target} 在酒館外大打出手。", "effects": [{"health": -10}, {"target": [{"health": -10}]}, {"trait_chance": {"trait": "scarred", "chance": 20}}, {"deed": {"type": "brawl"}}], "ai": {"base": 4, "traits": {"wrathful": 15, "brave": 6}}}
+       {"text": "打一架", "family_act": true, "log": "{name} 和 {target} 在酒館外大打出手。", "effects": [{"health": -10}, {"target": [{"health": -10}]}, {"trait_chance": {"trait": "scarred", "chance": 20}}, {"deed": {"type": "brawl"}}], "ai": {"base": 4, "traits": {"wrathful": 15, "brave": 6}}}
      ]},
     {"id": "friend_help", "title": "朋友相助", "scope": "player_family", "chance": 0.04, "cooldown_years": 3, "cooldown_scope": "household",
      "conditions": {"age": [16, 70], "month": [7, 8]},

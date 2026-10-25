@@ -29,7 +29,8 @@ Actions (the page's buttons):
   {"do":"pass"}   end this season          {"do":"year"}   let the AI play a whole year
   {"do":"regency"}   holding the house for a child: hand the years to the steward until they come of age
   {"do":"rule","rule":"occasions","value":"close"}   家裡的規矩 (standing rules: occasions = all|close|none|ask,
-                                                     grain = harvest|monthly|ask, repeats = fold|ask)
+                                                     grain = harvest|monthly|ask, repeats = fold|ask,
+                                                     votes = ask|kin|free, quarrels = ask|forbid|free)
                      (big questions are still asked on the way)
 """
 import json
@@ -70,30 +71,46 @@ def signed(v):
 
 # ---- the chronicle, by season (the same grouping as index.html's seasons()) ----
 
-def seasons(entries):
+def seasons(entries, start=0):
     """skey -> {label, big, fam, news, ledger, late}: entries in the order they came, a line that belongs to the one
-    above it under that one, a late outcome also under the season it came from."""
+    above it under that one, a late outcome also under the season it came from. An item (or a sub-line) from before
+    entry number `start` is kept for its sub-lines to hang on but marked old, so a view can print only what is new."""
     out, last = {}, None
-    for e in entries:
+    for i, e in enumerate(entries):
         s = out.setdefault(e["skey"], {"label": e["season"], "big": [], "fam": [], "news": [], "ledger": None, "late": []})
         cls = e.get("cls")
+        old = i < start
         if cls == "ledger":
-            s["ledger"] = e
+            if not old:
+                s["ledger"] = e
             continue
         if cls == "sub":
             if last is not None and last["skey"] == e["skey"]:
-                last["subs"].append(e["text"])
+                if not old:
+                    last["subs"].append(e["text"])
+                    last["new_subs"] = True
             continue
-        item = {"skey": e["skey"], "text": e["text"], "subs": [], "near": e.get("near", False)}
+        item = {"skey": e["skey"], "text": e["text"], "subs": [], "near": e.get("near", False), "old": old}
         if cls == "news" and not item["near"]:
             s["news"].append(item)
         else:
             (s["big"] if cls in ("big", "news") else s["fam"]).append(item)
         last = item
-        if e.get("origin"):
+        if e.get("origin") and not old:
             for k, o in out.items():
                 if o["label"] == e["origin"] and k != e["skey"]:
                     o["late"].append(f"{e['season']}：{e['text']}")
+    if start:
+        # Only what is new: an old item stays only when a new sub-line came under it (shown as 「接上」).
+        for s in out.values():
+            for key in ("big", "fam", "news"):
+                kept = []
+                for it in s[key]:
+                    if not it["old"]:
+                        kept.append(it)
+                    elif it.get("new_subs"):
+                        kept.append(dict(it, text="（接上）" + it["text"]))
+                s[key] = kept
     return out
 
 
@@ -123,7 +140,7 @@ def season_block(s, now=False, news_all=False):
             out.append(f"   · {it['text']}")
             out += [f"       └ {x}" for x in it["subs"]]
         if len(s["fam"]) > len(fam):
-            out.append(f"   · 還有 {len(s['fam']) - len(fam)} 件家裡的小事（chronicle 看全部）")
+            out.append(f"   · 還有 {len(s['fam']) - len(fam)} 件家裡的小事（chronicle 2 看這兩季的全部）")
         for x in s["late"]:
             out.append(f"   ↳ 後來：{x}")
     led = ledger_text(s["ledger"])
@@ -134,12 +151,17 @@ def season_block(s, now=False, news_all=False):
             out.append("  村裡的消息：")
             out += [f"   · {it['text']}" for it in s["news"]]
         else:
-            out.append(f"  還有 {len(s['news'])} 則村裡的消息（chronicle 看）")
+            out.append(f"  還有 {len(s['news'])} 則村裡的消息（chronicle 2 看）")
     return out
 
 
 def chronicle_lines(v, count=None, since=None):
-    ss = seasons(v.get("entries") or [])
+    """The chronicle by season, newest first. count: the last N seasons in full (every small thing and the village's
+    news); since: what came after entry number `since` only (a view prints each line once: fun-r12 A7, the lines
+    printed twice); neither: all of it."""
+    entries = v.get("entries") or []
+    start = since if since is not None and 0 < since <= len(entries) else 0
+    ss = seasons(entries, start)
     st = v.get("state") or {}
     now_key = None
     if st.get("date"):
@@ -149,14 +171,15 @@ def chronicle_lines(v, count=None, since=None):
             ss.setdefault(now_key, {"label": ln["season"], "big": [], "fam": [], "news": [], "ledger": None, "late": []})
             ss[now_key]["ledger"] = ss[now_key]["ledger"] or ln
     keys = sorted(ss, reverse=True)
-    if since is not None:
-        fresh = sum(1 for k in keys if k >= since)  # the seasons since the last view, at least two, at most six
-        keys = keys[:max(2, min(fresh, 6))]
+    if start:
+        keys = [k for k in keys if k == now_key or any(ss[k][x] for x in ("big", "fam", "news", "late")) or ss[k]["ledger"]]
     elif count is not None:
         keys = keys[:count]
+    elif since is not None:
+        keys = keys[:2]  # the first view: the last two seasons
     out = []
     for k in keys:
-        out += season_block(ss[k], now=k == now_key, news_all=count is None and since is None)
+        out += season_block(ss[k], now=k == now_key, news_all=since is None)
     return out, (max(ss) if ss else None)
 
 
@@ -329,14 +352,18 @@ def render(v):
     out += top_events(v)
     out += decision(v, s, a)
     out += family(s, season)
+    # The cursor holds how many entries the last view had shown: this one prints only what came after (fun-r12 A7).
     try:
-        since = int(open(CURSOR, encoding="utf-8").read().strip())
-    except (OSError, ValueError):
+        since = int(open(CURSOR, encoding="utf-8").read().split()[-1])
+    except (OSError, ValueError, IndexError):
         since = None
+    total = len(v.get("entries") or [])
+    if since is not None and since > total:
+        since = None  # another game on this port: start again
     lines, newest = chronicle_lines(v, since=since)
-    out += ["", "―― 編年記錄（新的季在上面；chronicle 看更早的）――"] + lines
-    if newest is not None:
-        open(CURSOR, "w", encoding="utf-8").write(str(newest))
+    fresh = "（上次之後的新記錄；chronicle 2 看最近兩季的全部）" if since else "（新的季在上面；chronicle 看更早的）"
+    out += ["", "―― 編年記錄" + fresh + "――"] + (lines or ["  （上次之後沒有新的記錄）"])
+    open(CURSOR, "w", encoding="utf-8").write(str(total))
     t = talk_lines(s)
     if t:
         out += ["", "―― 村裡在說（最近三年，◆ 跟你家有關）――"] + t
@@ -438,7 +465,7 @@ def render_people(s, full=False):
                 line += f"（✗ {x.get('why', '')}）"
             out.append(line)
         for a in p.get("asks") or []:
-            obj = {"do": "ask", "who": p["id"], "ask": a["ask"], "object": a["object"], "subject": a["subject"], "office": a.get("office", ""), "lever": ""}
+            obj = {"do": "ask", "who": p["id"], "ask": a["ask"], "object": a["object"], "subject": a["subject"], "office": a.get("office", ""), "lever": a.get("lever", "")}
             out.append(f"    開口：{a['label']} → {act_json(obj)}" + ("" if a.get("open", True) else f"（✗ {a.get('why', '')}）"))
     if not full:
         out.append(f"（列出最熟的 14 人和能開口的人，共 {len(s.get('people', []))} 人；people --full 看全部）")
@@ -479,7 +506,7 @@ def render_contest(s):
                 t += f"；{x.get('note', '')}"
                 a = x.get("ask")
                 if a:
-                    press = {"do": "ask", "who": x["id"], "ask": a["ask"], "object": a["object"], "subject": a["subject"], "office": a.get("office", ""), "lever": ""}
+                    press = {"do": "ask", "who": x["id"], "ask": a["ask"], "object": a["object"], "subject": a["subject"], "office": a.get("office", ""), "lever": a.get("lever", "")}
                     t += f" → {act_json(press)}" if a.get("open") else f"（✗ {a.get('why', '')}）"
                 out.append(t)
     for pst in c.get("past", [])[:4]:

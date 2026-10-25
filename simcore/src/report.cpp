@@ -35,7 +35,7 @@ const std::map<std::string, std::string>& modNames() {
         {"condolence", "來弔唁過"}, {"took_our_want", "搶了我們看中的"}, {"mill_toll", "嫌他家磨坊抽得重"}, {"usury", "放債吃利"}, {"settled_son", "替小兒子置了產"}, {"took_our_land", "趁機拿走我家的地"},
         {"dragged_to_court", "欠債拖到上了法庭"}, {"asked_too_much", "開口要得太過分"}, {"no_mercy", "不肯寬限"}, {"spoken_for", "有人替他說過話"}, {"granted_ask", "答應過我的請求"},
         {"refused_ask", "回絕過我的請求"}, {"pressed_with_secret", "拿把柄壓過我"}, {"haggled", "跟我討價還價過"}, {"helped_us", "替我家墊過租"}, {"lied_to_me", "瞞過我的帳"}, {"stood_aside", "讓過我一步"}, {"hard_words", "說過狠話"}, {"forbade_match", "不准我的親事"}, {"put_off", "推託過我的事"},
-        {"cold_shoulder", "給過我冷臉"}, {"famine_gift", "荒年白送過糧"}, {"refused_loan", "不肯借給我"}, {"famine_gouge", "荒年三倍價賣糧給我"}, {"heeded", "把我的事放在心上"}, {"neglected", "冷落過我"},
+        {"cold_shoulder", "給過我冷臉"}, {"famine_gift", "斷糧時白送過糧"}, {"refused_loan", "不肯借給我"}, {"famine_gouge", "趁我家斷糧高價賣糧給我"}, {"heeded", "把我的事放在心上"}, {"neglected", "冷落過我"},
         {"came_to_wake", "來守過靈"}, {"missed_funeral", "喪事沒來露面"}, {"came_to_wedding", "來喝過喜酒"},
         {"wedding_gift", "送過賀禮"}, {"helps_at_home", "在家很幫忙"}, {"for_the_dead", "看在先人份上"}, {"same_house", "一家人"}, {"helped_the_manor", "替莊園解過圍"}, {"held_back", "要錢時推託過"}, {"paid_up", "欠債按時還清"}, {"against_the_dead", "記著先人的舊帳"}, {"missed_wedding", "喜事沒來"}, {"sent_word", "紅白事託人帶話，沒來"},
         // design/fun-r5.md C: asks with terms, the king's tax, the season's deeds.
@@ -253,8 +253,12 @@ std::string World::familyReport() const {
             if (defs_.traits.at(tr).category == "personality") t += (t.empty() ? "" : "、") + defs_.traits.at(tr).name;
         o << (firstMember ? "" : "；") << shortName(m.id) << "（" << relation(m) << "，" << int(ageYears(m)) << " 歲"
           << (t.empty() ? "" : "，" + t) << (away ? "，" + stationName(m) : !inPlayerHouse(m.household) ? "，在別家幫傭" : "")
-          << (!away && focusOf(m) ? "，重心：" + focusOf(m)->name : "")
-          << "）";
+          << (!away && focusOf(m) ? "，重心：" + focusOf(m)->name : "");
+        // What they have taken on themselves (a wife's lessons with the priest): theirs, by their own name.
+        for (const auto& ap : plans_)
+            if (ap.actor == m.id)
+                if (const PlanDef* pd = defs_.plan(ap.plan); pd && !pd->secret) o << "，正在辦：" << pd->name;
+        o << "）";
         firstMember = false;
     }
     if (firstMember) o << "（只剩家主一人）";
@@ -397,7 +401,7 @@ std::string World::familyReport() const {
         bool any = false;
         for (Id id : note) {
             if (!seemsBusy(id)) continue;
-            if (!any) o << "\n眼下跟你家有事的人（輸入 i 可以細看）：\n";
+            if (!any) o << "\n眼下跟你家有事的人（每個人都可以點開來細看）：\n";
             any = true;
             o << "  " << fullName(id) << "：" << personLine(id) << "\n";
         }

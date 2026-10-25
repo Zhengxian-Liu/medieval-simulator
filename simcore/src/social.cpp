@@ -91,9 +91,14 @@ void World::electReeve() {
     if (playerRuns) {
         people_[head].flags.erase("campaign_ale");
         people_[head].flags.erase("campaign_lord");
+        // The sitting reeve standing again is asked as one (its prompt_if): the flag is his until the count.
+        if (old == head) people_[head].flags.insert("reeve");
         runEventById("reeve_campaign", head, lord_);
+        if (old == head) people_[head].flags.erase("reeve");
     }
+    decideFamilyBallot("reeve", cands);
     Tally tally = countVotes("reeve", cands, old, noise);
+    familyBallot_.erase("reeve");
     std::map<Id, int>& votes = tally.votes;
     Id winner = kNone;
     for (Id c : cands)
@@ -158,7 +163,7 @@ void World::electReeve() {
     if (winner != old) addReputation(winner, 5, "當選莊頭");
     for (Id c : cands)
         if (c != winner && people_[c].household != kNone && r.household != kNone)
-            noteClash(people_[c].household, r.household, "莊頭：" + (r.dynasty != kNone ? dynasties_[r.dynasty].surname : fullName(winner)) + "家選上");
+            noteClash(people_[c].household, r.household, "莊頭：" + winnerTag(winner) + "選上");
     // Terms on end of one blood: a son after his father carries the count on (「十年莊頭」 is the family's).
     const bool sameBlood = old != kNone && winner != old && r.dynasty != kNone && people_[old].dynasty == r.dynasty;
     reeveTerms_[winner] = winner == old ? reeveTerms_[winner] + 1 : sameBlood ? reeveTerms_[old] + 1 : 1;

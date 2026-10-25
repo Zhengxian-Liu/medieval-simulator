@@ -128,9 +128,16 @@ void World::harvest() {
         // keeps a poor family going in a bad year, whatever the size of its holding.
         if (h.house != "manor" && workers > 0) yield += kCroftBread * std::min(1.0, workers) * (0.8 + weather * 0.2);
         if (priest_ != kNone && people_[priest_].household != kNone)
-            households_[people_[priest_].household].food += tithe;
+            households_[people_[priest_].household].food += tithe, bookFood(households_[people_[priest_].household], "收到的什一稅", tithe);
         h.food += yield;
-        bookFood(h, "收成（交了什一稅）", yield);
+        // Where the crop came from, so a big one reads as what it is (fun-r12 A7: 「+2181 天」 was 21 acres and a leased
+        // demesne of 30, after the plague had thinned the table).
+        if (inPlayerHouse(h.id)) {
+            const double leased = h.leaseUntil > day_ ? h.leaseAcres : 0;
+            const std::string year = weather * mult < 0.8 ? "年成差" : weather * mult > 1.15 ? "豐年" : "平常年景";
+            bookFood(h, "收成（" + num(tilled) + " 畝" + (leased >= 0.5 ? "，含包下的自營地 " + num(leased) + " 畝" : std::string()) + "，" + year +
+                            "，交了什一稅）", yield);
+        }
 
         // Kept back: a year's bread and two months more, so the family does not sell at harvest and buy back in July.
         double reserve = consumption(h) * (kDaysPerYear + 60);
@@ -548,6 +555,7 @@ void World::payRent() {
             double price = param("grain_price", 0.5) * kFarmGate;
             double sell = std::min(h.food - daily * 300, (rent - h.money) / price);
             h.food -= sell;
+            bookFood(h, "賣口糧湊租", -sell);
             h.money += sell * price;
             h.soldForRent += sell;
             book(h, "賣口糧湊租", sell * price);
@@ -904,7 +912,10 @@ void World::monthlyEconomy() {
             h.hiredBy = kNone;
         }
         h.money += spare * kDayLabour * wage;
-        book(h, "打短工", spare * kDayLabour * wage);
+        // Said as what it is: no one chose it, the hands the strips do not need go out by the day (fun-r12 A7: 「打短工 +4」
+        // read as the 打短工 plan the family never took up).
+        if (spare > 0.01)
+            book(h, "家裡多出的人手去別家幫工（" + num(h.acres) + " 畝地用不了 " + num(farmHands(h)) + " 個人手）", spare * kDayLabour * wage);
         // What a month's living takes from the purse, never more than is in it (an empty purse goes without).
         auto spend = [&](double want, const std::string& why) {
             double paid = std::clamp(want, 0.0, std::max(0.0, h.money));
@@ -1234,6 +1245,7 @@ bool World::feedMenu(Household& h, bool chosen) {
         case 7: {
             ph.food -= grain;
             h.food += grain;
+            bookFood(ph, "借糧給人", -grain);
             addDebt(h, loanOwed, ours);
             // As the card said: due at next year's Michaelmas, the old debt to the family with it.
             if (h.debt > 0.5 && h.creditor == ours) h.debtYears = month() > 8 || (month() == 8 && dayOfMonth() == 29) ? 0 : -1;
@@ -1243,6 +1255,7 @@ bool World::feedMenu(Household& h, bool chosen) {
         case 0:
             ph.food -= grain;
             h.food += grain;
+            bookFood(ph, "送人的糧", -grain);
             log(1, head + fullName(ours) + " 讓人背了幾袋麥子送到 " + fullName(h.head) + " 家。" + after());
             break;
         case 1:

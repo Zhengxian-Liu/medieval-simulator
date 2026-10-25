@@ -413,10 +413,21 @@ void World::accuse(Id accuser, Id accused, Id deedId) {
                          fullName(accuser) + "。");
         return;
     }
+    // A suit between two houses is a clash between them (the rival is the house that clashed most: fun-r12 A4).
+    noteClash(people_[accuser].household, people_[accused].household, "莊園法庭：" + fullName(accuser) + " 告 " + fullName(accused) + "「" + what + "」", 1.5);
     std::vector<Id> ayes;
     int panel = 0;
     int votes = juryVerdict(accuser, accused, deedId, ayes, panel);
     bool convicted = votes * 3 >= panel * 2;
+    // The family's head sat on the jury: the verdict is the family's to hear, whoever stood in the dock (fun-r12 A1).
+    const Id me = playerHead();
+    const bool sat = me != kNone && panel >= 3 && people_[me].flags.count("juror");
+    std::string myVote;
+    if (sat) {
+        myVote = std::find(ayes.begin(), ayes.end(), me) != ayes.end() ? "（你說有罪）" : "（你說證據不夠）";
+        family = true;
+        imp = 1;
+    }
     // Who voted which way is known in a village: it is remembered on both sides.
     std::string jury;
     if (panel >= 3) {
@@ -441,13 +452,13 @@ void World::accuse(Id accuser, Id accused, Id deedId) {
         for (Id v : livingInVillage())
             if (ageYears(people_[v]) >= 12) addBelief(v, deedId, accused, 90, accuser);
         if (family)
-            log(imp, "【法庭】" + fullName(accuser) + " 在莊園法庭告 " + fullName(accused) + "「" + what + "」。" + (jury.empty() ? "" : jury + "，") +
+            log(imp, "【法庭】" + fullName(accuser) + " 在莊園法庭告 " + fullName(accused) + "「" + what + "」。" + (jury.empty() ? "" : jury + myVote + "，") +
                          "判" + (people_[accused].sex == Sex::Male ? "他" : "她") + "有罪，罰了 20 便士。");
     } else if (guilty || votes * 3 >= panel) {
         recordDeed("accused_unproven", accuser, accused, 1, deedId);
         if (family)
             log(imp, "【法庭】" + fullName(accuser) + " 在莊園法庭告 " + fullName(accused) + "「" + what + "」。" +
-                         (jury.empty() ? "" : jury + "，") + "不夠定罪，查無實據。");
+                         (jury.empty() ? "" : jury + myVote + "，") + "不夠定罪，查無實據。");
     } else {
         recordDeed("false_accusation", accuser, accused, 1, deedId);
         if (uh) book(*uh, "誣告罰款", -std::min(6.0, std::max(0.0, uh->money))), uh->money = std::max(0.0, uh->money - 6);
@@ -456,7 +467,7 @@ void World::accuse(Id accuser, Id accused, Id deedId) {
             if (b.deed == deedId) b.confidence = std::min(b.confidence, 30.0);
         if (family)
             log(imp, "【法庭】" + fullName(accuser) + " 在莊園法庭告 " + fullName(accused) + "「" + what + "」。" +
-                         (jury.empty() ? "" : jury + "，") + "鄰居們都替" + (people_[accused].sex == Sex::Male ? "他" : "她") +
+                         (jury.empty() ? "" : jury + myVote + "，") + "鄰居們都替" + (people_[accused].sex == Sex::Male ? "他" : "她") +
                          "作證。法庭判 " + fullName(accuser) + " 誣告，罰了 6 便士。");
     }
 }

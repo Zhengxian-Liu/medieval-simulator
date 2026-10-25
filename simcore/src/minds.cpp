@@ -571,6 +571,8 @@ void World::helpFriend(Person& p) {
     if (giveFood) {
         mine.food -= food;
         th.food += food;
+        bookFood(mine, "送人的糧", -food);
+        bookFood(th, "別人送的糧", food);
     } else {
         mine.money -= coin;
         book(mine, "接濟朋友", -coin);

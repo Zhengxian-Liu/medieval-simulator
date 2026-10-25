@@ -19,6 +19,7 @@ public:
     void apply(const Json& effects, Person& p, Id target);
     std::string format(const std::string& tmpl, const Person& p, Id target) const;
     std::string optionText(const OptionDef& o, const Person& p, Id target) const;
+    static std::string lastingNote(const OptionDef& o);  // what it does to the rent for good: 「（地租往後加一成半）」
     // May an old question (EventDef::fold) be answered with this option without asking? Never a crime (a deed, or
     // marked no_fold), never sending someone away (a station or a place), never more than 20 pence or a tax over
     // the assessed sum (fun-r11 review H1).
@@ -54,6 +55,10 @@ private:
     // when it is not held back (signals, institutions, rules that fire whenever their state holds, villagers).
     std::pair<Id, std::string> storyKey(const EventDef& ev, const Person& p) const;
     void fire(const EventDef& ev, Person& p, Id target);
+    int pickOption(const EventDef& ev, const Person& p, Id target);
+    // fun-r12 A2: an option done in the family's name, taken by one of the family who is not its head: by the house
+    // rule (asked first, forbidden, or theirs to take); what they do instead when it is not allowed.
+    int familyActGate(const EventDef& ev, const Person& p, Id target, int k);
     std::string choseLine(const Person& p, Id target, const std::string& option);
     const std::string& pickLog(const OptionDef& o, Id who);  // a variant this person was not told last time
     bool asked_ = false;   // the last chooseOption was the player's to make (the 「選擇」 is theirs)

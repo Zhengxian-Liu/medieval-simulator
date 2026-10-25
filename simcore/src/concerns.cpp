@@ -546,6 +546,11 @@ std::string World::foodSince(const FamilySnapshot& before) const {
         if (v == 0) continue;
         parts += (parts.empty() ? "：" : "、") + why + " " + (v > 0 ? "+" : "−") + std::to_string(std::labs(v));
     }
+    // The days are the house's days as it is now: when the table has grown or shrunk since, say so, or a harvest after a
+    // plague reads as twice the crop (fun-r12 A7, seed 195 1348).
+    const double thenDaily = before.food > 0.01 ? before.bread / before.food : daily;
+    if (std::abs(thenDaily - daily) > daily * 0.1)
+        parts += "（家裡現在 " + std::to_string(h.members.size()) + " 口人，比季初" + (daily < thenDaily ? "少" : "多") + "了，天數照現在的人口算）";
     return o + parts;
 }
 
@@ -732,6 +737,7 @@ double World::sellGrainAtMarket(Household& h, double days) {
     // At the town market the family gets the price the corn dealer sells at, less the carting.
     double got = std::round(amount * param("grain_price", 0.5) * 0.9);
     h.food -= amount;
+    bookFood(h, "去市集賣糧", -amount);
     h.money += got;
     book(h, "去市集賣糧", got);
     return got;
@@ -760,6 +766,8 @@ void World::giveParcelTo(Id parcel, Id house, Id giver) {
     if (bridge < std::max(0.5, consumption(h)) * 7) bridge = 0;  // not a few days' crumbs (the card says none is sent)
     ph.food -= bridge;
     h.food += bridge;
+    bookFood(ph, "送人的糧", -bridge);
+    bookFood(h, "別人送的糧", bridge);
     feedHouse(h);
     if (h.head != kNone && giver != kNone) {
         recordDeed("kindness", giver, h.head);
@@ -926,11 +934,14 @@ void World::spareWork(Household& h, Id worker, const Json& what, Id target) {
         const double meals = std::min(what.numberOr("meals", 0), std::max(0.0, o.food));
         o.food -= meals;
         h.food += meals;
+        bookFood(o, "打零工的人在家裡吃的", -meals);
+        bookFood(h, "打零工在東家吃的", meals);
         cooldowns_[{h.id, "spare_day"}] = nextSeason;
         const Id hand = static_cast<Id>(what.numberOr("worker", static_cast<double>(worker)));
         if (target != kNone && hand != kNone) addOpinion(target, hand, "good_work", 3, 3);
     } else if (kind == "glean") {
         h.food += what.numberOr("food", 0);
+        bookFood(h, "拾穗", what.numberOr("food", 0));
         cooldowns_[{h.id, "spare_glean"}] = day_ + daysToHarvest() + 1;
     } else if (kind == "craft") {
         double pay = what.numberOr("pay", 5);
@@ -939,6 +950,7 @@ void World::spareWork(Household& h, Id worker, const Json& what, Id target) {
         cooldowns_[{h.id, "spare_craft"}] = nextSeason;
     } else if (kind == "alms") {
         h.food += consumption(h) * what.numberOr("days", 15);
+        bookFood(h, "教堂的救濟", consumption(h) * what.numberOr("days", 15));
         cooldowns_[{h.id, "spare_alms"}] = nextSeason;
         // In the line at the church door the whole village sees: a public act, and the only thing here that moves the name.
         if (h.head != kNone) addReputation(h.head, -1, "去濟貧箱領救濟");

@@ -57,6 +57,9 @@ struct OptionDef {
     Json aiWeight;    // { base, traits: { id: delta } }
     Json conditions;  // optional: the option is only open when these hold (for the chooser)
     bool noFold = false;  // "no_fold": never answered for the player as an old question (hiding goods from the tax...)
+    // "family_act": done in the whole family's name (suing, a public quarrel): one of the family other than its head
+    // takes it only as the house rule says (World::quarrelRule, fun-r12 A2).
+    bool familyAct = false;
 };
 
 struct EventDef {

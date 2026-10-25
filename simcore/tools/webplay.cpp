@@ -16,7 +16,7 @@
 //       {"do":"agenda","id":"sell_grain"}            (這一季的事: one of the state's "agenda" items)
 //       {"do":"interact","who":12,"event":"keep_company"}   (陪家人: the company visit this person needs most)
 //       {"do":"rule","rule":"occasions","value":"close"}     (家裡的規矩: one of the state's "rules", set to one of its choices;
-//                                                             occasions = all|close|none|ask, grain = harvest|monthly|ask)
+//                                                             occasions = all|close|none|ask, grain = harvest|monthly|ask, repeats, votes, quarrels)
 #include <algorithm>
 #include <cmath>
 #include <fstream>
@@ -213,7 +213,7 @@ public:
         std::vector<std::string> out;
         for (const auto& a : w_.asksFor(who))
             out.push_back(Obj().text("ask", a.ask).text("label", a.label).n("object", a.object).n("subject", a.subject)
-                              .text("office", a.office).b("open", a.open).text("why", a.why).done());
+                              .text("office", a.office).b("open", a.open).text("why", a.why).text("lever", a.lever).done());
         return arr(out);
     }
 
@@ -370,7 +370,9 @@ public:
         // The family's turning points: births, deaths, marriages, the ambition and posts, contests, debts, standing.
         for (const char* k : {"出生", "生了", "去世", "過世", "夭折", "死了", "死於", "娶了", "嫁給", "嫁到", "入贅", "成了親", "訂了親", "立志", "志向",
                               "達成", "當上", "選上", "落選", "連任", "爭到", "拿到了", "讓給", "輸給", "贏了", "欠債", "借了", "借來", "還清", "地位",
-                              "繼承", "當了家", "接下", "贖身", "自由人", "法庭", "判了", "罰", "世仇", "結了怨", "和好", "開局", "【命案】", "【判決】", "【官司】", "【分家", "【寡婦產】", "【養老】", "【離家】", "【繼承人】", "【血仇】", "【避難】", "【沒收】", "【謀害】", "【家醜】", "【懸案】", "【苗頭】", "〔身後的家業〕"})
+                              "繼承", "當了家", "接下", "贖身", "自由人", "法庭", "判了", "罰", "世仇", "結了怨", "和好", "開局", "【命案】", "【判決】", "【官司】", "【分家", "【寡婦產】", "【養老】", "【離家】", "【繼承人】", "【血仇】", "【避難】", "【沒收】", "【謀害】", "【家醜】", "【懸案】", "【苗頭】", "〔身後的家業〕",
+                              // fun-r12 A1: every plan of the family's ends on one of these, and it is never a small thing
+                              "【成功】", "【失敗】", "【落空】", "【敗露】", "【搶親】", "【恩怨了結】", "【宿敵】", "【討人情】", "【規矩】"})
             if (t.find(k) != std::string::npos) return true;
         return false;
     }
@@ -379,7 +381,8 @@ public:
     static bool topLine(const std::string& t) {
         for (const char* k : {"當上了", "當選", "選上", "落選", "連任", "【死後稅】", "牽走", "【欠債】", "【抵押】", "【租約】", "還清", "債清了", "劃掉了",
                               "欠債 ", "借了", "【宿敵】", "回到家裡", "回村", "回來了", "離家", "幫傭去了", "打了個小包袱", "出發", "入贅", "嫁到", "嫁給",
-                              "娶了", "出生", "生下了", "去世", "夭折", "當了家", "【命案】", "【判決】", "【官司】", "【分家", "【寡婦產】", "【沒收】", "【謀害】", "【血仇】", "【避難】", "【懸案】", "【繼承人】", "〔他的那一份〕"})
+                              "娶了", "出生", "生下了", "去世", "夭折", "當了家", "【命案】", "【判決】", "【官司】", "【分家", "【寡婦產】", "【沒收】", "【謀害】", "【血仇】", "【避難】", "【懸案】", "【繼承人】", "〔他的那一份〕",
+                              "【成功】", "【失敗】", "【落空】", "【敗露】", "【搶親】"})
             if (t.find(k) != std::string::npos) return true;
         return false;
     }
@@ -690,6 +693,19 @@ public:
                                     .text("text", World::repeatRuleText(w.repeatRule()))
                                     .raw("choices", arr({Obj().text("value", "fold").text("text", World::repeatRuleText("fold")).done(),
                                                          Obj().text("value", "ask").text("text", World::repeatRuleText("ask")).done()}))
+                                    .done(),
+                                // fun-r12 A2: what one of the family does in the whole family's name.
+                                Obj().text("id", "votes").text("name", "家裡這一票").text("value", w.voteRule())
+                                    .text("text", World::voteRuleText(w.voteRule()))
+                                    .raw("choices", arr({Obj().text("value", "ask").text("text", World::voteRuleText("ask")).done(),
+                                                         Obj().text("value", "kin").text("text", World::voteRuleText("kin")).done(),
+                                                         Obj().text("value", "free").text("text", World::voteRuleText("free")).done()}))
+                                    .done(),
+                                Obj().text("id", "quarrels").text("name", "家人出頭").text("value", w.quarrelRule())
+                                    .text("text", World::quarrelRuleText(w.quarrelRule()))
+                                    .raw("choices", arr({Obj().text("value", "ask").text("text", World::quarrelRuleText("ask")).done(),
+                                                         Obj().text("value", "forbid").text("text", World::quarrelRuleText("forbid")).done(),
+                                                         Obj().text("value", "free").text("text", World::quarrelRuleText("free")).done()}))
                                     .done()}));
         }
         // Holding the house for a child: the head may hand the years to the steward and answer only what is asked.
@@ -1005,7 +1021,7 @@ public:
                                                .text("promised", vv.promised != kNone ? w.shortName(vv.promised) : "").text("note", vv.note);
                                            if (!vv.ask.ask.empty())
                                                q.raw("ask", Obj().text("ask", vv.ask.ask).text("label", vv.ask.label).n("object", vv.ask.object).n("subject", vv.ask.subject)
-                                                                .text("office", vv.ask.office).b("open", vv.ask.open).text("why", vv.ask.why).done());
+                                                                .text("office", vv.ask.office).b("open", vv.ask.open).text("why", vv.ask.why).text("lever", vv.ask.lever).done());
                                            v.push_back(q.done());
                                        }
                                        return arr(v); }())

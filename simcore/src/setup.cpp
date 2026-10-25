@@ -55,6 +55,14 @@ Id World::addItem(const std::string& type, Id maker, Id household) {
 }
 
 void World::rollPersonality(Person& p, int count) {
+    // A child brought up close (fond of a parent or the head, praised and taught) seldom grows up mean or grasping: the
+    // home shows in the grown character (fun-r12 A7, seed 195: Matilda at +100 「長成了一個貪婪、刻薄的孩子」).
+    double warmth = -100;
+    if (ageYears(p) < 18 && playerHousehold_ != kNone && isPlayerFamily(p)) {
+        for (Id par : {p.father, p.mother, playerHead()})
+            if (par != kNone && par != p.id && people_[par].alive()) warmth = std::max(warmth, opinion(p.id, par));
+    }
+    const bool close = warmth >= 60;
     for (int n = 0; n < count; ++n) {
         std::vector<std::string> pool;
         std::vector<double> weights;
@@ -67,6 +75,8 @@ void World::rollPersonality(Person& p, int count) {
             for (Id par : {p.father, p.mother})
                 if (par != kNone && hasTrait(people_[par], id)) w += 3;
             if (p.flags.count("childhood_" + id)) w += 6;
+            if (close && (t.opposite == "kind" || t.opposite == "generous")) w *= 0.3;
+            if (close && (id == "kind" || id == "generous")) w += 3;
             pool.push_back(id);
             weights.push_back(w);
         }

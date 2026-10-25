@@ -108,7 +108,11 @@ void World::fallIll(Id id, const std::string& cause) {
     const Care& c = cares[r];
     h.money -= c.cost;
     if (c.cost > 0) book(h, "看病", -c.cost);
-    h.food = std::max(0.0, h.food - c.food);
+    {
+        const double before = h.food;
+        h.food = std::max(0.0, h.food - c.food);
+        bookFood(h, "留給病人吃的", h.food - before);
+    }
     sick_[id].odds = std::clamp(kSickOdds + c.odds, 0.05, 0.95);
     if (c.spirit > 0) p.needs[Spirit] = clamp100(p.needs[Spirit] + c.spirit);
     if (c.odds < 0 && !self) addOpinion(id, acting, "nursed", 5, 6);
@@ -303,7 +307,7 @@ void World::giveBirth(Person& mother) {
             std::string traits;
             for (const auto& t : child.traits) traits += "、" + defs_.traits.at(t).name;
             bool home = inPlayerHouse(people_[motherId].household);
-            std::string kin = home ? "" : kinWord(actingHead(), c);
+            std::string kin = home || fullName(c).find("（你") != std::string::npos ? "" : kinWord(actingHead(), c);
             const std::string born = traits.empty() ? "" : "（天生" + traits.substr(3) + "）";  // the child's, said next to the child
             log(familyTold(c) ? 1 : 2,
                 (kin.empty() ? fullName(motherId) + " 生下了" + (s == Sex::Male ? "兒子 " : "女兒 ") + fullName(c) + born
@@ -353,6 +357,8 @@ void World::kill(Id id, const std::string& cause) {
     const bool home = inPlayerHouse(hid) || (away && inPlayerHouse(p.awayFrom));
     if (family || told || (hid != kNone && households_[hid].head == id)) {
         std::string kin = !home && told ? kinWord(actingHead(), id) : "";
+        // A namesake of the head's is told apart as 「（你的兒子）」 already: not 「兒子理查（你的兒子）」 (seed 195, 1347).
+        if (fullName(id).find("（你") != std::string::npos) kin.clear();
         std::string who = (kin.empty() ? "" : kin + " ") + fullName(id);
         log(told ? 1 : 2, age < 1 ? who + " 出生沒多久就夭折了。"
                                   : (away ? "從外頭傳來消息：" + who + "（" + stationName(p) + "）" : who) + " 因" + cause +
@@ -1006,6 +1012,7 @@ void World::mergeHousehold(Household& from, Household& to, const std::string& ho
     to.money += from.money;
     book(to, "併進來的錢（" + how + "）", from.money);
     to.food += from.food;
+    bookFood(to, "併進來的糧（" + how + "）", from.food);
     to.firewood += from.firewood;
     auto rank = [](const std::string& k) { return k == "manor" ? 3 : k == "stone" ? 2 : k == "timber" ? 1 : 0; };
     if (rank(from.house) > rank(to.house)) to.house = from.house;
@@ -1447,7 +1454,11 @@ void World::marry(Id man, Id woman) {
         fresh.head = man;
         settleAsHead(man);
         fresh.food = consumption(fresh) * 120;
-        oldHome.food = std::max(0.0, oldHome.food - fresh.food);
+        {
+            const double before = oldHome.food;
+            oldHome.food = std::max(0.0, oldHome.food - fresh.food);
+            bookFood(oldHome, "成親搬出去帶走的糧（" + people_[man].firstName + "）", oldHome.food - before);
+        }
         fresh.firewood = 20;
         if (isPlayerFamily(m))
             log(imp, fullName(man) + " 成家後搬出去，自立門戶，向領主租了 " + std::to_string(int(fresh.acres)) +
@@ -1462,8 +1473,20 @@ int World::askPlayer(const std::string& title, const std::string& situation, con
     if (inOpening() && openingAsked_ >= kOpeningCards) return -1;
     ChoicePrompt c{title, situation, options, unavailable};
     noteCardAsked();
+    closeAiCard();
     int r = chooser_(c);
-    return r >= 0 && r < static_cast<int>(options.size()) ? r : -1;
+    if (r >= 0 && r < static_cast<int>(options.size())) return r;
+    aiCard_ = {title, chronicle_.size(), true};
+    return -1;
+}
+
+void World::closeAiCard() {
+    if (!aiCard_.open) return;
+    aiCard_.open = false;
+    for (size_t i = aiCard_.at; i < chronicle_.size(); ++i)
+        if (chronicle_[i].importance <= 1) return;
+    ++counters_["card_untold"];
+    log(1, "〔" + aiCard_.title + "〕交給家裡照往常的規矩辦了。");
 }
 
 bool World::marriageable(const Person& p) const {

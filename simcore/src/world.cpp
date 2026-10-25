@@ -184,6 +184,7 @@ void World::stepDay() {
             else giveBirth(people_[i]);
         }
     ambitionNow();
+    closeAiCard();
 
     ++day_;
     // The family's books are kept to the penny: what moved the purse without a line is caught here (and is a bug).
@@ -312,6 +313,14 @@ std::string World::fullName(Id id) const {
             bool kinClash = false;  // another namesake the head would call the same
             for (const Person* o : namesakes) kinClash = kinClash || (!kin.empty() && kinByname(o->id) == kin);
             if (!kin.empty() && !kinClash) return s + "（" + kin + "）";
+            // Two of the family the head would call the same (two sons' wives both named 蘿絲): by whose wife or husband,
+            // not by a father of another house who may share the head's own name (seed 195, 1345: 「理查的女兒」).
+            if (kinClash && p.spouse != kNone && people_[p.spouse].alive()) {
+                bool spouseClash = false;
+                for (const Person* o : namesakes)
+                    spouseClash = spouseClash || (o->spouse != kNone && people_[o->spouse].firstName == people_[p.spouse].firstName);
+                if (!spouseClash) return s + "（" + people_[p.spouse].firstName + (p.sex == Sex::Male ? " 的丈夫）" : " 的妻子）");
+            }
             // Named for a father in another house, and he is the only other one: 小 (大 with a namesake child at home
             // who is 小 already).
             // (Not when another house has a 小 of that name already: then by whose son he is.)
@@ -386,9 +395,12 @@ std::string World::kinByname(Id id) const {
     const Person& h = people_[head];
     const Person& p = people_[id];
     bool f = p.sex == Sex::Female, older = p.birthDay < h.birthDay;
-    if (t == "sibling") return std::string("你的") + (f ? (older ? "姊姊" : "妹妹") : (older ? "哥哥" : "弟弟"));
+    // Dead, once the death is no longer news (as fullName's 老 / 已故的): the notice itself says 你的弟弟.
+    const bool gone = !p.alive() && p.deathDay < day_ - kDaysPerMonth;
+    if (t == "sibling") return std::string(gone ? "你過世的" : "你的") + (f ? (older ? "姊姊" : "妹妹") : (older ? "哥哥" : "弟弟"));
     std::string w = kinWord(head, id);
-    return w.empty() || w == "親戚" ? "" : "你的" + w;
+    // The dead are told as dead: 「你過世的兒子」, never as if he were still at the table (fun-r12 A7, seed 195).
+    return w.empty() || w == "親戚" ? "" : (gone ? "你過世的" : "你的") + w;
 }
 
 std::string World::shortName(Id id) const {

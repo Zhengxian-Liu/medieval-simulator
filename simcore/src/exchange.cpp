@@ -110,11 +110,11 @@ void World::payCreditor(Household& h, Id creditor, double amount) {
 
 // ---- The rival -----------------------------------------------------------------------------------
 
-void World::noteClash(Id houseA, Id houseB, const std::string& what) {
+void World::noteClash(Id houseA, Id houseB, const std::string& what, double weight) {
     if (houseA == kNone || houseB == kNone || houseA == houseB) return;
     Id a = households_[houseA].dynasty, b = households_[houseB].dynasty;
-    if (a == kNone || b == kNone || a == b) return;
-    clashes_.push_back({day_, a, b, what});
+    if (a == kNone || b == kNone) return;
+    clashes_.push_back({day_, a, b, what, houseA, houseB, weight});
     if (clashes_.size() > 600) clashes_.erase(clashes_.begin());
 }
 
@@ -131,15 +131,96 @@ std::string World::rivalName() const {
     return dynasties_[rival_.dynasty].surname + "家（" + fullName(households_[r].head) + "）";
 }
 
+// Where the family's house and the rival's house met (not the rest of either blood): newest first.
 std::vector<std::string> World::rivalClashes() const {
     std::vector<std::string> out;
-    if (rivalHouse() == kNone || playerDynasty_ == kNone) return out;
-    for (auto it = clashes_.rbegin(); it != clashes_.rend() && out.size() < 6; ++it) {
-        bool us = it->a == playerDynasty_ || it->b == playerDynasty_;
-        bool them = it->a == rival_.dynasty || it->b == rival_.dynasty;
-        if (us && them) out.push_back(std::to_string(cfg_.startYear + it->day / kDaysPerYear) + " 年 " + it->what);
-    }
+    Id r = rivalHouse();
+    if (r == kNone || playerHousehold_ == kNone) return out;
+    for (auto it = clashes_.rbegin(); it != clashes_.rend() && out.size() < 6; ++it)
+        if ((inPlayerHouse(it->ha) && it->hb == r) || (inPlayerHouse(it->hb) && it->ha == r))
+            out.push_back(std::to_string(cfg_.startYear + it->day / kDaysPerYear) + " 年 " + clashWords(*it));
     return out;
+}
+
+// A clash as the family reads it: one written before the hand-over named the family by its surname (「莊頭：阿特伍德家選上」,
+// read as the rival's win); the family's own win is 「你家選上」.
+std::string World::clashWords(const Clash& c) const {
+    std::string t = c.what;
+    if (playerDynasty_ == kNone) return t;
+    const std::string mine = dynasties_[playerDynasty_].surname + "家選上";
+    if (const size_t at = t.find(mine); at != std::string::npos && inPlayerHouse(c.hb)) t.replace(at, mine.size(), "你家選上");
+    return t;
+}
+
+// Close kin are never the rival (fun-r12 A4): the house of the head's parents, brothers and sisters, or children.
+bool World::kinHouse(Id house) const {
+    const Id head = actingHead();
+    if (head == kNone || house == kNone) return false;
+    for (Id m : households_[house].members) {
+        const std::string t = kinTie(head, m);
+        // (and the wife's own father: seed 195, 1348 chose the house of the head's 岳父)
+        if (t == "parent" || t == "sibling" || t == "child" || t == "step_parent" || t == "step_child" || t == "spouse" || t == "parent_in_law" ||
+            t == "child_in_law")
+            return true;
+        const Id sp = people_[m].spouse;
+        if (m == households_[house].head && sp != kNone && people_[sp].alive()) {
+            const std::string ts = kinTie(head, sp);
+            if (ts == "parent" || ts == "sibling" || ts == "child") return true;
+        }
+    }
+    // 親家: the house a son's wife came from, while she lives in the family's house (a match is how feuds were ended).
+    if (people_[head].household != kNone)
+        for (Id m : households_[people_[head].household].members) {
+            const Person& p = people_[m];
+            if (!p.alive() || p.spouse == kNone || kinTie(head, p.spouse) != "child") continue;
+            for (Id par : {p.father, p.mother})
+                if (par != kNone && people_[par].alive() && people_[par].household == house) return true;
+        }
+    return false;
+}
+
+// How much this house has clashed with the family's, lately (fun-r12 A4): contests, suits, lost bids and lost matches
+// (the clash book), what the head believes they did to the family, the grudge between the heads, and what both are
+// after now. The newer, the heavier: a clash of six years ago counts half.
+double World::rivalScore(Id house, std::vector<std::string>* why) const {
+    const Id head = actingHead();
+    if (head == kNone || house == kNone) return 0;
+    const Household& h = households_[house];
+    if (h.extinct || h.head == kNone || h.members.empty()) return 0;
+    auto fresh = [&](int day) { return std::pow(0.5, (day_ - day) / double(6 * kDaysPerYear)); };
+    double s = 0;
+    for (const auto& c : clashes_) {
+        if (day_ - c.day > 15 * kDaysPerYear) continue;
+        if (!((inPlayerHouse(c.ha) && c.hb == house) || (inPlayerHouse(c.hb) && c.ha == house))) continue;
+        s += 3 * c.weight * fresh(c.day);
+        if (why && why->size() < 3) why->push_back(clashWords(c));
+    }
+    // A wrong the head believes they did the family (a theft, a fire, slander): the deed, not the talk about it.
+    std::set<Id> deeds;
+    for (const auto& b : head < static_cast<Id>(beliefs_.size()) ? beliefs_[head] : std::vector<Belief>{}) {
+        if (b.deed == kNone || b.culprit == kNone || b.confidence < 50 || deeds.count(b.deed)) continue;
+        const Deed& d = deeds_[b.deed];
+        if (day_ - d.day > 15 * kDaysPerYear || people_[b.culprit].household != house) continue;
+        if (d.target == kNone || !inPlayerHouse(people_[d.target].household)) continue;
+        const DeedDef* def = defs_.deed(d.type);
+        if (!def || std::find(def->tags.begin(), def->tags.end(), "crime") == def->tags.end()) continue;
+        deeds.insert(b.deed);
+        s += 4 * fresh(d.day);
+    }
+    if (h.dynasty != kNone && h.dynasty != playerDynasty_) {
+        for (const auto& f : feuds_)
+            if ((f.a == playerDynasty_ && f.b == h.dynasty) || (f.b == playerDynasty_ && f.a == h.dynasty)) s += f.stage * 3 + f.heat / 25;
+    }
+    if (opinion(h.head, head) <= -20) s += 1.5;
+    if (opinion(head, h.head) <= -20) s += 1.5;
+    for (const auto& wt : wants_) {
+        if (!wt.open || wt.house != house) continue;
+        bool hits = wt.kind == "parcel" && wt.object != kNone && inPlayerHouse(parcels_[wt.object].holder);
+        for (const auto& w2 : wants_)
+            hits = hits || (w2.open && inPlayerHouse(w2.house) && w2.kind == wt.kind && w2.object == wt.object && w2.office == wt.office);
+        if (hits) s += 2;
+    }
+    return s;
 }
 
 std::string World::rivalAfter() const {
@@ -185,50 +266,52 @@ void World::updateRival() {
     const Dynasty& our = dynasties_[playerDynasty_];
     Id genHead = our.heads.empty() ? kNone : our.heads.back();
     if (genHead == kNone) return;
-    if (rival_.forHead == genHead && rivalHouse() != kNone) return;
-    if (rival_.forHead != genHead) rival_ = Rival{}, rival_.forHead = genHead;
-    Id ourHead = actingHead();
-    const int genSince = our.headSince.empty() ? 0 : our.headSince.back();
-    std::map<Id, double> score;
-    for (const auto& c : clashes_) {
-        if (c.a != playerDynasty_ && c.b != playerDynasty_) continue;
-        if (day_ - c.day > 20 * kDaysPerYear) continue;
-        score[c.a == playerDynasty_ ? c.b : c.a] += c.day >= genSince ? 4 : 3;
+    const bool newGen = rival_.forHead != genHead;
+    // The rival's house changed hands: the family hears who it has to reckon with now.
+    if (!newGen && rivalHouse() != kNone && households_[rival_.house].head != rival_.headOf) {
+        const Id was = rival_.headOf, now = households_[rival_.house].head;
+        rival_.headOf = now;
+        if (day_ >= handedOver_ && now != kNone)
+            log(1, "【宿敵】" + dynasties_[rival_.dynasty].surname + "家換了當家的：" + fullName(now) + "（" + std::to_string(int(ageYears(people_[now]))) + " 歲）接下了" +
+                       (was != kNone ? fullName(was) + (people_[was].alive() ? "" : "（已過世）") + "的家業" : "家業") + "，兩家的帳也跟著到了" +
+                       (people_[now].sex == Sex::Male ? "他" : "她") + "手上（" + people_[now].firstName + " 對你家 " +
+                       std::to_string(std::lround(actingHead() != kNone ? opinion(now, actingHead()) : 0)) + "）。");
     }
-    for (const auto& f : feuds_) {
-        if (f.a != playerDynasty_ && f.b != playerDynasty_) continue;
-        score[f.a == playerDynasty_ ? f.b : f.a] += f.stage * 4 + f.heat / 20;
-    }
-    for (const auto& wt : wants_) {
-        if (!wt.open || inPlayerHouse(wt.house) || households_[wt.house].dynasty == kNone) continue;
-        bool hits = wt.kind == "parcel" && wt.object != kNone && inPlayerHouse(parcels_[wt.object].holder);
-        for (const auto& w2 : wants_)
-            hits = hits || (w2.open && inPlayerHouse(w2.house) && w2.kind == wt.kind && w2.object == wt.object && w2.office == wt.office);
-        if (hits) score[households_[wt.house].dynasty] += 2;
+    // Weighed again at each year's start (and for a new generation, or when the rival is gone or has become kin).
+    const bool gone = rivalHouse() == kNone || kinHouse(rival_.house);
+    if (!newGen && !gone && !(month() == 0 && dayOfMonth() == 0)) return;
+    if (!newGen && rivalHouse() != kNone && kinHouse(rival_.house) && day_ >= handedOver_)
+        log(1, "【宿敵】" + dynasties_[rival_.dynasty].surname + "家跟你家結了親，兩家成了親家，不再算宿敵了。");
+    if (newGen) {
+        Rival fresh;
+        fresh.forHead = genHead;
+        rival_ = fresh;
     }
     Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
-    Id best = kNone, bestHouse = kNone;
+    Id bestHouse = kNone;
     double top = 3.5;
-    for (const auto& [d, s] : score) {
-        // A living house of that blood, not the lord's: the one with the most land.
-        Id house = kNone;
-        for (const auto& h : households_)
-            if (!h.extinct && h.head != kNone && !h.members.empty() && h.dynasty == d && h.id != lordHouse && !inPlayerHouse(h.id) &&
-                people_[h.head].occupation != "priest" && (house == kNone || h.acres > households_[house].acres))
-                house = h.id;
-        if (house == kNone) continue;
-        double v = s + (ourHead != kNone && opinion(households_[house].head, ourHead) <= -20 ? 1 : 0);
-        if (v > top) top = v, best = d, bestHouse = house;
+    for (const auto& h : households_) {
+        if (h.extinct || h.head == kNone || h.members.empty() || h.id == lordHouse || inPlayerHouse(h.id) || h.dynasty == kNone) continue;
+        if (people_[h.head].occupation == "priest" || kinHouse(h.id)) continue;
+        double v = rivalScore(h.id);
+        if (v > top) top = v, bestHouse = h.id;
     }
-    if (best == kNone) return;
-    rival_.dynasty = best;
+    const double now = gone ? 0 : rivalScore(rival_.house);
+    // A standing rival is kept unless another house has clearly clashed more with the family since.
+    if (bestHouse == kNone || bestHouse == rival_.house || (!gone && top < now * 1.3 + 2)) {
+        if (gone && !newGen && bestHouse == kNone) rival_.house = kNone, rival_.dynasty = kNone;
+        return;
+    }
+    const bool had = !gone && rival_.house != kNone;
+    rival_.dynasty = households_[bestHouse].dynasty;
     rival_.house = bestHouse;
+    rival_.headOf = households_[bestHouse].head;
     rival_.since = day_;
     if (day_ < handedOver_) return;
     std::vector<std::string> past = rivalClashes();
     if (past.size() > 3) past.resize(3);
-    log(1, cardText("rival.chosen", {{"house", rivalName()}, {"clashes", past.empty() ? cardText("rival.no_clash") : join(past, "；")},
-                                     {"after", rivalAfter()}}));
+    log(1, cardText(had ? "rival.changed" : "rival.chosen", {{"house", rivalName()}, {"clashes", past.empty() ? cardText("rival.no_clash") : join(past, "；")},
+                                                             {"after", rivalAfter()}}));
 }
 
 // ---- 缺糧：跟誰開口 -----------------------------------------------------------------------------
@@ -528,14 +611,24 @@ int World::grainExchange(Household& h) {
 
 void World::famineAsk() {
     if (playerHousehold_ == kNone || actingHead() == kNone || month() >= 8) return;
-    const bool famine = lastWeather_ < 0.85 || param("harvest_mult", 1) < 0.85;
-    if (!famine) return;
     const int key = year() * 4 + month() / 3;
     if (famineAsked_ == key) return;
     if (famineYear_ != harvestYear()) famineYear_ = harvestYear(), famineAsks_ = 0;
-    if (famineAsks_ >= 2) return;
     Household& ph = households_[playerHousehold_];
     Id head = actingHead();
+    // fun-r12 A5: a real dearth, by the village's barns (not the family's own harvest): a fifth of the houses short and
+    // unable to buy. Without one, only a house that is itself short comes, once a harvest year.
+    Id lordHouse0 = lord_ != kNone ? people_[lord_].household : kNone;
+    int shortHouses = 0, houses = 0;
+    for (const auto& o : households_) {
+        if (o.extinct || o.members.empty() || o.head == kNone || o.id == ph.id || o.id == lordHouse0 || gentry(o.head)) continue;
+        ++houses;
+        if (breadShort(o) >= 20 && o.money < costToHarvest(o)) ++shortHouses;
+    }
+    // A dearth is a bad year for the village: a wet summer with several houses short, or a third of them short whatever
+    // the weather. Three landless houses short as they are every spring are not a famine (seed 195: 「荒年」 every year).
+    const bool dearth = shortHouses >= 3 && (lastWeather_ < 0.85 || param("harvest_mult", 1) < 0.85 ? shortHouses * 5 >= houses : shortHouses * 3 >= houses);
+    if (famineAsks_ >= (dearth ? 2 : 1)) return;
     const double ourDaily = std::max(0.5, consumption(ph));
     const double spare = foodDays(ph) - (daysToHarvest() + 60);
     if (spare < 20) return;
@@ -546,6 +639,15 @@ void World::famineAsk() {
     for (const auto& o : households_) {
         if (o.extinct || o.members.empty() || o.head == kNone || o.id == ph.id || o.id == lordHouse) continue;
         if (people_[o.head].occupation == "priest" || breadShort(o) < 20 || o.money >= costToHarvest(o)) continue;
+        // Not the lord's own kin (their lord feeds them), and the same house at most twice a generation.
+        // Not two years running either, and not a house the family was just asked about as kin going hungry (親友挨餓).
+        const FamineSeen& fs = famineBy_[{generation(), o.id}];
+        // (The two years run across a change of head: a new head is not asked by the house that came last year.)
+        int lastCame = fs.n >= 1 ? fs.year : -100000;
+        for (const auto& [k, seen] : famineBy_)
+            if (k.second == o.id && seen.n >= 1) lastCame = std::max(lastCame, seen.year);
+        if (gentry(o.head) || fs.n >= 2 || year() - lastCame < 2) continue;
+        if (auto fa = feedAskedUntil_.find(o.id); fa != feedAskedUntil_.end() && fa->second > day_) continue;
         double s = (o.id == rh ? 100 : 0) + houseLink(ph.id, o.id) * 50 + std::abs(opinion(o.head, head)) / 2 +
                    (favourOwed(o.head, head) + favourOwed(head, o.head) > 2 ? 20 : 0);
         for (const auto& wt : wants_)
@@ -559,6 +661,8 @@ void World::famineAsk() {
     if (days < 15) return;
     famineAsked_ = key;
     ++famineAsks_;
+    // Kin who came to the door for grain are not the 親友挨餓 card the same half-year (seed 195, 1350: lent, then fed).
+    feedAskedUntil_[pick] = std::max(feedAskedUntil_[pick], day_ + kDaysPerYear / 2);
     const double grain = days * theirDaily;
     const double ourDays = grain / ourDaily;
     const double market = grain * param("grain_price", 0.5);
@@ -605,11 +709,28 @@ void World::famineAsk() {
     tag.push_back(2);
     opts.push_back(cardText("famine.keep", v) + "｜" + touches({cardText("famine.also_opinion", v), wantsOurs.empty() ? "" : wantsOurs}));
     tag.push_back(3);
-    std::string sit = cardText("famine.situation", v) + (rival ? cardText("famine.rival", v) : "");
-    int r = askPlayer(cardText("famine.title", v), sit, opts, unavailable);
+    // The telling: the village's dearth, or this house alone and why; a second coming says what was done the first time.
+    FamineSeen& seen = famineBy_[{generation(), pick}];
+    {
+        std::string hw = hungerWhy(pick);
+        const std::string lead = "缺糧的緣故：";
+        if (hw.rfind(lead, 0) == 0) hw = hw.substr(lead.size());
+        v["why"] = hw;
+    }
+    v["short_houses"] = std::to_string(shortHouses);
+    v["when"] = dearth ? "荒年" : "斷糧時";  // the favour and the talk: 荒年 only for a real dearth (fun-r12 A5)
+    v["last_year"] = std::to_string(seen.year);
+    v["last"] = seen.answer;
+    const bool again = seen.n >= 1;
+    std::string sit = cardText(again ? "famine.situation_again" : dearth ? "famine.situation" : "famine.situation_one", v) + cardText("famine.state", v) +
+                      (rival ? cardText("famine.rival", v) : "");
+    const std::string ttl = cardText(again ? "famine.title_again" : dearth ? "famine.title" : "famine.title_one", v);
+    int r = askPlayer(ttl, sit, opts, unavailable);
     int t = r < 0 ? (opinion(head, oh.head) >= 30 && room ? 0 : 3) : tag[r];
     const std::string me = fullName(head);
-    const std::string title = "〔" + cardText("famine.title", v) + "〕";
+    const std::string title = "〔" + ttl + "〕";
+    ++seen.n, seen.year = year();
+    seen.answer = t == 0 ? "借了糧給他家" : t == 1 ? "高價賣了糧給他家" : t == 2 ? "白送了糧" : "沒有給";
     const double before = ph.money, foodBefore = foodDays(ph);
     auto ledger = [&]() {
         std::vector<std::string> parts;
@@ -620,6 +741,7 @@ void World::famineAsk() {
     auto hand = [&]() {
         ph.food = std::max(0.0, ph.food - grain);
         oh.food += grain;
+        bookFood(oh, "別人給的糧", grain);
     };
     if (t == 0) {
         hand();
@@ -627,37 +749,37 @@ void World::famineAsk() {
         addDebt(oh, owed, head);  // (offered only when his books have room)
         log(1, title + cardText("famine.done_lend", v) + "（選擇：借）");
         ledger();
-        favourLine(oh.head, head, 15, cardText("favour.famine_lend", {{"year", std::to_string(year())}, {"days", num(days)}}));
+        favourLine(oh.head, head, 15, cardText("favour.famine_lend", {{"year", std::to_string(year())}, {"days", num(days)}, {"when", v["when"]}}));
         addOpinion(oh.head, head, "helped_me", 10, 10);
     } else if (t == 1) {
         hand();
         bookFood(ph, "高價賣糧", -grain);
         oh.money -= dear;
         ph.money += dear;
-        book(ph, "荒年高價賣糧", dear);
+        book(ph, dearth ? "荒年高價賣糧" : "高價賣糧", dear);
         book(oh, "高價買糧", -dear);
         log(1, title + cardText("famine.done_sell", v) + "（選擇：高價賣）");
         ledger();
         addReputation(head, -6, cardText("rep.famine_sell", v));
         log(1, "  " + cardText("famine.rep_sell"));
         addOpinion(oh.head, head, "famine_gouge", -15, 12);
-        favourLine(oh.head, head, 2, cardText("favour.famine_sell", {{"year", std::to_string(year())}}));
+        favourLine(oh.head, head, 2, cardText("favour.famine_sell", {{"year", std::to_string(year())}, {"when", v["when"]}}));
     } else if (t == 2) {
         hand();
         bookFood(ph, "白送的糧", -grain);
         log(1, title + cardText("famine.done_give", v) + "（選擇：送）");
         ledger();
         addReputation(head, 6, cardText("rep.famine_give", v));
-        log(1, "  " + cardText("famine.rep_give"));
+        log(1, "  " + cardText("famine.rep_give", v));
         addOpinion(oh.head, head, "famine_gift", 25, 15);
         recordDeed("kindness", head, oh.head);
-        favourLine(oh.head, head, 30, cardText("favour.famine_give", {{"year", std::to_string(year())}, {"days", num(days)}}));
+        favourLine(oh.head, head, 30, cardText("favour.famine_give", {{"year", std::to_string(year())}, {"days", num(days)}, {"when", v["when"]}}));
     } else {
         log(1, title + cardText("famine.done_keep", v) + "（選擇：囤著）");
         addOpinion(oh.head, head, "refused_loan", -8, 8);
     }
     if (rival) {
-        noteClash(ph.id, oh.id, cardText("clash.famine", {{"name", fullName(oh.head)}}));
+        noteClash(ph.id, oh.id, cardText("clash.famine", {{"name", fullName(oh.head)}, {"when", v["when"]}}), 0.4);  // a plea at the door, no fight
         // The rival's own house at the family's door for bread: a head-on meeting of the generation (fun-r11 6).
         rival_.headOn = day_;
         ++rival_.headOns;

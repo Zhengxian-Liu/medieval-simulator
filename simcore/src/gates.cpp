@@ -41,7 +41,13 @@ OfficeGate EventRunner::gate(const std::string& k, const Json& v, const Person& 
     OfficeGate g;
     g.ok = evalKey(k, v, p, target);
     if (quiet) *quiet = false;
-    const std::string who = w.shortName(p.id);
+    // Whom it is about, told apart from namesakes: for one of the family the plan is for (target = the actor), what they
+    // are to the head as well (fun-r12 A7, seed 195: 「愛麗絲已經 40 歲」 was the married daughter, read as the dead wife).
+    std::string who = w.shortName(p.id);
+    if (target != kNone && target != p.id) {
+        const std::string kin = w.kinByname(p.id);
+        if (kin.size() > 3 && kin != "你") who = kin + who;
+    }
     Id hid = p.household != kNone ? p.household : w.isAway(p) ? p.awayFrom : kNone;
     const Household* h = hid != kNone ? &w.households_[hid] : nullptr;
     auto yes = [&](const Json& x) { return !x.isBool() || x.asBool(); };
@@ -182,8 +188,19 @@ OfficeGate EventRunner::gate(const std::string& k, const Json& v, const Person& 
     } else if (k == "feud_ge") {
         set(v.asNumber() >= 2 ? "跟你家結了怨" : "跟你家有嫌隙", "跟你家還沒到那一步");
     } else if (k == "marriageable") {
-        set(yes(v) ? "能談婚事（不是神職、書記，不在外打仗）" : "不能談婚事",
-            yes(v) ? who + "是神職、書記或在外打仗，不談婚事" : who + "還能談婚事");
+        // The one reason that bars, not the whole list (fun-r12 A7: 「雷夫是神職、書記」 of a married farmer).
+        std::string why = "不談婚事";
+        static const std::map<std::string, std::string> kChurch{{"priest", "當了神父"}, {"monk", "當了修士"}, {"nun", "當了修女"}, {"clerk", "當了書記"}};
+        if (!p.alive()) why = "已經過世了";
+        else if (p.spouse != kNone && w.people_[p.spouse].alive()) why = "已經成了親（配偶是 " + w.shortName(p.spouse) + "）";
+        else if (p.flags.count("celibate")) why = "發願不嫁娶";
+        else if (auto it = kChurch.find(p.occupation); it != kChurch.end()) why = it->second + "，不談婚事";
+        else if (p.station == "archer") why = "在外打仗，不談婚事";
+        else if (w.isAway(p)) why = "不在村裡，不談婚事";
+        else
+            for (const auto& ap : w.plans_)
+                if (ap.subject == p.id && ap.plan == "church_post") why = "正在謀教會的差事，不談婚事";
+        set(yes(v) ? "能談婚事（沒成親，不是神職、書記，不在外打仗）" : "不能談婚事", yes(v) ? who + why : who + "還能談婚事");
     } else if (k == "family_offices_ge") {
         int now = w.familyOffices(p.dynasty);
         set("家裡有 " + num(v.asNumber()) + " 個人當著村裡的差事", "家裡眼下有 " + std::to_string(now) + " 個人當差（要 " + num(v.asNumber()) + " 個）");
@@ -213,6 +230,8 @@ OfficeGate EventRunner::gate(const std::string& k, const Json& v, const Person& 
         set("另有條件", "還不合條件");
         hush();
     }
+    // The dead: whatever the condition, the reason is that they are gone (fun-r12 A7: a wife dead six years "已經 40 歲").
+    if (!p.alive() && !g.ok) g.detail = who + "已經過世了";
     return g;
 }
 

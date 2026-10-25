@@ -45,6 +45,10 @@ const FocusDef* World::focusDefault(const Person& p) const {
     const FocusDef* f = nullptr;
     if (ageYears(p) < 14) {
         if (p.station == "apprentice") f = pick("errand");  // at the master's bench all day
+        // Lessons with the priest while there is reading still to learn; a child who reads already and has been set to a
+        // trade spends the days at it (fun-r12 A7, seed 195: Matilda, reading and learning to brew, was shown at her
+        // letters while it was her mother who had gone to the priest).
+        if (!f && p.flags.count("schooled") && hasTrait(p, "literate") && p.flags.count("trade_decided")) f = pick("errand");
         if (!f && p.flags.count("schooled")) f = pick("letters");
         if (!f) f = pick(defs_.focusDefaults.at(p.sex == Sex::Male ? "child_male" : "child_female"));
     } else {

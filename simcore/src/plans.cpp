@@ -107,6 +107,8 @@ void World::processCommands() {
             else if (what == "grain") setGrainRule(value);
             else if (what == "routine") setRoutineByRule(value == "1");
             else if (what == "repeats") setRepeatRule(value);
+            else if (what == "votes") setVoteRule(value);
+            else if (what == "quarrels") setQuarrelRule(value);
         } else if (c.type == "interact") {
             // 陪家人 (keep_company): whichever of the company visits this person needs most now.
             std::string id = c.plan == "keep_company" && c.target != kNone ? companyEvent(c.target) : c.plan;
@@ -354,12 +356,72 @@ bool World::headConsents(Id actorId, const PlanDef& pd, Id target) {
     return yes;
 }
 
+bool World::planIsOurs(const ActivePlan& plan, const PlanDef& pd) const {
+    const Person& a = people_[plan.actor];
+    const bool home = inPlayerHouse(a.household) || (a.household == kNone && inPlayerHouse(a.awayFrom)) || (!a.alive() && inPlayerHouse(a.diedIn));
+    if (!home) return false;
+    // A family member's affair is theirs to hide (hooks.cpp familyAffairs tells it by stages); the head's own, or one
+    // the head said yes to, is the family's.
+    const bool consented = std::find(plan.beatsSeen.begin(), plan.beatsSeen.end(), "_consent") != plan.beatsSeen.end();
+    if (pd.secret && pd.consent && plan.actor != actingHead() && plan.actor != playerHead() && !consented) return false;
+    return true;
+}
+
+void World::tellPlan(const std::string& outcome, const std::string& text) {
+    if (text.empty()) return;
+    const char* tag = outcome == "success" || outcome == "wed" ? "【成功】" : outcome == "exposed" ? "【敗露】" : outcome == "fail" ? "【失敗】" : "【落空】";
+    log(1, tag + text);
+    ++counters_["plan_told"];
+}
+
+std::string World::planFallback(const ActivePlan& plan, const PlanDef& pd, const std::string& outcome) const {
+    const std::string who = fullName(plan.actor) + " 的「" + pd.name + "」";
+    if (outcome == "success") return who + "辦成了。";
+    if (outcome == "exposed") return who + "被人看破了。";
+    if (outcome == "cancel") return fullName(plan.actor) + " 放棄了「" + pd.name + "」。";
+    if (outcome == "aborted") return who + "就此作罷。";
+    if (outcome == "fail") {
+        const int months = (day_ - plan.startDay) / kDaysPerMonth;
+        return who + "沒有成：" + (months >= pd.maxMonths ? "拖了 " + std::to_string(months) + " 個月，" : "白忙了一場，") +
+               (plan.target != kNone && people_[plan.target].alive()
+                    ? people_[plan.target].firstName + " 對你家的好感還是 " + std::to_string(std::lround(opinion(plan.target, plan.actor))) + "。"
+                    : "眼下只好先放下。");
+    }
+    return who + "沒辦下去。";
+}
+
 void World::endPlan(size_t index, const std::string& requested) {
-    std::string outcome = requested;
     ActivePlan plan = plans_[index];
     plans_.erase(plans_.begin() + static_cast<long>(index));
+    const PlanDef* pd = defs_.plan(plan.plan);
+    const bool ours = pd && planIsOurs(plan, *pd);
+    const int told = counters_["plan_told"];
+    endPlanBody(plan, requested);
+    if (!ours) return;
+    ++counters_["plan_end_ours"];
+    if (counters_["plan_told"] != told) return;
+    // A path that ended the family's plan without a word: the fallback speaks, and the count shows the gap (tests).
+    ++counters_["plan_untold"];
+    tellPlan(requested, planFallback(plan, *pd, requested));
+}
+
+void World::endPlanBody(ActivePlan plan, const std::string& requested) {
+    std::string outcome = requested;
     ++counters_["plan:" + plan.plan + ":" + outcome];
     const PlanDef* pd = defs_.plan(plan.plan);
+    if (outcome == "actor_gone" || outcome == "wed") {
+        // The one doing it died or left (a match set going and never heard of again), or the pair married each other
+        // another way (her family came asking): never just gone from the list.
+        const Person& a = people_[plan.actor];
+        if (!planIsOurs(plan, *pd)) return;
+        if (outcome == "wed") {
+            Id one = plan.plan == "court" ? plan.actor : plan.subject;
+            tellPlan(outcome, "「" + pd->name + "」不用再辦了：" + fullName(one) + " 和 " + fullName(plan.target) + " 已經成了親。");
+        } else {
+            tellPlan(outcome, "「" + pd->name + "」擱下了：" + fullName(a.id) + (a.alive() ? " 已經不在家裡" : " 已經過世") + "，沒人接著辦。");
+        }
+        return;
+    }
     // After a failure the plan waits its full time; one that came off can be taken up again within the year.
     if (pd->retryYears > 0)
         cooldowns_[{plan.actor, "plan:" + plan.plan}] = day_ + (outcome == "success" ? std::min(pd->retryYears, 1) : pd->retryYears) * kDaysPerYear;
@@ -373,16 +435,23 @@ void World::endPlan(size_t index, const std::string& requested) {
     EventRunner ev(*this, &plan);
     // A family member's own plan is theirs, told as theirs (「艾格妮絲 自己的「追求」落空了」), not in the head's voice.
     bool own = actorHome && plan.actor != actingHead();
-    std::string whose = own ? "【家人】" + fullName(plan.actor) + " 自己的「" + pd->name + "」" : "「" + pd->name + "」";
+    std::string whose = own ? fullName(plan.actor) + " 自己的「" + pd->name + "」" : "「" + pd->name + "」";
 
-    if (outcome == "aborted") return;  // called off in a beat that already said so: no failure, no deed, no talk
+    if (outcome == "aborted") {
+        // Called off in a beat that already said why: no failure, no deed, no talk; the plan's end is still told.
+        if (actorHome) tellPlan(outcome, whose + "就此作罷。");
+        return;
+    }
     if (outcome == "cancel") {
-        if (actorHome) log(1, fullName(plan.actor) + " 放棄了「" + pd->name + "」。");
+        if (actorHome) tellPlan(outcome, fullName(plan.actor) + " 放棄了「" + pd->name + "」。");
         return;
     }
     if (outcome == "lost_target") {
         Id gone = plan.target != kNone && (!people_[plan.target].alive() || people_[plan.target].household == kNone) ? plan.target : plan.subject;
-        if (actorHome && gone != kNone) log(1, whose + "落空了：" + fullName(gone) + " 已經不在了。");
+        if (actorHome && gone != kNone) {
+            const Person& g = people_[gone];
+            tellPlan(outcome, whose + "落空了：" + fullName(gone) + (g.alive() ? " 已經不在村裡了。" : " 已經過世了。"));
+        }
         return;
     }
     if (outcome == "married_off") {
@@ -392,7 +461,18 @@ void World::endPlan(size_t index, const std::string& requested) {
         };
         Id partner = plan.plan == "court" ? plan.actor : plan.subject;
         Id wed = wedTo(plan.subject, plan.target) ? plan.subject : wedTo(plan.target, partner) ? plan.target : plan.actor;
-        if (actorHome) log(1, whose + "落空了：" + fullName(wed) + " 已經另結了親。");
+        if (actorHome) {
+            // Lost to another house: say whose, and it is a clash with them (fun-r12 A1, A4).
+            const Id to = people_[wed].spouse;
+            const Id toHouse = to != kNone ? people_[to].household : kNone;
+            std::string by;
+            if (to != kNone && wed == plan.target) {
+                by = "，許給了" + (toHouse != kNone && households_[toHouse].dynasty != kNone ? dynasties_[households_[toHouse].dynasty].surname + "家的 " : std::string()) +
+                     fullName(to);
+                if (toHouse != kNone && !inPlayerHouse(toHouse)) noteClash(actor.household, toHouse, "親事：" + fullName(wed) + " 許給了他家");
+            }
+            tellPlan(outcome, whose + "落空了：" + fullName(wed) + " 已經另結了親" + by + "。");
+        }
         return;
     }
     // An affair aimed at the one keeping the player's house goes nowhere without their yes (asked here when the plan
@@ -440,7 +520,7 @@ void World::endPlan(size_t index, const std::string& requested) {
         deal = landDeal(households_[actor.household], households_[people_[plan.target].household], (*buy)["acres"].asNumber(),
                         (*buy)["price"].asNumber(), !((*buy)["wanted"].isBool() && !(*buy)["wanted"].asBool()), plan.priceAdd);
         if (!deal.ok) {
-            if (actorHome) log(1, "「" + pd->name + "」沒談成：" + (deal.acres <= 0 ? fullName(plan.target) + " 家已經沒有地可讓" : "手上的錢不夠了") + "。");
+            if (actorHome) tellPlan("fail", "「" + pd->name + "」沒談成：" + (deal.acres <= 0 ? fullName(plan.target) + " 家已經沒有地可讓" : "手上的錢不夠了") + "。");
             return;
         }
     }
@@ -461,35 +541,42 @@ void World::endPlan(size_t index, const std::string& requested) {
     // which case nothing of it happens (no 「分了家」 line, no standing for it; round 10 M1).
     if (outcome == "success" && plan.subject != kNone && pd->success.isArray() && inPlayerHouse(actor.household))
         for (const auto& e : pd->success.asArray())
-            if (e.has("settle_subject") && !askSettleSon(actor.household, plan.subject, e["settle_subject"].numberOr("acres", 8), e["settle_subject"].numberOr("money", 30)))
+            if (e.has("settle_subject") && !askSettleSon(actor.household, plan.subject, e["settle_subject"].numberOr("acres", 8), e["settle_subject"].numberOr("money", 30))) {
+                tellPlan("aborted", "「" + pd->name + "」先擱著：" + fullName(plan.subject) + " 還留在家裡。");
                 return;
+            }
     const std::string& text = outcome == "success" ? pd->successLog : outcome == "exposed" ? pd->exposedLog : pd->failLog;
     const Json& effects = outcome == "success" ? pd->success : outcome == "exposed" ? pd->exposed : pd->fail;
     std::string line = text.empty() ? "" : ev.format(text, actor, plan.target);
-    // A plan of the family's never just stops: one that came to nothing says so, and why.
-    if (line.empty() && outcome == "fail" && actorHome && !pd->secret) {
-        int months = (day_ - plan.startDay) / kDaysPerMonth;
-        line = fullName(plan.actor) + " 的「" + pd->name + "」沒有成：" +
-               (months >= pd->maxMonths ? "拖了 " + std::to_string(months) + " 個月，" : "白忙了一場，") +
-               (plan.target != kNone ? people_[plan.target].firstName + " 對你家的好感還是 " + std::to_string(std::lround(opinion(plan.target, plan.actor))) + "。"
-                                     : "眼下只好先放下。");
-    }
     // The one keeping the player's house said yes to it (順水推舟): it is theirs as much as the actor's.
     const bool consented = std::find(plan.beatsSeen.begin(), plan.beatsSeen.end(), "_consent") != plan.beatsSeen.end();
-    if (consented && !line.empty()) {
-        log(1, (outcome == "success" ? std::string("【成功】") : outcome == "exposed" ? "【敗露】" : "【失敗】") + line);
+    const bool ours = planIsOurs(plan, *pd);
+    // A family member's affair is theirs to hide, whether it came off or came to nothing; only exposure makes it news.
+    const bool hidden = own && !ours && !consented && pd->secret && pd->consent && outcome != "exposed";
+    // A plan of the family's never just stops: one that came to nothing says so, and why.
+    if (line.empty() && outcome == "fail" && actorHome && !hidden) line = planFallback(plan, *pd, outcome);
+    if (ours && !line.empty()) {
+        tellPlan(outcome, line);
+    } else if (consented && !line.empty()) {
+        tellPlan(outcome, line);
     } else if (pd->secret && outcome == "success" && victimHome && !actorHome) {
         // The victim sees what happened, not who did it.
         if (!pd->victimLog.empty()) log(1, ev.format(pd->victimLog, actor, plan.target));
-    } else if (own && pd->secret && pd->consent && outcome == "success") {
+    } else if (hidden) {
         // A family member's affair is theirs to hide: the head comes to hear of it by stages (hooks.cpp familyAffairs).
-    } else if (!line.empty() && (actorHome || (victimHome && pd->notifyTarget))) {
-        log(1, (own ? std::string("【家人】") : outcome == "success" ? "【成功】" : outcome == "exposed" ? "【敗露】" : "【失敗】") + line);
+    } else if (!line.empty() && actorHome) {
+        tellPlan(outcome, line);  // (found out: the whole village knows)
+    } else if (!line.empty() && victimHome && pd->notifyTarget) {
+        // Another house's plan that reached the family (a match for one of ours, a field of ours): its answer.
+        log(1, (outcome == "success" ? "【成功】" : outcome == "exposed" ? "【敗露】" : "【失敗】") + line);
     } else if (!line.empty() && outcome == "exposed") {
         log(2, line);
     }
     size_t before = deeds_.size();
+    const size_t told = chronicle_.size();
     ev.apply(effects, actor, plan.target);
+    // A plan whose outcome is told by what it does (a suit at the court, the terms of a threat): those lines are its answer.
+    if (ours && line.empty() && chronicle_.size() > told) ++counters_["plan_told"];
     // Say why, when the doer's family is the player's: a grudge answered is part of the story.
     if (actorHome && outcome == "success")
         for (size_t k = before; k < deeds_.size(); ++k)
@@ -505,13 +592,7 @@ void World::monthlyPlans() {
         const PlanDef* pd = defs_.plan(plan.plan);
         Person& actor = people_[plan.actor];
         if (!actor.alive() || actor.household == kNone) {
-            // The one doing it died or left: said, when it was the player's own house's and no secret (a match set going
-            // and never heard of again; never an affair or a threat the family has not found out).
-            const bool ours = inPlayerHouse(actor.home) || (actor.household == kNone && inPlayerHouse(actor.awayFrom)) ||
-                              (!actor.alive() && inPlayerHouse(actor.diedIn));
-            if (pd && !pd->secret && ours)
-                log(1, "「" + pd->name + "」擱下了：" + fullName(actor.id) + (actor.alive() ? " 已經不在家裡" : " 已經過世") + "，沒人接著辦。");
-            plans_.erase(plans_.begin() + static_cast<long>(i));
+            endPlan(i, "actor_gone");  // the one doing it died or left: said, when it was the family's
             continue;
         }
         // A suit to the lord goes on to the new lord when the old one dies: it is the manor that is asked.
@@ -536,12 +617,7 @@ void World::monthlyPlans() {
         // The pair married each other another way (her family came asking): the suit has nothing left to do.
         auto wedEachOther = [&](Id x, Id other) { return x != kNone && other != kNone && people_[x].spouse == other; };
         if ((plan.plan == "arrange_match" && wedEachOther(plan.subject, plan.target)) || (plan.plan == "court" && wedEachOther(plan.actor, plan.target))) {
-            // Never just gone from the list: the money and the time spent on it came to this.
-            if (inPlayerHouse(actor.household) && pd) {
-                Id one = plan.plan == "court" ? plan.actor : plan.subject;
-                log(1, "【成功】「" + pd->name + "」不用再辦了：" + fullName(one) + " 和 " + fullName(plan.target) + " 已經成了親。");
-            }
-            plans_.erase(plans_.begin() + static_cast<long>(i));
+            endPlan(i, "wed");
             continue;
         }
         if (plan.subject != kNone && (!people_[plan.subject].alive() || people_[plan.subject].household == kNone)) {
@@ -630,8 +706,8 @@ void World::monthlyPlans() {
             EventRunner ev(*this, &cur);
             log(1, ev.format(pd->foreshadow, actor, cur.target));
         }
-        if (!people_[cur.actor].alive()) {
-            plans_.erase(plans_.begin() + static_cast<long>(i));
+        if (!people_[cur.actor].alive() || people_[cur.actor].household == kNone) {
+            endPlan(i, "actor_gone");
             continue;
         }
         if (cur.aborted) {

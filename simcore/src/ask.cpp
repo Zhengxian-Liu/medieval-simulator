@@ -132,6 +132,23 @@ std::vector<AskOption> World::asksFor(Id target) {
         AskOption o = opt("stand_aside", "請" + tp + "別跟你搶" + wantThing(wt), wt.id);
         push(o);
     }
+    // 討人情 (fun-r12 A3): someone who owes the family a favour can be asked on the strength of it, up front, for what
+    // matters most (a vote, a field, a match, a word with the lord, to stand aside). The label says what it spends.
+    const double owes = favourOwed(target, head);
+    if (owes >= 5) {
+        std::string fw;
+        for (const auto& f : favours_)
+            if (f.debtor == target && f.creditor == head) fw = std::to_string(cfg_.startYear + f.day / kDaysPerYear) + " 年" + f.why;
+        const size_t n = out.size();
+        for (size_t i = 0; i < n; ++i) {
+            const AskOption& a = out[i];
+            if (a.ask != "vote" && a.ask != "sell_parcel" && a.ask != "match" && a.ask != "speak" && a.ask != "stand_aside") continue;
+            AskOption o = a;
+            o.lever = "owed";
+            o.label = "討人情：" + a.label + "（提起" + fw + "那份情；" + tp + "答應了，這份情就算還了）";
+            out.push_back(o);
+        }
+    }
     (void)surname;
     return out;
 }
@@ -142,11 +159,15 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
     Person& t = people_[who];
     std::vector<AskOption> opts = asksFor(who);
     const AskOption* opt = nullptr;
+    // 討人情 is an asking of its own (its own option, up front); every other lever presses an answer just given.
+    const std::string optLever = lever == "owed" ? "owed" : "";
     for (const auto& o : opts)
-        if (o.ask == what && o.object == object && (o.subject == subject || (what == "vote" && subject == kNone)) && o.office == officeId) opt = &o;
+        if (o.ask == what && o.object == object && (o.subject == subject || (what == "vote" && subject == kNone)) && o.office == officeId &&
+            o.lever == optLever)
+            opt = &o;
     if (opt) subject = opt->subject;
     const Id runner = what == "vote" ? (subject != kNone ? subject : head) : kNone;  // whom the vote is asked for
-    bool again = !lever.empty();
+    bool again = !lever.empty() && lever != "owed";
     if (!again) settleAsk();
     if (again) {
         // Pressing the answer just given: in the same season, with a lever offered, in the same talk.
@@ -400,6 +421,10 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
         fs.push_back({favourOwed(who, head) * 2 + 15, "欠你的人情總要還"});
         callInFavour(who, head);
         leverNote = "提起上回幫過的忙，";
+    } else if (lever == "owed") {
+        // Up front, on the favour: it weighs as a called-in favour does, and is spent only on a yes.
+        fs.push_back({favourOwed(who, head) * 2 + 15, "欠你家的那份情，這回還了"});
+        leverNote = "提起" + shortName(who) + "欠你家的那份情，";
     } else if (lever == "hook") {
         Id deed = hookDeed(head, who);
         if (deed == kNone) return;
@@ -489,6 +514,17 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
     res.subject = subject;
     res.answer = answer;
     std::string name = shortName(who);
+    // A yes on the strength of a favour owed settles that favour: no new one the other way.
+    auto oweBack = [&](double weight, const std::string& why) {
+        if (lever != "owed") oweFavour(head, who, weight, why);
+    };
+    if (answer == 1 && lever == "owed") {
+        std::string fw;
+        for (const auto& f : favours_)
+            if (f.debtor == who && f.creditor == head) fw = std::to_string(cfg_.startYear + f.day / kDaysPerYear) + " 年" + f.why;
+        callInFavour(who, head);
+        pendingFavour_ = "【討人情】" + fullName(who) + " 還了" + fw + "欠你家的那份情：答應了" + o.label.substr(0, o.label.find("（")).substr(std::string("討人情：").size()) + "。";
+    }
     if (answer == 1) {
         res.text = name + "點頭了：「" + (plus.empty() ? "好吧" : plus + "，好吧") + (misgiving.empty() ? "" : "。只是" + misgiving) + "。」";
         if (what == "sell_parcel") {
@@ -498,7 +534,7 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
             book(ph, "買地", -pay);
             res.text += "你家用 " + pence(pay) + "買下了" + parcelName(parcels_[object]) + "。";
             moveParcel(object, playerHousehold_, "買來");
-            oweFavour(head, who, 6, "讓地給你家");
+            oweBack(6, "讓地給你家");
         } else if (what == "rent_vacant") {
             double pay = price + (lever == "meet" ? demandMoney : 0);
             ph.money -= pay;
@@ -510,14 +546,14 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
             promises_[{who, officeId}] = runner;
             const Office* of = office(officeId);
             res.text += "選" + (of ? of->name : officeId) + "時會投" + (runner == head ? std::string("你") : shortName(runner)) + "。";
-            oweFavour(head, who, 6, runner == head ? "答應投你一票" : "答應投你家的人一票");
+            oweBack(6, runner == head ? "答應投你一票" : "答應投你家的人一票");
         } else if (what == "lend") {
             double amount = object;
             th.money -= amount;
             ph.money += amount;
             book(ph, "借錢", amount);
             addDebt(ph, amount + (lever == "meet" ? demandMoney : 0), who);
-            oweFavour(head, who, 10, "借錢給你家");
+            oweBack(10, "借錢給你家");
             res.text += "借了你家 " + pence(amount) + "。";
         } else if (what == "match") {
             if (lever == "meet" && demandMoney > 0) {
@@ -530,7 +566,7 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
             res.text += shortName(subject) + "和" + shortName(object) + "的親事說定了。";
             log(1, "〔開口〕" + res.text);
             marry(man, woman);
-            oweFavour(head, who, 8, "答應了親事");
+            oweBack(8, "答應了親事");
         } else if (what == "apprentice") {
             double pay = 24 + (lever == "meet" ? demandMoney : 0);
             if (takePlace(object, "apprentice", subject)) {  // the fee, once the place is taken
@@ -538,7 +574,7 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
                 th.money += pay;
                 book(ph, "拜師錢", -pay);
                 res.text += shortName(subject) + "跟著" + name + "學手藝去了。";
-                oweFavour(head, who, 8, "收你兒子當學徒");
+                oweBack(8, "收你兒子當學徒");
             } else {
                 res.text += "可是" + shortName(subject) + "眼下去不了。";
             }
@@ -550,13 +586,13 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
                 addOpinion(lord_, head, "spoken_for", 8, 6);
                 res.text += name + "在領主面前替你家說了好話。";
             }
-            oweFavour(head, who, 10, "在領主面前替你說話");
+            oweBack(10, "在領主面前替你說話");
         } else if (what == "stand_aside") {
             Want& wt = wants_[object];
             std::string thing = wantThing(wt);
             dropWant(wt, "讓給了你家");
             res.text += name + "家不跟你搶" + thing + "了。";
-            oweFavour(head, who, 20, "讓你一步");
+            oweBack(20, "讓你一步");
             addOpinion(head, who, "stood_aside", 6, 8);
         }
         if (lever == "meet") {
@@ -616,6 +652,12 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
     if (!pendingReason_.empty()) {
         log(1, "  （" + pendingReason_ + "）");
         pendingReason_.clear();
+    }
+    if (!pendingFavour_.empty()) {
+        log(1, pendingFavour_);
+        pendingFavour_.clear();
+    } else if (lever == "owed") {
+        log(1, "  （" + name + "沒答應，那份情還記在" + (t.sex == Sex::Male ? "他" : "她") + "那裡。）");
     }
     seasonNotes_.push_back("你找" + name + "開口：" + res.text);
     t.soughtDay = day_;

@@ -241,6 +241,7 @@ World::Tally World::countVotes(const std::string& id, const std::vector<Id>& can
         if (t.mine == kNone && inPlayerHouse(people_[c].household)) t.mine = c;
     bool familyRuns = t.mine != kNone;
     Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
+    const Id houseVote = houseBallot(id, cands);  // the family's vote by its rule, or as the head was asked (fun-r12 A2)
     for (const auto& h : households_) {
         if (h.extinct || h.members.empty() || h.head == kNone || h.id == lordHouse) continue;
         const Person& voter = people_[h.head];
@@ -264,6 +265,9 @@ World::Tally World::countVotes(const std::string& id, const std::vector<Id>& can
                 if (c == old && terms != reeveTerms_.end() && terms->second >= 2) s -= 6 * (terms->second - 1);
             }
             if (feudStage(voter.id, c) >= 2) s -= 40;
+            // A favour owed to the man's house is a reason, weighed with the rest (fun-r12 A3): a big one turns a vote.
+            if (people_[c].household != h.id && feudStage(voter.id, c) < 2) s += std::min(36.0, favourFor(voter.id, c) * 1.2);
+            if (h.id == playerHousehold_ && houseVote != kNone && c == houseVote) s += 1e5;
             if (s > best) best = s, pick = c;
         }
         if (pick == kNone) continue;
@@ -339,11 +343,18 @@ std::vector<World::VoterView> World::electionView(const std::string& id) {
             if (!note.empty() || !wt.open || wt.house != th.id) continue;
             if (wt.kind == "parcel" && inPlayerHouse(parcels_[wt.object].holder)) note = "想要你家的" + parcelName(parcels_[wt.object]) + "，拉票時多半會拿這個開條件";
         }
+        if (note.empty() && favourOwed(voter, head) >= 4) {
+            // fun-r12 A3: a favour owed is a reason; one that does not carry the vote can be called in (討人情).
+            std::string fw;
+            for (const auto& f : favours_)
+                if (f.debtor == voter && f.creditor == head) fw = std::to_string(cfg_.startYear + f.day / kDaysPerYear) + " 年" + f.why;
+            note = pick == man ? "記得" + fw + "那份情，這一票會念著你家" : "欠你家一份情（" + fw + "），可這一票另有打算：可以去討人情";
+        }
         double op = opinion(voter, head);
         if (note.empty()) note = op >= 20 ? "跟你家有交情" : op <= -15 ? "跟你家沒交情" : "還沒說要投誰";
         v.note = note;
         for (const auto& a : asksFor(voter))
-            if (a.ask == "vote" && a.office == id) v.ask = a;
+            if (a.ask == "vote" && a.office == id && (v.ask.ask.empty() || (a.lever == "owed" && pick != man))) v.ask = a;
         out.push_back(v);
     }
     return out;
@@ -433,7 +444,170 @@ void World::electionNotice() {
     std::string tail;
     if (!could.empty()) tail += "你夠資格爭" + join(could, "、") + "：在「村裡在爭什麼」按「想當」，再去拉票。";
     if (!barred.empty()) tail += "你家這回爭不了" + join(barred, "、") + "。";
+    tail += std::string("家裡這一票的規矩：") + voteRuleText(voteRule_) + "（可在「家裡的規矩」改）。";
     log(loud || !could.empty() ? 1 : 2, "【選舉在即】這一季" + when + "。照現在看，" + join(parts, "；") + "。" + tail);
+}
+
+// ---- 家裡這一票 (fun-r12 A2) -------------------------------------------------------------------
+
+const char* World::voteRuleText(const std::string& rule) {
+    if (rule == "kin") return "自家沒人出來選時，先投親戚（兄弟、兒女、姻親那幾家），沒有親戚就投你看得順眼的";
+    if (rule == "free") return "自家沒人出來選時，照當家的自己的好惡投，不先問";
+    return "自家沒人出來選、可有親戚、本家或仇家在選時，每回先問你投誰";
+}
+
+void World::setVoteRule(const std::string& rule) {
+    if (rule != "ask" && rule != "kin" && rule != "free") {
+        log(1, "【家裡的規矩】「家裡這一票」只能選「每回問我」「親戚優先」或「照當家的好惡」，規矩沒有改。");
+        return;
+    }
+    const bool changed = rule != voteRule_;
+    voteRule_ = rule;
+    if (changed && playerHousehold_ != kNone && actingHead() != kNone) log(1, std::string("【家裡的規矩】往後家裡這一票：") + voteRuleText(rule) + "。");
+}
+
+const char* World::quarrelRuleText(const std::string& rule) {
+    if (rule == "forbid") return "家裡的人不准自己去告人、當眾跟人翻臉：要出頭，由當家的出面";
+    if (rule == "free") return "家裡的人要告人、要當眾質問誰，由他們自己拿主意";
+    return "家裡的人要告人、要當眾質問誰，先問你";
+}
+
+void World::setQuarrelRule(const std::string& rule) {
+    if (rule != "ask" && rule != "forbid" && rule != "free") {
+        log(1, "【家裡的規矩】「家人出頭」只能選「先問我」「不准」或「由他們自己」，規矩沒有改。");
+        return;
+    }
+    const bool changed = rule != quarrelRule_;
+    quarrelRule_ = rule;
+    if (changed && playerHousehold_ != kNone && actingHead() != kNone) log(1, std::string("【家裡的規矩】往後家人出頭：") + quarrelRuleText(rule) + "。");
+}
+
+std::string World::winnerTag(Id winner) const {
+    const Person& w = people_[winner];
+    if (inPlayerHouse(w.household)) return "你家";
+    const Id head = actingHead();
+    const std::string kw = head != kNone ? kinWord(head, winner) : "";
+    if (!kw.empty() || (w.dynasty != kNone && w.dynasty == playerDynasty_)) return fullName(winner) + "（" + (kw.empty() ? std::string("你家本家") : "你的" + kw) + "）";
+    return w.dynasty != kNone ? dynasties_[w.dynasty].surname + "家" : fullName(winner);
+}
+
+double World::favourFor(Id voter, Id cand) const {
+    if (voter == kNone || cand == kNone) return 0;
+    double owed = favourOwed(voter, cand);
+    const Id ch = people_[cand].household;
+    if (ch != kNone && households_[ch].head != kNone && households_[ch].head != cand) owed = std::max(owed, favourOwed(voter, households_[ch].head));
+    return owed;
+}
+
+// Blood first: a brother, a son, a father (or the house one of them keeps); then the in-laws and cousins; never one the
+// family is feuding with. Among the rest, the one the head likes best. why: what he is to the head.
+Id World::kinPick(const std::vector<Id>& cands, std::string* why) const {
+    const Id head = actingHead();
+    if (head == kNone) return kNone;
+    Id best = kNone;
+    double bestScore = -1e9;
+    std::string bestWhy;
+    for (Id c : cands) {
+        const std::string tie = kinTie(head, c);
+        // The house he stands for: a man of a house the head's brother or son keeps counts as theirs.
+        const Id ch = people_[c].household;
+        const Id chHead = ch != kNone ? households_[ch].head : kNone;
+        const std::string houseTie = chHead != kNone && chHead != c ? kinTie(head, chHead) : "";
+        double score = opinion(head, c) * 0.5;
+        std::string w;
+        auto near = [](const std::string& t) { return t == "sibling" || t == "child" || t == "parent" || t == "spouse"; };
+        auto far = [](const std::string& t) {
+            return t == "grandchild" || t == "grandparent" || t == "child_in_law" || t == "parent_in_law" || t == "sibling_in_law" || t == "uncle" ||
+                   t == "nephew" || t == "step_parent" || t == "step_child";
+        };
+        if (near(tie)) score += 200, w = "是你的" + kinWord(head, c);
+        else if (near(houseTie)) score += 180, w = "是你" + kinWord(head, chHead) + "家的人";
+        else if (far(tie)) score += 120, w = "是你的" + kinWord(head, c);
+        else if (closeKin(head, c)) score += 100, w = "是你家的親戚";
+        else if (people_[c].dynasty != kNone && people_[c].dynasty == people_[head].dynasty) score += 80, w = "是同姓本家";
+        else w = std::string("你對") + (people_[c].sex == Sex::Male ? "他" : "她") + " " + std::to_string(std::lround(opinion(head, c)));
+        if (feudStage(head, c) >= 2) score -= 400, w = "跟你家有仇";
+        if (score > bestScore) bestScore = score, best = c, bestWhy = w;
+    }
+    if (why) *why = bestWhy;
+    return best;
+}
+
+Id World::houseBallot(const std::string& office, const std::vector<Id>& cands, std::string* why) const {
+    const Id ballot = ballotHead();
+    if (ballot == kNone || cands.size() < 2) return kNone;
+    for (Id c : cands)
+        if (inPlayerHouse(people_[c].household)) return kNone;  // the house's own man: its vote is his
+    if (promises_.count({ballot, office})) return kNone;     // the head gave his word: kept as before
+    auto chosen = familyBallot_.find(office);
+    if (chosen != familyBallot_.end() && std::find(cands.begin(), cands.end(), chosen->second) != cands.end()) {
+        if (why) *why = "你定的";
+        return chosen->second;
+    }
+    if (voteRule_ == "free") return kNone;
+    // "ask" not yet asked: what the house would most likely say, for the forecasts (the card asks it at the vote).
+    return kinPick(cands, why);
+}
+
+// Before the count: the house's vote, by its rule or by the head's own answer. Never cast against the family's own man,
+// nor over a word the head gave (開口, the Michaelmas offers).
+void World::decideFamilyBallot(const std::string& office, const std::vector<Id>& cands) {
+    familyBallot_.erase(office);
+    const Id ballot = ballotHead();
+    if (ballot == kNone || cands.size() < 2 || voteRule_ == "free") return;
+    for (Id c : cands)
+        if (inPlayerHouse(people_[c].household)) return;
+    if (promises_.count({ballot, office})) return;
+    const Office* of = this->office(office);
+    const std::string name = of ? of->name : office;
+    std::string why;
+    const Id kin = kinPick(cands, &why);
+    if (kin == kNone) return;
+    // Only when the family has a stake in it (a relative or the family's own surname standing, or a house it has a
+    // quarrel with): two strangers for the ale-taster are each voter's own affair, not a card every Michaelmas.
+    bool stake = false;
+    for (Id c : cands) {
+        std::string w;
+        kinPick({c}, &w);
+        stake = stake || w.rfind("你對", 0) != 0;
+    }
+    if (!stake) return;
+    if (voteRule_ == "kin") {
+        familyBallot_[office] = kin;
+        log(1, "家裡這一票照規矩（親戚優先）投了 " + fullName(kin) + "：" + why + "。");
+        return;
+    }
+    // "ask": the head is asked, each man with what he is to the family and how the vote looks.
+    auto mid = [](double m) { return m / 2; };
+    const Id old = office == "reeve" ? currentReeve() : of ? of->holder : kNone;
+    Tally t = countVotes(office, cands, old, mid);
+    std::vector<std::string> opts, parts;
+    // 「勞倫斯·科特（奧斯伯特的兒子）（是你的舅子）」: one bracket, not two.
+    auto tagged = [&](Id c, const std::string& w) {
+        std::string n = fullName(c);
+        const std::string close = "）";
+        if (n.size() > close.size() && n.compare(n.size() - close.size(), close.size(), close) == 0) return n.substr(0, n.size() - close.size()) + "；" + w + close;
+        return n + "（" + w + close;
+    };
+    for (Id c : cands) {
+        std::string w;
+        kinPick({c}, &w);
+        auto v = t.votes.find(c);
+        const int n = v != t.votes.end() ? v->second : 0;
+        parts.push_back(tagged(c, w + "；照現在看約 " + std::to_string(n) + " 票"));
+        opts.push_back("投 " + tagged(c, w));
+    }
+    opts.push_back("往後照親疏投，不必再問（這回投 " + fullName(kin) + "：" + why + "）");
+    std::string list;
+    for (const auto& x : parts) list += (list.empty() ? "" : "、") + x;
+    const std::string sit = "選" + name + "：" + list + "。你家沒人出來選，這一票是全家的，各家都會聽見你家投誰。";
+    int r = askPlayer("家裡這一票", sit, opts);
+    Id pick = kin;
+    if (r >= 0 && r < static_cast<int>(cands.size())) pick = cands[r];
+    familyBallot_[office] = pick;
+    if (r >= 0) log(1, "〔家裡這一票〕選" + name + "，你家投 " + fullName(pick) + "。（選擇：" + opts[r].substr(0, opts[r].find("（")) + "）");
+    else if (aiCard_.open) log(1, "〔家裡這一票〕選" + name + "，家裡照親疏投了 " + fullName(pick) + "（" + why + "）。");
+    if (r == static_cast<int>(cands.size())) setVoteRule("kin");
 }
 
 void World::chooseOfficers() {
@@ -445,7 +619,9 @@ void World::chooseOfficers() {
         auto noise = [&](double m) { return static_cast<double>(rngContest_.range(0, static_cast<int>(m))); };
         std::vector<Id> cands = officeCandidates(id, old, noise);
         if (cands.empty()) continue;
+        decideFamilyBallot(id, cands);
         Tally t = countVotes(id, cands, old, noise);
+        familyBallot_.erase(id);
         Id winner = kNone;
         for (Id c : cands)
             if (winner == kNone || t.votes[c] > t.votes[winner]) winner = c;
@@ -471,11 +647,11 @@ void World::chooseOfficers() {
         setOffice(id, winner, "選上的");
         Household& wh = households_[people_[winner].household];
         if (id == "aletaster") wh.money += 8, book(wh, "品酒官的罰款分成", 8);  // a share of the fines he presents
-        else wh.food += consumption(wh) * 30;  // a sheaf from every house at harvest
+        else wh.food += consumption(wh) * 30, bookFood(wh, "當" + cur->name + "各家送的麥捆", consumption(wh) * 30);  // a sheaf from every house at harvest
         if (winner != old) addReputation(winner, 2, "當選" + name);
         for (Id c : cands)
             if (c != winner && people_[c].household != kNone)
-                noteClash(people_[c].household, people_[winner].household, name + "：" + (people_[winner].dynasty != kNone ? dynasties_[people_[winner].dynasty].surname : fullName(winner)) + "家選上");
+                noteClash(people_[c].household, people_[winner].household, name + "：" + winnerTag(winner) + "選上");
         if (familyIn && cands.size() > 1) {
             log(1, "【選" + name + "】" + tallyText(cands, t, false) + "。" + tie + voteWhy(t, winner) + fullName(winner) + " 當選，做到明年米迦勒節。");
             log(1, "  開票時各家當眾說了投誰：" + ballotText(t) + "。");

@@ -124,6 +124,10 @@ void World::feudOnDeed(const Deed& d, const DeedDef& def, Id culprit) {
     // Tenants resent the lord, but they do not feud with him as with an equal.
     Id lordDyn = lord_ != kNone ? people_[lord_].dynasty : kNone;
     if (dc == lordDyn || dv == lordDyn) return;
+    // A quarrel inside one family (a son-in-law's theft, a married sister's grievance over shares) stays between the two
+    // people: it does not start a feud between their surnames (fun-r12 A7, seed 195: a 1332 family theft was told as
+    // the start of the quarrel with the Carters).
+    if (std::find(def.tags.begin(), def.tags.end(), "kin") != def.tags.end()) return;
     if (!feudCounted_.insert({d.id, dc}).second) return;
     if (std::find(def.tags.begin(), def.tags.end(), "peace") != def.tags.end()) {
         endFeud(dc, dv, def.name);
@@ -345,8 +349,14 @@ void World::feudTurn(size_t i) {
             log(1, "〔了結恩怨〕" + op.firstName + " 提著禮上 " + sur + " 家的門，" + fullName(them) + " 收了禮，門卻沒開。兩家的帳還在。");
             return;
         }
+        const int was = static_cast<int>(std::lround(opinion(them, ours)));
         endFeud(playerDynasty_, other, op.firstName + " 上門賠了罪，" + fullName(them) + " 讓進了門");
         recordDeed("made_amends", ours, them);
+        // The other side's answer, always (fun-r12 A1): how the door opened, and where it leaves them.
+        const int now = static_cast<int>(std::lround(opinion(them, ours)));
+        log(1, "〔了結恩怨〕" + op.firstName + " 提著 10 便士的禮上 " + sur + " 家的門賠罪。" + fullName(them) +
+                   (now >= 0 ? " 把禮收下，請進屋喝了一碗麥酒：兩家的帳就此了結" : " 收了禮，話不多，總算讓進了門：帳是了了，臉色還要些時候") + "（" +
+                   people_[them].firstName + " 對你 " + std::to_string(was) + " → " + std::to_string(now) + "）。");
     } else if (k == 1) {
         log(1, "〔了結恩怨〕" + op.firstName + " 請神父出面。神父把兩家家主叫到教堂門口，兩人握了手：暫時休兵，往後再起事，還是會翻舊帳。");
         recordDeed("mediated", ours, them);

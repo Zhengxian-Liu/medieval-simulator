@@ -556,6 +556,59 @@ bool EventRunner::optionOpen(const OptionDef& o, const Person& p, Id target) con
 }
 
 int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
+    return familyActGate(ev, p, target, pickOption(ev, p, target));
+}
+
+int EventRunner::familyActGate(const EventDef& ev, const Person& p, Id target, int k) {
+    if (k < 0 || k >= static_cast<int>(ev.options.size()) || !ev.options[k].familyAct) return k;
+    if (asked_) return k;  // the head's own card (or answered for the head)
+    const Id acting = w_.actingHead();
+    const bool ours = w_.inPlayerHouse(p.household) || (w_.isAway(p) && w_.inPlayerHouse(p.awayFrom));
+    if (acting == kNone || p.id == acting || !ours || w_.quarrelRule_ == "free") return k;
+    // What they would do instead: the likeliest of the options that are no family act.
+    int alt = -1;
+    double best = -1;
+    for (size_t j = 0; j < ev.options.size(); ++j) {
+        const OptionDef& o = ev.options[j];
+        if (o.familyAct || !optionOpen(o, p, target)) continue;
+        double wgt = std::max(0.01, weight(o.aiWeight, p, target));
+        if (wgt > best) best = wgt, alt = static_cast<int>(j);
+    }
+    if (alt < 0) return k;
+    const std::string act = optionText(ev.options[k], p, target), instead = optionText(ev.options[alt], p, target);
+    const std::string about = ev.prompt.empty() ? "" : format(ev.prompt, p, target);
+    const Id th = target != kNone ? w_.people_[target].household : kNone;
+    const std::string them = th != kNone && w_.households_[th].dynasty != kNone ? w_.dynasties_[w_.households_[th].dynasty].surname + "家" : std::string("人家");
+    bool yes = false;
+    if (w_.quarrelRule_ == "forbid") {
+        w_.log(1, "【家裡的規矩】" + w_.shortName(p.id) + "想" + act + "，照家裡的規矩（家人不自己出頭），沒有去；" + instead + "。");
+    } else {
+        // Against one of the family's own (a brother, a son set up apart): not a house to keep accounts with, but the
+        // family's quarrel aired before the village (seed 195, 1348: 「阿特伍德家會記在你家帳上」 of a brother).
+        const bool kin = target != kNone && w_.isPlayerFamily(w_.people_[target]);
+        const std::string kw = kin ? w_.kinWord(acting, target) : std::string();
+        const std::string sit = about + w_.shortName(p.id) + "（" + w_.kinWord(acting, p.id) + "）想「" + act + "」。" +
+                                (kin ? "對方是自家人（" + (kw.empty() || kw == "親戚" ? std::string("你家的人") : "你的" + kw) + "）：鬧出去就是家醜外揚，全村都會看在眼裡。"
+                                     : "這是替全家出頭：" + them + "會記在你家帳上。");
+        int r = w_.askPlayer("家人要出頭", sit, {"准" + w_.shortName(p.id) + "去", "不准（" + instead + "）", "往後家裡的人都不准自己出頭"});
+        if (r >= 0) {
+            yes = r == 0;
+            w_.log(1, "〔家人要出頭〕" + sit + "（選擇：" + (r == 0 ? "准" : "不准") + "）");
+            if (r == 2) w_.setQuarrelRule("forbid");
+        } else {
+            // Without a player: the head's temper (one who hates that house lets them go).
+            const Person& h = w_.people_[acting];
+            double c = 0.3 + (target != kNone && w_.opinion(acting, target) < -20 ? 0.3 : 0) + (w_.hasTrait(h, "vengeful") || w_.hasTrait(h, "wrathful") ? 0.2 : 0) -
+                       (w_.hasTrait(h, "calm") || w_.hasTrait(h, "kind") ? 0.2 : 0);
+            yes = w_.rngEvents_.chance(std::clamp(c, 0.05, 0.9));
+            w_.log(1, "〔家人要出頭〕" + sit + (yes ? "當家的點了頭。" : "當家的沒答應：" + instead + "。"));
+        }
+    }
+    ++w_.counters_[std::string("family_act:") + (yes ? "yes" : "no")];
+    return yes ? k : alt;
+}
+
+int EventRunner::pickOption(const EventDef& ev, const Person& p, Id target) {
     // A child's road is the parents' call (parent_decides), in every family: their temper weighs the options and,
     // when a model decides, it decides as them. The child's own state (age, skills, flags) still sets what is open.
     const Person* decider = nullptr;
@@ -616,7 +669,7 @@ int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
                 continue;
             }
             open.push_back(static_cast<int>(k));
-            prompt.options.push_back(optionText(o, p, target));
+            prompt.options.push_back(optionText(o, p, target) + lastingNote(o));
             lines.push_back(format(o.logs.empty() ? o.log : o.logs[0], p, target));
         }
         const std::string* when = nullptr;  // a telling for this case (prompt_if): the first whose conditions hold
@@ -624,6 +677,11 @@ int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
             for (const auto& c : ev.promptIf.asArray())
                 if (eval(c["cond"], p, target)) {
                     when = &c["prompt"].asString();
+                    // Other ways of telling this case too (a sitting reeve asked every third summer), in turn.
+                    if (c["prompts"].isArray() && !c["prompts"].asArray().empty()) {
+                        const auto& vs = c["prompts"].asArray();
+                        when = &vs[w_.freshVariant(p.household, ev.id + ":if", static_cast<int>(vs.size()), w_.rngEvents_)].asString();
+                    }
                     break;
                 }
         if (when) {
@@ -1184,6 +1242,13 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
     if (!effects.isArray()) return;
     World& w = w_;
     for (const auto& e : effects.asArray()) {
+        // The barn's line for what an event or plan moved: by its name, as the purse's is (fun-r12 A7: no 「其他」).
+        auto foodAs = [&](bool gain) {
+            std::string as = bookAs_;
+            if (as.empty() && plan_)
+                if (const PlanDef* pd = w.defs_.plan(plan_->plan)) as = pd->name;
+            return as.empty() ? std::string(gain ? "得來的糧" : "糧食耗用") : "「" + as + "」" + (gain ? "得來的糧" : "用掉的糧");
+        };
         for (const auto& [k, v] : e.asObject()) {
             Id hid = p.household != kNone ? p.household : w.isAway(p) ? p.awayFrom : kNone;  // away: the family's house
             Household* h = hid != kNone ? &w.households_[hid] : nullptr;
@@ -1219,7 +1284,11 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                     w.book(*h, as.empty() ? "各種事情" : as, h->money - before);
                 }
             } else if (k == "food") {
-                if (h) h->food = std::max(0.0, h->food + v.asNumber());
+                if (h) {
+                    const double before = h->food;
+                    h->food = std::max(0.0, h->food + v.asNumber());
+                    w.bookFood(*h, foodAs(v.asNumber() >= 0), h->food - before);
+                }
             } else if (k == "firewood") {
                 if (h) h->firewood = std::max(0.0, h->firewood + v.asNumber());
             } else if (k == "health") {
@@ -1427,7 +1496,9 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 // Buy land from the target's household: the parcel this house was after, if it is theirs
                 // ("wanted": false for a set lot, as when the seller names it).
                 if (!h || target == kNone || w.people_[target].household == kNone) continue;
-                Household& th = w.households_[w.people_[target].household];
+                // A servant sells what is her own family's, not her master's.
+                const Id sellerHouse = w.people_[target].home != kNone ? w.people_[target].home : w.people_[target].household;
+                Household& th = w.households_[sellerHouse];
                 World::LandDeal d = w.landDeal(*h, th, v["acres"].asNumber(), v["price"].asNumber(), !(v["wanted"].isBool() && !v["wanted"].asBool()),
                                                plan_ ? plan_->priceAdd : 0);
                 if (!d.ok) continue;
@@ -1440,9 +1511,18 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 } else {
                     double moved = w.moveLand(th.id, h->id, d.acres, LandPick::CustomaryFirst, "買來");
                     price = std::round(price * moved / d.acres);
-                    if ((h->id == w.playerHousehold_ || th.id == w.playerHousehold_) && moved >= 0.5 && th.dynasty != kNone && h->dynasty != kNone)
-                        w.log(1, "  " + std::to_string(static_cast<long>(std::lround(moved))) + " 畝地從" + w.dynasties_[th.dynasty].surname + "家到了" +
-                                     w.dynasties_[h->dynasty].surname + "家，換了 " + std::to_string(static_cast<long>(price)) + " 便士。");
+                    // Said by the seller's own name: the house's surname is not always theirs (fun-r12 A7, seed 195: Edith
+                    // Miller's 4 acres were booked 「從謝帕德家」).
+                    if ((h->id == w.playerHousehold_ || th.id == w.playerHousehold_) && moved >= 0.5 && h->dynasty != kNone) {
+                        const Person& seller = w.people_[target];
+                        const std::string houseSur = th.dynasty != kNone ? w.dynasties_[th.dynasty].surname : "";
+                        const std::string ownSur = seller.dynasty != kNone ? w.dynasties_[seller.dynasty].surname : "";
+                        std::string from = !houseSur.empty() && houseSur == ownSur ? houseSur + "家" : w.fullName(target) + (houseSur.empty() ? "" : "（住在" + houseSur + "家）");
+                        if (th.id == w.playerHousehold_) from = "你家";
+                        w.log(1, "  " + std::to_string(static_cast<long>(std::lround(moved))) + " 畝地從" + from + "到了" +
+                                     (h->id == w.playerHousehold_ ? std::string("你家") : w.dynasties_[h->dynasty].surname + "家") + "，換了 " +
+                                     std::to_string(static_cast<long>(price)) + " 便士。");
+                    }
                 }
                 // On the books under what it was (a sale under a threat is not a plain sale, fun-r10).
                 const std::string why = bookAs_.empty() ? "" : "（" + bookAs_ + "）";
@@ -1723,7 +1803,7 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 if (!h) continue;
                 const double before = h->food;
                 h->food = std::max(0.0, h->food + w.consumption(*h) * v.asNumber());
-                w.bookFood(*h, v.asNumber() >= 0 ? "得來的糧" : "糧食耗用", h->food - before);
+                w.bookFood(*h, foodAs(v.asNumber() >= 0), h->food - before);
             } else if (k == "give_food_target") {
                 // p's house carries v days of its bread to the target's house: it arrives there, and both books show it.
                 if (!h || target == kNone) continue;
@@ -1781,6 +1861,7 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                 const double purse = v.isObject() && v.has("pence") ? std::min(h->money, v.numberOr("pence", 0)) : h->money;
                 double b = std::clamp(w.consumption(*h) * days, 0.0, std::max(0.0, purse) / price);
                 h->food += b;
+                w.bookFood(*h, "買糧", b);
                 h->money = std::max(0.0, h->money - b * price);
                 w.book(*h, "買糧", -b * price);
             } else if (k == "surrender_acres") {
@@ -1805,6 +1886,7 @@ void EventRunner::apply(const Json& effects, Person& p, Id target) {
                     continue;
                 }
                 h->food += w.consumption(*h) * 20;
+                w.bookFood(*h, "送孩子去幫傭，東家先給的糧", w.consumption(*h) * 20);
                 if (h->id == w.playerHousehold_)
                     w.log(1, "  " + w.people_[child].firstName + "去了 " + w.fullName(master) + " 家，說好幹 " + std::to_string(static_cast<int>(v.numberOr("years", 3))) + " 年，管吃管住。");
             } else if (k == "borrow") {
@@ -2187,6 +2269,50 @@ bool EventRunner::foldSafe(const OptionDef& o) {
         for (const auto& e : o.effects.asArray())
             if (e.isObject() && e["money"].isNumber() && e["money"].asNumber() < 0) spent -= e["money"].asNumber();
     return spent <= 20;
+}
+
+// What an option does to the rent for good, said on the option before it is chosen (fun-r12 A7: 帶頭抗議 left the rent
+// ×1.6 with no word of it beforehand): 「（地租往後加一成半）」, or for a gamble 「（多半不成：不成的話地租往後加兩成半、領主記恨）」.
+std::string EventRunner::lastingNote(const OptionDef& o) {
+    if (o.text.find("地租") != std::string::npos || !o.effects.isArray()) return "";
+    auto tenths = [](double x) {
+        static const char* const kN[] = {"", "一", "兩", "三", "四", "五", "六", "七", "八", "九"};
+        const int n = static_cast<int>(std::lround(std::abs(x) * 20));
+        const int whole = std::min(9, n / 2);
+        return std::string(x < 0 ? "減" : "加") + (whole == 0 ? std::string("半成") : std::string(kN[whole]) + "成" + (n % 2 ? "半" : ""));
+    };
+    auto branch = [&](const Json& effs, std::string& out) {
+        if (!effs.isArray()) return;
+        double rent = 0;
+        bool grudge = false;
+        for (const auto& e : effs.asArray()) {
+            if (!e.isObject()) continue;
+            if (e["rent_factor"].isNumber()) rent += e["rent_factor"].asNumber();
+            for (const char* k : {"target_opinion", "lord_opinion"})
+                if (e[k].isObject() && e[k].numberOr("value", 0) <= -10) grudge = true;
+        }
+        if (std::abs(rent) >= 0.025) out = "地租往後" + tenths(rent);
+        if (grudge && !out.empty()) out += "、對方記恨";
+    };
+    std::string sure;
+    branch(o.effects, sure);
+    std::string risk;
+    int badPct = 0;
+    for (const auto& e : o.effects.asArray()) {
+        if (!e.isObject() || !e["random"].isObject()) continue;
+        const Json& r = e["random"];
+        const int pct = static_cast<int>(r.numberOr("percent", 50));
+        std::string a, b;
+        branch(r["effects"], a);
+        branch(r["else"], b);
+        if (!b.empty()) risk = b, badPct = 100 - pct;
+        else if (!a.empty()) risk = a, badPct = pct;
+    }
+    std::string out;
+    if (!sure.empty()) out = sure;
+    if (!risk.empty())
+        out += (out.empty() ? "" : "；") + std::string(badPct >= 60 ? "多半不成" : badPct >= 40 ? "成不成一半一半" : "有可能不成") + "：不成的話" + risk;
+    return out.empty() ? "" : "（" + out + "）";
 }
 
 std::string EventRunner::optionText(const OptionDef& o, const Person& p, Id target) const {

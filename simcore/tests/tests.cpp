@@ -226,6 +226,18 @@ struct WorldTest {
     static std::vector<World::Pledge>& pledges(World& w) { return w.pledges_; }
     static void settlePledges(World& w) { w.settlePledges(); }
     static void setLastDeath(World& w, int day) { w.lastDeathDay_ = day; }
+    static void flag(World& w, Id id, const std::string& f) { w.people_[id].flags.insert(f); }
+    static bool kinHouse(const World& w, Id house) { return w.kinHouse(house); }
+    static void holdEvent(World& w, Id id, const std::string& ev, int days) { w.cooldowns_[{id, ev}] = w.day_ + days; }
+    static void addGrief(World& w, Id who, Id against, const std::string& why) {
+        World::Grievance g;
+        g.who = who, g.against = against, g.motive = 40, g.why = why, g.signs = 1, g.lastSign = w.day_;
+        w.griefs_.push_back(g);
+    }
+    static void kinRespond(World& w, size_t i) { w.kinRespond(w.griefs_[i]); }
+    static void noMillFarmer(World& w) {  // nobody farms the mill (its toll comes out of every purse at Michaelmas)
+        for (auto& h : w.households_) h.millUntil = -1;
+    }
 };
 }  // namespace sim
 
@@ -472,6 +484,8 @@ int main() {
             runTo(w, 6, 0);
             w.setMoneyForTest(hh, 400);
             w.setFoodForTest(hh, 20);
+            // (No neighbour bringing two sacks the same day for an old kindness: the barn shows only what was bought.)
+            WorldTest::holdEvent(w, w.playerHead(), "remembered_kindness", 30);
             w.stepDay();  // month 6, day 0: sixty days to the harvest
             const World::ChoicePrompt* card = nullptr;
             for (const auto& p : asked)
@@ -2086,6 +2100,7 @@ int main() {
             double due = std::round(WorldTest::rent(b, hh));
             b.setMoneyForTest(hh, 2.9);
             b.setFoodForTest(hh, 600);
+            WorldTest::noMillFarmer(b);  // (seed 58 since round 12: a neighbour farms the mill and its toll takes the 0.9)
             WorldTest::house(b, hh).debt = WorldTest::house(b, hh).heldDebt = 0;
             b.setChooser([&](const World::ChoicePrompt& p) { return p.title == "米迦勒節算帳" ? static_cast<int>(p.options.size()) - 1 : -1; });
             b.stepDay();
@@ -2519,7 +2534,8 @@ int main() {
     // from its own land and pays the rent.
     {
         std::vector<double> cover;
-        for (uint64_t seed : {118ull, 33ull}) {
+        // (Three villages, not two: on two the median of some twenty harvests moved by ±0.1 with any change elsewhere.)
+        for (uint64_t seed : {118ull, 33ull, 34ull}) {
             Config c;
             c.seed = seed;
             c.prerun = 25;
@@ -2592,6 +2608,9 @@ int main() {
             WorldTest::clearFamineAsks(w);  // (the year played so far may have had its own famine and its asks)
             w.setFoodForTest(hh, 400);
             WorldTest::setRival(w, other);  // the one who comes to ask
+            // fun-r12 A5: a famine is the village's, not one house's: the other houses' barns are low too.
+            for (const auto& oh : w.households())
+                if (oh.id != hh && oh.id != other && w_ok(w, oh.id)) WorldTest::house(w, oh.id).food = 0, WorldTest::house(w, oh.id).money = 0;
             WorldTest::house(w, other).food = 0;
             WorldTest::house(w, other).money = w.costToHarvest(w.household(other)) * 0.95;  // short of the harvest at market, enough to pay dear
             const Id me = w.playerHead();
@@ -2746,7 +2765,7 @@ int main() {
     // same words, the grain cards stay few, and a rival house is found.
     {
         Config c;
-        c.seed = 118;
+        c.seed = 119;  // (fun-r12: on 118 the head now dies of dysentery in the tenth year, so no card of the round is asked three times by one head)
         c.prerun = 25;
         World w(defs, c);
         std::map<std::tuple<size_t, std::string, std::string>, int> seen;
@@ -2784,13 +2803,13 @@ int main() {
             if (p.title == "缺糧：跟誰開口") ++grain, grainYear = std::max(grainYear, ++grainIn[(w.today() + kDaysPerYear - 8 * kDaysPerMonth) / kDaysPerYear]);
             return 0;
         });
-        AutoPlayer ai(118);
+        AutoPlayer ai(119);
         for (int d = 0; d < 15 * kDaysPerYear && !w.gameOver(); ++d) {
             if (d > 0 && w.dayOfMonth() == 0 && w.month() % 3 == 0) w.startSeason();
             ai.act(w);
             w.stepDay();
         }
-        std::printf("15 years on seed 118: grain cards %d, a card's same words at most %d times a generation (%s), rival %s\n", grain, worst,
+        std::printf("15 years on seed 119: grain cards %d, a card's same words at most %d times a generation (%s), rival %s\n", grain, worst,
                     worstCard.c_str(), w.rivalName().c_str());
         CHECK(worst <= 2, ("a card came more than twice a generation in the same words: " + worstCard).c_str());
         std::printf("   yearly round asked at most %d times a generation, hungry houses at most %d a season\n", foldWorst, feedWorst);
@@ -2820,6 +2839,52 @@ int main() {
         const int headOn = w.counters().count("rival_head_on") ? w.counters().at("rival_head_on") : 0;
         std::printf("   rival head-on %d times\n", headOn);
         CHECK(headOn >= 1, "the rival never met the family head-on in fifteen years");
+        // fun-r12 A1: every plan of the family's ends with a line on screen (endPlan counts the ones that did not).
+        auto cnt = [&](const std::string& k) { return w.counters().count(k) ? w.counters().at(k) : 0; };
+        std::printf("   family plans ended %d, told %d, ended with no line %d\n", cnt("plan_end_ours"), cnt("plan_told"), cnt("plan_untold"));
+        CHECK(cnt("plan_end_ours") > 0, "no plan of the family's ended in fifteen years");
+        CHECK(cnt("plan_untold") == 0, "a plan of the family's ended with no line saying how");
+        CHECK(cnt("plan_told") >= cnt("plan_end_ours"), "fewer outcome lines than plans of the family's ended");
+        // fun-r12 A4: the rival is never close kin (a parent's, a sibling's or a child's house).
+        CHECK(w.rivalHouse() == kNone || !WorldTest::kinHouse(w, w.rivalHouse()), "the rival is the house of the head's own kin");
+    }
+    // fun-r12 A1/A2/A7: the outcome of a plan the family gave up, the sitting reeve's card, the cost on an option, the
+    // dead told as dead.
+    {
+        Config c = grownHouse(defs, 30);
+        World w(defs, c);
+        const Id head = w.playerHead();
+        std::vector<World::ChoicePrompt> asked;
+        w.setChooser([&](const World::ChoicePrompt& p) { asked.push_back(p); return -1; });
+        // The sitting reeve standing again is asked as one: the card has its title and the words for a sitting reeve.
+        WorldTest::flag(w, head, "reeve");
+        WorldTest::runEvent(w, "reeve_campaign", head, w.lordId());
+        bool reeveCard = false;
+        for (const auto& p : asked)
+            if (p.event == "reeve_campaign") {
+                reeveCard = true;
+                CHECK(p.title == "選莊頭" && p.situation.find("你當了這一任") != std::string::npos, "the sitting reeve's card has no title or not its words");
+            }
+        CHECK(reeveCard, "the reeve's card was not put to the head");
+        // 帶頭抗議: what it can do to the rent is on the option before it is chosen.
+        asked.clear();
+        WorldTest::runEvent(w, "rent_raised", head, w.lordId());
+        bool rentNote = false;
+        for (const auto& p : asked)
+            for (const auto& o : p.options)
+                if (o.find("帶頭抗議") != std::string::npos) rentNote = o.find("地租往後加") != std::string::npos;
+        CHECK(asked.empty() || rentNote, "the rent the protest can cost is not on the option");
+        // A plan given up says so on the family's page.
+        w.setChooser(nullptr);
+        const size_t before = w.chronicle().size();
+        const std::string why = WorldTest::startPlan(w, head, "seek_patron", w.lordId());
+        if (why.empty()) {
+            CHECK(WorldTest::failPlan(w, head, "seek_patron"), "the plan just started is not there");
+            bool told = false;
+            for (size_t i = before; i < w.chronicle().size(); ++i)
+                told = told || (w.chronicle()[i].importance == 1 && w.chronicle()[i].text.find("【失敗】") != std::string::npos);
+            CHECK(told, "a failed plan of the family's ended with no 【失敗】 line");
+        }
     }
 
     // Round 10 (design/stages-and-drive.md 三、四、六): the drive inside the family.
@@ -2919,6 +2984,35 @@ int main() {
             for (size_t i = news; i < w.news().size(); ++i) heard = heard || w.news()[i].kind == "kin:verdict";
             CHECK(heard, "the maintenance suit's verdict did not go into the news");
             checkInvariants(w, "upkeep suit");
+        }
+    }
+    // A son placated with his share has had it from the whole house: his complaint against the brother who would get
+    // the land sleeps too, not a second card worded on the shares before he was given anything (fun-r12 A6).
+    {
+        Config c;
+        c.seed = 119;
+        c.prerun = 25;
+        World w(defs, c);
+        w.runYears(1);
+        const Id head = w.playerHead();
+        Id son = kNone, other = kNone;
+        for (Id m : w.household(w.playerHousehold()).members)
+            if (m != head && w.person(m).alive() && w.ageYears(w.person(m)) >= 16) {
+                if (son == kNone) son = m;
+                else if (other == kNone) other = m;
+            }
+        CHECK(son != kNone && other != kNone, "no two grown people besides the head in the family's house");
+        if (son != kNone && other != kNone) {
+            const size_t at = w.grievances().size();
+            WorldTest::addGrief(w, son, head, "照現在的分法，自己分不到地");
+            WorldTest::addGrief(w, son, other, "照現在的分法，自己分不到地");
+            int cards = 0;
+            w.setChooser([&](const World::ChoicePrompt& p) { cards += p.title == "家裡的不平"; return 0; });
+            WorldTest::kinRespond(w, at);
+            CHECK(cards == 1, "placating a son did not ask on a card");
+            const auto& g = w.grievances();
+            CHECK(g.size() > at + 1 && g[at].calmUntil > w.today() && g[at + 1].calmUntil > w.today() && g[at + 1].pending == 0,
+                  "a son placated by the head still has an open grievance against the rest of the house");
         }
     }
     // A killing by the family's head: the inquest and jury run, the goods go to the lord on the books, the land stays

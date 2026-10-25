@@ -5,6 +5,7 @@
   "texts": {
     "rival.chosen": "【宿敵】這一代跟你家撞得最多的是{house}：{clashes}。他在跟你搶：{after}。",
     "rival.no_clash": "兩家的仇和爭的東西都還在",
+    "rival.changed": "【宿敵】這幾年跟你家撞得最多的，換成了{house}：{clashes}。他在跟你搶：{after}。",
     "rival.title": "宿敵上門",
     "rival.weak_fine": "入地費到期、手上又拿不出錢",
     "rival.weak_death": "剛辦完喪事",

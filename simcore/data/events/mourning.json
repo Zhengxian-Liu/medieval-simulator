@@ -306,7 +306,7 @@
 
     // A neighbour who owes the house money loses the other half of the house: the debt is now a question of what the
     // family wants to be in the village.
-    {"id": "widow_debt", "title": "寡婦的債", "scope": "player_head", "chance": 0.15, "cooldown_years": 3,
+    {"id": "widow_debt", "title": "喪家的債", "scope": "player_head", "chance": 0.15, "cooldown_years": 3,
      "conditions": {"is_head": true},
      "target": {"pick": "random_villager", "conditions": {"is_head": true, "recently_widowed": true, "other_dynasty": true, "owes_target": true}},
      "prompt": "{target}剛送走了另一半，家裡還欠著你家的錢。秋收前是還不上了，{target_first}這幾天見了你就躲。",

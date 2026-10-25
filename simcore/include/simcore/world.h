@@ -362,6 +362,7 @@ struct AskOption {
     std::string office;
     bool open = true;
     std::string why;     // when closed
+    std::string lever;   // "owed": 討人情, asked on the strength of a favour they owe (spent on a yes; fun-r12 A3)
 };
 struct AskResult {
     int day = -1;
@@ -834,6 +835,20 @@ public:
     const std::string& repeatRule() const { return repeatRule_; }
     static const char* repeatRuleText(const std::string& rule);
     void setRepeatRule(const std::string& rule);
+    // fun-r12 A2: what one of the family does in the whole family's name. 「家裡這一票」: when the house has no man of
+    // its own standing, ask = the head is asked whom the house votes for, kin = blood and close kin first (else the
+    // one the head likes best), free = the head's own likes as they fall. 「家人出頭」: a member (not the one keeping
+    // the house) suing or confronting another house in public: ask = the head is asked first, forbid = never without
+    // the head, free = as they please.
+    const std::string& voteRule() const { return voteRule_; }
+    static const char* voteRuleText(const std::string& rule);
+    void setVoteRule(const std::string& rule);
+    const std::string& quarrelRule() const { return quarrelRule_; }
+    static const char* quarrelRuleText(const std::string& rule);
+    void setQuarrelRule(const std::string& rule);
+    // How the house would vote for this post by its rule, and why (「你的弟弟」): kNone when the rule leaves it to the
+    // head's likes, or the house has its own man standing.
+    Id houseBallot(const std::string& office, const std::vector<Id>& cands, std::string* why = nullptr) const;
     // While the year is let run (play's year mode), routine questions go by the family's rules, or by custom where
     // none is set: no card for each wake and wedding.
     void setRoutineByRule(bool on) { routineByRule_ = on; }
@@ -922,6 +937,7 @@ public:
         bool struck = false;  // the once-a-generation blow while the family is down has fallen
         int headOn = -1;      // the day he last went after the same thing as the family (rivalHeadOn)
         int headOns = 0;      // how many times this generation (a famine plea of his counts)
+        Id headOf = kNone;    // who kept the rival's house when last looked (a new head is told: fun-r12 A4)
     };
     const Rival& rival() const { return rival_; }
     void rivalHeadOn();                          // monthly: now and then he goes after the family's match, a field or grain
@@ -1139,7 +1155,12 @@ private:
         ++cardsInMonth_;
     }
     void releaseDeferredCard();
-    int handedOver_ = 0;                 // day the player took the family over (Config::prerun)
+    // A card the player handed to the family's own ways (「讓 AI 決定」): if nothing the family hears follows it by the
+    // day's end, it still ends in a line (fun-r12 A1: no card ends silently; counted as card_untold for the tests).
+    struct AiCard { std::string title; size_t at = 0; bool open = false; };
+    AiCard aiCard_;
+    void closeAiCard();
+    int handedOver_ = 0;                // day the player took the family over (Config::prerun)
     Rng rngMinds_;
     std::string pendingOpening_;  // the opening situation, run on the first day
     int lastForeshadow_ = -100000;  // the family senses a plot against it at most once every few years
@@ -1177,6 +1198,14 @@ private:
     void monthlyPlans();
     void npcStartPlans();
     void endPlan(size_t index, const std::string& outcome);
+    void endPlanBody(ActivePlan plan, const std::string& outcome);
+    // fun-r12 A1: the one way a plan of the player's house ends where the family can see it. Every end goes through
+    // endPlan; a plan the family knows of (not a member's hidden affair) always leaves an outcome line, tagged
+    // 【成功】【失敗】【敗露】【落空】 so the screen shows it as a big thing. counters: plan_end_ours, plan_told,
+    // plan_untold (the fallback had to speak: a path that forgot its line).
+    bool planIsOurs(const ActivePlan& plan, const PlanDef& pd) const;
+    void tellPlan(const std::string& outcome, const std::string& text);
+    std::string planFallback(const ActivePlan& plan, const PlanDef& pd, const std::string& outcome) const;
     // A family member (not the one keeping the house) means to start a plan that changes the family's life: the
     // head is asked first. False: not allowed (and said).
     bool familyAllows(Id actor, const PlanDef& pd, Id target);
@@ -1361,6 +1390,11 @@ private:
     std::string occasionRule_;
     std::string grainRule_;
     std::string repeatRule_ = "fold";
+    std::string voteRule_ = "ask", quarrelRule_ = "ask";
+    std::map<std::string, Id> familyBallot_;  // office -> whom the house votes for this election (asked or by rule)
+    Id kinPick(const std::vector<Id>& cands, std::string* why) const;
+    void decideFamilyBallot(const std::string& office, const std::vector<Id>& cands);
+    double favourFor(Id voter, Id cand) const;  // what the voter owes the candidate's house (him, or its head)
     struct FoldSeen { int n = 0; int year = 0; std::string choice; };
     std::map<std::pair<int, std::string>, FoldSeen> foldSeen_;  // (generation, card's name) -> asked so far, and last answer
     std::map<std::string, int> foldLast_;                       // event -> the option the player chose last time
@@ -1591,12 +1625,19 @@ private:
     void log(int importance, const std::string& text);
     // exchange.cpp (fun-r9)
     Rival rival_;
-    struct Clash { int day = 0; Id a = kNone, b = kNone; std::string what; };  // dynasties
+    // a, b: the dynasties; ha, hb: the two houses (the rival is the house that clashed with the family's own house:
+    // fun-r12 A4); weight: how much of a clash it was (a famine plea is less than a contest).
+    struct Clash { int day = 0; Id a = kNone, b = kNone; std::string what; Id ha = kNone, hb = kNone; double weight = 1; };
     std::vector<Clash> clashes_;
     std::vector<Pledge> pledges_;
     std::map<std::pair<int, std::string>, int> genCards_;  // (generation, card + its words) -> times shown
     int generation() const;  // which head of the family's line this is (counting from the first)
-    void noteClash(Id houseA, Id houseB, const std::string& what);
+    void noteClash(Id houseA, Id houseB, const std::string& what, double weight = 1);
+    std::string clashWords(const Clash& c) const;  // the clash as the family reads it (its own win is 你家)
+    bool kinHouse(Id house) const;  // the house of the head's parents, siblings or children, or a son's wife's parents (never the rival)
+    // Who won, for the clash book: 「你家」, a kinsman of a house of his own by name (「湯瑪斯·阿特伍德（你的弟弟）」), else 「卡特家」.
+    std::string winnerTag(Id winner) const;
+    double rivalScore(Id house, std::vector<std::string>* why = nullptr) const;
     void updateRival();
     int grainExchange(Household& h);     // the player's house short of bread: whom to ask (1 answered, -1 left to custom, 0 not asked)
     void famineAsk();                    // a famine, and grain to spare: someone comes to ask for it
@@ -1609,6 +1650,8 @@ private:
     int lastDeathDay_ = -100000;         // the last death in the family's house
     int famineAsked_ = -1;               // the season the last famine asker came
     int famineAsks_ = 0, famineYear_ = -1;
+    struct FamineSeen { int n = 0, year = 0; std::string answer; };
+    std::map<std::pair<int, Id>, FamineSeen> famineBy_;  // (generation, house) -> its comings to the door for bread
     std::vector<Id> livingInVillage() const;
 
     // kin.cpp (design/stages-and-drive.md 三、四)
@@ -1619,7 +1662,7 @@ private:
     struct Share { Id who = kNone; double acres = 0, money = 0; std::string what; };  // what one son gets
     // What the passing of a holding left someone owed or short of (a son passed over, the heir with a widow's third
     // out of the house): it feeds their grievance for years, fading.
-    struct PassGrudge { Id who = kNone, against = kNone; double points = 0; int day = 0; std::string why, claim; double merit = 0; };
+    struct PassGrudge { Id who = kNone, against = kNone; double points = 0; int day = 0; std::string why, claim; double merit = 0; double shortBy = 0; };
     std::vector<PassGrudge> passGrudges_;
     std::vector<Share> passPlan(const Household& h, Id head, const std::string& by, const std::string& younger, Id named) const;
     std::string passWords(const Household& h, Id head, const std::string& by, const std::string& younger, Id named) const;
@@ -1644,6 +1687,13 @@ private:
     // it goes with them when they head a house, back to the house they took it from when they die.
     struct Purse { double money = 0; Id from = kNone; };
     std::map<Id, Purse> purse_;
+    // fun-r12 A6: what the family has given each of its own (a portion setting him up, a share at a passing, coin to
+    // placate him, a court's award): a grievance over shares counts what was already given.
+    struct Given { int day = 0; double acres = 0, money = 0; std::string what; };
+    std::map<Id, std::vector<Given>> given_;
+    void noteGiven(Id who, double acres, double money, const std::string& what);
+    double givenWorth(Id who, int after = -1, bool moneyOnly = false) const;  // acres + pence/60, given after that day
+    std::string givenText(Id who, int after = -1) const;                      // 「1340 年分家 8 畝、30 便士；1346 年安撫 40 便士」
     void pursesMonth();
     std::string heirTag(Id x) const;
     std::set<Id> homeKin() const;
@@ -1675,6 +1725,9 @@ private:
     bool docketing_ = false;
     std::vector<std::pair<Id, Id>> docket_;  // suits waiting for the court day: (plaintiff, defendant)
     int juryStance_ = -1;                    // the head's way of sitting on this court day (-1: asked case by case)
+    bool juryHeadSat_ = false;               // the head was on the jury of the case just heard (its verdict is the family's to hear)
+    std::string juryAside() const;
+    std::string pendingFavour_;              // 【討人情】 line of the ask just answered (said after its 〔開口〕 line)
     std::string juryNote_;                   // how the head voted in the case just heard, by that way
     std::string killing(Id felon, Id victim, Id deed, bool poison, bool watched);  // hanged | abjured | acquitted | unsolved | unseen
     void forfeitGoods(Id felon);

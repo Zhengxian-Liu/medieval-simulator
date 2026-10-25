@@ -57,17 +57,17 @@
     {"id": "informed_lord",    "name": "向領主告密", "tags": ["honour"],           "visibility": "private", "roles": {"target": 30}, "half_life": 20},
     // The drive inside the family (src/kin.cpp, design/stages-and-drive.md 三、四): how the holding passes, the old
     // parent's keep, and the ladder a grievance climbs. A quarrel inside one family stays between the two people.
-    {"id": "passed_over",      "name": "家業沒分給他", "tags": ["honour", "money"], "visibility": "public", "roles": {"target": -18}, "half_life": 20, "inheritable": true, "stress": {"target": 8}},
-    {"id": "kin_complaint",    "name": "到處訴苦",   "tags": ["honour"],           "visibility": "public",  "roles": {"target": -6, "actor": -3}, "half_life": 5, "stress": {"target": 2}},
-    {"id": "left_home",        "name": "鬧翻離家",   "tags": ["honour"],           "visibility": "public",  "roles": {"target": -12, "actor": -10}, "half_life": 12, "stress": {"actor": 8, "target": 6}},
-    {"id": "kin_theft",        "name": "偷家裡的錢", "tags": ["crime", "money"],   "visibility": "secret",  "roles": {"target": -30, "target_family": -10, "actor": 4}, "half_life": 15, "inheritable": true, "stress": {"actor": 5}},
-    {"id": "collusion",        "name": "勾結外人",   "tags": ["crime", "honour"],  "visibility": "secret",  "roles": {"target": -40, "target_family": -20, "actor": 6}, "half_life": 25, "inheritable": true, "family": true, "stress": {"actor": 6}},
+    {"id": "passed_over",      "name": "家業沒分給他", "tags": ["kin", "honour", "money"], "visibility": "public", "roles": {"target": -18}, "half_life": 20, "inheritable": true, "stress": {"target": 8}},
+    {"id": "kin_complaint",    "name": "到處訴苦",   "tags": ["kin", "honour"],           "visibility": "public",  "roles": {"target": -6, "actor": -3}, "half_life": 5, "stress": {"target": 2}},
+    {"id": "left_home",        "name": "鬧翻離家",   "tags": ["kin", "honour"],           "visibility": "public",  "roles": {"target": -12, "actor": -10}, "half_life": 12, "stress": {"actor": 8, "target": 6}},
+    {"id": "kin_theft",        "name": "偷家裡的錢", "tags": ["kin", "crime", "money"],   "visibility": "secret",  "roles": {"target": -30, "target_family": -10, "actor": 4}, "half_life": 15, "inheritable": true, "stress": {"actor": 5}},
+    {"id": "collusion",        "name": "勾結外人",   "tags": ["kin", "crime", "honour"],  "visibility": "secret",  "roles": {"target": -40, "target_family": -20, "actor": 6}, "half_life": 25, "inheritable": true, "family": true, "stress": {"actor": 6}},
     {"id": "poisoning",        "name": "下毒",       "tags": ["crime", "violence"],"visibility": "secret",  "roles": {"target": -90, "target_family": -70, "actor": 10}, "half_life": 0, "inheritable": true, "family": true, "stress": {"actor": 25}},
     {"id": "murder",           "name": "殺人",       "tags": ["crime", "violence"],"visibility": "secret",  "roles": {"target": -90, "target_family": -80, "actor": 10}, "half_life": 0, "inheritable": true, "family": true, "stress": {"actor": 30}},
     {"id": "attempt_exposed",  "name": "謀害未遂",   "tags": ["crime", "violence"],"visibility": "public",  "roles": {"target": -60, "target_family": -40, "witness": -8}, "half_life": 0, "inheritable": true, "family": true, "stress": {"actor": 20, "target": 25}},
-    {"id": "upkeep_broken",    "name": "不養老人",   "tags": ["honour"],           "visibility": "public",  "roles": {"target": -25, "witness": -2}, "half_life": 15, "inheritable": true, "stress": {"target": 12}},
-    {"id": "placated",         "name": "讓了一份",   "tags": ["bond", "money"],    "visibility": "public",  "roles": {"target": 15}, "half_life": 10},
-    {"id": "confronted",       "name": "當面攤牌",   "tags": ["honour"],           "visibility": "public",  "roles": {"target": -10, "actor": -4}, "half_life": 6, "stress": {"target": 8}},
-    {"id": "sent_away",        "name": "被打發出門", "tags": ["honour"],           "visibility": "public",  "roles": {"target": -14}, "half_life": 10, "stress": {"target": 10}}
+    {"id": "upkeep_broken",    "name": "不養老人",   "tags": ["kin", "honour"],           "visibility": "public",  "roles": {"target": -25, "witness": -2}, "half_life": 15, "inheritable": true, "stress": {"target": 12}},
+    {"id": "placated",         "name": "讓了一份",   "tags": ["kin", "bond", "money"],    "visibility": "public",  "roles": {"target": 15}, "half_life": 10},
+    {"id": "confronted",       "name": "當面攤牌",   "tags": ["kin", "honour"],           "visibility": "public",  "roles": {"target": -10, "actor": -4}, "half_life": 6, "stress": {"target": 8}},
+    {"id": "sent_away",        "name": "被打發出門", "tags": ["kin", "honour"],           "visibility": "public",  "roles": {"target": -14}, "half_life": 10, "stress": {"target": 10}}
   ]
 }

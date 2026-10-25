@@ -158,7 +158,8 @@
      "ai": {"base": 5, "traits": {"ambitious": 10, "greedy": 4, "brave": 2}, "if": [{"cond": {"ambition": "become_reeve"}, "add": 15}]},
      "beats": [
        {"id": "gift_to_lord", "prompt": "{name} 想在 {target} 面前留個好印象。", "chance": 0.2, "options": [
-         {"text": "聖誕節送一隻閹雞", "log": "{name} 給 {target} 送去一隻肥閹雞。", "effects": [{"money": -4}, {"progress": 15}], "ai": {"base": 10}},
+         {"text": "聖誕節送一隻閹雞（4 便士）", "conditions": {"month": [11, 11]}, "log": "{name} 給 {target} 送去一隻過聖誕的肥閹雞。", "effects": [{"money": -4}, {"progress": 15}], "ai": {"base": 10}},
+         {"text": "送一隻肥鵝去莊園（4 便士）", "conditions": {"not": {"month": [11, 11]}}, "log": "{name} 給 {target} 送去一隻肥鵝。", "effects": [{"money": -4}, {"progress": 15}], "ai": {"base": 10}},
          {"text": "在法庭上替領主作證", "log": "莊園法庭上，{name} 站出來替 {target} 作證，鄰居們看{pron}的眼神變了。", "effects": [{"progress": 30}, {"reputation": -4}], "ai": {"base": 6, "traits": {"ambitious": 6, "kind": -4, "craven": 4}}}]}
      ]},
 

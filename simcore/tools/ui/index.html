@@ -401,7 +401,7 @@ function askButtons(p) {
   const shown = p.asks.filter((a) => !hidden.includes(a));
   const more = hidden.length ? `<button class="link" onclick="askMore.add(${p.id});renderTabs()">還有 ${hidden.length} 塊地…</button>` : "";
   return `<div class="asks"><span class="lab">開口：</span>${shown.map((a) =>
-    `<button ${a.open && can ? "" : "disabled"} title="${esc(a.open ? "用一段空閒去問" : a.why)}" onclick="${askCall(p.id, a, "")}">${esc(a.label)}</button>`).join("")}${more}${f ? " " + f : ""}</div>`;
+    `<button ${a.open && can ? "" : "disabled"} title="${esc(a.open ? "用一段空閒去問" : a.why)}" onclick="${askCall(p.id, a, a.lever || "")}">${esc(a.label)}</button>`).join("")}${more}${f ? " " + f : ""}</div>`;
 }
 function answerCard(s) {
   const a = s && s.last_ask;
@@ -720,7 +720,7 @@ function renderContest(s) {
       ${!o.mine && (o.gates || []).length ? `<div class="muted" style="font-size:12px;padding:0 0 4px">條件：${o.gates.map((g) => g.ok ? `<span class="pos" >✓ ${esc(g.detail || g.label)}</span>` : `<span class="neg">✗ ${esc(g.detail)}</span>`).join("　")}</div>` : ""}
       ${(o.voters || []).length ? `<div style="font-size:12px;padding:0 0 6px"><span class="muted">各家家主照現在看（${o.voters.filter((x) => x.ours).length}/${o.voters.length} 家會投你家）：</span>${o.voters.map((x) =>
         `<div>${esc(x.name)}：看樣子投 <b class="${x.ours ? "pos" : ""}">${esc(x.lean || "?")}</b>${x.promised ? `（答應了${esc(x.promised)}）` : ""}<span class="muted">；${esc(x.note)}</span>
-         ${x.ask ? `<button ${x.ask.open && can ? "" : "disabled"} title="${esc(x.ask.open ? "用一段空閒去問" : x.ask.why)}" onclick="${askCall(x.id, x.ask, "")}">拉票</button>` : ""}</div>`).join("")}</div>` : ""}`).join("");
+         ${x.ask ? `<button ${x.ask.open && can ? "" : "disabled"} title="${esc(x.ask.open ? "用一段空閒去問" : x.ask.why)}" onclick="${askCall(x.id, x.ask, x.ask.lever || "")}">${x.ask.lever === "owed" ? "討人情" : "拉票"}</button>` : ""}</div>`).join("")}</div>` : ""}`).join("");
   if (c.past.length) html += `<h3>你家最近的結果</h3>` + c.past.map((p) => `<div style="font-size:13px">${p.year} 年　${esc(p.thing)}：<b>${esc(p.outcome)}</b></div>`).join("");
   html += `<p class="legend">只列你家聽說的。去「村民」那一欄找人開口：買地、租地、請他投票、借錢、說親、收學徒。</p>`;
   $("tab-body").innerHTML = html;
