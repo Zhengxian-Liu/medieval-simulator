@@ -19,7 +19,9 @@ public:
     void apply(const Json& effects, Person& p, Id target);
     std::string format(const std::string& tmpl, const Person& p, Id target) const;
     std::string optionText(const OptionDef& o, const Person& p, Id target) const;
-    static std::string lastingNote(const OptionDef& o);  // what it does to the rent for good: 「（地租往後加一成半）」
+    // What it does to the rent for good: 「（地租往後加一成半）」, by the change it can still make from rentNow (the factor
+    // has its bounds: fun-r12 L10).
+    static std::string lastingNote(const OptionDef& o, double rentNow = 1);
     // May an old question (EventDef::fold) be answered with this option without asking? Never a crime (a deed, or
     // marked no_fold), never sending someone away (a station or a place), never more than 20 pence or a tax over
     // the assessed sum (fun-r11 review H1).

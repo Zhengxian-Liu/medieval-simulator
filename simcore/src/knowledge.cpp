@@ -413,8 +413,12 @@ void World::accuse(Id accuser, Id accused, Id deedId) {
                          fullName(accuser) + "。");
         return;
     }
-    // A suit between two houses is a clash between them (the rival is the house that clashed most: fun-r12 A4).
-    noteClash(people_[accuser].household, people_[accused].household, "莊園法庭：" + fullName(accuser) + " 告 " + fullName(accused) + "「" + what + "」", 1.5);
+    // A suit between two houses is a clash between them (the rival is the house that clashed most: fun-r12 A4); not a
+    // quarrel inside one family (a theft at home, a share), which is the family's own business (H1). The names are
+    // put in when the clash is read, by what they are to the head then (L11).
+    const bool kinCase = def && std::find(def->tags.begin(), def->tags.end(), "kin") != def->tags.end();
+    if (!kinCase && !kinTo(accuser, accused))
+        noteClash(people_[accuser].household, people_[accused].household, "莊園法庭：{p0} 告 {p1}「" + what + "」", 1.5, accuser, accused);
     std::vector<Id> ayes;
     int panel = 0;
     int votes = juryVerdict(accuser, accused, deedId, ayes, panel);

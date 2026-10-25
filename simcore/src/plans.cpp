@@ -384,7 +384,7 @@ std::string World::planFallback(const ActivePlan& plan, const PlanDef& pd, const
         const int months = (day_ - plan.startDay) / kDaysPerMonth;
         return who + "沒有成：" + (months >= pd.maxMonths ? "拖了 " + std::to_string(months) + " 個月，" : "白忙了一場，") +
                (plan.target != kNone && people_[plan.target].alive()
-                    ? people_[plan.target].firstName + " 對你家的好感還是 " + std::to_string(std::lround(opinion(plan.target, plan.actor))) + "。"
+                    ? people_[plan.target].firstName + " 對你家的好感還是 " + std::to_string(std::lround(opinion(plan.target, actingHead() != kNone ? actingHead() : plan.actor))) + "。"
                     : "眼下只好先放下。");
     }
     return who + "沒辦下去。";
@@ -462,16 +462,28 @@ void World::endPlanBody(ActivePlan plan, const std::string& requested) {
         Id partner = plan.plan == "court" ? plan.actor : plan.subject;
         Id wed = wedTo(plan.subject, plan.target) ? plan.subject : wedTo(plan.target, partner) ? plan.target : plan.actor;
         if (actorHome) {
-            // Lost to another house: say whose, and it is a clash with them (fun-r12 A1, A4).
+            // Lost to another house: say whose, and it is a clash with the house that won the match (fun-r12 A1, A4, M1):
+            // the house the new spouse came from, not the house the family was courting (a man who married another
+            // brings his wife home; his own house took nothing from the family).
             const Id to = people_[wed].spouse;
-            const Id toHouse = to != kNone ? people_[to].household : kNone;
-            std::string by;
-            if (to != kNone && wed == plan.target) {
-                by = "，許給了" + (toHouse != kNone && households_[toHouse].dynasty != kNone ? dynasties_[households_[toHouse].dynasty].surname + "家的 " : std::string()) +
-                     fullName(to);
-                if (toHouse != kNone && !inPlayerHouse(toHouse)) noteClash(actor.household, toHouse, "親事：" + fullName(wed) + " 許給了他家");
+            const Id wedHouse = people_[wed].household;
+            Id won = kNone;
+            if (to != kNone) {
+                if (people_[to].household != kNone && people_[to].household != wedHouse) won = people_[to].household;
+                else
+                    for (Id par : {people_[to].father, people_[to].mother})
+                        if (won == kNone && par != kNone && people_[par].alive() && people_[par].household != kNone && people_[par].household != wedHouse)
+                            won = people_[par].household;
             }
-            tellPlan(outcome, whose + "落空了：" + fullName(wed) + " 已經另結了親" + by + "。");
+            const std::string fromHouse = won != kNone && households_[won].dynasty != kNone ? dynasties_[households_[won].dynasty].surname + "家的 " : std::string();
+            const std::string verb = people_[wed].sex == Sex::Male ? "另娶了" : "另嫁了";
+            std::string line;
+            if (to == kNone) line = fullName(wed) + " 已經另結了親";
+            else if (wed == plan.actor) line = std::string(people_[wed].sex == Sex::Male ? "他" : "她") + "自己" + verb + fromHouse + fullName(to);  // (L1)
+            else line = fullName(wed) + " " + verb + fromHouse + fullName(to);
+            if (to != kNone && wed != plan.actor && won != kNone && !inPlayerHouse(won))
+                noteClash(actor.household, won, std::string("親事：{p0} ") + verb + fromHouse + "{p1}", 1, wed, to);
+            tellPlan(outcome, whose + "落空了：" + line + "。");
         }
         return;
     }
@@ -576,7 +588,16 @@ void World::endPlanBody(ActivePlan plan, const std::string& requested) {
     const size_t told = chronicle_.size();
     ev.apply(effects, actor, plan.target);
     // A plan whose outcome is told by what it does (a suit at the court, the terms of a threat): those lines are its answer.
-    if (ours && line.empty() && chronicle_.size() > told) ++counters_["plan_told"];
+    // Only a family line (importance 1) naming the doer or the one it was aimed at counts as the plan's answer (L3): a
+    // piece of village news in the same moment does not.
+    if (ours && line.empty()) {
+        const std::string an = shortName(plan.actor), tn = plan.target != kNone ? shortName(plan.target) : std::string();
+        for (size_t i = told; i < chronicle_.size(); ++i)
+            if (chronicle_[i].importance <= 1 && (chronicle_[i].text.find(an) != std::string::npos || (!tn.empty() && chronicle_[i].text.find(tn) != std::string::npos))) {
+                ++counters_["plan_told"];
+                break;
+            }
+    }
     // Say why, when the doer's family is the player's: a grudge answered is part of the story.
     if (actorHome && outcome == "success")
         for (size_t k = before; k < deeds_.size(); ++k)

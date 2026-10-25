@@ -752,6 +752,7 @@ public:
     void setMoneyForTest(Id house, double money) { households_[house].money = money; }  // tests only
     void setFoodForTest(Id house, double days) { households_[house].food = consumption(households_[house]) * days; }  // tests only
     void setHealthForTest(Id person, double health) { people_[person].health = health; }  // tests only
+    void spareForTest(Id person) { spared_.insert(person); }  // tests only: this one does not die (a test's head lives out its years)
     void killForTest(Id person) { kill(person, "test"); }                                    // tests only
     std::vector<std::pair<std::string, Id>> deferredForTest() const;                          // tests only: waiting cards
     void startSeason() { rollSeason(); }  // on a season's first day, before it runs: free time and the family's wants  // carry out what the player just asked for, before the day runs
@@ -938,6 +939,7 @@ public:
         int headOn = -1;      // the day he last went after the same thing as the family (rivalHeadOn)
         int headOns = 0;      // how many times this generation (a famine plea of his counts)
         Id headOf = kNone;    // who kept the rival's house when last looked (a new head is told: fun-r12 A4)
+        int switches = 0;     // changed to another house this generation (at most once, unless it died out or married in)
     };
     const Rival& rival() const { return rival_; }
     void rivalHeadOn();                          // monthly: now and then he goes after the family's match, a field or grain
@@ -1103,6 +1105,7 @@ private:
     std::vector<Place> places_;
     std::vector<Want> wants_;
     std::vector<Favour> favours_;
+    std::set<Id> spared_;  // spareForTest
     std::vector<EntryFine> fines_;
     std::map<std::pair<Id, std::string>, Id> promises_;  // (voter, office) -> the man they promised their vote
     std::map<std::tuple<Id, std::string, Id>, int> asked_;  // (who, ask, object) -> day it may be asked again
@@ -1393,6 +1396,11 @@ private:
     std::string voteRule_ = "ask", quarrelRule_ = "ask";
     std::map<std::string, Id> familyBallot_;  // office -> whom the house votes for this election (asked or by rule)
     Id kinPick(const std::vector<Id>& cands, std::string* why) const;
+    bool ballotStake(const std::vector<Id>& cands) const;  // a relative, the family's surname or a house it quarrels with is standing
+    // (head, office, the related candidate) -> whom the head chose the first time: asked once, then followed (fun-r12 M3).
+    std::map<std::tuple<Id, std::string, Id>, Id> ballotAnswered_;
+    bool voteRuleTold_ = false;  // the house's ballot rule said once in 【選舉在即】 (again after it changes or the head does)
+    Id voteRuleToldHead_ = kNone;
     void decideFamilyBallot(const std::string& office, const std::vector<Id>& cands);
     double favourFor(Id voter, Id cand) const;  // what the voter owes the candidate's house (him, or its head)
     struct FoldSeen { int n = 0; int year = 0; std::string choice; };
@@ -1531,7 +1539,13 @@ private:
     // Who lends `amount` to h, richest willing neighbour first; when that is the player's house, the player is asked.
     // owed: what h will owe (more with interest, 0 when the player gives it outright).
     Id seekLender(Household& h, double amount, const std::string& why, double& owed);
-    void callInFavour(Id debtor, Id creditor);
+    // Favours are kept one by one (fun-r12 M4): what is called in is one named favour, the largest still owed; the rest
+    // stay. kFavourAsk is the one threshold for 「可以去討人情」 and the 討人情 option alike.
+    static constexpr double kFavourAsk = 5;
+    double favourNow(const Favour& f) const;
+    const Favour* bestFavour(Id debtor, Id creditor) const;
+    std::string favourName(const Favour& f) const;  // 「1340 年荒年白送了 60 天的糧」
+    void spendFavour(Id debtor, Id creditor);        // the largest one only
     void chargeEntryFine(Household& h, Id heir, Id dead, double customary);
     void monthlyFines();
     void resolveFine(EntryFine& f);
@@ -1627,12 +1641,23 @@ private:
     Rival rival_;
     // a, b: the dynasties; ha, hb: the two houses (the rival is the house that clashed with the family's own house:
     // fun-r12 A4); weight: how much of a clash it was (a famine plea is less than a contest).
-    struct Clash { int day = 0; Id a = kNone, b = kNone; std::string what; Id ha = kNone, hb = kNone; double weight = 1; };
+    // what may hold {p0} {p1} (the people, named when read, by what they are to the head then) and {w0} (who won, 你家 or
+    // the house): a clash written before a change of head reads right after it (fun-r12 L11).
+    struct Clash { int day = 0; Id a = kNone, b = kNone; std::string what; Id ha = kNone, hb = kNone; double weight = 1; Id p0 = kNone, p1 = kNone; };
     std::vector<Clash> clashes_;
+    // The rival kept steady (fun-r12 M2): a house that leads another must lead two yearly weighings running; one change
+    // per head unless the rival dies out or becomes kin; houses that married in stay out across the generations.
+    Id rivalChallenger_ = kNone;
+    int rivalChallengerYears_ = 0;
+    std::map<Id, int> rivalWedOut_;     // house -> the day it was found married in (never the rival again while it holds)
+    std::set<std::string> rivalSaid_;  // 【宿敵】 lines already said (never the same words twice)
+    Id rivalPrevHouse_ = kNone;         // the last generation's rival, for 「上一代的帳」
+    std::vector<Id> lineage() const;    // the head keeping the house, the family's head, this and the last generation's heads, their spouses
+    bool kinTo(Id a, Id b) const;       // near kin: parent, child, sibling, spouse, grandparent, in-laws, step-kin, uncle, nephew
     std::vector<Pledge> pledges_;
     std::map<std::pair<int, std::string>, int> genCards_;  // (generation, card + its words) -> times shown
     int generation() const;  // which head of the family's line this is (counting from the first)
-    void noteClash(Id houseA, Id houseB, const std::string& what, double weight = 1);
+    void noteClash(Id houseA, Id houseB, const std::string& what, double weight = 1, Id p0 = kNone, Id p1 = kNone);
     std::string clashWords(const Clash& c) const;  // the clash as the family reads it (its own win is 你家)
     bool kinHouse(Id house) const;  // the house of the head's parents, siblings or children, or a son's wife's parents (never the rival)
     // Who won, for the clash book: 「你家」, a kinsman of a house of his own by name (「湯瑪斯·阿特伍德（你的弟弟）」), else 「卡特家」.

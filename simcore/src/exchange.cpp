@@ -110,11 +110,13 @@ void World::payCreditor(Household& h, Id creditor, double amount) {
 
 // ---- The rival -----------------------------------------------------------------------------------
 
-void World::noteClash(Id houseA, Id houseB, const std::string& what, double weight) {
+void World::noteClash(Id houseA, Id houseB, const std::string& what, double weight, Id p0, Id p1) {
     if (houseA == kNone || houseB == kNone || houseA == houseB) return;
     Id a = households_[houseA].dynasty, b = households_[houseB].dynasty;
-    if (a == kNone || b == kNone) return;
-    clashes_.push_back({day_, a, b, what, houseA, houseB, weight});
+    if (a == kNone || b == kNone || a == b) return;  // one blood: the family's own quarrel, never a rival's (fun-r12 H1)
+    // The family against its own kin (a brother's house, the in-laws): not a clash with a rival either.
+    if ((inPlayerHouse(houseA) && kinHouse(houseB)) || (inPlayerHouse(houseB) && kinHouse(houseA))) return;
+    clashes_.push_back({day_, a, b, what, houseA, houseB, weight, p0, p1});
     if (clashes_.size() > 600) clashes_.erase(clashes_.begin());
 }
 
@@ -146,33 +148,63 @@ std::vector<std::string> World::rivalClashes() const {
 // read as the rival's win); the family's own win is 「你家選上」.
 std::string World::clashWords(const Clash& c) const {
     std::string t = c.what;
+    // The people, by what they are to the head now (a 「你的繼母」 of the last head is not the widow's: fun-r12 L11).
+    for (auto [key, id, win] : {std::tuple<const char*, Id, bool>{"{p0}", c.p0, false}, {"{p1}", c.p1, false}, {"{w0}", c.p0, true}})
+        for (size_t at; id != kNone && (at = t.find(key)) != std::string::npos;) t.replace(at, std::string(key).size(), win ? winnerTag(id) : fullName(id));
     if (playerDynasty_ == kNone) return t;
-    const std::string mine = dynasties_[playerDynasty_].surname + "家選上";
-    if (const size_t at = t.find(mine); at != std::string::npos && inPlayerHouse(c.hb)) t.replace(at, mine.size(), "你家選上");
+    if (!inPlayerHouse(c.hb)) return t;
+    for (const char* won : {"家選上", "家拿到"}) {
+        const std::string mine = dynasties_[playerDynasty_].surname + won;
+        if (const size_t at = t.find(mine); at != std::string::npos) t.replace(at, mine.size(), std::string("你") + won);
+    }
     return t;
 }
 
-// Close kin are never the rival (fun-r12 A4): the house of the head's parents, brothers and sisters, or children.
-bool World::kinHouse(Id house) const {
-    const Id head = actingHead();
-    if (head == kNone || house == kNone) return false;
-    for (Id m : households_[house].members) {
-        const std::string t = kinTie(head, m);
-        // (and the wife's own father: seed 195, 1348 chose the house of the head's 岳父)
-        if (t == "parent" || t == "sibling" || t == "child" || t == "step_parent" || t == "step_child" || t == "spouse" || t == "parent_in_law" ||
-            t == "child_in_law")
-            return true;
-        const Id sp = people_[m].spouse;
-        if (m == households_[house].head && sp != kNone && people_[sp].alive()) {
-            const std::string ts = kinTie(head, sp);
-            if (ts == "parent" || ts == "sibling" || ts == "child") return true;
-        }
+// The family's line as it stands (fun-r12 H1): the one keeping the house, the family's head, this generation's head
+// and the one before, and their husbands and wives. A widow keeping the house measures by her late husband too, so his
+// brothers and his stepmother stay kin.
+std::vector<Id> World::lineage() const {
+    std::vector<Id> out;
+    auto add = [&](Id x) {
+        if (x != kNone && std::find(out.begin(), out.end(), x) == out.end()) out.push_back(x);
+    };
+    add(actingHead());
+    add(playerHead());
+    if (playerDynasty_ != kNone) {
+        const auto& hs = dynasties_[playerDynasty_].heads;
+        for (size_t i = hs.size() >= 2 ? hs.size() - 2 : 0; i < hs.size(); ++i) add(hs[i]);
     }
+    const size_t n = out.size();
+    for (size_t i = 0; i < n; ++i) add(people_[out[i]].spouse);
+    return out;
+}
+
+bool World::kinTo(Id a, Id b) const {
+    if (a == kNone || b == kNone || a == b) return a == b && a != kNone;
+    static const std::set<std::string> kNear{"parent", "child", "sibling", "spouse", "step_parent", "step_child", "parent_in_law", "child_in_law",
+                                             "sibling_in_law", "uncle", "nephew", "grandparent", "grandchild"};
+    return kNear.count(kinTie(a, b)) || kNear.count(kinTie(b, a));
+}
+
+// Close kin are never the rival (fun-r12 A4, H1): a house of the family's own surname, or one where anyone is near kin
+// of the family's line (blood to cousins, in-laws, step-kin, uncles and nephews), or the house a son's wife came from.
+bool World::kinHouse(Id house) const {
+    if (house == kNone) return false;
+    const Household& h = households_[house];
+    if (playerDynasty_ != kNone && h.dynasty == playerDynasty_) return true;
+    const std::vector<Id> line = lineage();
+    if (line.empty()) return false;
+    for (Id m : h.members)
+        for (Id l : line)
+            if (kinTo(l, m)) return true;
     // 親家: the house a son's wife came from, while she lives in the family's house (a match is how feuds were ended).
-    if (people_[head].household != kNone)
-        for (Id m : households_[people_[head].household].members) {
+    if (playerHousehold_ != kNone)
+        for (Id m : households_[playerHousehold_].members) {
             const Person& p = people_[m];
-            if (!p.alive() || p.spouse == kNone || kinTie(head, p.spouse) != "child") continue;
+            if (!p.alive() || p.spouse == kNone) continue;
+            bool ours = false;
+            for (Id l : line) ours = ours || kinTie(l, p.spouse) == "child";
+            if (!ours) continue;
             for (Id par : {p.father, p.mother})
                 if (par != kNone && people_[par].alive() && people_[par].household == house) return true;
         }
@@ -271,21 +303,41 @@ void World::updateRival() {
     if (!newGen && rivalHouse() != kNone && households_[rival_.house].head != rival_.headOf) {
         const Id was = rival_.headOf, now = households_[rival_.house].head;
         rival_.headOf = now;
-        if (day_ >= handedOver_ && now != kNone)
+        if (day_ >= handedOver_ && now != kNone && rivalSaid_.insert("head:" + std::to_string(rival_.house) + ":" + std::to_string(now)).second)
             log(1, "【宿敵】" + dynasties_[rival_.dynasty].surname + "家換了當家的：" + fullName(now) + "（" + std::to_string(int(ageYears(people_[now]))) + " 歲）接下了" +
                        (was != kNone ? fullName(was) + (people_[was].alive() ? "" : "（已過世）") + "的家業" : "家業") + "，兩家的帳也跟著到了" +
                        (people_[now].sex == Sex::Male ? "他" : "她") + "手上（" + people_[now].firstName + " 對你家 " +
                        std::to_string(std::lround(actingHead() != kNone ? opinion(now, actingHead()) : 0)) + "）。");
     }
     // Weighed again at each year's start (and for a new generation, or when the rival is gone or has become kin).
-    const bool gone = rivalHouse() == kNone || kinHouse(rival_.house);
+    const bool exists = rivalHouse() != kNone;
+    const bool wedIn = exists && kinHouse(rival_.house);
+    bool gone = !exists || wedIn;
     if (!newGen && !gone && !(month() == 0 && dayOfMonth() == 0)) return;
-    if (!newGen && rivalHouse() != kNone && kinHouse(rival_.house) && day_ >= handedOver_)
-        log(1, "【宿敵】" + dynasties_[rival_.dynasty].surname + "家跟你家結了親，兩家成了親家，不再算宿敵了。");
+    // Never the same 【宿敵】 words twice (fun-r12 M2).
+    auto say = [&](const std::string& line) {
+        if (day_ >= handedOver_ && rivalSaid_.insert(line).second) log(1, line);
+    };
+    if (wedIn && !rivalWedOut_.count(rival_.house)) {
+        // Kept out from now on, this generation and the next (M2). 「結了親」 only for a match between the two houses.
+        rivalWedOut_[rival_.house] = day_;
+        bool married = false;
+        for (Id m : households_[rival_.house].members)
+            if (Id sp = people_[m].spouse; sp != kNone && (isPlayerFamily(people_[sp]) || inPlayerHouse(people_[sp].household))) married = true;
+        if (playerHousehold_ != kNone)
+            for (Id m : households_[playerHousehold_].members)
+                for (Id par : {people_[m].father, people_[m].mother})
+                    if (par != kNone && people_[par].household == rival_.house) married = true;
+        const std::string sur = dynasties_[rival_.dynasty].surname;
+        say("【宿敵】" + sur + (married ? "家跟你家結了親，兩家成了親家，不再算宿敵了。" : "家論起來是你家的親戚，不再算宿敵了。"));
+    }
     if (newGen) {
+        if (exists && !wedIn) rivalPrevHouse_ = rival_.house;
         Rival fresh;
         fresh.forHead = genHead;
         rival_ = fresh;
+        rivalChallenger_ = kNone, rivalChallengerYears_ = 0;
+        gone = true;
     }
     Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
     Id bestHouse = kNone;
@@ -293,16 +345,32 @@ void World::updateRival() {
     for (const auto& h : households_) {
         if (h.extinct || h.head == kNone || h.members.empty() || h.id == lordHouse || inPlayerHouse(h.id) || h.dynasty == kNone) continue;
         if (people_[h.head].occupation == "priest" || kinHouse(h.id)) continue;
+        if (auto wo = rivalWedOut_.find(h.id); wo != rivalWedOut_.end() && day_ - wo->second < 30 * kDaysPerYear) continue;
         double v = rivalScore(h.id);
         if (v > top) top = v, bestHouse = h.id;
     }
-    const double now = gone ? 0 : rivalScore(rival_.house);
-    // A standing rival is kept unless another house has clearly clashed more with the family since.
-    if (bestHouse == kNone || bestHouse == rival_.house || (!gone && top < now * 1.3 + 2)) {
-        if (gone && !newGen && bestHouse == kNone) rival_.house = kNone, rival_.dynasty = kNone;
+    if (bestHouse == kNone || bestHouse == rival_.house) {
+        if (gone && bestHouse == kNone) rival_.house = kNone, rival_.dynasty = kNone;
+        rivalChallenger_ = kNone, rivalChallengerYears_ = 0;
         return;
     }
-    const bool had = !gone && rival_.house != kNone;
+    if (!gone) {
+        // A standing rival is kept unless another house clearly leads it on two yearly weighings running, and it changes
+        // at most once a generation (M2: not a new name every other year).
+        const double now = rivalScore(rival_.house);
+        if (top < now * 1.3 + 2 || rival_.switches >= 1) {
+            rivalChallenger_ = kNone, rivalChallengerYears_ = 0;
+            return;
+        }
+        if (rivalChallenger_ != bestHouse) {
+            rivalChallenger_ = bestHouse, rivalChallengerYears_ = 1;
+            return;
+        }
+        if (++rivalChallengerYears_ < 2) return;
+        ++rival_.switches;
+    }
+    const bool had = !gone;
+    rivalChallenger_ = kNone, rivalChallengerYears_ = 0;
     rival_.dynasty = households_[bestHouse].dynasty;
     rival_.house = bestHouse;
     rival_.headOf = households_[bestHouse].head;
@@ -310,8 +378,11 @@ void World::updateRival() {
     if (day_ < handedOver_) return;
     std::vector<std::string> past = rivalClashes();
     if (past.size() > 3) past.resize(3);
-    log(1, cardText(had ? "rival.changed" : "rival.chosen", {{"house", rivalName()}, {"clashes", past.empty() ? cardText("rival.no_clash") : join(past, "；")},
-                                                             {"after", rivalAfter()}}));
+    const std::string clashes = past.empty() ? cardText("rival.no_clash") : join(past, "；");
+    if (newGen && bestHouse == rivalPrevHouse_)
+        say("【宿敵】上一代跟" + rivalName() + "的帳，這一代接著算：" + clashes + "。");
+    else
+        say(cardText(had ? "rival.changed" : "rival.chosen", {{"house", rivalName()}, {"clashes", clashes}, {"after", rivalAfter()}}));
 }
 
 // ---- 缺糧：跟誰開口 -----------------------------------------------------------------------------
@@ -467,8 +538,7 @@ int World::grainExchange(Household& h) {
         if (f.kind == "favour") {
             int y = cfg_.startYear;
             std::string why;
-            for (const auto& fv : favours_)
-                if (fv.debtor == f.who && fv.creditor == head) y = cfg_.startYear + fv.day / kDaysPerYear, why = fv.why;
+            if (const Favour* bf = bestFavour(f.who, head)) y = cfg_.startYear + bf->day / kDaysPerYear, why = bf->why;
             v["year"] = std::to_string(y);
             v["why"] = why;
             wants = cardText("short.favour", v);
@@ -574,7 +644,7 @@ int World::grainExchange(Household& h) {
     std::string what;
     if (f.kind == "favour") {
         what = cardText("short.done_favour", {{"name", them}, {"days", num(f.days)}});
-        callInFavour(f.who, head);
+        spendFavour(f.who, head);  // the one favour the card named (fun-r12 M4)
         addOpinion(f.who, head, "helped_them", 4, 5);
     } else if (f.kind == "loan" || f.kind == "pledge") {
         const int due = dueYearFor(f.who);
@@ -641,7 +711,9 @@ void World::famineAsk() {
         if (people_[o.head].occupation == "priest" || breadShort(o) < 20 || o.money >= costToHarvest(o)) continue;
         // Not the lord's own kin (their lord feeds them), and the same house at most twice a generation.
         // Not two years running either, and not a house the family was just asked about as kin going hungry (親友挨餓).
-        const FamineSeen& fs = famineBy_[{generation(), o.id}];
+        static const FamineSeen kUnseen{};
+        const auto fsAt = famineBy_.find({generation(), o.id});
+        const FamineSeen& fs = fsAt != famineBy_.end() ? fsAt->second : kUnseen;  // (find: not an empty entry per house, L5)
         // (The two years run across a change of head: a new head is not asked by the house that came last year.)
         int lastCame = fs.n >= 1 ? fs.year : -100000;
         for (const auto& [k, seen] : famineBy_)
@@ -685,7 +757,12 @@ void World::famineAsk() {
     const double times = market > 0 ? std::floor(dear / market * 10 + 0.5) / 10 : 0;
     char timesText[16];
     std::snprintf(timesText, sizeof timesText, times == std::floor(times) ? "%.0f" : "%.1f", times);
-    std::map<std::string, std::string> v{{"name", name}, {"surname", surname}, {"asker", asker == oh.head ? fullName(asker) : fullName(oh.head) + "的" + kinWord(oh.head, asker) + shortName(asker)},
+    // (Someone of the house who is no near kin of its head: 「格林家的羅傑」, not 「奧斯伯特·格林的羅傑」.)
+    const std::string askerKin = asker == oh.head ? "" : kinWord(oh.head, asker);
+    std::map<std::string, std::string> v{{"name", name}, {"surname", surname},
+                                         {"asker", asker == oh.head ? fullName(asker)
+                                                   : askerKin.empty() ? surname + "的" + shortName(asker)
+                                                                      : fullName(oh.head) + "的" + askerKin + shortName(asker)},
                                          {"days", num(days)}, {"our_days", num(ourDays)}, {"owed", num(owed)}, {"dear", num(dear)},
                                          {"times", timesText},
                                          {"due", std::to_string(loanDueYear(oh, head))},
@@ -965,17 +1042,17 @@ bool World::rivalMatch(Id rh) {
             ap.progress += 45;
             addOpinion(households_[rh].head, head, "rival_outbid", -8, 8);
             line += "禮送到了，" + fullName(th) + " 家的口氣鬆了：你家這邊談到 " + num(ap.progress) + " 成，他家 " + num(his) + "。";
-            noteClash(ph.id, rh, "搶 " + fullName(target) + " 的親事：你家多添了禮");
+            noteClash(ph.id, rh, "搶 {p0} 的親事：你家多添了禮", 1, target);
         } else if (w == 1) {
             ap.progress += lift;
             line += (lift >= 30 ? fullName(th) + " 家念著跟你家的交情，答應再等等你家的媒人" : lift > 0 ? "說了情，" + fullName(th) + " 家只說要再想想"
                                                                                                    : fullName(th) + " 家跟你家不親，說情沒用") +
                     "：你家這邊談到 " + num(ap.progress) + " 成，他家 " + num(his) + "。";
-            noteClash(ph.id, rh, "搶 " + fullName(target) + " 的親事：你家託人說情");
+            noteClash(ph.id, rh, "搶 {p0} 的親事：你家託人說情", 1, target);
         } else {
             ap.aborted = true;
             line += "你家的媒人不再上門了，" + surname + "的媒人接著談。";
-            noteClash(ph.id, rh, "搶 " + fullName(target) + " 的親事：讓給了他家");
+            noteClash(ph.id, rh, "搶 {p0} 的親事：讓給了他家", 1, target);
         }
         log(1, line);
         // His own plan, racing the family's (ap is not used from here: plans_ may grow).
@@ -1196,13 +1273,11 @@ std::vector<std::pair<Id, std::string>> World::voterLeans(const std::string& id)
         const std::string to = inPlayerHouse(people_[pick].household) ? (pick == head ? "你" : shortName(pick)) : fullName(pick);
         if (feudStage(voter, head) >= 2) why = cardText("vote.feud");
         else if (weOwe > 0.5) why = cardText("vote.debt", {{"owed", num(weOwe)}});
-        else if (favourOwed(voter, head) >= 4) {
+        else if (const Favour* bf = bestFavour(voter, head); bf && favourNow(*bf) >= kFavourAsk) {
             // A favour owed to the family is a reason for the family's man only; one who owes it and still votes the
             // other way says so (fun-r10: 「記得收留了家裡的人」 was shown as a reason to vote for the rival).
             const bool ours = inPlayerHouse(people_[pick].household);
-            for (const auto& f : favours_)
-                if (f.debtor == voter && f.creditor == head)
-                    why = cardText(ours ? "vote.favour" : "vote.favour_but", {{"year", std::to_string(cfg_.startYear + f.day / kDaysPerYear)}, {"why", f.why}});
+            why = cardText(ours ? "vote.favour" : "vote.favour_but", {{"year", std::to_string(cfg_.startYear + bf->day / kDaysPerYear)}, {"why", bf->why}});
         } else if (favourOwed(head, voter) >= 4) why = cardText("vote.we_owe");
         else if (auto pr = promises_.find({voter, id}); pr != promises_.end()) why = cardText("vote.promised", {{"man", fullName(pr->second)}});
         if (why.empty()) continue;

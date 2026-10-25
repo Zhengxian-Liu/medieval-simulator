@@ -33,6 +33,7 @@ Actions (the page's buttons):
                                                      votes = ask|kin|free, quarrels = ask|forbid|free)
                      (big questions are still asked on the way)
 """
+import hashlib
 import json
 import os
 import sys
@@ -352,18 +353,22 @@ def render(v):
     out += top_events(v)
     out += decision(v, s, a)
     out += family(s, season)
-    # The cursor holds how many entries the last view had shown: this one prints only what came after (fun-r12 A7).
+    # The cursor holds which game it was (its first entry) and how many entries the last view had shown: this one prints
+    # only what came after (fun-r12 A7). A new game on the same port starts again, however long it already is (L12).
+    entries = v.get("entries") or []
+    game = hashlib.sha1(json.dumps(entries[0], ensure_ascii=False, sort_keys=True).encode()).hexdigest()[:12] if entries else "-"
     try:
-        since = int(open(CURSOR, encoding="utf-8").read().split()[-1])
+        was_game, was = open(CURSOR, encoding="utf-8").read().split()[-2:]
+        since = int(was) if was_game == game else None
     except (OSError, ValueError, IndexError):
         since = None
-    total = len(v.get("entries") or [])
+    total = len(entries)
     if since is not None and since > total:
         since = None  # another game on this port: start again
     lines, newest = chronicle_lines(v, since=since)
     fresh = "（上次之後的新記錄；chronicle 2 看最近兩季的全部）" if since else "（新的季在上面；chronicle 看更早的）"
     out += ["", "―― 編年記錄" + fresh + "――"] + (lines or ["  （上次之後沒有新的記錄）"])
-    open(CURSOR, "w", encoding="utf-8").write(str(total))
+    open(CURSOR, "w", encoding="utf-8").write(f"{game} {total}")
     t = talk_lines(s)
     if t:
         out += ["", "―― 村裡在說（最近三年，◆ 跟你家有關）――"] + t

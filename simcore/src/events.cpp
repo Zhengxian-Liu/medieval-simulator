@@ -669,7 +669,18 @@ int EventRunner::pickOption(const EventDef& ev, const Person& p, Id target) {
                 continue;
             }
             open.push_back(static_cast<int>(k));
-            prompt.options.push_back(optionText(o, p, target) + lastingNote(o));
+            {
+                // One bracket, not two: 「送禮求情（30 便士；地租往後加半成）」 (L10).
+                std::string text = optionText(o, p, target);
+                const Id rh = p.household != kNone ? p.household : w_.isAway(p) ? p.awayFrom : kNone;
+                std::string note = lastingNote(o, rh != kNone ? w_.households_[rh].rentFactor : 1);
+                const std::string lb = "（", rb = "）";
+                if (!note.empty() && text.size() > rb.size() && text.compare(text.size() - rb.size(), rb.size(), rb) == 0)
+                    text = text.substr(0, text.size() - rb.size()) + "；" + note.substr(lb.size());
+                else
+                    text += note;
+                prompt.options.push_back(text);
+            }
             lines.push_back(format(o.logs.empty() ? o.log : o.logs[0], p, target));
         }
         const std::string* when = nullptr;  // a telling for this case (prompt_if): the first whose conditions hold
@@ -2273,7 +2284,7 @@ bool EventRunner::foldSafe(const OptionDef& o) {
 
 // What an option does to the rent for good, said on the option before it is chosen (fun-r12 A7: 帶頭抗議 left the rent
 // ×1.6 with no word of it beforehand): 「（地租往後加一成半）」, or for a gamble 「（多半不成：不成的話地租往後加兩成半、領主記恨）」.
-std::string EventRunner::lastingNote(const OptionDef& o) {
+std::string EventRunner::lastingNote(const OptionDef& o, double rentNow) {
     if (o.text.find("地租") != std::string::npos || !o.effects.isArray()) return "";
     auto tenths = [](double x) {
         static const char* const kN[] = {"", "一", "兩", "三", "四", "五", "六", "七", "八", "九"};
@@ -2291,6 +2302,7 @@ std::string EventRunner::lastingNote(const OptionDef& o) {
             for (const char* k : {"target_opinion", "lord_opinion"})
                 if (e[k].isObject() && e[k].numberOr("value", 0) <= -10) grudge = true;
         }
+        rent = std::clamp(rentNow + rent, 0.7, 1.8) - rentNow;  // what it can still do (the factor's bounds)
         if (std::abs(rent) >= 0.025) out = "地租往後" + tenths(rent);
         if (grudge && !out.empty()) out += "、對方記恨";
     };

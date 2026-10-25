@@ -322,6 +322,10 @@ void World::giveBirth(Person& mother) {
 void World::kill(Id id, const std::string& cause) {
     Person& p = people_[id];
     if (!p.alive()) return;
+    if (!spared_.empty() && spared_.count(id)) {  // (tests only: World::spareForTest)
+        p.health = std::max(p.health, 50.0);
+        return;
+    }
     // A cause that says how ("戰死沙場", "…被絞死") stands as it is; a sickness (黑死病 too) is what they died of.
     auto endsWith = [&](const std::string& s) { return cause.size() >= s.size() && cause.compare(cause.size() - s.size(), s.size(), s) == 0; };
     bool saysHow = cause.find("死") != std::string::npos && !endsWith("病");

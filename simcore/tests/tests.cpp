@@ -235,6 +235,11 @@ struct WorldTest {
         w.griefs_.push_back(g);
     }
     static void kinRespond(World& w, size_t i) { w.kinRespond(w.griefs_[i]); }
+    static void oweFavour(World& w, Id debtor, Id creditor, double weight, const std::string& why) { w.oweFavour(debtor, creditor, weight, why); }
+    static void spendFavour(World& w, Id debtor, Id creditor) { w.spendFavour(debtor, creditor); }
+    static std::vector<Id> lineage(const World& w) { return w.lineage(); }
+    static std::string kinTie(const World& w, Id a, Id b) { return w.kinTie(a, b); }
+    static void setQuarrelRule(World& w, const std::string& r) { w.setQuarrelRule(r); }
     static void noMillFarmer(World& w) {  // nobody farms the mill (its toll comes out of every purse at Michaelmas)
         for (auto& h : w.households_) h.millUntil = -1;
     }
@@ -2765,10 +2770,16 @@ int main() {
     // same words, the grain cards stay few, and a rival house is found.
     {
         Config c;
-        c.seed = 119;  // (fun-r12: on 118 the head now dies of dysentery in the tenth year, so no card of the round is asked three times by one head)
+        c.seed = 118;
         c.prerun = 25;
         World w(defs, c);
+        // (fun-r12 L4: on this seed the head now dies of dysentery in the tenth year, by a shifted draw; the round's
+        // fold needs one head living out the fifteen years, so his life is fixed rather than the seed changed.)
+        w.spareForTest(w.playerHead());
         std::map<std::tuple<size_t, std::string, std::string>, int> seen;
+        // fun-r12 M3: 〔家裡這一票〕 once for the same man and office under one head (the words with the numbers taken out).
+        std::map<std::tuple<size_t, std::string>, int> ballots;
+        int ballotWorst = 0;
         int grain = 0, worst = 0, grainYear = 0;
         std::map<int, int> grainIn;  // grain cards by harvest year (as the feed test counts them)
         std::string worstCard;
@@ -2790,6 +2801,12 @@ int main() {
             const auto& heads = w.dynasties()[w.playerDynasty()].heads;
             int& n = seen[{heads.size(), p.title, p.situation}];
             if (++n > worst) worst = n, worstCard = p.title;
+            if (p.title == "家裡這一票") {
+                std::string bare;
+                for (char ch : p.situation.substr(0, p.situation.find("。")))
+                    if (ch < '0' || ch > '9') bare += ch;
+                ballotWorst = std::max(ballotWorst, ++ballots[{heads.size(), bare}]);
+            }
             if (auto sw = safeWays.find(p.event); sw != safeWays.end()) {
                 const std::pair<size_t, std::string> key{heads.size(), p.event};
                 if (!foldOpen.count(key)) foldWorst = std::max(foldWorst, ++foldAsked[key]);
@@ -2809,9 +2826,10 @@ int main() {
             ai.act(w);
             w.stepDay();
         }
-        std::printf("15 years on seed 119: grain cards %d, a card's same words at most %d times a generation (%s), rival %s\n", grain, worst,
-                    worstCard.c_str(), w.rivalName().c_str());
+        std::printf("15 years on seed 118: grain cards %d, a card's same words at most %d times a generation (%s), rival %s, family ballot asked at most %d\n", grain, worst,
+                    worstCard.c_str(), w.rivalName().c_str(), ballotWorst);
         CHECK(worst <= 2, ("a card came more than twice a generation in the same words: " + worstCard).c_str());
+        CHECK(ballotWorst <= 1, "the family's ballot for the same man and office was asked twice under one head");
         std::printf("   yearly round asked at most %d times a generation, hungry houses at most %d a season\n", foldWorst, feedWorst);
         CHECK(foldWorst <= 2, "a card of the yearly round was asked more than twice a generation");
         int folded = 0;
@@ -2834,11 +2852,8 @@ int main() {
         // back within the harvest year: at most one a harvest year, and no more than one for each year played (plus the first).
         CHECK(grainYear <= 1, "the grain card came more than once in one harvest year");
         CHECK(grain <= 16, "more grain cards than years played, plus one");
-        CHECK(w.rivalHouse() != kNone, "no rival house in fifteen years");
-        // fun-r11 6: the rival meets the family head-on (a match, a field, grain, or his house at the door for bread).
-        const int headOn = w.counters().count("rival_head_on") ? w.counters().at("rival_head_on") : 0;
-        std::printf("   rival head-on %d times\n", headOn);
-        CHECK(headOn >= 1, "the rival never met the family head-on in fifteen years");
+        // (The rival's checks run on seed 119 below: on this seed, with near kin kept out (fun-r12 H1), the one rival the
+        // fifteen years find, 謝帕德家 in 1338, takes the head's wife's sister as a wife the next year and is kin from then.)
         // fun-r12 A1: every plan of the family's ends with a line on screen (endPlan counts the ones that did not).
         auto cnt = [&](const std::string& k) { return w.counters().count(k) ? w.counters().at(k) : 0; };
         std::printf("   family plans ended %d, told %d, ended with no line %d\n", cnt("plan_end_ours"), cnt("plan_told"), cnt("plan_untold"));
@@ -2846,6 +2861,27 @@ int main() {
         CHECK(cnt("plan_untold") == 0, "a plan of the family's ended with no line saying how");
         CHECK(cnt("plan_told") >= cnt("plan_end_ours"), "fewer outcome lines than plans of the family's ended");
         // fun-r12 A4: the rival is never close kin (a parent's, a sibling's or a child's house).
+        CHECK(w.rivalHouse() == kNone || !WorldTest::kinHouse(w, w.rivalHouse()), "the rival is the house of the head's own kin");
+    }
+    // fun-r11 6: a rival is found in fifteen years and meets the family head-on (a match, a field, grain, or his house at
+    // the door for bread). Seed 119, the head's life fixed, the family taking the first way on each card.
+    {
+        Config c;
+        c.seed = 119;
+        c.prerun = 25;
+        World w(defs, c);
+        w.spareForTest(w.playerHead());
+        w.setChooser([](const World::ChoicePrompt&) { return 0; });
+        AutoPlayer ai(119);
+        for (int d = 0; d < 15 * kDaysPerYear && !w.gameOver(); ++d) {
+            if (d > 0 && w.dayOfMonth() == 0 && w.month() % 3 == 0) w.startSeason();
+            ai.act(w);
+            w.stepDay();
+        }
+        const int headOn = w.counters().count("rival_head_on") ? w.counters().at("rival_head_on") : 0;
+        std::printf("15 years on seed 119: rival %s, head-on %d times\n", w.rivalName().c_str(), headOn);
+        CHECK(w.rivalHouse() != kNone, "no rival house in fifteen years");
+        CHECK(headOn >= 1, "the rival never met the family head-on in fifteen years");
         CHECK(w.rivalHouse() == kNone || !WorldTest::kinHouse(w, w.rivalHouse()), "the rival is the house of the head's own kin");
     }
     // fun-r12 A1/A2/A7: the outcome of a plan the family gave up, the sitting reeve's card, the cost on an option, the
@@ -2873,11 +2909,13 @@ int main() {
         for (const auto& p : asked)
             for (const auto& o : p.options)
                 if (o.find("帶頭抗議") != std::string::npos) rentNote = o.find("地租往後加") != std::string::npos;
-        CHECK(asked.empty() || rentNote, "the rent the protest can cost is not on the option");
+        CHECK(!asked.empty(), "the rent-raise card was not put to the head");
+        CHECK(rentNote, "the rent the protest can cost is not on the option");
         // A plan given up says so on the family's page.
         w.setChooser(nullptr);
         const size_t before = w.chronicle().size();
         const std::string why = WorldTest::startPlan(w, head, "seek_patron", w.lordId());
+        CHECK(why.empty(), ("the plan to test could not be started: " + why).c_str());
         if (why.empty()) {
             CHECK(WorldTest::failPlan(w, head, "seek_patron"), "the plan just started is not there");
             bool told = false;
@@ -3014,6 +3052,110 @@ int main() {
             CHECK(g.size() > at + 1 && g[at].calmUntil > w.today() && g[at + 1].calmUntil > w.today() && g[at + 1].pending == 0,
                   "a son placated by the head still has an open grievance against the rest of the house");
         }
+    }
+    // fun-r12 M4: favours are kept one by one; calling one in spends the largest only, and the rest stay owed.
+    {
+        Config c;
+        c.seed = 119;
+        c.prerun = 25;
+        World w(defs, c);
+        const Id head = w.playerHead();
+        Id other = kNone;
+        for (const auto& h : w.households())
+            if (!h.extinct && h.head != kNone && h.id != w.playerHousehold() && h.head != w.lordId()) other = h.head;
+        if (other != kNone) {
+            const double was = w.favourOwed(other, head);
+            WorldTest::oweFavour(w, other, head, 30, "白送了 60 天的糧");
+            WorldTest::oweFavour(w, other, head, 6, "答應投你一票");
+            WorldTest::spendFavour(w, other, head);
+            CHECK(std::abs(w.favourOwed(other, head) - was - 6) < 0.5, "calling in one favour spent more (or less) than that one");
+        }
+    }
+    // fun-r12 L9: 〔家人要出頭〕 by each rule: asked (a card, and the head's yes holds), forbidden (a line, no card, the
+    // other way taken), free (neither).
+    {
+        Config c = grownHouse(defs, 31);
+        World base(defs, c);
+        const Id head = base.playerHead();
+        Id member = kNone, other = kNone;
+        for (Id m : base.household(base.playerHousehold()).members)
+            if (m != head && base.person(m).alive() && base.ageYears(base.person(m)) >= 18 && base.ageYears(base.person(m)) <= 70) member = m;
+        for (const auto& h : base.households())
+            if (!h.extinct && h.head != kNone && h.id != base.playerHousehold() && h.head != base.lordId() && base.person(h.head).dynasty != base.person(head).dynasty &&
+                base.ageYears(base.person(h.head)) >= 16)
+                other = h.head;
+        CHECK(member != kNone && other != kNone, "no grown family member and other house for the family-act test");
+        if (member != kNone && other != kNone) {
+            for (const char* rule : {"ask", "forbid", "free"}) {
+                bool gated = false, card = false, ruleLine = false;
+                for (int tries = 0; tries < 40 && !gated; ++tries) {
+                    World w = base;
+                    WorldTest::setQuarrelRule(w, rule);
+                    int cards = 0;
+                    w.setChooser([&](const World::ChoicePrompt& p) { cards += p.title == "家人要出頭"; return p.title == "家人要出頭" ? 0 : -1; });
+                    // Each try draws its own way: skip ahead a few days so the pick differs.
+                    for (int d = 0; d < tries; ++d) w.stepDay();
+                    auto cnt = [&](const std::string& k) { return w.counters().count(k) ? w.counters().at(k) : 0; };
+                    const int yes = cnt("family_act:yes"), no = cnt("family_act:no");
+                    const size_t before = w.chronicle().size();
+                    WorldTest::runEvent(w, "rival_dispute", member, other);
+                    bool line = false;
+                    for (size_t i = before; i < w.chronicle().size(); ++i) line = line || w.chronicle()[i].text.find("【家裡的規矩】") != std::string::npos;
+                    if (cnt("family_act:yes") != yes || cnt("family_act:no") != no) {
+                        gated = true, card = cards > 0, ruleLine = line;
+                        if (std::string(rule) == "ask") CHECK(cnt("family_act:yes") == yes + 1, "the head said yes on the card but the family act was not let through");
+                    }
+                    if (std::string(rule) == "free") CHECK(cards == 0 && cnt("family_act:yes") == yes && cnt("family_act:no") == no, "under 「由他們自己」 a family act was still gated");
+                }
+                std::printf("family act under %s: gated %d, card %d, rule line %d\n", rule, gated, card, ruleLine);
+                if (std::string(rule) == "ask") CHECK(gated && card, "under 「先問我」 a family member's suit or brawl was not put to the head");
+                if (std::string(rule) == "forbid") CHECK(gated && !card && ruleLine, "under 「不准」 the family act was not stopped by the rule, with its line");
+            }
+        }
+    }
+    // fun-r12 H1, M2: across a change of head (seed 118: the head dies in the tenth year and his widow keeps the house),
+    // the rival is never near kin of the head keeping the house or of the one before, never of the family's surname;
+    // a standing rival changes at most once a head; no 【宿敵】 line is said twice.
+    {
+        Config c;
+        c.seed = 118;
+        c.prerun = 25;
+        World w(defs, c);
+        static const std::set<std::string> kNear{"parent", "child", "sibling", "spouse", "step_parent", "step_child", "parent_in_law", "child_in_law",
+                                                 "sibling_in_law", "uncle", "nephew", "grandparent", "grandchild"};
+        AutoPlayer ai(118);
+        Id lastHead = w.actingHead(), lastRival = w.rivalHouse();
+        int changes = 0, worstChanges = 0, headChanges = 0;
+        bool kinRival = false;
+        std::string kinWhy;
+        for (int d = 0; d < 13 * kDaysPerYear && !w.gameOver(); ++d) {
+            if (d > 0 && w.dayOfMonth() == 0 && w.month() % 3 == 0) w.startSeason();
+            ai.act(w);
+            w.stepDay();
+            const Id head = w.actingHead(), rival = w.rivalHouse();
+            if (head != lastHead) ++headChanges, changes = 0;
+            if (rival != lastRival && rival != kNone && lastRival != kNone && w.household(lastRival).head != kNone &&
+                !w.household(lastRival).extinct && !WorldTest::kinHouse(w, lastRival) && head == lastHead)
+                worstChanges = std::max(worstChanges, ++changes);
+            if (rival != kNone && (rival != lastRival || head != lastHead || w.dayOfMonth() == 0)) {
+                for (Id m : w.household(rival).members) {
+                    if (w.person(m).dynasty == w.playerDynasty()) kinRival = true, kinWhy = "the family's own surname";
+                    for (Id l : WorldTest::lineage(w))
+                        if (kNear.count(WorldTest::kinTie(w, l, m)) || kNear.count(WorldTest::kinTie(w, m, l))) kinRival = true, kinWhy = w.fullName(m) + " is " + WorldTest::kinTie(w, l, m);
+                }
+            }
+            lastHead = head, lastRival = rival;
+        }
+        std::map<std::string, int> said;
+        int saidTwice = 0;
+        for (const auto& e : w.chronicle())
+            if (e.text.rfind("【宿敵】", 0) == 0 && ++said[e.text] == 2) ++saidTwice;
+        std::printf("rival over 13 years on seed 118: %d changes of head, a standing rival changed at most %d times a head, %zu rival lines\n", headChanges,
+                    worstChanges, said.size());
+        CHECK(headChanges >= 1, "no change of head on seed 118 to test the rival across");
+        CHECK(!kinRival, ("the rival was near kin of the family's line: " + kinWhy).c_str());
+        CHECK(worstChanges <= 1, "a standing rival changed more than once under one head");
+        CHECK(saidTwice == 0, "the same 【宿敵】 line was said twice");
     }
     // A killing by the family's head: the inquest and jury run, the goods go to the lord on the books, the land stays
     // whole, and the succession is worked out again. And the name passes in part, by the rule on screen.

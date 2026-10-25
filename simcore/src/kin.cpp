@@ -552,7 +552,7 @@ Id World::setUpSon(Id hid, Id son, double own, double vac, double money, const s
     if (vac + own < 1) vac = own = 0;  // no land: a cottage and its garden, and day labour
     own = std::clamp(own, 0.0, std::max(0.0, households_[hid].acres - 1));
     double gift = std::min(money, std::max(0.0, households_[hid].money));
-    noteGiven(son, own >= 1 ? own : 0, gift, "分家");
+    noteGiven(son, own >= 1 ? own : 0, gift, how.rfind("安撫", 0) == 0 ? "安撫" : "分家");  // (named here: L7)
     Id nh = addHousehold(sub.dynasty, 0, gift);  // households_ may move: by index from here on
     households_[hid].money -= gift;
     book(households_[hid], "給" + sub.firstName + "分家的錢", -gift);
@@ -1317,7 +1317,6 @@ void World::kinRespond(Grievance& g) {
     if (kind == 0) {
         if (landed) {
             setUpSon(t.household, g.who, 3, 0, gift, "安撫分給" + pn + "的");
-            if (!given_[g.who].empty()) given_[g.who].back().what = "安撫";
             done = "分了 3 畝地" + (gift >= 1 ? "和 " + n0(gift) + " 便士" : std::string()) + "給" + pn + "，讓" + std::string(he(p)) + "自立門戶";
         } else {
             double c = std::min(coin, std::max(0.0, households_[t.household].money));

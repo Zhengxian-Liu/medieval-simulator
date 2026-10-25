@@ -134,18 +134,18 @@ std::vector<AskOption> World::asksFor(Id target) {
     }
     // 討人情 (fun-r12 A3): someone who owes the family a favour can be asked on the strength of it, up front, for what
     // matters most (a vote, a field, a match, a word with the lord, to stand aside). The label says what it spends.
-    const double owes = favourOwed(target, head);
-    if (owes >= 5) {
-        std::string fw;
-        for (const auto& f : favours_)
-            if (f.debtor == target && f.creditor == head) fw = std::to_string(cfg_.startYear + f.day / kDaysPerYear) + " 年" + f.why;
+    const Favour* bf = bestFavour(target, head);
+    if (bf && favourNow(*bf) >= kFavourAsk) {
+        // The one favour it spends, named, and whether others stay owed (fun-r12 M4).
+        const std::string fw = favourName(*bf);
+        const bool more = favourOwed(target, head) - favourNow(*bf) >= 1;
         const size_t n = out.size();
         for (size_t i = 0; i < n; ++i) {
             const AskOption& a = out[i];
             if (a.ask != "vote" && a.ask != "sell_parcel" && a.ask != "match" && a.ask != "speak" && a.ask != "stand_aside") continue;
             AskOption o = a;
             o.lever = "owed";
-            o.label = "討人情：" + a.label + "（提起" + fw + "那份情；" + tp + "答應了，這份情就算還了）";
+            o.label = "討人情：" + a.label + "（提起" + fw + "那份情；" + tp + "答應了，這一份就算還了" + (more ? "，別的情照舊欠著" : "") + "）";
             out.push_back(o);
         }
     }
@@ -418,12 +418,14 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
         addOpinion(who, head, "gift", 3, 3);
         leverNote = "送上 " + pence(g) + "的禮，";
     } else if (lever == "favour") {
-        fs.push_back({favourOwed(who, head) * 2 + 15, "欠你的人情總要還"});
-        callInFavour(who, head);
+        const Favour* bf = bestFavour(who, head);
+        fs.push_back({(bf ? favourNow(*bf) : 0) * 2 + 15, "欠你的人情總要還"});
+        spendFavour(who, head);
         leverNote = "提起上回幫過的忙，";
     } else if (lever == "owed") {
         // Up front, on the favour: it weighs as a called-in favour does, and is spent only on a yes.
-        fs.push_back({favourOwed(who, head) * 2 + 15, "欠你家的那份情，這回還了"});
+        const Favour* bf = bestFavour(who, head);
+        fs.push_back({(bf ? favourNow(*bf) : 0) * 2 + 15, "欠你家的那份情，這回還了"});
         leverNote = "提起" + shortName(who) + "欠你家的那份情，";
     } else if (lever == "hook") {
         Id deed = hookDeed(head, who);
@@ -519,10 +521,9 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
         if (lever != "owed") oweFavour(head, who, weight, why);
     };
     if (answer == 1 && lever == "owed") {
-        std::string fw;
-        for (const auto& f : favours_)
-            if (f.debtor == who && f.creditor == head) fw = std::to_string(cfg_.startYear + f.day / kDaysPerYear) + " 年" + f.why;
-        callInFavour(who, head);
+        const Favour* bf = bestFavour(who, head);
+        const std::string fw = bf ? favourName(*bf) : std::string();
+        spendFavour(who, head);
         pendingFavour_ = "【討人情】" + fullName(who) + " 還了" + fw + "欠你家的那份情：答應了" + o.label.substr(0, o.label.find("（")).substr(std::string("討人情：").size()) + "。";
     }
     if (answer == 1) {
@@ -636,10 +637,15 @@ void World::ask(Id who, const std::string& what, Id object, Id subject, const st
         // (「賣了我家就不夠吃了」), nor where they weigh it too heavily for a small present to move them. The press
         // counts the same factors with the lever's weight added, so this is the answer it would get.
         auto turns = [&](double add) { return !hardNo && (s + add >= yesAt || (answer == 3 && !demand.empty() && s + add >= -12)); };
-        const double favourAdd = favourOwed(who, head) * 2 + 15;
+        const Favour* bf = bestFavour(who, head);
+        const double favourAdd = (bf ? favourNow(*bf) : 0) * 2 + 15;
         bool giftTurns = turns(18), favourTurns = turns(favourAdd);
         if (households_[playerHousehold_].money >= giftSum + dealCost && giftTurns) res.levers.push_back("gift");
-        if (favourOwed(who, head) >= 5 && favourTurns) res.levers.push_back("favour");
+        if (bf && favourNow(*bf) >= kFavourAsk && favourTurns) {
+            res.levers.push_back("favour");
+            // What pressing on the favour spends, said before it is chosen (fun-r12 M4): the one favour, not all.
+            res.text += "要是提起人情，提的是 " + favourName(*bf) + "那一份，提了就算還了。";
+        }
         if (hookDeed(head, who) != kNone) res.levers.push_back("hook");
         if (hardNo) res.noLever = "「" + hardWhy + "」——這是硬道理，送禮、提人情都改不了";
         else if (!giftTurns) res.noLever = "要說動" + name + "還差得遠，送點小禮改不了主意；先多來往、攢下人情，或找到他家想要的東西再說";
