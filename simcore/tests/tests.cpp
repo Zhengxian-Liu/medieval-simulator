@@ -215,6 +215,25 @@ static bool w_ok(const World& w, Id house) {  // a house of the village that can
            h.dynasty != w.playerDynasty() && w.person(h.head).occupation != "lord";
 }
 
+// The first seed from `from` on whose family is handed over to a grown head with living children: the house some
+// cases are set up on, whatever the 25 years before the hand-over did (a change in the data can leave a child heir).
+static Config grownHouse(const Defs& defs, int from) {
+    for (int s = from; s < from + 40; ++s) {
+        Config c;
+        c.seed = s;
+        c.prerun = 25;
+        World w(defs, c);
+        const Id head = w.playerHead();
+        if (head == kNone || w.gameOver() || w.ageYears(w.person(head)) < 21) continue;
+        for (Id k : w.person(head).children)
+            if (w.person(k).alive()) return c;
+    }
+    Config c;
+    c.seed = from;
+    c.prerun = 25;
+    return c;
+}
+
 static double villageAcres(const World& w) {
     double a = 0;
     for (const auto& pc : w.parcels())
@@ -589,9 +608,7 @@ int main() {
     }
     // fun-r6 C: a poor season's free day can be worked for pay at once (这一季的事), paid by the neighbour who needs hands.
     {
-        Config c;
-        c.seed = 58;
-        c.prerun = 25;
+        Config c = grownHouse(defs, 58);  // a grown head with hands to send out (not a child heir)
         World w(defs, c);
         const Id hh = w.playerHousehold();
         while (!(w.month() == 3 && w.dayOfMonth() == 0)) w.stepDay();
@@ -1972,9 +1989,10 @@ int main() {
 
         // A 結交 that comes to nothing says so.
         {
-            World w = base;
+            // A grown head (one who can take up a plan at all), cleared of the sworn friends that would refuse a third.
+            World w(defs, grownHouse(defs, 58));
+            const Id head = w.playerHead(), hh = w.playerHousehold();
             bool started = false;
-            // (the head of seed 58 has his two sworn friends already: a third is refused, with that reason)
             auto& mine = WorldTest::memories(w, head);
             mine.erase(std::remove_if(mine.begin(), mine.end(), [](const Memory& m) { return m.label == "sworn_friend"; }), mine.end());
             for (const auto& p : w.people()) {

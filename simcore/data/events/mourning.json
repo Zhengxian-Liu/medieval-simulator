@@ -8,6 +8,12 @@
      "on": {"signal": "bereaved:child", "after_months": [0, 0]},
      "conditions": {"age": [16, 120]},
      "prompt": "{target}走了。{name}坐在{target_first}睡過的草墊旁，一整天沒說話。",
+     "prompt_if": [
+       {"cond": {"target": {"died_suddenly": true}}, "prompt": "早上{target_first}還在院子裡追雞，到了下午，人是讓鄰居抱回來的。{name}跪在地上，怎麼搖也搖不醒。"},
+       {"cond": {"target": {"age": [0, 2]}}, "prompt": "{target}沒能熬過這一季。小小的一個，用一塊舊麻布包著就放得下。{name}抱著不肯撒手。"},
+       {"cond": {"target": {"age": [12, 40]}}, "prompt": "{target}走了。那麼大的人了，眼看就能頂起家裡一半的活。{name}站在墳前，想起還沒替{target_first}辦成的那些事。"},
+       {"cond": {"food_days_lt": 40}, "prompt": "{target}走了。這一冬家裡本來就吃不飽，{name}總想，要是多給{target_first}一口吃的，是不是就熬過去了。"}
+     ],
      "options": [
       {"text": "守靈三天，給孩子點長明燈（3 便士）",
        "log": "{name}替{target}守了三天靈，長明燈一直沒熄。",
@@ -17,11 +23,17 @@
        "log": "{name}求神父替{target}做了一場彌撒，願{target_first}的靈魂早日安息。",
        "effects": [{"money": -6}, {"ease_concern": {"kind": "grief", "by": 18}}, {"ease_concern_house": {"kind": "grief", "by": 10}}, {"need": {"spirit": 40}}, {"stress": -5}],
        "ai": {"base": 8, "traits": {"pious": 10, "generous": 3, "greedy": -6}}},
-      {"text": "去酒館喝到不省人事",
+      // Spare grain turned into the village's goodwill: a public thing, so it moves the name.
+      {"text": "開一桶麥酒、蒸幾籠麵包，請鄰居來送{target_first}一程（約 10 天的糧；來的人家都會記得）",
+       "conditions": {"not": {"food_days_lt": 100}, "target": {"age": [3, 120]}},
+       "log": "{name}開了一桶麥酒，請鄰居來喝喪酒。半個村子的人擠在院子裡，說起{target_first}小時候的淘氣事，說著說著都紅了眼眶。",
+       "effects": [{"food_days": -10}, {"ease_concern": {"kind": "grief", "by": 12}}, {"ease_concern_house": {"kind": "grief", "by": 8}}, {"reputation": 1}, {"village_opinion": {"value": 2, "mod": "gift", "years": 3}}, {"need": {"social": 15}}],
+       "ai": {"base": 5, "traits": {"generous": 8, "gregarious": 5, "greedy": -6, "shy": -4}}},
+      {"text": "去酒館喝到不省人事（2 便士）",
        "log": "埋了{target}那晚，{name}在酒館喝到不省人事，被人抬回了家。",
        "effects": [{"money": -2}, {"ease_concern": {"kind": "grief", "by": 8}}, {"stress": -10}, {"health": -4}, {"trait_chance": {"trait": "drunkard", "chance": 10}}],
        "ai": {"base": 4, "traits": {"drunkard": 12, "melancholy": 4, "wrathful": 3}}},
-      {"text": "第二天照樣下田，什麼也不說",
+      {"text": "第二天照樣下田，什麼也不說（田裡不耽誤，心裡憋著）",
        "log": "埋了{target}，{name}第二天照樣下田，一句話也沒說。",
        "effects": [{"work_bonus": 0.02}, {"stress": 6}],
        "ai": {"base": 6, "traits": {"diligent": 8, "calm": 4, "cruel": 3}}}
@@ -62,6 +74,13 @@
      "on": {"signal": "bereaved:sibling", "after_months": [0, 1]},
      "conditions": {"age": [8, 120]},
      "prompt": "{target}走了。{name}總想起小時候和{target_first}一起在河邊摸魚、搶一塊麵包的樣子。",
+     "prompts": ["{target}走了。{name}總想起小時候和{target_first}一起在河邊摸魚、搶一塊麵包的樣子。",
+                 "{target}走了。{name}想起那年冬天，兩人擠在一張草墊上，{target_first}把自己那半條毯子也蓋到{name}身上。",
+                 "{target}走了。這些年各忙各的，{name}和{target_first}一年也說不上幾句話。如今想說，已經來不及了。"],
+     "prompt_if": [
+       {"cond": {"target": {"died_suddenly": true}}, "prompt": "{target}說走就走了，前一天還在{name}家門口借了把鐮刀。那把鐮刀現在還靠在牆邊。"},
+       {"cond": {"age": [8, 13]}, "prompt": "{target}走了。{name}還小，不太懂死是什麼，只知道往後吃飯，桌邊少了一個搶麵包的人。"}
+     ],
      "options": [
       {"text": "去{target_first}墳前放一把野花", "log": "{name}去{target}墳前放了一把野花，坐了很久。",
        "effects": [{"ease_concern": {"kind": "grief", "by": 12}}, {"need": {"spirit": 10}}],
@@ -117,20 +136,48 @@
      "on": {"signal": "concern:grief", "as": "head", "after_months": [1, 3]},
      "conditions": {"target": {"concern": {"kind": "grief", "min": 25}, "age": [8, 120]}},
      "target": {"conditions": {"same_household": true}},
+     // Told by who is grieving (a widow, a child, the old), else another way each time (fun-r8: six times the same words).
      "prompt": "這幾個月，{target_first}常一個人坐在{target_about:grief}的墳邊，飯也吃得很少。",
+     "prompts": ["這幾個月，{target_first}常一個人坐在{target_about:grief}的墳邊，飯也吃得很少。",
+                 "{target_first}這陣子做什麼都提不起勁，鋤頭拿起來又放下，一站就是半天。家裡人知道，{target_pron}還在想{target_about:grief}。",
+                 "夜裡{name}聽見{target_first}在草墊上翻來覆去。天亮了，{target_pron}眼睛是腫的，什麼也不說，又出門往教堂墓地那邊去了。",
+                 "{target_first}把{target_about:grief}用過的木碗擺在桌上，吃飯時誰也不准動。家裡人看在眼裡，誰也不敢開口。"],
+     "prompt_if": [
+       {"cond": {"target": {"recently_widowed": true}}, "prompt": "{target_first}還是天天往{target_about:grief}的墳前跑，回來就坐在門檻上，誰叫也不應。床的另一半空著，{target_pron}寧可睡在灶邊。"},
+       {"cond": {"target": {"age": [8, 13]}}, "prompt": "{target_first}不肯再跟別的孩子去河邊玩了，夜裡常常哭醒，嘴裡喊著{target_about:grief}。"},
+       {"cond": {"target": {"age": [60, 120]}}, "prompt": "{target_first}這陣子一下子老了好多，坐在門口曬太陽時常唸：「該走的是我，怎麼輪到{target_about:grief}。」"}
+     ],
      "options": [
-      {"text": "陪{target_pron}去墳前坐一下午，家裡傷心的人也一起去",
-       "log": "{name}放下手上的活，帶著家裡的人，陪{target_first}在{target_about:grief}的墳前坐了一下午。",
-       "effects": [{"on_target": [{"ease_concern": {"kind": "grief", "by": 25}}, {"stress": -8}]}, {"ease_concern_house": {"kind": "grief", "by": 12}}, {"mutual_opinion": {"value": 10, "mod": "comforted", "years": 12}}],
+      {"text": "陪{target_pron}去墳前坐一下午，家裡傷心的人也一起去（佔一段空閒）",
+       "log": ["{name}放下手上的活，帶著家裡的人，陪{target_first}在{target_about:grief}的墳前坐了一下午。",
+               "{name}陪{target_first}去墳前拔了草，一家人坐在那裡，說了好多{target_about:grief}從前的事，說著說著倒笑了。"],
+       "effects": [{"spend_time": 1}, {"on_target": [{"ease_concern": {"kind": "grief", "by": 25}}, {"stress": -8}]}, {"ease_concern_house": {"kind": "grief", "by": 12}}, {"mutual_opinion": {"value": 10, "mod": "comforted", "years": 12}}],
        "ai": {"base": 10, "traits": {"kind": 8, "gregarious": 3}}},
-      {"text": "叫{target_pron}振作起來，日子還得過",
+      {"text": "叫{target_pron}振作起來，日子還得過（不花時間，{target_first}會記著這句話）",
        "log": "{name}對{target_first}說：「人死不能復生，日子還得過。」{target_first}沒有回答。",
        "effects": [{"on_target": [{"ease_concern": {"kind": "grief", "by": 6}}, {"opinion": {"value": -6, "mod": "hard_words", "years": 8}}]}],
        "ai": {"base": 6, "traits": {"cruel": 6, "diligent": 3, "calm": 2}}},
       {"text": "請神父來家裡跟{target_pron}說說話（2 便士）",
        "log": "{name}請神父來家裡，神父陪{target_first}禱告了一個晚上。",
        "effects": [{"money": -2}, {"on_target": [{"ease_concern": {"kind": "grief", "by": 18}}, {"need": {"spirit": 35}}]}, {"target_opinion": {"value": 4, "mod": "comforted", "years": 8}}],
-       "ai": {"base": 6, "traits": {"pious": 8}}}
+       "ai": {"base": 6, "traits": {"pious": 8}}},
+      // Someone else in the house who is good at this: the head need not give a day, but the spouse gives the fields some.
+      {"text": "讓{spouse}這陣子多陪陪{target_pron}（你不用分身；{spouse}田裡的活要少做些）",
+       "conditions": {"is_spouse": false, "spouse": {"any": [{"trait": "kind"}, {"trait": "gregarious"}, {"trait": "pious"}]}},
+       "log": "{name}託{spouse}多照看{target_first}。那陣子{target_first}走到哪裡，{spouse}就跟到哪裡，有時兩人在井邊一坐就是一下午。",
+       "effects": [{"on_target": [{"ease_concern": {"kind": "grief", "by": 18}}, {"stress": -5}]}, {"work_bonus": -0.01}],
+       "ai": {"base": 7, "traits": {"lazy": 3, "diligent": -2}}},
+      // Work as the cure: the house gains a pair of hands, the grief is only pushed down.
+      {"text": "把{target_about:grief}留下的那份活交給{target_pron}，讓{target_pron}忙起來（家裡多一把力，可心事是壓下去的）",
+       "conditions": {"target": {"age": [14, 70]}},
+       "log": "{name}把{target_about:grief}從前管的那攤活交給了{target_first}。{target_first}從早忙到晚，累得沒力氣哭了。",
+       "effects": [{"work_bonus": 0.01}, {"on_target": [{"ease_concern": {"kind": "grief", "by": 10}}, {"stress": 6}, {"skill": {"farming": 0.5}}]}],
+       "ai": {"base": 6, "traits": {"diligent": 8, "ambitious": 3, "kind": -3}}},
+      {"text": "帶{target_pron}去酒館坐坐，聽聽村裡的熱鬧（1 便士，佔一段空閒）",
+       "conditions": {"money_ge": 1, "target": {"age": [16, 120]}},
+       "log": "{name}拉著{target_first}去了酒館。鄰居們你一句我一句，{target_first}聽著聽著，總算端起了杯子。",
+       "effects": [{"money": -1}, {"spend_time": 1}, {"on_target": [{"ease_concern": {"kind": "grief", "by": 14}}, {"need": {"social": 25}}]}, {"mutual_opinion": {"value": 5, "mod": "good_times", "years": 6}}],
+       "ai": {"base": 4, "traits": {"gregarious": 8, "drunkard": 6, "pious": -3, "shy": -4}}}
      ]},
 
     {"id": "longing_at_home", "title": "孩子的心上人", "scope": "player_head", "chance": 0.7,
@@ -166,6 +213,99 @@
        "log": "{name}當作沒看見：家裡{name}說了算。{target_first}的臉更冷了。",
        "effects": [{"on_target": [{"concern": {"kind": "grievance", "about": "target", "strength": 15}}, {"opinion": {"value": -5, "mod": "cold_shoulder", "years": 6}}]}],
        "ai": {"base": 8, "traits": {"cruel": 5, "wrathful": 4, "ambitious": 3}}}
+     ]},
+
+    // A death opens a negotiation (design/stitching-fable.md: death into the loop). The house has just lost a pair
+    // of hands, and a better-off neighbour who never cared much for it comes for the land.
+    {"id": "widow_rival", "title": "趁虛而入", "scope": "player_head", "chance": 0.08, "cooldown_years": 3,
+     "conditions": {"is_head": true, "recently_widowed": true, "acres_ge": 6},
+     "target": {"pick": "random_villager", "conditions": {"is_head": true, "other_dynasty": true, "money_ge": 140, "acres_ge": 6, "opinion_of_target_lt": 15,
+                                                          "not": {"occupation": ["lord", "lady", "priest"]}}},
+     "prompt": "喪事才辦完，{target}就上門了。坐下來沒說兩句就切入正題：「你家少了一個勞力，那幾畝地荒著也是荒著，不如 2 畝讓給我家，120 便士，現錢。」",
+     "prompts": ["喪事才辦完，{target}就上門了。坐下來沒說兩句就切入正題：「你家少了一個勞力，那幾畝地荒著也是荒著，不如 2 畝讓給我家，120 便士，現錢。」",
+                 "{target}在教堂門口攔住{name}，先說了幾句節哀，接著壓低聲音：「一個人哪種得了那麼多地？2 畝，120 便士，我替你分憂。」",
+                 "墳上的土還沒乾，{target}托人捎話來：願意出 120 便士買你家 2 畝地。捎話的人還加了一句：「他說你家今年一定忙不過來。」"],
+     "options": [
+      {"text": "賣 2 畝給{target_pron}家（得 120 便士；地就沒了，往後每年少收兩畝的糧）",
+       "log": "{name}想了一夜，還是把 2 畝地賣給了{target}。",
+       "effects": [{"on_target": [{"take_acres": {"acres": 2, "price": 120, "wanted": false}}]}, {"deed": {"type": "land_bought", "doer": "target"}}, {"stress": 6}],
+       "ai": {"base": 5, "traits": {"greedy": 4, "content": 4, "ambitious": -6}, "if": [{"cond": {"in_debt": true}, "add": 6}]}},
+      {"text": "不賣，叫家裡的人頂上（地保住了，全家要累一整年）", "conditions": {"household_size_ge": 3},
+       "log": "{name}回絕了{target}：「地是我家的，再苦也自己種。」那一年，家裡大大小小天不亮就下田。",
+       "effects": [{"work_bonus": 0.02}, {"stress": 8}, {"target_opinion": {"value": -4, "mod": "rebuffed", "years": 6}}],
+       "ai": {"base": 8, "traits": {"diligent": 8, "ambitious": 4, "lazy": -6}}},
+      {"text": "雇個長工撐過這兩年（24 便士）", "conditions": {"money_ge": 24},
+       "log": "{name}花錢雇了個長工，地一畝也沒賣。{target}碰了個軟釘子。",
+       "effects": [{"money": -24}, {"work_bonus": 0.03}, {"target_opinion": {"value": -3, "mod": "rebuffed", "years": 5}}],
+       "ai": {"base": 6, "traits": {"greedy": -4, "calm": 3}}},
+      {"text": "去莊園請管家作主，叫{target_pron}死了這條心（用掉一點領主對你的好感）", "conditions": {"lord_opinion_ge": 10},
+       "log": "{name}去莊園找管家訴苦。管家把{target}叫去說了幾句，{target_pron}再也沒提那幾畝地。",
+       "effects": [{"lord_opinion": {"value": -4, "mod": "event", "years": 5}}, {"target_opinion": {"value": -8, "mod": "rebuffed", "years": 8}}],
+       "ai": {"base": 5, "traits": {"craven": 4, "ambitious": 3}}},
+      {"text": "當面回絕：「人還沒涼透，你就來搶地？」（{target_house}家會記仇）",
+       "log": "{name}把{target}轟出了門。這話第二天就傳遍了村子。",
+       "effects": [{"feud_heat": 6}, {"target_opinion": {"value": -12, "mod": "hard_words", "years": 10}}, {"need": {"spirit": 5}}],
+       "ai": {"base": 4, "traits": {"wrathful": 10, "brave": 4, "calm": -6}}}
+     ]},
+
+    // The other side of it: a neighbour just widowed would let land go, and the wake is where it is said.
+    {"id": "widow_land", "title": "守靈之後", "scope": "player_head", "chance": 0.05, "cooldown_years": 3,
+     "conditions": {"is_head": true, "money_ge": 90, "not": {"occupation": ["lord", "lady", "priest"]}},
+     "target": {"pick": "random_villager", "conditions": {"is_head": true, "recently_widowed": true, "other_dynasty": true, "would_sell": true, "acres_ge": 6,
+                                                          "not": {"occupation": ["lord", "lady", "priest"]}}},
+     "prompt": "{target}埋了另一半還不到一年，家裡少了人手，又{sell_reason}。那天守靈完，{target_first}拉著{name}到屋外：「那 2 畝地，你家要不要？」",
+     "prompts": ["{target}埋了另一半還不到一年，家裡少了人手，又{sell_reason}。那天守靈完，{target_first}拉著{name}到屋外：「那 2 畝地，你家要不要？」",
+                 "{target}這一年老了很多。在磨坊門口碰見{name}，{target_pron}嘆了口氣：家裡{sell_reason}，一個人種不過來，想讓出 2 畝。",
+                 "神父悄悄跟{name}說：{target}家自從辦了喪事就撐不住了，{sell_reason}。「你家要是有心，那 2 畝地交給你，他們也放心。」"],
+     "options": [
+      {"text": "照價買下 2 畝（130 便士；{target_first}會記得你沒壓價）", "conditions": {"money_ge": 130},
+       "log": "{name}照{target_first}開的價買下了 2 畝地，當場把錢點清。",
+       "effects": [{"take_acres": {"acres": 2, "price": 130, "wanted": false}}, {"target_opinion": {"value": 6, "mod": "helped_us", "years": 8}}, {"deed": {"type": "land_bought"}}],
+       "ai": {"base": 8, "traits": {"ambitious": 6, "kind": 3, "content": -4}}},
+      {"text": "趁{target_pron}家急，壓到 90 便士（不一定肯；成了，村裡會說你趁人之危）",
+       "log": "{name}只肯出 90 便士。",
+       "effects": [{"random": {"percent": 60,
+          "effects": [{"log": "  {target_first}紅著眼答應了。這事沒幾天就傳開了。"}, {"take_acres": {"acres": 2, "price": 90, "wanted": false}}, {"deed": {"type": "land_bought"}},
+                      {"target_opinion": {"value": -15, "mod": "took_our_land", "years": 12}}, {"reputation": -2}],
+          "else": [{"log": "  {target_first}搖搖頭走了。後來那塊地賣給了別家。"}, {"target_opinion": {"value": -6, "mod": "haggled", "years": 8}}]}}],
+       "ai": {"base": 5, "traits": {"greedy": 10, "cruel": 4, "kind": -8}}},
+      {"text": "不買地，叫家裡的人去幫{target_pron}家把這一季的活做完（佔一段空閒，自家田裡少幾天工；{target_first}欠你一份情）",
+       "log": "{name}沒提地的事，帶著家裡的人去{target}家，幫著把這一季的活做完了。",
+       "effects": [{"spend_time": 1}, {"work_bonus": -0.01}, {"deed": {"type": "kindness"}}, {"mutual_opinion": {"value": 6, "mod": "helped_them", "years": 10}}],
+       "ai": {"base": 6, "traits": {"kind": 8, "generous": 6, "greedy": -6}}},
+      {"text": "不在這時候談地（什麼也不花，{target_first}心裡敬你一分）",
+       "log": "{name}說：「這種時候不談這個。」{target_first}點點頭，沒再開口。",
+       "effects": [{"target_opinion": {"value": 4, "mod": "respect", "years": 6}}],
+       "ai": {"base": 5, "traits": {"pious": 4, "content": 4, "shy": 3}}}
+     ]},
+
+    // A neighbour who owes the house money loses the other half of the house: the debt is now a question of what the
+    // family wants to be in the village.
+    {"id": "widow_debt", "title": "寡婦的債", "scope": "player_head", "chance": 0.15, "cooldown_years": 3,
+     "conditions": {"is_head": true},
+     "target": {"pick": "random_villager", "conditions": {"is_head": true, "recently_widowed": true, "other_dynasty": true, "owes_target": true}},
+     "prompt": "{target}剛送走了另一半，家裡還欠著你家的錢。秋收前是還不上了，{target_first}這幾天見了你就躲。",
+     "prompts": ["{target}剛送走了另一半，家裡還欠著你家的錢。秋收前是還不上了，{target_first}這幾天見了你就躲。",
+                 "{target}家辦完喪事，連買蠟燭的錢都是借的。欠你家的那筆，{target_first}托人來說：能不能再等等。",
+                 "村裡都在看：{target}家剛死了人，又欠著你家的錢，你家會怎麼做。"],
+     "options": [
+      {"text": "把這筆債免了（錢就沒了；這種事村裡人都會知道）",
+       "log": "{name}在教堂門口當著鄰居的面說：「{target_first}家欠的，一筆勾銷。」",
+       "effects": [{"on_target": [{"forgive_target_debt": true}]}, {"reputation": 2}, {"target_opinion": {"value": 20, "mod": "helped_kin", "years": 15}}],
+       "ai": {"base": 6, "traits": {"generous": 10, "kind": 8, "pious": 4, "greedy": -10}}},
+      {"text": "寬限一年，等{target_pron}家緩過來（不花錢，也不急著要）",
+       "log": "{name}讓人捎話給{target}：債的事，明年再說。",
+       "effects": [{"on_target": [{"debt_grace": true}]}, {"target_opinion": {"value": 6, "mod": "stood_aside", "years": 8}}],
+       "ai": {"base": 9, "traits": {"calm": 4, "kind": 3}}},
+      {"text": "拿{target_pron}家 1 畝地抵掉這筆債（地歸你家；{target_house}家會記恨，村裡會說話）", "conditions": {"target": {"acres_ge": 4}},
+       "log": "{name}要{target}拿 1 畝地抵債。{target_first}在莊園法庭上畫了押，一句話也沒說。",
+       "effects": [{"take_acres": {"acres": 1, "price": 0, "wanted": false}}, {"on_target": [{"forgive_target_debt": true}]}, {"deed": {"type": "land_bought"}},
+                   {"target_opinion": {"value": -20, "mod": "took_our_land", "years": 15}}, {"reputation": -2}],
+       "ai": {"base": 4, "traits": {"greedy": 10, "ambitious": 6, "kind": -8}}},
+      {"text": "上門說清楚：秋收以後一定要還（不鬆口，{target_first}會記著）",
+       "log": "{name}上門對{target}說：「難處我知道，可秋收以後，該還的還是要還。」",
+       "effects": [{"target_opinion": {"value": -6, "mod": "no_mercy", "years": 8}}],
+       "ai": {"base": 5, "traits": {"greedy": 6, "diligent": 3}}}
      ]}
   ]
 }

@@ -1,20 +1,37 @@
 {
   "_doc": "人生的岔路 (design/life-paths.md): checkpoints at set ages whose options come from the family's means, standing and the places free; tries that can fail and send a life down another road; and the yearly lot of those living away (scope away). Stations are in data/paths.json.",
   "events": [
-    {"id": "path_school", "repeat": "person", "title": "認字", "prompt": "神父願意教村裡的孩子認字。{name} {age} 歲了，家裡也正缺人手。", "scope": "anyone", "pulse": "yearly", "chance": 0.7, "parent_decides": true,
+    {"id": "path_school", "repeat": "person", "title": "認字", "prompt": "神父願意教村裡的孩子認字。{name} {age} 歲了，家裡也正缺人手。",
+     "prompts": ["神父願意教村裡的孩子認字。{name} {age} 歲了，家裡也正缺人手。",
+                 "主日彌撒後，神父摸著 {name} 的頭說：「這孩子眼睛亮，冬天送來跟我念念字母吧。」{name} {age} 歲了，正是能放羊撿柴的年紀。",
+                 "神父家的窗下每天傳出孩子念禱詞的聲音。{name} {age} 歲了，常扒在窗外聽，回家還會學著念。"],
+     "prompt_if": [
+       {"cond": {"food_days_lt": 60}, "prompt": "神父願意教村裡的孩子認字。{name} {age} 歲了。可家裡的糧撐不了兩個月，多一個念書的就少一個撿柴放羊的。"},
+       {"cond": {"kin_priest": true}, "prompt": "神父願意教村裡的孩子認字，他知道你家有人在教會，特地來問：{name} {age} 歲了，要不要也走這條路？"}
+     ], "scope": "anyone", "pulse": "yearly", "chance": 0.7, "parent_decides": true,
      "conditions": {"age": [7, 9], "station": "home", "no_flag": "school_decided", "is_head": false},
      "options": [
-       {"text": "跟神父認字（12 便士）", "conditions": {"money_ge": 12}, "log": "{name} 開始跟神父認字。",
+       {"text": "跟神父認字（12 便士；家裡少個放羊撿柴的）", "conditions": {"money_ge": 12, "kin_priest": false}, "log": "{name} 開始跟神父認字。",
         "effects": [{"money": -12}, {"set_flag": "schooled"}, {"set_flag": "school_decided"}, {"focus": "letters"}],
         "ai": {"base": 4, "traits": {"pious": 4, "ambitious": 4, "greedy": -4, "clever": 6, "dull": -6},
                "if": [{"cond": {"standing_ge": 2}, "add": 6}, {"cond": {"money_lt": 40}, "add": -3}, {"cond": {"tradition": "lettered"}, "add": 20}, {"cond": {"ambition": "educate_child"}, "add": 40}]}},
-       {"text": "留在家幫忙", "log": "{name} 沒去認字，留在家裡幫忙幹活。", "effects": [{"set_flag": "school_decided"}, {"skill": {"farming": 1}}], "ai": {"base": 12}},
-       {"text": "送去別人家幫傭，換口飯吃", "conditions": {"any_place": "service", "money_lt": 30}, "log": "家裡揭不開鍋，{name} 才 {age} 歲就被送去別人家幫傭。",
+       {"text": "跟神父認字，學費托當神父的親戚說情，只收一半（6 便士；家裡少個放羊撿柴的）", "conditions": {"money_ge": 6, "kin_priest": true}, "log": "家裡有親戚在教會，神父看在同行的份上只收了一半學費，{name} 開始跟神父認字。",
+        "effects": [{"money": -6}, {"set_flag": "schooled"}, {"set_flag": "school_decided"}, {"focus": "letters"}],
+        "ai": {"base": 8, "traits": {"pious": 4, "ambitious": 4, "clever": 6, "dull": -6}, "if": [{"cond": {"tradition": "lettered"}, "add": 20}, {"cond": {"ambition": "educate_child"}, "add": 40}]}},
+       {"text": "跟神父認字，學費拿一袋麥子抵（約 15 天的糧，不花現錢）", "conditions": {"not": {"food_days_lt": 120}},
+        "log": "家裡扛了一袋麥子去神父家抵學費，{name} 開始跟神父認字。",
+        "effects": [{"food_days": -15}, {"set_flag": "schooled"}, {"set_flag": "school_decided"}, {"focus": "letters"}],
+        "ai": {"base": 3, "traits": {"pious": 3, "ambitious": 3, "clever": 6, "dull": -6}, "if": [{"cond": {"money_lt": 30}, "add": 4}, {"cond": {"ambition": "educate_child"}, "add": 30}]}},
+       {"text": "留在家幫忙（不花錢，多一雙手；這孩子往後就不識字）", "log": "{name} 沒去認字，留在家裡幫忙幹活。", "effects": [{"set_flag": "school_decided"}, {"skill": {"farming": 1}}], "ai": {"base": 12}},
+       {"text": "送去別人家幫傭，換口飯吃（家裡少一張嘴，孩子要吃苦）", "conditions": {"any_place": "service", "money_lt": 30}, "log": "家裡揭不開鍋，{name} 才 {age} 歲就被送去別人家幫傭。",
         "effects": [{"set_flag": "school_decided"}, {"take_any_place": "service"}],
         "ai": {"base": 2, "if": [{"cond": {"food_days_lt": 60}, "add": 10}]}}
      ]},
 
-    {"id": "path_youth_m", "repeat": "person", "title": "出路", "prompt": "{name} {age} 歲了，往後走哪條路，家裡得拿個主意。", "scope": "anyone", "pulse": "yearly", "chance": 0.6, "parent_decides": true,
+    {"id": "path_youth_m", "repeat": "person", "title": "出路", "prompt": "{name} {age} 歲了，往後走哪條路，家裡得拿個主意。",
+     "prompts": ["{name} {age} 歲了，往後走哪條路，家裡得拿個主意。",
+                 "{name} {age} 歲了，個子竄得比灶台還高。吃飯的時候大家都看著{pron}：這孩子往後做什麼？",
+                 "米迦勒節前，村裡的師傅、大戶都在找人手。{name} {age} 歲了，家裡得替{pron}拿個主意。"], "scope": "anyone", "pulse": "yearly", "chance": 0.6, "parent_decides": true,
      "conditions": {"sex": "male", "age": [11, 13], "station": "home", "no_flag": "trade_decided", "is_head": false},
      "options": [
        {"text": "留在家裡，跟著家裡的活", "log": "{name} 留在家裡，跟著大人學種地。", "effects": [{"set_flag": "trade_decided"}],
@@ -49,7 +66,10 @@
         "ai": {"base": 3, "traits": {"pious": 6, "ambitious": 4, "clever": 8}, "if": [{"cond": {"heir_apparent": true}, "add": -10}, {"cond": {"tradition": "lettered"}, "add": 15}]}}
      ]},
 
-    {"id": "path_youth_f", "repeat": "person", "title": "出路", "prompt": "{name} {age} 歲了，往後走哪條路，家裡得拿個主意。", "scope": "anyone", "pulse": "yearly", "chance": 0.6, "parent_decides": true,
+    {"id": "path_youth_f", "repeat": "person", "title": "出路", "prompt": "{name} {age} 歲了，往後走哪條路，家裡得拿個主意。",
+     "prompts": ["{name} {age} 歲了，往後走哪條路，家裡得拿個主意。",
+                 "{name} {age} 歲了，個子竄得比灶台還高。吃飯的時候大家都看著{pron}：這孩子往後做什麼？",
+                 "米迦勒節前，村裡的師傅、大戶都在找人手。{name} {age} 歲了，家裡得替{pron}拿個主意。"], "scope": "anyone", "pulse": "yearly", "chance": 0.6, "parent_decides": true,
      "conditions": {"sex": "female", "age": [11, 14], "station": "home", "no_flag": "trade_decided", "is_head": false, "married": false},
      "options": [
        {"text": "在家學持家", "log": "{name} 留在家裡，跟著學紡線、做飯、持家。", "effects": [{"set_flag": "trade_decided"}], "ai": {"base": 12}},

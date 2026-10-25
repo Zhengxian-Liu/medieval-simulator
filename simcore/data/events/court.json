@@ -19,18 +19,27 @@
         "ai": {"base": 2, "traits": {"greedy": 12, "cynical": 4, "pious": -8, "kind": -2}}}
      ]},
 
-    {"id": "reeve_campaign", "title": "選莊頭", "prompt": "又到了選莊頭的時候。當莊頭能免勞役、在管家面前說得上話，但收不齊租要自己賠。", "scope": "player_head", "chance": 1,
+    {"id": "reeve_campaign", "title": "選莊頭", "prompt": "又到了選莊頭的時候。當莊頭能免勞役、在管家面前說得上話，但收不齊租要自己賠。",
+     "prompts": ["又到了選莊頭的時候。當莊頭能免勞役、在管家面前說得上話，但收不齊租要自己賠。",
+                 "米迦勒節的莊園法庭上，管家敲了敲桌子：明年的莊頭，各家家主自己推。當莊頭能免勞役，收不齊的租可得自己掏。",
+                 "選莊頭的日子近了，酒館裡天天有人在算誰會投誰。莊頭免勞役、管家面前說得上話，可收不齊租要自己賠。"],
+     "prompt_if": [{"cond": {"reeve": true}, "prompt": "又到了選莊頭的時候。你當了這一任，誰家欠租、誰家被你逼過，大家心裡都有本帳。這回還要不要連任？"}], "scope": "player_head", "chance": 1,
      "on": {"signal": "manual"},
      "conditions": {"age": [14, 120]},
      "options": [
-       {"text": "請全村喝酒（15 便士）", "conditions": {"money_ge": 15},
+       {"text": "請全村喝酒（15 便士；喝了酒的家主多半會投你）", "conditions": {"money_ge": 15},
         "log": "選莊頭前一晚，{name} 在酒館請各家家主喝酒，拍著胸脯說今年一定替大家向管家說話。",
         "effects": [{"money": -15}, {"set_flag": "campaign_ale"}, {"need": {"social": 20}}],
         "ai": {"base": 8, "traits": {"gregarious": 8, "ambitious": 6, "shy": -6, "greedy": -4}, "if": [{"cond": {"ambition": "become_reeve"}, "add": 20}]}},
-       {"text": "求領主點名", "log": "選莊頭前，{name} 帶著一隻閹雞去莊園，請 {target} 替{pron}說句話。",
+       {"text": "求領主點名（得送一隻閹雞；成不成看領主對你家的看法）", "log": "選莊頭前，{name} 帶著一隻閹雞去莊園，請 {target} 替{pron}說句話。",
         "effects": [{"set_flag": "campaign_lord"}, {"food": -10}],
         "ai": {"base": 5, "traits": {"ambitious": 6, "craven": 2}, "if": [{"cond": {"flag": "lord_favour"}, "add": 15}, {"cond": {"ambition": "become_reeve"}, "add": 10}]}},
-       {"text": "順其自然", "log": "{name} 沒去拉票，選莊頭的事由各家自己拿主意。",
+       // Grain as the coin of politics (design/stitching.md A): the fuller barn is the louder voice.
+       {"text": "給村裡缺糧的幾家各送一袋麥子（約 20 天的糧；收了的人家記你的情，全村都看在眼裡）", "conditions": {"not": {"food_days_lt": 150}},
+        "log": "選莊頭前，{name} 叫兒子推著車，給村裡幾家揭不開鍋的人家各送了一袋麥子。",
+        "effects": [{"food_days": -20}, {"village_opinion": {"value": 4, "mod": "gift", "years": 2}}, {"reputation": 1}],
+        "ai": {"base": 5, "traits": {"generous": 8, "ambitious": 4, "greedy": -6}, "if": [{"cond": {"ambition": "become_reeve"}, "add": 12}]}},
+       {"text": "順其自然（什麼也不花，選上選不上看各家）", "log": "{name} 沒去拉票，選莊頭的事由各家自己拿主意。",
         "effects": [],
         "ai": {"base": 8, "traits": {"content": 8, "shy": 4, "lazy": 4}}}
      ]},
