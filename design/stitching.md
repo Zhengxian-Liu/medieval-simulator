@@ -1,6 +1,6 @@
 # 從第一性原理重看設計：缺的是「縫合」（2026-10-21）
 
-> 狀態：提案，等 Zhengxian 看過。起因：你說「遊戲設計很重要的要素是縫合，要縫得絲滑而且有深度，也就是組合式創新」。
+> 狀態：提案。2026-10-25 使用者要先記下來，再和 Fable 討論接下來的方向（討論紀錄：[stitching-fable.md](stitching-fable.md)）。起因：你說「遊戲設計很重要的要素是縫合，要縫得絲滑而且有深度，也就是組合式創新」。
 > 根據：[first-principles.md](first-principles.md)、[ck3-why-fun.md](ck3-why-fun.md)、第 1–8 輪 Fable 報告（[playtests/](../playtests/)），以及這次對程式的清點。
 
 ## 一句話結論
