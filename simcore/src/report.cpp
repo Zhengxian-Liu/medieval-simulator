@@ -25,7 +25,7 @@ const std::map<std::string, std::string>& modNames() {
         {"poacher", "在林子裡被逮過"}, {"promised_match", "說好的親事"}, {"quarrels", "常吵嘴"}, {"rebel", "造過反"},
         {"shamed_us", "讓家裡丟過臉"}, {"shirker", "推託勞役"}, {"soft_reeve", "收租太軟"}, {"tender", "疼愛"},
         {"tithe", "什一稅"}, {"tithe_quarrel", "吵過什一稅"}, {"trusted_tenant", "信得過的佃戶"},
-        {"voted_against_me", "陪審時投了我有罪"}, {"voted_for_them", "陪審時偏袒對方"}, {"welched", "賴過帳"},
+        {"voted_against_me", "陪審時投了我有罪"}, {"jury_sided_with_me", "陪審時站在我這邊"}, {"voted_for_them", "陪審時偏袒對方"}, {"welched", "賴過帳"},
         {"pass_slighted", "家業的分法虧待了我"}, {"pass_favoured", "家業的分法偏著我"}, {"pass_changed", "改了家業的分法"},
         {"colluded", "跟我一起算計他家"}, {"backed_down", "攤牌時讓了步"}, {"kept_upkeep", "照約奉養"}, {"caught_stealing", "偷家裡的錢被撞見"}, {"caught_colluding", "勾結外人被撞破"},
         {"worked_off_debt", "做工抵過債"}, {"envy", "眼紅你家"}, {"refused_kindness", "不准我幫朋友"}, {"respect", "敬重你家"}, {"worthy_tenant", "體面的佃戶"}, {"lords_man", "領主的人"}, {"event", "往來"},

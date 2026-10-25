@@ -19,6 +19,10 @@ public:
     void apply(const Json& effects, Person& p, Id target);
     std::string format(const std::string& tmpl, const Person& p, Id target) const;
     std::string optionText(const OptionDef& o, const Person& p, Id target) const;
+    // May an old question (EventDef::fold) be answered with this option without asking? Never a crime (a deed, or
+    // marked no_fold), never sending someone away (a station or a place), never more than 20 pence or a tax over
+    // the assessed sum (fun-r11 review H1).
+    static bool foldSafe(const OptionDef& o);
     double odds(const Json& o, const Person& p, Id target) const;
     // A condition as gates, one per key, each decided by the same check as eval (src/gates.cpp); `all` keeps the
     // quiet ones (not the lord, not the priest) even when met. describe: the met-or-not labels as one phrase.

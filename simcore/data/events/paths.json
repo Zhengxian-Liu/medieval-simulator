@@ -28,7 +28,7 @@
         "ai": {"base": 2, "if": [{"cond": {"food_days_lt": 60}, "add": 10}]}}
      ]},
 
-    {"id": "path_youth_m", "repeat": "person", "title": "出路", "fold": true, "prompt": "{name} {age} 歲了，往後走哪條路，家裡得拿個主意。",
+    {"id": "path_youth_m", "repeat": "person", "title": "出路", "prompt": "{name} {age} 歲了，往後走哪條路，家裡得拿個主意。",
      "prompts": ["{name} {age} 歲了，往後走哪條路，家裡得拿個主意。",
                  "{name} {age} 歲了，個子竄得比灶台還高。吃飯的時候大家都看著{pron}：這孩子往後做什麼？",
                  "米迦勒節前，村裡的師傅、大戶都在找人手。{name} {age} 歲了，家裡得替{pron}拿個主意。"], "scope": "anyone", "pulse": "yearly", "chance": 0.6, "parent_decides": true,
@@ -66,7 +66,7 @@
         "ai": {"base": 3, "traits": {"pious": 6, "ambitious": 4, "clever": 8}, "if": [{"cond": {"heir_apparent": true}, "add": -10}, {"cond": {"tradition": "lettered"}, "add": 15}]}}
      ]},
 
-    {"id": "path_youth_f", "repeat": "person", "title": "出路", "fold": true, "prompt": "{name} {age} 歲了，往後走哪條路，家裡得拿個主意。",
+    {"id": "path_youth_f", "repeat": "person", "title": "出路", "prompt": "{name} {age} 歲了，往後走哪條路，家裡得拿個主意。",
      "prompts": ["{name} {age} 歲了，往後走哪條路，家裡得拿個主意。",
                  "{name} {age} 歲了，個子竄得比灶台還高。吃飯的時候大家都看著{pron}：這孩子往後做什麼？",
                  "米迦勒節前，村裡的師傅、大戶都在找人手。{name} {age} 歲了，家裡得替{pron}拿個主意。"], "scope": "anyone", "pulse": "yearly", "chance": 0.6, "parent_decides": true,
@@ -122,7 +122,7 @@
        {"text": "算了", "log": "{name} 想了想，沒去那位寡婦家提親。", "effects": [], "ai": {"base": 8, "traits": {"content": 4, "shy": 4}}}
      ]},
 
-    {"id": "commission_of_array", "repeat": "person", "title": "點兵", "fold": true, "prompt": "國王又要用兵了。領主的管家在教堂門口點人去當弓兵：管吃，一天三便士，搶到的東西歸自己。他點到了 {name}。", "scope": "anyone", "pulse": "yearly", "chance": 0.12, "cooldown_years": 4, "parent_decides": true,
+    {"id": "commission_of_array", "repeat": "person", "title": "點兵", "prompt": "國王又要用兵了。領主的管家在教堂門口點人去當弓兵：管吃，一天三便士，搶到的東西歸自己。他點到了 {name}。", "scope": "anyone", "pulse": "yearly", "chance": 0.12, "cooldown_years": 4, "parent_decides": true,
      "conditions": {"sex": "male", "age": [16, 35], "is_head": false, "station": ["home", "labourer", "veteran"], "any": [{"year": [1333, 1360]}, {"year": [1369, 1389]}]},
      "options": [
        {"text": "去當弓兵", "log": "{name} 背上長弓，跟著點來的人走了。",
@@ -150,7 +150,7 @@
         "ai": {"base": 2, "traits": {"ambitious": 6, "content": -6}, "if": [{"cond": {"heir_apparent": true}, "add": -12}, {"cond": {"year": [1349, 1400]}, "add": 3}]}}
      ]},
 
-    {"id": "veteran_back", "repeat": "person", "parent_decides": true, "title": "老兵", "fold": true, "prompt": "{name} 打完仗回來了，身上有點積蓄，也見過了世面。", "scope": "anyone", "pulse": "yearly", "chance": 0.8,
+    {"id": "veteran_back", "repeat": "person", "parent_decides": true, "title": "老兵", "prompt": "{name} 打完仗回來了，身上有點積蓄，也見過了世面。", "scope": "anyone", "pulse": "yearly", "chance": 0.8,
      "conditions": {"station": "veteran", "is_head": false},
      "options": [
        {"text": "安心回田裡", "log": "{name} 把刀掛上牆，安心回田裡幹活。", "effects": [{"station": {"id": "home", "note": "回田裡"}}], "ai": {"base": 10, "traits": {"content": 6}}},

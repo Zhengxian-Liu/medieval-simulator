@@ -76,6 +76,7 @@ EventDef parseEvent(const Json& e) {
         }
         od.effects = o["effects"];
         od.aiWeight = o["ai"];
+        od.noFold = o["no_fold"].isBool() && o["no_fold"].asBool();
         od.conditions = o["conditions"];
         d.options.push_back(od);
     }

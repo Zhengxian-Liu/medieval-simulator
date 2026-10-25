@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 
 namespace sim {
 
@@ -295,7 +296,8 @@ void EventRunner::fire(const EventDef& ev, Person& p, Id target) {
     if (!line.empty()) {
         if (family) {
             std::string choice = ev.options.size() > 1 && asked_ && !bare ? "（選擇：" + optionText(o, p, target) + "）" : "";
-            if (folded_) choice = foldedAsLast_ ? "（老問題，照上回的做法，沒再問你）" : "（老問題，照家裡的習慣辦了，沒再問你）";
+            // What was done for the player, with what it cost (the option's own words carry the price).
+            if (folded_) choice = "（老問題，沒再問你，照你上回的做法：" + optionText(o, p, target) + "）";
             w_.log(home ? 1 : 2, "〔" + ev.title + "〕" + line + choice);
         } else if (ev.npcLog) {
             w_.log(2, line);
@@ -595,6 +597,7 @@ int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
         World::ChoicePrompt prompt;
         std::vector<std::string> lines;
         prompt.title = ev.title;
+        prompt.event = ev.id;
         for (size_t k = 0; k < ev.options.size(); ++k) {
             const OptionDef& o = ev.options[k];
             if (ws[k] <= 0 && !optionOpen(o, p, target)) {
@@ -662,23 +665,24 @@ int EventRunner::chooseOption(const EventDef& ev, const Person& p, Id target) {
         const bool story = ev.on.isNull() && ev.interaction.isNull() && (ev.pulse == "monthly" || ev.pulse == "yearly") &&
                            ev.repeat != "free" && !ev.institution && ev.budget != "hunger";
         int& told = w_.genCards_[{w_.generation(), ev.title + "\n" + prompt.situation}];
-        // fun-r11 1: a card that comes round every year (fold) is asked twice a generation, whatever its words; the
-        // second time it says what was chosen the first, and after that the house does as it did last time.
-        const std::string group = ev.title.substr(0, ev.title.find("："));
-        World::FoldSeen& seen = w_.foldSeen_[{w_.generation(), group}];
+        // fun-r11 1: a card that comes round every year (fold) is asked twice a generation, whatever its words (the same
+        // card: its id); the second time it says what was chosen the first. After that it is answered as the player
+        // answered it last time, but only with a way that is no crime, sends nobody away and spends little (foldSafe);
+        // anything else, or no answer of the player's to go by, is asked as before.
+        World::FoldSeen& seen = w_.foldSeen_[{w_.generation(), ev.id}];
         const bool real = open.size() > 1 || (!open.empty() && !prompt.unavailable.empty());
         if (ev.fold && real && w_.repeatRule_ != "ask" && seen.n >= 2) {
-            asked_ = false;
-            folded_ = true;
             auto last = w_.foldLast_.find(ev.id);
             if (last != w_.foldLast_.end() && last->second < static_cast<int>(ws.size()) && ws[last->second] > 0 &&
-                optionOpen(ev.options[last->second], p, target)) {
-                foldedAsLast_ = true;
+                optionOpen(ev.options[last->second], p, target) && foldSafe(ev.options[last->second])) {
+                asked_ = false;
+                folded_ = foldedAsLast_ = true;
+                ++w_.counters_["fold:" + ev.id + ":" + std::to_string(last->second)];
                 return last->second;
             }
-            // Last time's answer is not open now (or this one was never asked): the house's ways, below.
-        } else if (real && (!story || told < 2)) {
-            if (ev.fold && seen.n == 1 && !seen.choice.empty())
+        }
+        if (real && (!story || told < 2)) {
+            if (ev.fold && seen.n >= 1 && !seen.choice.empty())
                 prompt.situation = "（" + std::to_string(seen.year) + " 年也問過一回，那回選的是「" + seen.choice + "」。）" + prompt.situation;
             w_.noteCardAsked();
             ++told;
@@ -2160,6 +2164,31 @@ double EventRunner::odds(const Json& o, const Person& p, Id target) const {
 
 // An option's text, with {odds} spelled out the way the player would weigh it: "機會偏高，看讀書的本事".
 // The odds are told in words, not numbers, and say what they hang on ("depends"), not what was missed.
+bool EventRunner::foldSafe(const OptionDef& o) {
+    if (o.noFold) return false;
+    // Anywhere in the effects, a chance's branches too: a deed (a crime on the record) or a way out of the house.
+    std::function<bool(const Json&)> bad = [&](const Json& j) {
+        if (j.isArray()) {
+            for (const auto& x : j.asArray())
+                if (bad(x)) return true;
+        } else if (j.isObject()) {
+            for (const auto& [k, v] : j.asObject()) {
+                if (k == "deed" || k == "station" || k == "take_any_place" || k == "take_place" || (k == "set_flag" && v.isString() && v.asString() == "hid_tax"))
+                    return true;
+                if (k == "pay_tax" && v.isNumber() && v.asNumber() > 1.0) return true;
+                if (bad(v)) return true;
+            }
+        }
+        return false;
+    };
+    if (bad(o.effects)) return false;
+    double spent = 0;  // what it costs for certain (the top level), against the little an old question may spend
+    if (o.effects.isArray())
+        for (const auto& e : o.effects.asArray())
+            if (e.isObject() && e["money"].isNumber() && e["money"].asNumber() < 0) spent -= e["money"].asNumber();
+    return spent <= 20;
+}
+
 std::string EventRunner::optionText(const OptionDef& o, const Person& p, Id target) const {
     std::string t = o.text;
     size_t at = t.find("{odds}");

@@ -627,11 +627,17 @@ void World::ensureFood(Household& h) {
 // the card) says, and a rule the purse cannot keep is said once, then the hunger cards carry the other ways out.
 const char* World::repeatRuleText(const std::string& rule) {
     if (rule == "ask") return "每回都問我";
-    return "每年都來的老問題（國王的稅、孩子認字、出路……）一代問兩回，之後照上回的做法辦，記錄裡會寫明";
+    return "每年都來的老問題（國王的稅、孩子認字、莊園要用錢、莊頭的帳本）同一張卡一代問兩回；之後要是你上回親手選的做法不犯法、不送人離家、花不到 20 便士，就照那樣辦，記錄裡寫明做了什麼、花了多少；否則照樣問你";
 }
 
 void World::setRepeatRule(const std::string& rule) {
-    if (rule == "fold" || rule == "ask") repeatRule_ = rule;
+    if (rule != "fold" && rule != "ask") {
+        log(1, "【家裡的規矩】「老問題」只能選「照上回的做法」或「每回都問我」，規矩沒有改。");
+        return;
+    }
+    const bool changed = rule != repeatRule_;
+    repeatRule_ = rule;
+    if (changed && playerHousehold_ != kNone && actingHead() != kNone) log(1, std::string("【家裡的規矩】往後老問題：") + repeatRuleText(rule) + "。");
 }
 
 const char* World::grainRuleText(const std::string& rule) {
@@ -1129,9 +1135,18 @@ bool World::feedMenu(Household& h, bool chosen) {
     const bool again = feedHelped_[h.id] > 0;
     struct Way { int what; std::string text, label; };
     std::vector<Way> ways;
+    // A loan of grain is due at next year's Michaelmas. Owed to the family already, it goes on the same account and the
+    // whole of it is put off to then; owed to someone else first, it waits behind that debt (review M5).
+    const int dueYear = year() + 1;
+    const double loanOwed = std::round(grain * price);
+    const bool sameBook = h.debt > 0.5 && h.creditor == ours;
+    const bool behind = !sameBook && (h.debt > 0.5 || h.heldDebt > 0.5);
+    const std::string loanTerms = sameBook ? "連同舊欠的 " + std::to_string(int(h.debt)) + " 便士，一共 " + std::to_string(int(h.debt + loanOwed)) + " 便士，改到 " +
+                                                 std::to_string(dueYear) + " 年米迦勒節還"
+                                  : behind ? "記一筆 " + std::to_string(int(loanOwed)) + " 便士的帳，排在他家前一筆債後面，那筆還清後的米迦勒節到期"
+                                           : "記一筆 " + std::to_string(int(loanOwed)) + " 便士的帳，" + std::to_string(dueYear) + " 年米迦勒節前還";
     if (grain >= daily * 20 && debtRoom(h, ours))
-        ways.push_back({7, "借他們夠吃 " + std::to_string(int(grain / daily)) + " 天的糧，明年米迦勒節前還（記一筆 " + std::to_string(int(std::round(grain * price))) +
-                               " 便士的帳；" + barn(grain) + "；" + theirs(h.food / daily + grain / daily) + "）",
+        ways.push_back({7, "借他們夠吃 " + std::to_string(int(grain / daily)) + " 天的糧（" + loanTerms + "；" + barn(grain) + "；" + theirs(h.food / daily + grain / daily) + "）",
                         "借糧"});
     if (grain >= daily * 20)
         ways.push_back({0, "從自家糧倉送去夠他們吃 " + std::to_string(int(grain / daily)) + " 天的糧（" + barn(grain) + "；" + theirs(h.food / daily + grain / daily) + "）", "送糧"});
@@ -1156,8 +1171,10 @@ bool World::feedMenu(Household& h, bool chosen) {
     const Id parcel = spareParcel(h.id);
     if (parcel != kNone) {
         const double bridge = std::min(daily * 30, std::max(0.0, spare));
-        ways.push_back({5, "把" + parcelName(parcels_[parcel]) + "分給他家種（你家少了這幾畝" + std::string(parcels_[parcel].free ? "，這是自由地" : "") + "；再送 " +
-                               std::to_string(int(bridge / daily)) + " 天的糧撐到收成，" + theirs(h.food / daily + bridge / daily) + "；往後每年多收約 " +
+        // (Too little spare grain to matter, and the bridge is not offered as one: review L3.)
+        const std::string carry = bridge >= daily * 7 ? "再送 " + std::to_string(int(bridge / daily)) + " 天的糧撐到收成，" + theirs(h.food / daily + bridge / daily)
+                                                      : std::string("你家沒有多的糧可送，他家眼下還是只有 ") + std::to_string(theirDays) + " 天的糧";
+        ways.push_back({5, "把" + parcelName(parcels_[parcel]) + "分給他家種（你家少了這幾畝" + std::string(parcels_[parcel].free ? "，這是自由地" : "") + "；" + carry + "；往後每年多收約 " +
                                std::to_string(int(keepsHouse(parcels_[parcel].acres) / daily / kDaysPerMonth)) + " 個月的口糧）",
                         "分地"});
     }
@@ -1217,10 +1234,10 @@ bool World::feedMenu(Household& h, bool chosen) {
         case 7: {
             ph.food -= grain;
             h.food += grain;
-            const double owed = std::round(grain * price);
-            addDebt(h, owed, ours);
-            log(1, head + fullName(ours) + " 借了夠吃 " + std::to_string(int(grain / daily)) + " 天的糧給 " + fullName(h.head) + " 家，記下 " +
-                       std::to_string(int(owed)) + " 便士的帳，米迦勒節前還。" + after());
+            addDebt(h, loanOwed, ours);
+            // As the card said: due at next year's Michaelmas, the old debt to the family with it.
+            if (h.debt > 0.5 && h.creditor == ours) h.debtYears = month() > 8 || (month() == 8 && dayOfMonth() == 29) ? 0 : -1;
+            log(1, head + fullName(ours) + " 借了夠吃 " + std::to_string(int(grain / daily)) + " 天的糧給 " + fullName(h.head) + " 家，" + loanTerms + "。" + after());
             break;
         }
         case 0:
@@ -1242,7 +1259,8 @@ bool World::feedMenu(Household& h, bool chosen) {
             break;
         case 4:
             hireKin(h.id, playerHousehold_);
-            log(1, head + fullName(h.head) + " 家能幹活的人搬來你家做一年，吃住都在你家，他家每月多約 " + std::to_string(int(hands * 40 / daily)) + " 天的糧。");
+            log(1, head + fullName(h.head) + " 家能幹活的人來你家做一年長工，白天在你家田裡幹活，工錢和飯食讓他家每月多約 " + std::to_string(int(hands * 40 / daily)) +
+                       " 天的糧。");
             break;
         case 8:
             hireKin(h.id, master);

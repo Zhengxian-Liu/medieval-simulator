@@ -56,6 +56,7 @@ struct OptionDef {
     Json effects;     // array
     Json aiWeight;    // { base, traits: { id: delta } }
     Json conditions;  // optional: the option is only open when these hold (for the chooser)
+    bool noFold = false;  // "no_fold": never answered for the player as an old question (hiding goods from the tax...)
 };
 
 struct EventDef {

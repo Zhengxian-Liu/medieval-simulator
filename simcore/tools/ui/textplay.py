@@ -29,7 +29,7 @@ Actions (the page's buttons):
   {"do":"pass"}   end this season          {"do":"year"}   let the AI play a whole year
   {"do":"regency"}   holding the house for a child: hand the years to the steward until they come of age
   {"do":"rule","rule":"occasions","value":"close"}   家裡的規矩 (standing rules: occasions = all|close|none|ask,
-                                                     grain = harvest|monthly|ask)
+                                                     grain = harvest|monthly|ask, repeats = fold|ask)
                      (big questions are still asked on the way)
 """
 import json

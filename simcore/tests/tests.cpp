@@ -2753,18 +2753,33 @@ int main() {
         int grain = 0, worst = 0, grainYear = 0;
         std::map<int, int> grainIn;  // grain cards by harvest year (as the feed test counts them)
         std::string worstCard;
-        // fun-r11 1: the yearly round (tax, letters, a child's way, the manor's call for money, the muster, the reeve's
-        // books) is asked twice a generation, whatever its words; one hungry house a season.
-        static const std::set<std::string> folds = {"國王的稅", "認字", "出路", "莊園要用錢", "點兵", "莊頭的帳本", "老兵"};
+        // fun-r11 1: a card of the yearly round (marked fold: the tax, letters, the manor's call for money, the reeve's
+        // books) is asked twice a generation, by its id whatever its words, unless the player's last answer may not
+        // be given for them (a crime, a way out of the house, real money: EventRunner::foldSafe); one hungry house a season.
+        // The family answers a card of the round with a way that may be given for it (its words up to the first 「{」 or
+        // 「（」 open the option); once it answered otherwise, the card may come again.
+        std::map<std::string, std::vector<std::string>> safeWays;
+        for (const auto& ev : defs.events)
+            if (ev.fold)
+                for (const auto& o : ev.options)
+                    if (EventRunner::foldSafe(o)) safeWays[ev.id].push_back(o.text.substr(0, std::min(o.text.find('{'), o.text.find("（"))));
         std::map<std::pair<size_t, std::string>, int> foldAsked;
+        std::set<std::pair<size_t, std::string>> foldOpen;  // answered with a way that is asked again
         std::map<int, int> feedSeason;
         int foldWorst = 0, feedWorst = 0;
         w.setChooser([&](const World::ChoicePrompt& p) {
             const auto& heads = w.dynasties()[w.playerDynasty()].heads;
             int& n = seen[{heads.size(), p.title, p.situation}];
             if (++n > worst) worst = n, worstCard = p.title;
-            const std::string group = p.title.substr(0, p.title.find("："));
-            if (folds.count(group)) foldWorst = std::max(foldWorst, ++foldAsked[{heads.size(), group}]);
+            if (auto sw = safeWays.find(p.event); sw != safeWays.end()) {
+                const std::pair<size_t, std::string> key{heads.size(), p.event};
+                if (!foldOpen.count(key)) foldWorst = std::max(foldWorst, ++foldAsked[key]);
+                for (size_t i = 0; i < p.options.size(); ++i)
+                    for (const auto& pre : sw->second)
+                        if (!pre.empty() && p.options[i].rfind(pre, 0) == 0) return static_cast<int>(i);
+                foldOpen.insert(key);
+                return 0;
+            }
             if (p.title == "親友挨餓") feedWorst = std::max(feedWorst, ++feedSeason[w.today() / (3 * kDaysPerMonth)]);
             if (p.title == "缺糧：跟誰開口") ++grain, grainYear = std::max(grainYear, ++grainIn[(w.today() + kDaysPerYear - 8 * kDaysPerMonth) / kDaysPerYear]);
             return 0;
@@ -2780,6 +2795,20 @@ int main() {
         CHECK(worst <= 2, ("a card came more than twice a generation in the same words: " + worstCard).c_str());
         std::printf("   yearly round asked at most %d times a generation, hungry houses at most %d a season\n", foldWorst, feedWorst);
         CHECK(foldWorst <= 2, "a card of the yearly round was asked more than twice a generation");
+        int folded = 0;
+        for (const auto& [k, v] : w.counters()) {
+            if (k.rfind("fold:", 0) != 0) continue;
+            folded += v;
+            const size_t colon = k.rfind(':');
+            const std::string id = k.substr(5, colon - 5);
+            const size_t opt = std::stoul(k.substr(colon + 1));
+            for (const auto& ev : defs.events)
+                if (ev.id == id)
+                    CHECK(opt < ev.options.size() && EventRunner::foldSafe(ev.options[opt]),
+                          ("an old question was answered for the player with a crime, a way out or real money: " + id).c_str());
+        }
+        std::printf("   old questions answered as last time: %d\n", folded);
+        CHECK(folded > 0, "no card of the yearly round was ever answered as last time in fifteen years");
         CHECK(feedWorst <= 1, "more than one hungry house was put to the family in a season");
         // Round 10: the 25-year pre-run now runs the family's own quarrels and passings too, and this seed's family starts
         // poorer than it did (5 acres, not 13), so a hungry house asks most years. What the test guards is the card coming
@@ -2787,6 +2816,10 @@ int main() {
         CHECK(grainYear <= 1, "the grain card came more than once in one harvest year");
         CHECK(grain <= 16, "more grain cards than years played, plus one");
         CHECK(w.rivalHouse() != kNone, "no rival house in fifteen years");
+        // fun-r11 6: the rival meets the family head-on (a match, a field, grain, or his house at the door for bread).
+        const int headOn = w.counters().count("rival_head_on") ? w.counters().at("rival_head_on") : 0;
+        std::printf("   rival head-on %d times\n", headOn);
+        CHECK(headOn >= 1, "the rival never met the family head-on in fifteen years");
     }
 
     // Round 10 (design/stages-and-drive.md 三、四、六): the drive inside the family.

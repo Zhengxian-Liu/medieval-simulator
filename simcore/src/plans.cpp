@@ -505,8 +505,11 @@ void World::monthlyPlans() {
         const PlanDef* pd = defs_.plan(plan.plan);
         Person& actor = people_[plan.actor];
         if (!actor.alive() || actor.household == kNone) {
-            // The one doing it died or left: said, when it was the family's (a match set going and never heard of again).
-            if (pd && (inPlayerHouse(actor.home) || (actor.household == kNone && inPlayerHouse(actor.awayFrom)) || isPlayerFamily(actor)))
+            // The one doing it died or left: said, when it was the player's own house's and no secret (a match set going
+            // and never heard of again; never an affair or a threat the family has not found out).
+            const bool ours = inPlayerHouse(actor.home) || (actor.household == kNone && inPlayerHouse(actor.awayFrom)) ||
+                              (!actor.alive() && inPlayerHouse(actor.diedIn));
+            if (pd && !pd->secret && ours)
                 log(1, "「" + pd->name + "」擱下了：" + fullName(actor.id) + (actor.alive() ? " 已經不在家裡" : " 已經過世") + "，沒人接著辦。");
             plans_.erase(plans_.begin() + static_cast<long>(i));
             continue;

@@ -87,6 +87,7 @@ struct Person {
     Sex sex = Sex::Male;
     int birthDay = 0;
     int deathDay = -1;
+    Id diedIn = kNone;  // the household they belonged to when they died (their home, if out in service)
     std::string deathCause;
     Id father = kNone, mother = kNone, spouse = kNone;
     Id household = kNone;
@@ -589,6 +590,7 @@ public:
         std::string title, situation;
         std::vector<std::string> options;
         std::vector<std::string> unavailable;  // shown but not choosable, with why (e.g. "請老婦人來看（錢不夠）")
+        std::string event = {};  // the event's id, when an event asks (empty for the code's own questions)
     };
     using Chooser = std::function<int(const ChoicePrompt&)>;
     void setChooser(Chooser c) { chooser_ = std::move(c); }
@@ -919,9 +921,13 @@ public:
         int since = -1;
         bool struck = false;  // the once-a-generation blow while the family is down has fallen
         int headOn = -1;      // the day he last went after the same thing as the family (rivalHeadOn)
+        int headOns = 0;      // how many times this generation (a famine plea of his counts)
     };
     const Rival& rival() const { return rival_; }
-    void rivalHeadOn();                          // monthly: now and then he goes after the family's match or a field
+    void rivalHeadOn();                          // monthly: now and then he goes after the family's match, a field or grain
+    bool rivalMatch(Id rh);                      // (the arenas of rivalHeadOn: true when the family was asked)
+    bool rivalLand(Id rh, bool owed);
+    bool rivalGrain(Id rh);
     Id rivalHouse() const;                       // kNone when there is none (yet) this generation
     std::string rivalName() const;               // 「卡特家（雷金納德）」
     std::vector<std::string> rivalClashes() const;  // where the two houses have met: 「1332 年 南田那 5 畝：他家拿到」, newest first
@@ -1003,7 +1009,8 @@ public:
         double bitter = 0;        // what the climb itself left (a suit lost, caught, sent off), fading a little each year
         std::string bitterWhy;
         std::string chain;        // cause → signs → acts, for the chronicle's 「為什麼」
-        std::string sued;         // the claim and reason last heard in court ("" never): the same suit is not heard twice
+        std::string sued;         // the claim last heard in court ("" never): the same suit is not heard again within five years
+        int suedDay = -100000;    // when it was heard
     };
     const std::vector<Grievance>& grievances() const { return griefs_; }
     // The old parent's keep (養老契約): the holding handed to the heir in the manor court for written terms.

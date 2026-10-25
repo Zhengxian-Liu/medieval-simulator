@@ -656,7 +656,13 @@ void World::famineAsk() {
         log(1, title + cardText("famine.done_keep", v) + "（選擇：囤著）");
         addOpinion(oh.head, head, "refused_loan", -8, 8);
     }
-    if (rival) noteClash(ph.id, oh.id, cardText("clash.famine", {{"name", fullName(oh.head)}}));
+    if (rival) {
+        noteClash(ph.id, oh.id, cardText("clash.famine", {{"name", fullName(oh.head)}}));
+        // The rival's own house at the family's door for bread: a head-on meeting of the generation (fun-r11 6).
+        rival_.headOn = day_;
+        ++rival_.headOns;
+        ++counters_["rival_head_on"];
+    }
 }
 
 // ---- 宿敵趁你弱時出手 ----------------------------------------------------------------------------
@@ -772,103 +778,145 @@ void World::rivalStrike() {
     noteClash(ph.id, rh, cardText(kind == 0 ? "clash.lease" : "clash.price", v) + (yes ? "：他家得手" : "：你家沒讓"));
 }
 
-// ---- 正面撞上：宿敵在地、親事上跟你家搶 (fun-r11 6) -------------------------------------------------------
-// Once in a while (and at least once a generation, as a rule) the rival does not wait for the family to be down:
-// he goes after the same thing the family is after, the match it is making or a field a neighbour has to sell.
+// ---- 正面撞上：宿敵在地、親事、糧上跟你家搶 (fun-r11 6) ---------------------------------------------------
+// The rival does not only wait for the family to be down: now and then, and at least once a generation (from the
+// third year of the rivalry he looks for it most months), he goes after the same thing the family is after: the match
+// it is making (with a matchmaker of his own, a race), a field a neighbour has to sell, or a neighbour's spare grain
+// in a year the family is short. A rival come begging grain in a famine (famineCall) counts as one too.
 
 void World::rivalHeadOn() {
     const Id rh = rivalHouse();
     if (rh == kNone || playerHousehold_ == kNone || day_ < handedOver_ + kDaysPerYear) return;
-    if (rival_.headOn >= 0 && day_ - rival_.headOn < 6 * kDaysPerYear) return;
+    if (rival_.headOn >= 0 && day_ - rival_.headOn < 3 * kDaysPerYear) return;
     const Id head = actingHead();
-    if (head == kNone || people_[head].flags.count("plague_shelter")) return;
-    if (!rngContest_.chance(0.06)) return;
+    if (head == kNone || people_[head].flags.count("plague_shelter") || households_[rh].head == kNone) return;
+    const bool owed = rival_.headOns == 0 && day_ - std::max(rival_.since, handedOver_) >= 2 * kDaysPerYear;
+    if (!rngContest_.chance(owed ? 0.3 : 0.05)) return;
+    if (rivalMatch(rh) || rivalLand(rh, owed) || rivalGrain(rh)) {
+        rival_.headOn = day_;
+        ++rival_.headOns;
+        ++counters_["rival_head_on"];
+    }
+}
+
+// A match the family is making, and a son or daughter of his of an age for the same match: he sends a matchmaker of
+// his own (a plan of his, racing the family's), and the family is asked what it does about it.
+bool World::rivalMatch(Id rh) {
+    const Id head = actingHead();
     Household& ph = households_[playerHousehold_];
-    Household& rv = households_[rh];
-    const std::string them = fullName(rv.head), surname = dynasties_[rival_.dynasty].surname + "家";
-    // A match the family is making, and a son or daughter of his of an age for the same match.
-    for (auto& ap : plans_) {
-        if (ap.plan != "arrange_match" || ap.subject == kNone || ap.target == kNone || !inPlayerHouse(people_[ap.actor].household)) continue;
-        const Person& t = people_[ap.target];
-        if (!t.alive() || t.household == kNone || t.household == rh) continue;
+    const std::string surname = dynasties_[rival_.dynasty].surname + "家";
+    for (size_t i = 0; i < plans_.size(); ++i) {
+        const ActivePlan& ap0 = plans_[i];
+        if (ap0.plan != "arrange_match" || ap0.aborted || ap0.subject == kNone || ap0.target == kNone || !inPlayerHouse(people_[ap0.actor].household)) continue;
+        const Person& t = people_[ap0.target];
+        if (!t.alive() || t.household == kNone || t.household == rh || households_[t.household].head == kNone) continue;
         Id cand = kNone;
-        for (Id m : rv.members) {
+        for (Id m : households_[rh].members) {
             const Person& q = people_[m];
-            if (q.sex == t.sex || !marriageable(q) || ageYears(q) < 15 || ageYears(q) > 35 || closeKin(m, ap.target)) continue;
+            if (q.sex == t.sex || !marriageable(q) || ageYears(q) < 15 || ageYears(q) > 35 || closeKin(m, ap0.target)) continue;
             if (cand == kNone || std::abs(ageYears(q) - ageYears(t)) < std::abs(ageYears(people_[cand]) - ageYears(t))) cand = m;
         }
         if (cand == kNone) continue;
-        rival_.headOn = day_;
+        const Id target = ap0.target, subject = ap0.subject, th = households_[t.household].head;
+        const double ours = ap0.progress;
+        // His matchmaker starts where the family's has got to: from here it is a race (the first to settle has the match).
+        const double his = std::max(ours, 30.0);
         const double gift = std::min(40.0, std::floor(std::max(0.0, ph.money) * 0.2));
-        const Id th = households_[t.household].head;
-        const double op = th != kNone ? opinion(th, head) : 0;
-        const std::string sit = surname + "也託了媒人去 " + fullName(th) + " 家，替 " + fullName(cand) + " 說 " + fullName(ap.target) + "。你家替 " +
-                                shortName(ap.subject) + " 說的這門親，眼看要被搶走（" + fullName(th) + " 對你家 " + std::to_string(int(std::lround(op))) + "）。";
+        const double op = opinion(th, head);
+        const int lift = op >= 20 ? 30 : op >= 0 ? 12 : 0;
+        const std::string sit = surname + "也託了媒人去 " + fullName(th) + " 家，替 " + fullName(cand) + " 說 " + fullName(target) + "。誰家先談妥，親事就歸誰：你家替 " +
+                                shortName(subject) + " 已經談到 " + num(ours) + " 成（滿 100 成事），他家一上門就談到 " + num(his) + "。（" + fullName(th) + " 對你家 " +
+                                std::to_string(int(std::lround(op))) + "）";
         std::vector<std::string> opts;
         std::vector<int> what;
-        if (gift >= 10) opts.push_back("多添 " + num(gift) + " 便士的禮，把親事搶下來（錢 " + num(ph.money) + " → " + num(ph.money - gift) + "；" + surname + "會記恨）"), what.push_back(0);
-        opts.push_back("託人去 " + fullName(th) + " 家說情（不花錢；他家跟你家越親近越有用）"), what.push_back(1);
-        opts.push_back("讓給" + surname + "，這門親就算了"), what.push_back(2);
+        if (gift >= 10)
+            opts.push_back("多添 " + num(gift) + " 便士的禮（錢 " + num(ph.money) + " → " + num(ph.money - gift) + "；你家這邊 +45 成，" + surname + "會記恨）"), what.push_back(0);
+        opts.push_back("託人去 " + fullName(th) + " 家說情（不花錢；照他家對你家的交情，你家這邊 +" + std::to_string(lift) + " 成）"), what.push_back(1);
+        opts.push_back("讓給" + surname + "（你家的媒人不再上門，這門親由他家去談）"), what.push_back(2);
         int r = askPlayer("宿敵搶親", sit, opts);
         if (r < 0) r = static_cast<int>(opts.size()) - 2;  // the family's ways: ask a friend to speak, spend nothing
         const int w = what[r];
         std::string line = "〔宿敵搶親〕" + sit + "（選擇：" + opts[r].substr(0, opts[r].find("（")) + "）";
+        ActivePlan& ap = plans_[i];
         if (w == 0) {
             ph.money -= gift, book(ph, "說親添的禮", -gift);
             ap.progress += 45;
-            addOpinion(rv.head, head, "rival_outbid", -8, 8);
-            line += "禮送到了，" + fullName(th) + " 家的口氣鬆了。";
-            noteClash(ph.id, rh, "搶 " + fullName(ap.target) + " 的親事：你家多添了禮");
+            addOpinion(households_[rh].head, head, "rival_outbid", -8, 8);
+            line += "禮送到了，" + fullName(th) + " 家的口氣鬆了：你家這邊談到 " + num(ap.progress) + " 成，他家 " + num(his) + "。";
+            noteClash(ph.id, rh, "搶 " + fullName(target) + " 的親事：你家多添了禮");
         } else if (w == 1) {
-            ap.progress += op >= 20 ? 30 : op >= 0 ? 12 : 0;
-            line += op >= 20 ? fullName(th) + " 家念著跟你家的交情，答應再等等你家的媒人。" : "說了情，" + fullName(th) + " 家只說要再想想。";
-            noteClash(ph.id, rh, "搶 " + fullName(ap.target) + " 的親事：你家託人說情");
+            ap.progress += lift;
+            line += (lift >= 30 ? fullName(th) + " 家念著跟你家的交情，答應再等等你家的媒人" : lift > 0 ? "說了情，" + fullName(th) + " 家只說要再想想"
+                                                                                                   : fullName(th) + " 家跟你家不親，說情沒用") +
+                    "：你家這邊談到 " + num(ap.progress) + " 成，他家 " + num(his) + "。";
+            noteClash(ph.id, rh, "搶 " + fullName(target) + " 的親事：你家託人說情");
         } else {
             ap.aborted = true;
-            line += "你家的媒人不再上門了。";
-            noteClash(ph.id, rh, "搶 " + fullName(ap.target) + " 的親事：讓給了他家");
+            line += "你家的媒人不再上門了，" + surname + "的媒人接著談。";
+            noteClash(ph.id, rh, "搶 " + fullName(target) + " 的親事：讓給了他家");
         }
         log(1, line);
-        return;
+        // His own plan, racing the family's (ap is not used from here: plans_ may grow).
+        const Id rhead = households_[rh].head;
+        bool started = false;
+        for (auto& p : plans_)
+            if (p.actor == rhead && p.plan == "arrange_match") started = true;
+        if (!started) {
+            plans_.push_back({rhead, target, cand, "arrange_match", his, day_, {}});
+            ++counters_["plan:arrange_match:start"];
+        }
+        return true;
     }
-    // A neighbour with a field to sell: the rival has bid for it, and the family is asked first whether to stand aside.
+    return false;
+}
+
+// A neighbour with a field to sell: the rival has bid for it, and the family is asked first whether to stand aside.
+bool World::rivalLand(Id rh, bool owed) {
+    const Id head = actingHead();
+    Household& ph = households_[playerHousehold_];
+    Household& rv = households_[rh];
+    const std::string surname = dynasties_[rival_.dynasty].surname + "家";
     Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
     std::vector<Id> sellers;
+    // (A field that has to go, or, when he is owed his clash, any holding whose purse is near empty.)
     for (const auto& o : households_)
-        if (!o.extinct && o.head != kNone && o.id != rh && o.id != lordHouse && !inPlayerHouse(o.id) && o.acres >= 8 &&
-            people_[o.head].occupation != "priest" && !sellReason(o).empty())
+        if (!o.extinct && o.head != kNone && o.id != rh && o.id != lordHouse && !inPlayerHouse(o.id) && o.acres >= (owed ? 6 : 8) &&
+            people_[o.head].occupation != "priest" && (!sellReason(o).empty() || (owed && o.money < 60)))
             sellers.push_back(o.id);
-    if (sellers.empty()) return;
+    if (sellers.empty()) return false;
     Household& sh = households_[sellers[rngContest_.range(0, static_cast<int>(sellers.size()) - 1)]];
     const double acres = std::min(4.0, std::floor(sh.acres / 4));
     const double value = std::round(acres * kAcreValue), bid = std::round(value * 1.25);
-    if (acres < 2 || rv.money < value + 20 || ph.money < value + 20) return;
-    rival_.headOn = day_;
+    if (acres < 1 || rv.money < value || ph.money < value + 20) return false;
+    const std::string why = sellReason(sh).empty() ? std::string("手頭緊") : sellReason(sh);
     const double op = opinion(sh.head, head);
     const std::string seller = fullName(sh.head);
-    const std::string sit = seller + " 家" + sellReason(sh) + "，要賣 " + num(acres) + " 畝地。" + surname + "搶先出了 " + num(value) + " 便士，" + seller +
-                            "還沒點頭。（" + seller + " 對你家 " + std::to_string(int(std::lround(op))) + "；你家有 " + num(ph.money) + " 便士。）";
+    const int chance = static_cast<int>(std::lround(std::clamp(0.3 + op / 100, 0.1, 0.9) * 100));
+    const std::string sit = seller + " 家" + why + "，要賣 " + num(acres) + " 畝地。" + surname + "搶先出了 " + num(value) + " 便士，" + seller +
+                            "還沒點頭。讓給他，這 " + num(acres) + " 畝就歸" + surname + "。（" + seller + " 對你家 " + std::to_string(int(std::lround(op))) + "；你家有 " +
+                            num(ph.money) + " 便士、" + num(ph.acres) + " 畝地，" + surname + " " + num(rv.acres) + " 畝。）";
     std::vector<std::string> opts;
     std::vector<int> what;
     if (ph.money >= bid + 20) opts.push_back("出得比他高：" + num(bid) + " 便士買下（錢 " + num(ph.money) + " → " + num(ph.money - bid) + "；" + surname + "會記恨）"), what.push_back(0);
-    opts.push_back("去求 " + seller + " 看在交情上照他的價賣給你家（" + num(value) + " 便士；成不成看他跟你家多親近）"), what.push_back(1);
-    opts.push_back("讓給" + surname), what.push_back(2);
+    opts.push_back("去求 " + seller + " 看在交情上照他的價賣給你家（" + num(value) + " 便士；約 " + std::to_string(chance) + "% 肯，不肯就歸" + surname + "）"), what.push_back(1);
+    opts.push_back("讓給" + surname + "（地歸他家，你家不花錢）"), what.push_back(2);
     int r = askPlayer("宿敵搶地", sit, opts);
     if (r < 0) r = static_cast<int>(opts.size()) - 1;  // the family's ways: not into a bidding war
     const int w = what[r];
     std::string line = "〔宿敵搶地〕" + sit + "（選擇：" + opts[r].substr(0, opts[r].find("（")) + "）";
     auto sell = [&](Household& buyer, double price, const std::string& who) {
         double got = moveLand(sh.id, buyer.id, acres, LandPick::CustomaryFirst, "買來");
-        buyer.money -= price, book(buyer, "買地", -price);
-        sh.money += price, book(sh, "賣地", price);
-        return who + "用 " + num(price) + " 便士買下了 " + num(got) + " 畝。";
+        const double paid = std::round(price * got / acres);  // for the acres that actually changed hands (review L4)
+        buyer.money -= paid, book(buyer, "買地", -paid);
+        sh.money += paid, book(sh, "賣地", paid);
+        return who + "用 " + num(paid) + " 便士買下了 " + num(got) + " 畝。";
     };
     bool ours = false;
     if (w == 0) {
         line += sell(ph, bid, "你家");
         ours = true;
         addOpinion(rv.head, head, "rival_outbid", -8, 8);
-    } else if (w == 1 && rngContest_.chance(std::clamp(0.3 + op / 100, 0.1, 0.9))) {
+    } else if (w == 1 && rngContest_.chance(chance / 100.0)) {
         line += seller + " 念著跟你家的交情，" + sell(ph, value, "你家");
         ours = true;
         addOpinion(rv.head, head, "rival_outbid", -5, 6);
@@ -877,6 +925,73 @@ void World::rivalHeadOn() {
     }
     log(1, line);
     noteClash(ph.id, rh, "搶買 " + seller + " 家的 " + num(acres) + " 畝：" + (ours ? "你家得手" : "他家得手"));
+    return true;
+}
+
+// A short year for the family, and a neighbour with grain to spare: the rival has offered for all of it.
+bool World::rivalGrain(Id rh) {
+    const Id head = actingHead();
+    Household& ph = households_[playerHousehold_];
+    Household& rv = households_[rh];
+    const std::string surname = dynasties_[rival_.dynasty].surname + "家";
+    const double ourDaily = std::max(0.5, consumption(ph));
+    if (foodDays(ph) >= std::max(150.0, daysToHarvest() + 60.0)) return false;  // the family is not short: no fight over grain
+    Id lordHouse = lord_ != kNone ? people_[lord_].household : kNone;
+    Id best = kNone;
+    double most = 0;
+    for (const auto& o : households_) {
+        if (o.extinct || o.head == kNone || o.id == rh || o.id == lordHouse || inPlayerHouse(o.id) || people_[o.head].occupation == "priest") continue;
+        const double spare = o.food - std::max(0.5, consumption(o)) * (daysToHarvest() + 90);
+        if (spare > most) most = spare, best = o.id;
+    }
+    const double grain = std::min(most, ourDaily * 90);
+    if (best == kNone || grain < ourDaily * 30) return false;
+    Household& sh = households_[best];
+    const double price = param("grain_price", 0.5);
+    const double value = std::round(grain * price), bid = std::round(value * 1.3);
+    if (rv.money < value || ph.money < value + 10) return false;
+    const double op = opinion(sh.head, head);
+    const int chance = static_cast<int>(std::lround(std::clamp(0.3 + op / 100, 0.1, 0.9) * 100));
+    const std::string seller = fullName(sh.head);
+    const int days = static_cast<int>(grain / ourDaily);
+    const std::string sit = "你家的糧只夠吃 " + num(foodDays(ph)) + " 天，離秋收還有 " + std::to_string(daysToHarvest()) + " 天。" + seller + " 家倉裡有多的麥子（夠你家吃 " +
+                            std::to_string(days) + " 天），" + surname + "搶先出了 " + num(value) + " 便士要全買下。讓給他，這批糧就進了" + surname + "的倉。（" + seller +
+                            " 對你家 " + std::to_string(int(std::lround(op))) + "；你家有 " + num(ph.money) + " 便士。）";
+    std::vector<std::string> opts;
+    std::vector<int> what;
+    if (ph.money >= bid + 10)
+        opts.push_back("出得比他高：" + num(bid) + " 便士買下（錢 " + num(ph.money) + " → " + num(ph.money - bid) + "；存糧 " + num(foodDays(ph)) + " → " +
+                       num(foodDays(ph) + days) + " 天；" + surname + "會記恨）"),
+            what.push_back(0);
+    opts.push_back("去求 " + seller + " 照他的價賣給你家（" + num(value) + " 便士；約 " + std::to_string(chance) + "% 肯，不肯就歸" + surname + "）"), what.push_back(1);
+    opts.push_back("讓給" + surname + "（不花錢，存糧照舊 " + num(foodDays(ph)) + " 天，到時候再去市集買）"), what.push_back(2);
+    int r = askPlayer("宿敵搶糧", sit, opts);
+    if (r < 0) r = static_cast<int>(opts.size()) - 2;  // the family's ways: ask, at the fair price
+    const int w = what[r];
+    std::string line = "〔宿敵搶糧〕" + sit + "（選擇：" + opts[r].substr(0, opts[r].find("（")) + "）";
+    auto sell = [&](Household& buyer, double paid, const std::string& who) {
+        sh.food -= grain, bookFood(sh, "賣糧", -grain);
+        buyer.food += grain, bookFood(buyer, "買糧", grain);
+        buyer.money -= paid, book(buyer, "買糧", -paid);
+        sh.money += paid, book(sh, "賣餘糧", paid);
+        return who + "用 " + num(paid) + " 便士買下了這批糧。";
+    };
+    bool ours = false;
+    if (w == 0) {
+        line += sell(ph, bid, "你家");
+        ours = true;
+        addOpinion(rv.head, head, "rival_outbid", -8, 8);
+    } else if (w == 1 && rngContest_.chance(chance / 100.0)) {
+        line += seller + " 念著跟你家的交情，" + sell(ph, value, "你家");
+        ours = true;
+        addOpinion(rv.head, head, "rival_outbid", -5, 6);
+    } else {
+        line += (w == 1 ? seller + " 搖了頭：「" + surname + "的錢先到。」" : std::string()) + sell(rv, value, surname);
+    }
+    if (ours) line += "如今你家的糧夠吃 " + num(foodDays(ph)) + " 天。";
+    log(1, line);
+    noteClash(ph.id, rh, "搶買 " + seller + " 家的餘糧：" + std::string(ours ? "你家得手" : "他家得手"));
+    return true;
 }
 
 // ---- 抵押與租約到期 ------------------------------------------------------------------------------

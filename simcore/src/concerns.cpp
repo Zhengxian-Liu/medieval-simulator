@@ -757,6 +757,7 @@ void World::giveParcelTo(Id parcel, Id house, Id giver) {
     // A sack or two to see them to the harvest the land will bring.
     Household& ph = households_[playerHousehold_];
     double bridge = std::min(consumption(h) * 30, std::max(0.0, ph.food - consumption(ph) * 120));
+    if (bridge < std::max(0.5, consumption(h)) * 7) bridge = 0;  // not a few days' crumbs (the card says none is sent)
     ph.food -= bridge;
     h.food += bridge;
     feedHouse(h);
