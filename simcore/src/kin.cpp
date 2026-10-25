@@ -69,12 +69,71 @@ double World::dowerOf(const Household& h, Id head, Id heir) const {
     return std::round(h.acres / 3);
 }
 
+bool World::namedHeirStands(const Household& h, Id x) const {
+    if (x == kNone || !people_[x].alive() || people_[x].flags.count("felon")) return false;
+    const Person& q = people_[x];
+    const StationDef* sd = defs_.station(q.station);
+    if (q.occupation == "priest" || (sd && sd->lasting)) return false;
+    if (q.household == h.id || q.home == h.id || (isAway(q) && q.awayFrom == h.id)) return true;
+    // Set up in a house of his own in the village: he comes back to the holding with his household (onHeadDied).
+    return q.household != kNone && !households_[q.household].extinct && households_[q.household].head == x && households_[q.household].house != "manor";
+}
+
+Id World::planHeir(const Household& h, Id head, const std::string& by, Id named) const {
+    if (by == "named" && namedHeirStands(h, named)) return named;
+    Household custom = h;  // heirOf by custom alone, without the court's naming
+    custom.passBy.clear(), custom.passHeir = kNone;
+    return heirOf(custom, head);
+}
+
+World::SettleTerms World::settleTerms(Id hid, double want, double money) const {
+    SettleTerms t;
+    t.vac = std::min(vacantAcres(), want);
+    t.own = std::clamp(want - t.vac, 0.0, std::max(0.0, households_[hid].acres - 8));
+    if (t.vac + t.own < 2) t.vac = t.own = 0;  // no land to rent or spare: a cottage and its garden, and day labour
+    t.gift = std::min(money, std::max(0.0, households_[hid].money));
+    return t;
+}
+
+bool World::askSettleSon(Id hid, Id son, double want, double money) {
+    if (!inPlayerHouse(hid) || son == kNone || people_[son].household != hid || households_[hid].head == son) return true;
+    const Household& ph = households_[hid];
+    const SettleTerms t = settleTerms(hid, want, money);
+    const Person& sub = people_[son];
+    // fun-r9 (seed 118): the price is said before the son goes, not found in a 「·」 line after (8 acres).
+    std::string sit = "給 " + fullName(son) + " 分家：" +
+                      (t.vac + t.own < 2 ? std::string("村裡沒有空地，自家的地也分不出來，只能給他一間小屋和屋後的菜園，靠做工過活；")
+                                         : (t.vac >= 1 ? "向領主租村裡的空地 " + n0(t.vac) + " 畝" : std::string()) + (t.vac >= 1 && t.own >= 1 ? "、" : "") +
+                                               (t.own >= 1 ? "從自家的地分出 " + n0(t.own) + " 畝" : std::string()) + "；") +
+                      (t.gift >= 1 ? "再給 " + n0(t.gift) + " 便士起家。" : "家裡拿不出錢給他起家。") + "你家的地從 " + n0(ph.acres) + " 畝剩 " + n0(ph.acres - t.own) +
+                      " 畝（平常年景收的糧夠家裡吃 " + n0(keepsHouse(ph.acres - t.own) / std::max(1.0, consumption(ph) * kDaysPerMonth)) + " 個月，" + sub.firstName +
+                      "一家搬走後少幾張嘴）" + (t.gift >= 1 ? "，錢從 " + n0(ph.money) + " 剩 " + n0(ph.money - t.gift) + " 便士" : "") + "。";
+    if (son == planHeir(ph, ph.head, ph.passBy, ph.passHeir)) sit += sub.firstName + "是繼承人：分出去自立門戶，就不再接這個家的家業。";
+    std::string cost;
+    if (t.own >= 1) cost += "地 −" + n0(t.own) + " 畝";
+    if (t.gift >= 1) cost += (cost.empty() ? "" : "，") + std::string("錢 −") + n0(t.gift);
+    std::vector<std::string> opts = {"照這樣分" + (cost.empty() ? std::string() : "（" + cost + "）")};
+    if (t.own >= 1)
+        opts.push_back(t.vac >= 1 ? "只給錢和村裡的空地，自家的地不動（" + n0(t.vac) + " 畝空地" + (t.gift >= 1 ? "、" + n0(t.gift) + " 便士" : "") + "）"
+                                  : "自家的地不動，" + std::string(t.gift >= 1 ? "只給 " + n0(t.gift) + " 便士，" : "") + "讓他靠做工過活");
+    opts.push_back("先不分了");
+    int r = askPlayer("分家", sit, opts);
+    if (r == static_cast<int>(opts.size()) - 1) {
+        log(1, "〔分家〕" + sub.firstName + "的分家先擱下了。（選擇：先不分了）");
+        return false;
+    }
+    if (r == 1 && t.own >= 1) settleNoOwn_.insert(son);
+    return true;
+}
+
 std::vector<World::Share> World::passPlan(const Household& h, Id head, const std::string& by, const std::string& younger, Id named) const {
     std::vector<Share> out;
     std::vector<Id> sons = sonsOf(h, head);
     if (sons.empty()) return out;
-    Id heir = sons[0];
-    if (by == "named" && named != kNone && people_[named].alive() && !people_[named].flags.count("felon")) heir = named;
+    // The same heir the succession will find (round 10 H1): a son already set up in a house of his own has had his
+    // share and is not the heir by custom; a chosen heir counts while that choice stands.
+    const Id heir = planHeir(h, head, by, named);
+    if (heir == kNone) return out;
     double land = h.acres - dowerOf(h, head, heir), money = std::max(0.0, h.money);
     std::vector<Id> ys;  // the grown younger sons, in line for a provision
     for (Id s : sons)
@@ -94,7 +153,7 @@ std::vector<World::Share> World::passPlan(const Household& h, Id head, const std
             if (how == "portion" && portion >= 1) {
                 out.push_back({s, portion, 0, "portion"});
                 hs.acres -= portion;
-            } else if (how == "trade" && ageYears(q) <= 25 && q.spouse == kNone && money - (hs.money - money) >= 0) {
+            } else if (how == "trade" && ageYears(q) <= 25 && q.spouse == kNone && std::min(20.0, hs.money) >= 1) {
                 out.push_back({s, 0, std::min(20.0, hs.money), "trade"});
                 hs.money -= out.back().money;
             } else {
@@ -105,7 +164,7 @@ std::vector<World::Share> World::passPlan(const Household& h, Id head, const std
     } else {
         // A chosen heir takes it all; the other grown sons (the eldest has his own grievance) get nothing.
         for (Id s : ys)
-            if (s != sons[0]) out.push_back({s, 0, 0, "none"});
+            if (s != sons[0] || heir == sons[0]) out.push_back({s, 0, 0, "none"});
     }
     out.insert(out.begin(), hs);
     return out;
@@ -115,31 +174,48 @@ std::string World::passWords(const Household& h, Id head, const std::string& by,
     std::vector<Share> plan = passPlan(h, head, by, younger, named);
     if (plan.empty()) return "";
     std::vector<Id> sons = sonsOf(h, head);
-    std::string out = shortName(plan[0].who) + (plan[0].who == sons[0] ? "（長子）" : "") + "繼承 " + n0(plan[0].acres) + " 畝和房子";
-    std::vector<std::string> sore;
+    const Id heir = plan[0].who;
+    std::string out = shortName(heir) + (heir == sons[0] ? "（長子）" : "") + "繼承 " + n0(plan[0].acres) + " 畝和房子";
+    std::vector<std::string> sore, onlyCash;
     const double fair = (h.acres + std::max(0.0, h.money) / 60) / std::max<size_t>(1, sons.size());
+    auto ownHouse = [&](Id x) {
+        const Id sh = people_[x].household;
+        return sh != kNone && sh != h.id && households_[sh].head == x;
+    };
     for (size_t i = 1; i < plan.size(); ++i) {
         const Share& s = plan[i];
         std::string nm = shortName(s.who);
-        const Id sh = people_[s.who].household;
-        const bool own = sh != kNone && sh != h.id && households_[sh].head == s.who;
-        if (s.what == "cash") out += "；" + nm + "拿 " + n0(s.money) + " 便士" + (own ? "（他已經自立門戶）" : people_[s.who].spouse != kNone || ageYears(people_[s.who]) >= 21 ? "，搬去村邊小屋做工過活" : "，出去謀生") +
-                                     (younger == "trade" ? "（成了家或過了學藝的年紀，只能給錢）" : "");
-        else if (s.what == "none") out += "；" + nm + "什麼也分不到";
+        const bool own = ownHouse(s.who);
+        if (s.what == "cash") {
+            out += "；" + nm + (s.money >= 1 ? "拿 " + n0(s.money) + " 便士" : "什麼也分不到（家裡沒錢）") +
+                   (own ? "（他已經自立門戶）" : people_[s.who].spouse != kNone || ageYears(people_[s.who]) >= 21 ? "，搬去村邊小屋做工過活" : "，出去謀生");
+            if (younger == "trade") onlyCash.push_back(nm);
+        } else if (s.what == "none") out += "；" + nm + "什麼也分不到";
         else if (s.what == "trade") out += "；" + nm + "帶 " + n0(s.money) + " 便士拜師錢去鎮上學手藝";
         else out += "；" + nm + "分 " + n0(s.acres) + (own ? " 畝，併進他自己家" : " 畝自立門戶");
-        if (s.acres + s.money / 60 < fair * 0.6) sore.push_back(nm);
+        if (s.acres + s.money / 60 < fair * 0.6 && !(s.who == sons[0] && by == "named")) sore.push_back(nm);
     }
-    // The eldest passed over, or left with a share: he is sore too.
-    if (plan[0].who != sons[0]) sore.insert(sore.begin(), shortName(sons[0]) + "（長子，什麼也分不到）");
-    else if (by == "split" && sons.size() >= 2) sore.insert(sore.begin(), shortName(sons[0]) + "（長子，照習俗該全拿，平分只得 1/" + std::to_string(sons.size()) + "）");
+    if (!onlyCash.empty()) {
+        std::string who;
+        for (const auto& x : onlyCash) who += (who.empty() ? "" : "、") + x;
+        out += "（" + who + "成了家或過了學藝的年紀，只能給錢）";
+    }
+    // The eldest passed over, or left with a share: he is sore too. One already set up on his own is not the heir.
+    if (heir != sons[0]) {
+        if (by == "named") sore.insert(sore.begin(), shortName(sons[0]) + "（長子，什麼也分不到）");
+        else if (ownHouse(sons[0])) out += "；長子" + shortName(sons[0]) + "已經分出去自立門戶，不接這份家業";
+    } else if (by == "split" && sons.size() >= 2) {
+        sore.insert(sore.begin(), shortName(sons[0]) + "（長子，照習俗該全拿，平分只得 1/" + std::to_string(sons.size()) + "）");
+    }
+    if (by == "named" && named != kNone && heir != named) out += "；立的繼承人" + shortName(named) + "已經不在，照習俗改由" + shortName(heir) + "接";
     for (Id s : sons)
-        if (ageYears(people_[s]) < 16 && s != plan[0].who) {
-            out += "；" + shortName(s) + (by == "split" && sons.size() >= 2 ? "還小，照平分本該有約 " + n0(std::floor((h.acres - dowerOf(h, head, plan[0].who)) / sons.size())) + " 畝，可交班時沒成年，地先留在哥哥手裡" : "還小，暫時什麼也分不到");
+        if (ageYears(people_[s]) < 16 && s != heir) {
+            out += "；" + shortName(s) + (by == "split" && sons.size() >= 2 ? "還小，照平分本該有約 " + n0(std::floor((h.acres - dowerOf(h, head, heir)) / sons.size())) + " 畝，可交班時沒成年，地先留在哥哥手裡" : "還小，暫時什麼也分不到");
             break;
         }
-    if (double d = dowerOf(h, head, plan[0].who); d > 0) out += "；後母" + shortName(people_[head].spouse) + "守寡帶走三分之一（" + n0(d) + " 畝），她死了才回來";
-    return out + (sore.empty() ? "。" : "。會不滿的：" + [&] { std::string s; for (const auto& x : sore) s += (s.empty() ? "" : "、") + x; return s; }() + "。");
+    if (double d = dowerOf(h, head, heir); d > 0)
+        out += "；" + shortName(people_[head].spouse) + "不是 " + shortName(heir) + " 的親娘，守寡時帶走三分之一（" + n0(d) + " 畝），她死了才回來";
+    return out + (sore.empty() ? "。" : "。會不滿的：" + [&] { std::string x; for (const auto& y : sore) x += (x.empty() ? "" : "、") + y; return x; }() + "。");
 }
 
 std::string World::inheritText() const {
@@ -148,13 +224,17 @@ std::string World::inheritText() const {
     Id head = playerHead();
     std::string t;
     std::vector<Id> sons = sonsOf(h, head);
+    const Id heir = planHeir(h, head, h.passBy, h.passHeir);
     const char* how = h.passBy == "split" ? "兒子們平分" : h.passBy == "named" ? "立了繼承人" : h.passBy == "eldest" ? "長子繼承" : "照習俗（長子繼承，弟弟們給幾個錢）";
     if (sons.size() >= 2) t = std::string(how) + "：" + passWords(h, head, h.passBy, h.passYounger, h.passHeir);
-    else if (Id heir = heirOf(h, head); heir != kNone) t = "家業歸 " + shortName(heir) + "。";
+    else if (heir != kNone) t = "家業歸 " + shortName(heir) + "。";
     Id w = people_[head].spouse;
-    if (w != kNone && people_[w].alive() && people_[w].household == h.id && h.acres >= 3)
-        t += "寡婦產：你死後，" + shortName(w) + "終身有三分之一的地（約 " + n0(std::round(h.acres / 3)) + " 畝）" +
-             (sons.empty() || people_[sons[0]].mother == w ? "，跟著兒子住就照舊一起種，改嫁就帶走。" : "，繼承人不是她生的，她會帶著地搬出去。");
+    // The widow's third, said once: passWords says it when it leaves the house; here only when it stays on paper.
+    if (w != kNone && people_[w].alive() && people_[w].household == h.id && h.acres >= 3 && dowerOf(h, head, heir) <= 0)
+        t += "寡婦產：你死後，" + shortName(w) + "終身有三分之一的地（約 " + n0(std::round(h.acres / 3)) + " 畝），跟著兒子住就照舊一起種，改嫁就帶走。";
+    for (const auto& d : dowers_)
+        if (d.open && d.in == h.id && people_[d.widow].alive())
+            t += "寡婦產：" + shortName(d.widow) + "守著 " + n0(d.acres) + " 畝，改嫁就帶走，她死了才" + (d.from == h.id ? "算回家裡的" : "回到前夫家") + "。";
     const double rep = people_[head].reputation;
     t += "名聲：交班時家名傳一半（你現在 " + sgn(rep) + "，繼承人接手時加上 " + sgn(rep * param("rep_carry", 0.5)) + "）。";
     return t;
@@ -212,8 +292,10 @@ void World::settlePassing(Household& h, bool change) {
             double x = 0;
             if (o.by == "eldest" && o.younger == "cash") x = 40 + (hasTrait(hp, "greedy") ? 12 : 0);
             else if (o.by == "eldest" && o.younger == "trade") x = 10 + (h.money >= 80 ? 8 : 0) + (hasTrait(hp, "ambitious") ? 6 : 0);
-            else if (o.by == "eldest") x = 14 + (hasTrait(hp, "kind") ? 10 : 0) + (h.acres >= 25 ? 8 : 0);
-            else if (o.by == "split") x = 8 + (hasTrait(hp, "kind") ? 8 : 0) + (hasTrait(hp, "generous") ? 8 : 0);
+            // Villein land went whole to one heir by the custom of the manor: carving it up was rare, for a big holding
+            // and a soft-hearted father (round 10: at 14/8 the 25-year pre-run broke the village into cottages).
+            else if (o.by == "eldest") x = 3 + (hasTrait(hp, "kind") ? 3 : 0) + (h.acres >= 25 ? 6 : 0);
+            else if (o.by == "split") x = 0.5 + (hasTrait(hp, "kind") ? 1 : 0) + (hasTrait(hp, "generous") ? 1 : 0);
             else if (o.by == "named" && h.money >= fine + fee + 20) {
                 double gap = opinion(head, o.named) - opinion(head, sons[0]);
                 x = gap > 40 ? 18 + (gap - 40) * 0.4 + (hasTrait(hp, "wrathful") || hasTrait(hp, "cruel") ? 8 : 0) : 0;
@@ -286,29 +368,43 @@ Id World::setUpSon(Id hid, Id son, double own, double vac, double money, const s
     }
     fresh.head = son;
     settleAsHead(son);
+    // What he had of his own under his father's roof goes with him.
+    for (Id who : going)
+        if (auto it = purse_.find(who); it != purse_.end()) {
+            fresh.money += it->second.money, book(fresh, "帶出來的私房錢", it->second.money);
+            purse_.erase(it);
+        }
     double food = std::min(old.food * 0.3, consumption(fresh) * 120);
     fresh.food = food;
     old.food -= food;
     fresh.firewood = 20;
     noteLife(son, "分家自立門戶");
-    if (inPlayerHouse(hid))
+    if (inPlayerHouse(hid) && !quietSetUp_)
         log(1, "【分家】" + fullName(son) + (wife && kids ? " 帶著妻兒" : wife ? " 帶著妻子" : kids ? " 帶著孩子" : " 一個人") + "搬出去，自立門戶：" +
                    (fresh.acres < 0.5 ? std::string("沒有地，只有屋後一塊菜園，靠做工過活；") : n0(fresh.acres) + " 畝地（" + (own >= 1 ? "自家分出 " + n0(own) + " 畝" : std::string("向領主租的")) + "）、") +
                    n0(gift) + " 便士。你家剩 " + n0(old.acres) + " 畝。往後他家是另一戶，可還是你家的血脈。");
     return nh;
 }
 
-void World::applyPassing(Household& hRef, Id dead, Id heir) {
+void World::applyPassing(Household& hRef, Id dead, Id heir, bool living) {
     const Id hid = hRef.id;
     const std::string by = hRef.passBy, younger = hRef.passYounger;
     const Id named = hRef.passHeir;
     hRef.passBy.clear(), hRef.passYounger.clear(), hRef.passHeir = kNone, hRef.passSince = -1;
     const bool player = inPlayerHouse(hid);
     const Id line = households_[hid].ward != kNone ? households_[hid].ward : heir;  // the one the house is for
+    // On the footing the card showed (round 10 M4): the widow's third is reckoned first, on the holding as it stands,
+    // and the sons' shares (passPlan) come out of the rest.
+    const double third = households_[hid].acres >= 3 ? std::round(households_[hid].acres / 3) : 0;
     std::vector<Id> sons = sonsOf(households_[hid], dead);
     std::vector<Share> plan = passPlan(households_[hid], dead, by, younger, named);
+    const double fair = (households_[hid].acres + std::max(0.0, households_[hid].money) / 60) / std::max<size_t>(1, sons.size());
+    // A son named for his father: the father is 「已故的…」 (or 「老…」 while he lives), so the line reads.
+    bool clash = false;
+    for (const auto& x : plan) clash = clash || (x.who != dead && people_[x.who].firstName == people_[dead].firstName);
+    const std::string deadName = (clash ? std::string(living ? "老" : "已故的") : std::string()) + people_[dead].firstName;
     std::vector<std::string> said;
-    const std::string deadName = people_[dead].firstName;
+    quietSetUp_ = true;  // one 【分家產】 line says it all
     for (size_t i = 1; i < plan.size(); ++i) {
         const Share& s = plan[i];
         if (s.who == line || s.who == heir) continue;
@@ -316,47 +412,48 @@ void World::applyPassing(Household& hRef, Id dead, Id heir) {
         if (!q.alive()) continue;
         const bool here = q.household == hid;
         const bool own = q.household != kNone && q.household != hid && households_[q.household].head == q.id;
+        double gotA = 0, gotM = 0;  // what he really had (L6)
         if (s.what == "cash" && s.money >= 1) {
             double cash = std::min(s.money, std::max(0.0, households_[hid].money));
-            if (cash < 1) continue;
-            if (own) {
+            if (cash >= 1 && own) {
                 households_[hid].money -= cash, book(households_[hid], "分家產給" + q.firstName + "的錢", -cash);
                 households_[q.household].money += cash, book(households_[q.household], "分家產分到的錢", cash);
-                said.push_back(q.firstName + "拿了 " + n0(cash) + " 便士");
-            } else if (here && (q.spouse != kNone || ageYears(q) >= 21)) {
+                said.push_back(q.firstName + "拿了 " + n0(cash) + " 便士"), gotM = cash;
+            } else if (cash >= 1 && here && (q.spouse != kNone || ageYears(q) >= 21)) {
                 setUpSon(hid, q.id, 0, 0, cash, "分家產");
-                said.push_back(q.firstName + "拿了 " + n0(cash) + " 便士，搬去村邊小屋");
-            } else if (here) {
+                said.push_back(q.firstName + "拿了 " + n0(cash) + " 便士，搬去村邊小屋"), gotM = cash;
+            } else if (cash >= 1 && here) {
                 households_[hid].money -= cash, book(households_[hid], "給" + q.firstName + "出去謀生的錢", -cash);
                 setStation(q.id, "town_labourer", 3, "拿了 " + n0(cash) + " 便士出去謀生");
-                said.push_back(q.firstName + "拿了 " + n0(cash) + " 便士去鎮上謀生");
+                said.push_back(q.firstName + "拿了 " + n0(cash) + " 便士去鎮上謀生"), gotM = cash;
             }
         } else if (s.what == "trade" && here) {
             double fee = std::min(s.money, std::max(0.0, households_[hid].money));
             households_[hid].money -= fee, book(households_[hid], q.firstName + "的拜師錢", -fee);
-            setStation(q.id, "town_apprentice", 5, "照" + deadName + "生前的安排，到鎮上拜師學手藝");
-            said.push_back(q.firstName + "帶著 " + n0(fee) + " 便士拜師錢去鎮上學手藝");
+            setStation(q.id, "town_apprentice", 5, "照" + deadName + (living ? "定的安排" : "生前的安排") + "，到鎮上拜師學手藝");
+            said.push_back(q.firstName + "帶著 " + n0(fee) + " 便士拜師錢去鎮上學手藝"), gotM = fee;
         } else if ((s.what == "portion" || s.what == "split") && s.acres >= 1) {
             double a = std::min(s.acres, households_[hid].acres - 1);
-            if (a < 1) continue;
-            if (own) {
-                double got = moveLand(hid, q.household, a, LandPick::CustomaryFirst, "分家產分到的");
-                said.push_back(q.firstName + "分到 " + n0(got) + " 畝，併進他自己家");
-            } else if (here) {
+            if (a >= 1 && own) {
+                gotA = moveLand(hid, q.household, a, LandPick::CustomaryFirst, "分家產分到的");
+                said.push_back(q.firstName + "分到 " + n0(gotA) + " 畝，併進他自己家");
+            } else if (a >= 1 && here) {
                 setUpSon(hid, q.id, a, 0, 0, "分家產分到的");
-                said.push_back(q.firstName + "分到 " + n0(a) + " 畝，自立門戶");
+                said.push_back(q.firstName + "分到 " + n0(a) + " 畝，自立門戶"), gotA = a;
             }
         }
+        if (s.acres + s.money >= 1 && gotA + gotM < 1)
+            said.push_back(q.firstName + (!here && !own ? "人在外地，那一份沒分到" : "那一份家裡給不出來"));
         // A meagre share stays with him for years: against the brother who got the rest.
-        const double fair = (households_[hid].acres + std::max(0.0, households_[hid].money) / 60 + s.acres + s.money / 60) / std::max<size_t>(1, sons.size());
-        const double got = s.acres + s.money / 60;
+        const double got = gotA + gotM / 60;
         if (got < fair * 0.6 && line != kNone)
             passGrudges_.push_back({q.id, line, (8 + 18 * (1 - got / std::max(1.0, fair))) * std::clamp(fair * sons.size() / 12, 0.3, 1.8), day_,
-                                    deadName + "的家業 " + shortName(line) + " 拿了大半，" + q.firstName + (s.acres >= 1 ? "只分到 " + n0(s.acres) + " 畝" : s.money >= 1 ? "只分到 " + n0(s.money) + " 便士" : std::string("什麼也沒分到")),
+                                    deadName + "的家業 " + shortName(line) + " 拿了大半，" + q.firstName + (gotA >= 1 ? "只分到 " + n0(gotA) + " 畝" : gotM >= 1 ? "只分到 " + n0(gotM) + " 便士" : std::string("什麼也沒分到")),
                                     "照習俗分一份家業", 0.25});
     }
+    quietSetUp_ = false;
     // The eldest passed over by a named heir: the strongest grievance a passing leaves, and a claim a court may hear.
-    if (by == "named" && !sons.empty() && sons[0] != line && people_[sons[0]].alive() && line != kNone) {
+    if (by == "named" && line == named && !sons.empty() && sons[0] != line && people_[sons[0]].alive() && line != kNone) {
         passGrudges_.push_back({sons[0], line, 30, day_, deadName + "立了 " + shortName(line) + " 當繼承人，長子 " + shortName(sons[0]) + " 什麼也沒分到", "長子的繼承權", 0.5});
         said.push_back("長子 " + shortName(sons[0]) + " 什麼也沒分到");
     }
@@ -370,25 +467,33 @@ void World::applyPassing(Household& hRef, Id dead, Id heir) {
     if (player && !said.empty()) {
         std::string t;
         for (const auto& x : said) t += (t.empty() ? "" : "；") + x;
-        log(1, "【分家產】照" + deadName + "生前定的分法（" + (by == "split" ? std::string("兒子們平分") : by == "named" ? "立了繼承人" : "長子繼承") + "）：" + t + "。家裡剩 " +
-                   n0(households_[hid].acres) + " 畝、" + n0(households_[hid].money) + " 便士。");
+        const std::string how = by == "split" ? "兒子們平分" : by == "named" ? "立了繼承人" : "長子繼承";
+        log(1, "【分家產】" + (by.empty() ? std::string("照習俗（長子繼承，弟弟們給幾個錢）") : "照" + deadName + (living ? "定的分法" : "生前定的分法") + "（" + how + "）") +
+                   "：" + t + "。家裡剩 " + n0(households_[hid].acres) + " 畝、" + n0(households_[hid].money) + " 便士。");
     }
+    if (!living) applyDower(hid, dead, line, third);
+}
+
+void World::applyDower(Id hid, Id dead, Id line, double a) {
     // The widow's third, for her life.
+    if (hid == kNone || line == kNone || a < 1) return;
     Id w = people_[dead].spouse;
     if (w == kNone || !people_[w].alive() || people_[w].household != hid || households_[hid].head == w || line == w) return;
-    if (households_[hid].acres < 3) return;
-    double a = std::round(households_[hid].acres / 3);
+    const bool player = inPlayerHouse(hid);
     Person& wp = people_[w];
     if (people_[line].mother == w) {
         dowers_.push_back({w, hid, hid, a, day_, true});
         if (player) log(1, "【寡婦產】" + wp.firstName + "按規矩終身有三分之一的地（" + n0(a) + " 畝）；她跟著兒子住，地照舊一起種，要是改嫁就帶走。");
         return;
     }
+    a = std::min(a, households_[hid].acres);
+    if (a < 1) return;
     // Not her son: she takes her third to a cottage of her own, with her own little ones.
+    const Id keep = households_[hid].head;
     Id nh = addHousehold(wp.dynasty, 0, 0);
     std::vector<Id> going{w};
     for (Id c : households_[hid].members)
-        if (c != line && c != heir && people_[c].mother == w && ageYears(people_[c]) < 16 && people_[c].home == kNone) going.push_back(c);
+        if (c != line && c != keep && people_[c].mother == w && ageYears(people_[c]) < 16 && people_[c].home == kNone) going.push_back(c);
     for (Id who : going) {
         auto& mem = households_[hid].members;
         mem.erase(std::remove(mem.begin(), mem.end(), who), mem.end());
@@ -410,6 +515,34 @@ void World::applyPassing(Household& hRef, Id dead, Id heir) {
     if (player)
         log(1, "【寡婦產】" + wp.firstName + "不是 " + shortName(line) + " 的親娘，按規矩帶著三分之一的地（" + n0(got) + " 畝）和 " + n0(m) +
                    " 便士，搬到村邊的小屋守寡終身" + (going.size() > 1 ? "，她自己的孩子跟著她" : "") + "。她死了，地才回到這個家。");
+}
+
+std::string World::dowerNote(Id widow) const {
+    if (widow == kNone || people_[widow].household == kNone) return "";
+    double a = 0;
+    for (const auto& d : dowers_)
+        if (d.open && d.widow == widow && d.in == people_[widow].household) a += d.acres;
+    if (a < 1) return "";
+    return "（" + people_[widow].firstName + "改嫁會帶走寡婦產 " + n0(a) + " 畝，她死了才回來）";
+}
+
+void World::pursesMonth() {
+    // What one took or was given under another's roof is his own: it goes with him to a house he heads or marries into,
+    // and back to the house it came from if he dies or is outlawed.
+    for (auto it = purse_.begin(); it != purse_.end();) {
+        const Person& q = people_[it->first];
+        const bool gone = !q.alive() || q.flags.count("felon");
+        Id to = kNone;
+        if (gone) to = it->second.from;
+        else if (q.household != kNone && (households_[q.household].head == q.id || q.household != it->second.from)) to = q.household;
+        else {
+            ++it;
+            continue;
+        }
+        if (to != kNone && !households_[to].extinct && it->second.money >= 0.5)
+            households_[to].money += it->second.money, book(households_[to], gone ? "回到家裡的私房錢" : "帶過來的私房錢", it->second.money);
+        it = purse_.erase(it);
+    }
 }
 
 void World::dowerReturns(Id widow) {
@@ -450,11 +583,13 @@ void World::dowerHouseEnds(Id house) {
 
 void World::passReputation(Id from, Id to) {
     if (from == kNone || to == kNone || from == to) return;
+    if (inPlayerHouse(people_[to].household)) repPassed_.clear();
     const double carried = std::round(people_[from].reputation * param("rep_carry", 0.5));
     const double own = people_[to].reputation;
     if (std::abs(carried) < 1) return;
     addReputation(to, carried, "接下" + people_[from].firstName + "的家名（傳一半）");
-    if (isPlayerFamily(people_[to]))
+    // Only this house's hand-over scene says it (round 10 L1): a branch's passing never leaves a line behind.
+    if (inPlayerHouse(people_[to].household))
         repPassed_ = "名聲：" + people_[from].firstName + "是 " + sgn(people_[from].reputation) + "，照規矩家名傳一半（" + sgn(carried) + "）；" +
                      people_[to].firstName + "自己原有 " + sgn(own) + "，現在是 " + sgn(people_[to].reputation) + "。";
 }
@@ -483,6 +618,9 @@ void World::considerUpkeep(Household& h) {
                           "（" + n0(ageYears(people_[heir])) + " 歲），由法庭記下奉養的條件：每年的口糧、灶邊一間屋、一年一身衣服。從此由" + shortName(heir) +
                           "當家（往後由你扮演 " + people_[heir].firstName + "），入地費約 " + n0(fine) + " 便士由新家主交。" +
                           "他要是不照約奉養，老人可以到莊園法庭告他；照不照做，看他的性子、對你的感情和家裡的難處。";
+        // What was settled for the younger sons is carried out at the hand-over, not left for a death that no longer passes the house (M3).
+        if (sonsOf(h, head).size() >= 2)
+            sit += "交家時，家業就照" + std::string(h.passBy.empty() ? "習俗" : "你定的分法") + "分下去：" + passWords(h, head, h.passBy, h.passYounger, h.passHeir);
         r = askPlayer("養老", sit, {"在莊園法庭把地交給 " + shortName(heir) + "，立下奉養的約", "還不交，自己當家"});
         if (r == 1) {
             log(1, "〔養老〕" + hp.firstName + "還不想交家。（選擇：還不交，自己當家）");
@@ -501,8 +639,12 @@ void World::considerUpkeep(Household& h) {
         log(1, "【養老】" + fullName(head) + " 在莊園法庭把家業交給 " + fullName(heir) + "，法庭記下奉養的條件：每年的口糧、灶邊一間屋、一年一身衣服。" +
                    (player ? "（選擇：在莊園法庭把地交給 " + shortName(heir) + "）" : ""));
     passReputation(head, heir);
-    handOver(h, heir, "在莊園法庭立了養老的約，接下家業");
-    chargeEntryFine(households_[people_[heir].household], heir, head, h.acres - h.freehold);
+    const Id hid = h.id;
+    // The old head's arrangement is carried out now (the widow's third waits for his death: life.cpp kill), and the new
+    // head starts with none of his own (round 10 M3).
+    applyPassing(households_[hid], head, heir, true);
+    handOver(households_[hid], heir, "在莊園法庭立了養老的約，接下家業");
+    chargeEntryFine(households_[people_[heir].household], heir, head, households_[hid].acres - households_[hid].freehold);
 }
 
 void World::upkeepYear(Upkeep& u) {
@@ -589,10 +731,10 @@ void World::kinMotives() {
                     if (s.who == m) got = s.acres + s.money / 60;
                 double deficit = std::clamp((fair - got) / std::max(1.0, fair), 0.0, 1.0);
                 std::string what = got <= 0 ? "什麼也分不到" : "只分得到 " + [&] { for (const auto& s : plan) if (s.who == m) return s.acres >= 1 ? n0(s.acres) + " 畝" : n0(s.money) + " 便士"; return std::string(); }();
-                bool eldestBypassed = m == sons[0] && plan[0].who != m;
+                bool eldestBypassed = m == sons[0] && plan[0].who != m && h.passBy == "named" && plan[0].who == h.passHeir;
                 double v = (deficit > 0.2 ? 8 + 22 * deficit : 0) * stake + (eldestBypassed ? 25 * stake : 0);
-                std::string why = eldestBypassed ? "父親立了 " + shortName(plan[0].who) + " 當繼承人，長子" + p.firstName + "什麼也分不到"
-                                                 : "照現在的分法，" + shortName(plan[0].who) + "要拿 " + n0(plan[0].acres) + " 畝，" + p.firstName + what;
+                std::string why = eldestBypassed ? "父親立了 " + shortName(plan[0].who) + " 當繼承人，長子" + shortName(m) + "什麼也分不到"
+                                                 : "照現在的分法，" + shortName(plan[0].who) + "要拿 " + n0(plan[0].acres) + " 畝，" + shortName(m) + what;
                 add(m, plan[0].who, v, why);
                 add(m, head, v * 0.5, why);
             }
@@ -602,11 +744,11 @@ void World::kinMotives() {
             const Person& p = people_[m];
             // Split among the sons: the eldest has a share of what was his by custom.
             if (!plan.empty() && h.passBy == "split" && m == sons[0] && m == plan[0].who && sons.size() >= 2)
-                add(m, head, 18 * (1 - 1.0 / sons.size()) * stake, "父親定了兒子們平分，長子" + p.firstName + "只拿得到 1/" + std::to_string(sons.size()));
+                add(m, head, 18 * (1 - 1.0 / sons.size()) * stake, "父親定了兒子們平分，長子" + shortName(m) + "只拿得到 1/" + std::to_string(sons.size()));
             // The heir kept waiting.
             if (m == heir && (p.father == head || p.mother == head) && ageYears(p) >= 26 && ageYears(hp) >= 50 && hp.health >= 50)
                 add(m, head, (5 + (p.spouse != kNone ? 5 : 0) + (hasTrait(p, "ambitious") ? 8 : 0) + (hasTrait(p, "greedy") ? 6 : 0) + (ageYears(p) - 26) * 1.2) * std::max(0.7, stake),
-                    p.firstName + "都 " + n0(ageYears(p)) + " 歲" + (p.spouse != kNone ? "、成了家" : "") + "，還得事事聽" + kinWord(m, head) + "的");
+                    shortName(m) + "都 " + n0(ageYears(p)) + " 歲" + (p.spouse != kNone ? "、成了家" : "") + "，還得事事聽" + kinWord(m, head) + "的");
             // A second wife with sons of her own, and a stepson to have it all.
             if (m == hp.spouse && hp.sex == Sex::Male && p.sex == Sex::Female && heir != kNone && heir != m && people_[heir].mother != m && grown(heir)) {
                 std::vector<Id> mine;
@@ -805,10 +947,10 @@ void World::kinDecide(Grievance& g) {
         double opp = (alone ? 1.5 : 1) * (partner ? 1.3 : 1) * (watched ? 0.5 : 1) * gain;
         const std::string risk = "（驗屍官會來驗屍，全村追兇，鄰居陪審；定了罪就是絞刑，家產歸領主）";
         opts.push_back({kPoison, "從藥婆那裡弄藥，給" + shortName(g.against) + "下毒" + risk,
-                        (0.8 + (hasTrait(p, "cruel") ? 3 : 0) + (hasTrait(p, "greedy") ? 1.5 : 0) + (p.sex == Sex::Female ? 1.5 : 0) + (m - 45) / 12) * mild * opp * up(kPoison)});
+                        (1.4 + (hasTrait(p, "cruel") ? 3 : 0) + (hasTrait(p, "greedy") ? 1.5 : 0) + (p.sex == Sex::Female ? 1.5 : 0) + (m - 45) / 12) * mild * opp * up(kPoison)});
         if (p.sex == Sex::Male && ageYears(p) <= 60)
             opts.push_back({kMurder, "找機會親手殺了" + shortName(g.against) + risk,
-                            (0.5 + (hasTrait(p, "wrathful") ? 3 : 0) + (hasTrait(p, "cruel") ? 2 : 0) + (hasTrait(p, "brave") ? 1 : 0) + (m - 45) / 12) * mild *
+                            (0.9 + (hasTrait(p, "wrathful") ? 3 : 0) + (hasTrait(p, "cruel") ? 2 : 0) + (hasTrait(p, "brave") ? 1 : 0) + (m - 45) / 12) * mild *
                                 (hasTrait(p, "craven") ? 0.2 : 1) * opp * up(kMurder)});
     }
     std::vector<std::string> texts;
@@ -861,11 +1003,12 @@ void World::kinSign(Grievance& g, int rung) {
     addNews("kin:sign", g.who, g.against, p.household, kNone, sign);
     const bool home = inPlayerHouse(t.household) || inPlayerHouse(p.household);
     if (home) {
-        log(1, "【風聲】" + sign + "。");
+        log(1, "【苗頭】" + sign + "。");
         if (actingHead() != kNone && actingHead() != g.who) addConcern(actingHead(), "worry", g.who, 30);
     }
     // The target's side may answer it: the player on a card (with the costs), anyone else by the rules.
-    if (g.who != playerHead()) kinRespond(g);
+    // The player's own hand too (L7): the other house watches him as it would anyone.
+    kinRespond(g);
 }
 
 void World::kinRespond(Grievance& g) {
@@ -880,11 +1023,14 @@ void World::kinRespond(Grievance& g) {
     const bool same = p.household == t.household;
     // What placating costs: land to set him up when there is land and he is married, else coin.
     Household& ph = households_[t.household];
-    const bool landed = same && p.sex == Sex::Male && p.spouse != kNone && ph.acres >= 10 && ph.head != g.who;
+    // Not the heir (H1): land to set him up would take the holding from him unsaid; the heir is placated with coin.
+    const bool heirHim = g.who == planHeir(ph, ph.head, ph.passBy, ph.passHeir);
+    const bool landed = same && p.sex == Sex::Male && p.spouse != kNone && ph.acres >= 10 && ph.head != g.who && !heirHim;
     const double coin = std::floor(std::clamp(ph.money * 0.15, 10.0, 40.0));
+    const double gift = std::floor(std::min(20.0, std::max(0.0, ph.money)));
     std::vector<std::string> texts = {
-        landed ? "安撫：分 3 畝地和 20 便士讓" + std::string(he(p)) + "自立門戶（你家剩 " + n0(ph.acres - 3) + " 畝）"
-               : "安撫：給" + std::string(he(p)) + " " + n0(coin) + " 便士，許" + std::string(he(p)) + "往後多一份",
+        landed ? "安撫：分 3 畝地" + (gift >= 1 ? "和 " + n0(gift) + " 便士" : std::string()) + "讓" + std::string(he(p)) + "自立門戶（你家剩 " + n0(ph.acres - 3) + " 畝）"
+               : "安撫：給" + std::string(he(p)) + " " + n0(coin) + " 便士" + (same ? "，算" + std::string(he(p)) + "自己的私房錢" : std::string()),
         "盯著" + std::string(he(p)) + "（" + (player ? "用一段空閒；" : "") + std::string(he(p)) + "要是動手，多半會被撞見）",
         "當面攤牌（" + std::string(he(p)) + "可能就此收手，也可能翻臉）"};
     std::vector<int> kinds = {0, 1, 2};
@@ -916,6 +1062,10 @@ void World::kinRespond(Grievance& g) {
                         : kd == 2 ? 4 + (hasTrait(a, "wrathful") ? 10 : 0) + (hasTrait(a, "brave") ? 5 : 0)
                         : kd == 3 ? 3 + (hasTrait(a, "cruel") ? 4 : 0)
                         : kd == 4 ? 0 : 10);
+        // The player's own plot: the other house can only keep an eye on him.
+        if (g.who == playerHead())
+            for (size_t i = 0; i < kinds.size(); ++i)
+                if (kinds[i] != 1 && kinds[i] != 5) w[i] = 0;
         r = rngKin_.weighted(w);
         if (r < 0) return;
     }
@@ -925,13 +1075,18 @@ void World::kinRespond(Grievance& g) {
     ++counters_["kin_answer:" + std::to_string(kind)];
     if (kind == 0) {
         if (landed) {
-            setUpSon(t.household, g.who, 3, 0, 20, "安撫分給" + pn + "的");
-            done = "分了 3 畝地和 20 便士給" + pn + "，讓" + std::string(he(p)) + "自立門戶";
+            setUpSon(t.household, g.who, 3, 0, gift, "安撫分給" + pn + "的");
+            done = "分了 3 畝地" + (gift >= 1 ? "和 " + n0(gift) + " 便士" : std::string()) + "給" + pn + "，讓" + std::string(he(p)) + "自立門戶";
         } else {
             double c = std::min(coin, std::max(0.0, households_[t.household].money));
             households_[t.household].money -= c, book(households_[t.household], "安撫" + pn + "的錢", -c);
             if (p.household != t.household) households_[p.household].money += c, book(households_[p.household], "人家讓的一份", c);
-            done = "給了" + pn + " " + n0(c) + " 便士，許" + std::string(he(p)) + "往後多一份";
+            else if (c >= 1) {
+                Purse& pu = purse_[g.who];
+                pu.money += c;
+                if (pu.from == kNone) pu.from = t.household;
+            }
+            done = "給了" + pn + " " + n0(c) + " 便士";
         }
         recordDeed("placated", answerer, g.who);
         g.calmUntil = day_ + 3 * kDaysPerYear;
@@ -1011,8 +1166,8 @@ int World::neighbourJury(Id accused, Id accuser, double truth, std::vector<Id>& 
         bool aye;
         if (j == playerHead()) {
             const bool civil = what.find("為了「") != std::string::npos;  // a suit between kin, not a felony
-            int r = civil ? askPlayer("陪審", "你被叫去當陪審：" + what + "。你站哪一邊？", {"說原告有理（" + shortName(accused) + "要輸）", "說 " + shortName(accused) + " 有理"})
-                          : askPlayer("陪審", "你被叫去當陪審：" + what + "。你說 " + fullName(accused) + " 有罪嗎？", {"說有罪", "說無罪"});
+            int r = civil ? askPlayer("陪審", "你被叫去當陪審：" + what + "。你站哪一邊？", {"說原告有理（" + shortName(accused) + "要輸，他會記你）", "說 " + shortName(accused) + " 有理"})
+                          : askPlayer("陪審", "你被叫去當陪審：" + what + "。你說 " + fullName(accused) + " 有罪嗎？", {"說有罪（" + shortName(accused) + "和他家會記你）", "說無罪"});
             aye = r == 0 || (r < 0 && rngKin_.chance(0.2 + 0.45 * truth));
         } else {
             double pr = 0.2 + 0.45 * truth;
@@ -1055,6 +1210,16 @@ bool World::kinCourt(Id plaintiff, Id defendant, const std::string& claim, doubl
             double f = dh ? payLord(*dh, 12, "不養老人的罰款") : 0;
             addReputation(defendant, -5, "被莊園法庭判了不養老人");
             outcome = "判 " + shortName(defendant) + " 照約奉養，罰 " + n0(f) + " 便士";
+        } else if (dh && ph == dh && plaintiff == planHeir(*dh, dh->head, dh->passBy, dh->passHeir)) {
+            // The heir under the same roof: setting him up would take the holding from him; he is awarded coin of his own.
+            double c = std::floor(std::min(30.0, std::max(0.0, dh->money) * 0.2));
+            if (c >= 1) {
+                dh->money -= c, book(*dh, "法庭判給" + people_[plaintiff].firstName + "的錢", -c);
+                Purse& pu = purse_[plaintiff];
+                pu.money += c;
+                if (pu.from == kNone) pu.from = dh->id;
+            }
+            outcome = "判 " + shortName(defendant) + " 給 " + shortName(plaintiff) + " " + n0(c) + " 便士（" + shortName(plaintiff) + "是繼承人，地不分出去）";
         } else if (dh && dh->acres >= 6 && ph) {
             double a = std::min(5.0, std::floor(dh->acres / 4));
             if (ph == dh) {
@@ -1129,7 +1294,13 @@ void World::kinAct(Grievance& g, int rung) {
             bool caught = rngKin_.chance(watched ? 0.8 : 0.25);
             th.money -= take, book(th, "被偷的錢", -take);
             Household& mine = households_[p.household];
-            if (mine.id != th.id) mine.money += take, book(mine, "拿來的錢", take);
+            if (caught) th.money += take, book(th, "追回被偷的錢", take);  // caught at it: the coin goes back in the box
+            else if (mine.id != th.id) mine.money += take, book(mine, "拿來的錢", take);
+            else {  // under the same roof: his own hoard (round 10 M2), out with him when he leaves (pursesMonth)
+                Purse& pu = purse_[g.who];
+                pu.money += take;
+                if (pu.from == kNone) pu.from = th.id;
+            }
             g.chain += "；" + seasonLabel(day_) + " 偷了 " + n0(take) + " 便士";
             if (caught) {
                 addBelief(g.against, d, g.who, 95, kNone);
@@ -1137,7 +1308,7 @@ void World::kinAct(Grievance& g, int rung) {
                 addOpinion(g.against, g.who, "caught_stealing", -25, 15);
                 addNews("kin:caught", g.who, g.against, t.household, kNone, pn + "偷家裡的錢，被撞個正著");
                 addReputation(g.who, -6, "偷家裡的錢被撞見");
-                log(imp, "【家醜】" + pn + " 偷拿家裡的 " + n0(take) + " 便士，被" + (watched ? std::string("盯著") + he(p) + "的人" : shortName(g.against)) + "撞個正著。" + because);
+                log(imp, "【家醜】" + pn + " 偷拿家裡的 " + n0(take) + " 便士，被" + (watched ? std::string("盯著") + he(p) + "的人" : shortName(g.against)) + "撞個正著，錢追了回來。" + because);
                 ++counters_["kin_theft_caught"];
                 g.bitter += 10, g.bitterWhy = "偷錢被撞破，在" + shortName(g.against) + "面前抬不起頭";
             } else if (inPlayerHouse(th.id)) {
@@ -1175,7 +1346,7 @@ void World::kinAct(Grievance& g, int rung) {
                     th.money -= take, book(th, "被偷的錢", -take);
                     households_[people_[ally].household].money += take, book(households_[people_[ally].household], "人家送來的錢", take);
                 }
-                got = "偷了家裡 " + n0(take) + " 便士送去，換他答應幫自己";
+                got = take >= 1 ? "偷了家裡 " + n0(take) + " 便士送去，換他答應幫自己" : std::string("把家裡的事一五一十說給他聽，換他答應幫自己");
             }
             g.chain += "；" + seasonLabel(day_) + " 勾結 " + fullName(ally);
             feudHeat(t.dynasty, people_[ally].dynasty, 6, d);
@@ -1206,8 +1377,9 @@ void World::kinAct(Grievance& g, int rung) {
             if (fam) ++counters_["kin_attempt:player"];
             g.chain += "；" + seasonLabel(day_) + (poison ? " 下毒" : " 動手");
             if (rngKin_.chance(std::clamp(ok, 0.1, 0.85))) {
-                if (fam) log(1, "  （" + pn + " 為什麼下手：" + kinWhy(g) + "。一路下來：" + g.chain + "）");
-                killing(g.who, g.against, d, poison, watched);
+                const std::string why = "  （" + pn + " 為什麼下手：" + kinWhy(g) + "。一路下來：" + g.chain + "）";
+                const std::string out = killing(g.who, g.against, d, poison, watched);
+                if (fam && (out == "hanged" || out == "abjured" || out == "acquitted")) log(1, why);
                 g.open = false, g.pending = 0;
                 return;
             }
@@ -1270,7 +1442,7 @@ void World::forfeitGoods(Id felon) {
 // What a killing sets off: the coroner's inquest, the hue and cry, a jury of neighbours, and one of four ends — hanged,
 // fled to sanctuary and the realm abjured, acquitted, or never solved — then the goods forfeit, the feud between the
 // houses, the succession worked out again, and the names of both houses.
-void World::killing(Id felon, Id victim, Id deed, bool poison, bool watched) {
+std::string World::killing(Id felon, Id victim, Id deed, bool poison, bool watched) {
     Person& f = people_[felon];
     Person& v = people_[victim];
     const bool fam = isPlayerFamily(f) || isPlayerFamily(v) || inPlayerHouse(v.household) || inPlayerHouse(f.household);
@@ -1304,7 +1476,7 @@ void World::killing(Id felon, Id victim, Id deed, bool poison, bool watched) {
     ++counters_["kin_kill:" + outcome];
     if (outcome == "hanged" || outcome == "abjured") f.flags.insert("felon");  // takes nothing: the succession goes past him
     // The death itself, and the succession it sets off.
-    log(imp, "【命案】" + vn + (poison ? " 喝了一碗湯，當夜就不行了。" : " 被人發現倒在路邊，身上有傷。"));
+    log(imp, !found ? "【急病】" + vn + " 忽然病倒，當夜就走了。" : "【命案】" + vn + (poison ? " 喝了一碗湯，當夜就不行了。" : " 被人發現倒在路邊，身上有傷。"));
     kill(victim, !found ? "急病" : poison ? "中毒" : "被人害死");
     std::string inquest = !found ? "看不出什麼，說是急病" : poison ? "是被毒死的" : "是被人害死的";
     addNews("kin:inquest", victim, felon, vh != kNone && !households_[vh].extinct ? vh : f.household, kNone, inquest);
@@ -1358,6 +1530,7 @@ void World::killing(Id felon, Id victim, Id deed, bool poison, bool watched) {
     }
     if (vh != kNone && !households_[vh].extinct && households_[vh].head != kNone && households_[vh].head != felon && outcome != "unsolved")
         addReputation(households_[vh].head, 3, "家裡出了命案，村裡同情");
+    return found || outcome != "unsolved" ? outcome : "unseen";
 }
 
 // ---- The player's own hand on the ladder (same rules, same risks) ------------------------------------------------
@@ -1408,6 +1581,16 @@ void World::yearlyKin() {
     for (size_t i = 0; i < households_.size(); ++i) {
         Household& h = households_[i];
         if (h.extinct || h.head == kNone || h.house == "manor" || h.ward != kNone) continue;
+        if (h.passBy == "named" && !namedHeirStands(h, h.passHeir)) {
+            // The one named is dead, outlawed, gone into the church or married into another house: the naming lapses
+            // (the fine stays paid) and the head may settle it again.
+            if (inPlayerHouse(h.id)) {
+                const Id y = planHeir(h, h.head, "", kNone);
+                log(1, "〔身後的家業〕立 " + shortName(h.passHeir) + " 當繼承人的安排落空了（罰金不退）" + (y != kNone ? "，照習俗由 " + shortName(y) + " 接" : std::string()) + "。");
+            }
+            h.passBy.clear(), h.passYounger.clear(), h.passHeir = kNone, h.passSince = -1;
+            people_[h.head].flags.erase("pass_asked");
+        }
         if (!people_[h.head].flags.count("pass_asked")) settlePassing(households_[i], false);
         else if (!inPlayerHouse(h.id) && rngKin_.chance(0.08)) settlePassing(households_[i], true);
     }
@@ -1436,6 +1619,7 @@ void World::yearlyKin() {
 }
 
 void World::monthlyKin() {
+    pursesMonth();
     // The keep cut short shows on the old parent; the grain saved shows in the barn.
     for (auto& u : upkeeps_) {
         if (!u.open || u.state == 0) continue;
@@ -1484,7 +1668,7 @@ void World::kinAgenda(std::vector<AgendaItem>& items) {
         if (!g.open || g.against == g.who || g.who == head || g.signs == 0 || day_ - g.lastSign > kDaysPerYear || g.calmUntil > day_) continue;
         if (!people_[g.who].alive() || people_[g.who].household == kNone || !people_[g.against].alive() || !inPlayerHouse(people_[g.against].household)) continue;
         AgendaItem a;
-        a.id = "kin_answer:" + std::to_string(i);
+        a.id = "kin_answer:" + std::to_string(g.who) + ":" + std::to_string(g.against);
         a.title = "處理" + shortName(g.who) + "的不平";
         a.desc = fullName(g.who) + "（" + kinWord(head, g.who) + "）心裡不平：" + kinWhy(g) + "。安撫、盯著、攤牌、打發出門，或者先下手。";
         a.kind = "kin", a.who = g.who, a.rank = 96;
@@ -1499,15 +1683,7 @@ void World::kinAgenda(std::vector<AgendaItem>& items) {
         a.kind = "kin", a.rank = 40;
         items.push_back(a);
     }
-    // Someone the head could take the ladder against: one whose grievance against the house has shown, the rival, a foe.
-    std::vector<Id> foes;
-    for (const auto& g : griefs_)
-        if (g.open && g.against == head && g.signs > 0 && people_[g.who].alive() && people_[g.who].household != kNone) foes.push_back(g.who);
-    if (Id rh = rivalHouse(); rh != kNone && households_[rh].head != kNone) foes.push_back(households_[rh].head);
-    for (const auto& q : people_)
-        if (q.alive() && q.household != kNone && q.id != head && ageYears(q) >= 16 && opinion(head, q.id) <= -40) foes.push_back(q.id);
-    std::sort(foes.begin(), foes.end());
-    foes.erase(std::unique(foes.begin(), foes.end()), foes.end());
+    std::vector<Id> foes = strikeTargets();
     if (!foes.empty()) {
         AgendaItem a;
         a.id = "kin_strike";
@@ -1520,24 +1696,42 @@ void World::kinAgenda(std::vector<AgendaItem>& items) {
     }
 }
 
+std::vector<Id> World::strikeTargets() const {
+    // Someone the head has real cause to take the ladder against (L11): one whose grievance against him has shown, the
+    // rival's head once it has come to bad blood, anyone he has come to hate.
+    std::vector<Id> foes;
+    const Id head = playerHead();
+    if (head == kNone) return foes;
+    for (const auto& g : griefs_)
+        if (g.open && g.against == head && g.signs > 0 && people_[g.who].alive() && people_[g.who].household != kNone) foes.push_back(g.who);
+    if (Id rh = rivalHouse(); rh != kNone && households_[rh].head != kNone) {
+        const Id r = households_[rh].head;
+        if (opinion(head, r) <= -20 || feudStage(head, r) >= 2) foes.push_back(r);
+    }
+    for (const auto& q : people_)
+        if (q.alive() && q.household != kNone && q.id != head && ageYears(q) >= 16 && opinion(head, q.id) <= -40) foes.push_back(q.id);
+    std::sort(foes.begin(), foes.end());
+    foes.erase(std::unique(foes.begin(), foes.end()), foes.end());
+    return foes;
+}
+
 void World::doKinAgenda(const AgendaItem& a) {
     Id head = playerHead();
     if (head == kNone || playerHousehold_ == kNone) return;
     Household& ph = households_[playerHousehold_];
     if (a.id.rfind("kin_answer:", 0) == 0) {
-        size_t i = std::stoul(a.id.substr(11));
-        if (i < griefs_.size()) kinRespond(griefs_[i]);
+        const size_t c = a.id.find(':', 11);
+        if (c == std::string::npos) return;
+        const Id who = static_cast<Id>(std::stol(a.id.substr(11, c - 11))), against = static_cast<Id>(std::stol(a.id.substr(c + 1)));
+        for (size_t i = 0; i < griefs_.size(); ++i)
+            if (griefs_[i].open && griefs_[i].who == who && griefs_[i].against == against) {
+                kinRespond(griefs_[i]);
+                break;
+            }
     } else if (a.id == "kin_pass") {
         settlePassing(ph, !ph.passBy.empty());
     } else if (a.id == "kin_strike") {
-        std::vector<Id> foes;
-        for (const auto& g : griefs_)
-            if (g.open && g.against == head && g.signs > 0 && people_[g.who].alive() && people_[g.who].household != kNone) foes.push_back(g.who);
-        if (Id rh = rivalHouse(); rh != kNone && households_[rh].head != kNone) foes.push_back(households_[rh].head);
-        for (const auto& q : people_)
-            if (q.alive() && q.household != kNone && q.id != head && ageYears(q) >= 16 && opinion(head, q.id) <= -40) foes.push_back(q.id);
-        std::sort(foes.begin(), foes.end());
-        foes.erase(std::unique(foes.begin(), foes.end()), foes.end());
+        std::vector<Id> foes = strikeTargets();
         if (foes.size() > 4) foes.resize(4);
         std::vector<std::string> texts;
         for (Id f : foes) texts.push_back(fullName(f) + "（" + (kinWord(head, f).empty() ? std::string("你對他的好感 ") + n0(opinion(head, f)) : kinWord(head, f)) + "）");

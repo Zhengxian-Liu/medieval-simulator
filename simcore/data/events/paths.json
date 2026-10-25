@@ -110,7 +110,7 @@
         "effects": [{"set_flag": "grown_decided"}, {"take_any_place": "service"}], "ai": {"base": 4}}
      ]},
 
-    {"id": "widow_suitor", "repeat": "person", "parent_decides": true, "title": "有地的寡婦", "prompt": "{target} 守了寡，一個人撐著家裡的地。村裡人說，誰娶了她，誰就有地種。", "scope": "anyone", "pulse": "yearly", "chance": 0.25, "cooldown_years": 3,
+    {"id": "widow_suitor", "repeat": "person", "parent_decides": true, "title": "有地的寡婦", "prompt": "{target} 守了寡，一個人撐著家裡的地。村裡人說，誰娶了她，誰就有地種。（她手上的地要是寡婦產，只歸她在世時種，她死了就回到前夫家。）", "scope": "anyone", "pulse": "yearly", "chance": 0.25, "cooldown_years": 3,
      "conditions": {"sex": "male", "age": [18, 35], "married": false, "is_head": false, "station": ["home", "labourer", "veteran"]},
      "target": {"pick": "random_villager", "conditions": {"sex": "female", "widowed": true, "is_head": true, "acres_ge": 4, "age": [22, 48], "married": false, "not_kin": true, "same_class": true, "player_family": false}},
      "options": [

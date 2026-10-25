@@ -1223,7 +1223,7 @@ std::vector<World::AgendaItem> World::seasonAgenda(bool all) {
             a.id = "match:" + std::to_string(pick->subject) + ":" + std::to_string(pick->target);
             a.title = "替" + shortName(pick->subject) + "向" + fullName(pick->target) + "說親";
             a.desc = shortName(pick->subject) + "（" + std::to_string(int(ageYears(people_[pick->subject]))) + " 歲）到了成親的年紀，" +
-                     fullName(pick->target) + "（" + std::to_string(int(ageYears(people_[pick->target]))) + " 歲）年紀身分都相當。託媒人去說（用一段空閒）。";
+                     fullName(pick->target) + "（" + std::to_string(int(ageYears(people_[pick->target]))) + " 歲）年紀身分都相當。託媒人去說（用一段空閒）。" + dowerNote(pick->subject);
             a.kind = "plan", a.event = "arrange_match", a.target = pick->target, a.subject = pick->subject;
             a.rank = 50;
             items.push_back(a);

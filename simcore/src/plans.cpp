@@ -416,6 +416,7 @@ void World::endPlan(size_t index, const std::string& requested) {
             const Household& th = households_[t.household];
             if (t.sex == Sex::Female && plan.target != th.head)
                 sit += "（照你家的身分，嫁妝約 " + std::to_string(int(std::min(th.money * 0.2, dowryCap(th)))) + " 便士。）";
+            sit += dowerNote(plan.target);  // a widow takes her third with her (round 10 M5)
             int r = askPlayer("求親", sit, {"答應", "回絕"});
             if (r == 1) {
                 log(1, "〔求親〕" + sit + "（選擇：回絕）");
@@ -454,6 +455,12 @@ void World::endPlan(size_t index, const std::string& requested) {
         else if (r == 1) outcome = "fail";
         if (r >= 0) log(1, "〔" + pd->name + "〕" + sit + "（選擇：" + pd->targetAnswers[r] + "）");
     }
+    // Setting a son up in a house of his own: the family sees the price before it is done, and may shelve it, in
+    // which case nothing of it happens (no 「分了家」 line, no standing for it; round 10 M1).
+    if (outcome == "success" && plan.subject != kNone && pd->success.isArray() && inPlayerHouse(actor.household))
+        for (const auto& e : pd->success.asArray())
+            if (e.has("settle_subject") && !askSettleSon(actor.household, plan.subject, e["settle_subject"].numberOr("acres", 8), e["settle_subject"].numberOr("money", 30)))
+                return;
     const std::string& text = outcome == "success" ? pd->successLog : outcome == "exposed" ? pd->exposedLog : pd->failLog;
     const Json& effects = outcome == "success" ? pd->success : outcome == "exposed" ? pd->exposed : pd->fail;
     std::string line = text.empty() ? "" : ev.format(text, actor, plan.target);

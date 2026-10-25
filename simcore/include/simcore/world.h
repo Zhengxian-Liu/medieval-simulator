@@ -1604,8 +1604,26 @@ private:
     void yearlyKin();                    // the turn of the year: settle the passing, the old parent's keep, every grievance
     void monthlyKin();                   // acts coming due, the keep kept or not
     void settlePassing(Household& h, bool change);  // the head chooses how the holding passes (asked of the player)
-    void applyPassing(Household& h, Id dead, Id heir);  // onHeadDied: the younger sons and the widow get what was settled
+    void applyPassing(Household& h, Id dead, Id heir, bool living = false);  // living: at a 養老 hand-over (no widow's third yet)  // onHeadDied: the younger sons and the widow get what was settled
     Id setUpSon(Id hid, Id son, double ownAcres, double vacantAcres, double money, const std::string& how);
+    // Setting a married son up (plans.json settle_son): what it takes, asked of the family before it is done.
+    struct SettleTerms { double vac = 0, own = 0, gift = 0; };
+    SettleTerms settleTerms(Id hid, double want, double money) const;
+    bool askSettleSon(Id hid, Id son, double want, double money);  // false: the family shelved it
+    std::set<Id> settleNoOwn_;           // sons to be set up on money and vacant land only (the family's choice)
+    // The heir a plan of passing names: a chosen heir while that choice stands (at home, or keeping a house of his own
+    // in the village: he comes back for it), else whoever custom gives it to (heirOf without the naming).
+    bool namedHeirStands(const Household& h, Id named) const;
+    Id planHeir(const Household& h, Id head, const std::string& by, Id named) const;
+    // Money a person holds of their own under someone else's roof (taken from the chest, or given to quiet them):
+    // it goes with them when they head a house, back to the house they took it from when they die.
+    struct Purse { double money = 0; Id from = kNone; };
+    std::map<Id, Purse> purse_;
+    void pursesMonth();
+    bool quietSetUp_ = false;            // applyPassing says it in one 【分家產】 line
+    void applyDower(Id hid, Id dead, Id line, double acres);  // the widow's third, for her life
+    std::string dowerNote(Id widow) const;  // for a match card: what she takes with her if she marries again
+    std::vector<Id> strikeTargets() const;  // whom the head has real cause to take the ladder against
     void dowerReturns(Id widow);         // the widow dies: her third goes back
     void dowerMoves(Id widow, Id to);    // the widow marries again: her third goes with her
     void passReputation(Id from, Id to);  // the name passes in part (shown on screen)
@@ -1618,7 +1636,7 @@ private:
     void kinRespond(Grievance& g);       // the target's side answers a sign (an NPC by the rules, the player on a card)
     bool kinCourt(Id plaintiff, Id defendant, const std::string& claim, double merit, const std::string& about);
     int neighbourJury(Id accused, Id accuser, double truth, std::vector<Id>& ayes, int& panel, const std::string& what);
-    void killing(Id felon, Id victim, Id deed, bool poison, bool watched);
+    std::string killing(Id felon, Id victim, Id deed, bool poison, bool watched);  // hanged | abjured | acquitted | unsolved | unseen
     void forfeitGoods(Id felon);
     std::string kinWhy(const Grievance& g) const;
     void kinAgenda(std::vector<AgendaItem>& items);  // seasonAgenda: the family's answers to what is brewing at home

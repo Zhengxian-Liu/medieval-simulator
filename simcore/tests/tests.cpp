@@ -524,7 +524,10 @@ int main() {
             const double b4 = bought();  // (a neighbour's gift of grain may still come: only what is bought counts)
             CHECK(cardAt(4, 40) == 0 && std::abs(bought() - b4) < 0.01, "grain was bought while the month's bread was not eaten");
             double booked = bought();
-            CHECK(cardAt(5, 10) == 0 && foodDays(w) > 35 && foodDays(w) < 47, "the rule did not buy the next month, or bought more");
+            // What the rule bought, in days (a neighbour's sacks of wheat on the same day are not the rule's).
+            const double daysBefore = WorldTest::grainDaysBought(w);
+            CHECK(cardAt(5, 10) == 0 && WorldTest::grainDaysBought(w) - daysBefore > 25 && WorldTest::grainDaysBought(w) - daysBefore < 37,
+                  "the rule did not buy the next month, or bought more");
             CHECK((w.ledger().count("買糧") ? w.ledger().at("買糧") : 0) < booked - 1, "the grain bought by the rule is not on the books");
             // 買到收成 keeps the rent and the fine back from what it buys, and the family is asked (once) whom to turn
             // to when the purse cannot do both. But the month's bread comes before the rent (review H3): a barn going
@@ -538,7 +541,8 @@ int main() {
             CHECK(keep >= WorldTest::rent(w, hh) + 19, "the harvest rule's floor leaves out the rent or the entry fine");
             dealer = false;
             size_t from = w.chronicle().size();
-            CHECK(cardAt(3, 20, keep + 3) == 1, "買到收成 with the purse at its floor did not ask whom to turn to");
+            // (the barn nearly bare: the day's wages and craft money, earned before the reckoning, buy a few days of their own)
+            CHECK(cardAt(3, 5, keep + 3) == 1, "買到收成 with the purse at its floor did not ask whom to turn to");
             bool saidDip = false;
             for (size_t i = from; i < w.chronicle().size(); ++i) saidDip = saidDip || w.chronicle()[i].text.find("糧比租要緊") != std::string::npos;
             CHECK(foodDays(w) >= 30 && saidDip, "買到收成 let the barn run down to keep the rent, or did not say it spent the rent on bread");
@@ -2255,7 +2259,8 @@ int main() {
     {
         int total = 0, most = 0;
         bool sane = true;
-        for (int seed : {64, 58, 61}) {
+        // (round 10: with holdings no longer carved up in the pre-run, 64's kin no longer go hungry; 118's do)
+        for (int seed : {64, 58, 61, 118}) {
             Config c;
             c.seed = seed;
             c.prerun = 25;
@@ -2734,13 +2739,14 @@ int main() {
         c.prerun = 25;
         World w(defs, c);
         std::map<std::tuple<size_t, std::string, std::string>, int> seen;
-        int grain = 0, worst = 0;
+        int grain = 0, worst = 0, grainYear = 0;
+        std::map<int, int> grainIn;  // grain cards by harvest year (as the feed test counts them)
         std::string worstCard;
         w.setChooser([&](const World::ChoicePrompt& p) {
             const auto& heads = w.dynasties()[w.playerDynasty()].heads;
             int& n = seen[{heads.size(), p.title, p.situation}];
             if (++n > worst) worst = n, worstCard = p.title;
-            grain += p.title == "缺糧：跟誰開口";
+            if (p.title == "缺糧：跟誰開口") ++grain, grainYear = std::max(grainYear, ++grainIn[(w.today() + kDaysPerYear - 8 * kDaysPerMonth) / kDaysPerYear]);
             return 0;
         });
         AutoPlayer ai(118);
@@ -2752,9 +2758,11 @@ int main() {
         std::printf("15 years on seed 118: grain cards %d, a card's same words at most %d times a generation (%s), rival %s\n", grain, worst,
                     worstCard.c_str(), w.rivalName().c_str());
         CHECK(worst <= 2, ("a card came more than twice a generation in the same words: " + worstCard).c_str());
-        // Round 10: this seed's family ends up landless (it gave its last 5 acres for a favour) and 15 strong, so one a year;
-        // the bound is about the same card coming back within a year, not a hungry house asking once a year.
-        CHECK(grain <= 16, "more than sixteen grain cards in fifteen years");
+        // Round 10: the 25-year pre-run now runs the family's own quarrels and passings too, and this seed's family starts
+        // poorer than it did (5 acres, not 13), so a hungry house asks most years. What the test guards is the card coming
+        // back within the harvest year: at most one a harvest year, and no more than one for each year played (plus the first).
+        CHECK(grainYear <= 1, "the grain card came more than once in one harvest year");
+        CHECK(grain <= 16, "more grain cards than years played, plus one");
         CHECK(w.rivalHouse() != kNone, "no rival house in fifteen years");
     }
 

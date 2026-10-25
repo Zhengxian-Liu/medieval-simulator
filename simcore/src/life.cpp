@@ -431,6 +431,14 @@ void World::kill(Id id, const std::string& cause) {
     if (wordAway) emit({"bereaved:away", kNone, actingHead(), id, false, 0});
     inheritMemories(id);
     dowerReturns(id);  // a widow's third goes back to the house it came from (src/kin.cpp)
+    // An old head who handed over in the court (養老): his widow's third falls in now, as it would have at a passing.
+    if (hid != kNone && households_[hid].head != id)
+        for (size_t i = 0; i < upkeeps_.size(); ++i)
+            if (upkeeps_[i].open && upkeeps_[i].parent == id && upkeeps_[i].house == hid) {
+                const Household& uh = households_[hid];
+                applyDower(hid, id, uh.ward != kNone ? uh.ward : uh.head, uh.acres >= 3 ? std::round(uh.acres / 3) : 0);
+                break;
+            }
     if (hid == kNone) return;
     Household& h = households_[hid];
     emit({"death", kNone, id, p.spouse != kNone && people_[p.spouse].alive() ? p.spouse : kNone, h.head == id});
@@ -543,7 +551,7 @@ Id World::heirOf(const Household& h, Id dead) const {
         if ((d.dynasty == kNone || people_[c].dynasty == d.dynasty) && !(people_[c].flags.count("disowned") && people_[c].father == dead))
             children.push_back(c);
     // An heir named in the lord's court (src/kin.cpp) comes before the eldest, while they live and are the house's.
-    if (h.head == dead && h.passBy == "named" && inHouse(h.passHeir)) return h.passHeir;
+    if (h.head == dead && h.passBy == "named" && namedHeirStands(h, h.passHeir)) return h.passHeir;  // the same test passPlan uses
     heir = eldest(children, Sex::Male);
     if (heir == kNone) {
         std::vector<Id> grandsons;
@@ -987,6 +995,8 @@ void World::mergeHousehold(Household& from, Household& to, const std::string& ho
     }
     for (auto& d : dowers_)  // a widow's third goes with the land into the house it merges with
         if (d.open && d.in == from.id) d.in = to.id;
+    for (auto& d : dowers_)  // and the house it goes back to, if that is the one merging (round 10 L9)
+        if (d.open && d.from == from.id) d.from = to.id;
     for (Id it : from.items) {
         items_[it].household = to.id;
         to.items.push_back(it);
@@ -1525,6 +1535,7 @@ void World::yearlyMarriages() {
                                                : about + "家託人來說親，想把她嫁給" + (ours == acting ? whom : " " + whom) + "。";
                 if (ours == acting && households_[playerHousehold_].ward != kNone)
                     sit += "（家業還是你替 " + people_[households_[playerHousehold_].ward].firstName + " 管著。）";
+                sit += dowerNote(ours);  // a widow takes her third with her (round 10 M5)
                 if (askPlayer("說親", sit, {"答應", "回絕"}) == 1) {
                     // The slight is felt by the house that sent the matchmaker, its head first.
                     Id sender = people_[other].household != kNone && households_[people_[other].household].head != kNone
