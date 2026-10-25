@@ -201,6 +201,36 @@
         "effects": [{"disown_target": true}, {"opinion": {"value": -40, "mod": "doubted_paternity", "years": 30}}, {"target_opinion": {"value": -30, "mod": "cold_father", "years": 25}},
                     {"household_opinion": {"value": -8, "mod": "hard_words", "years": 8}}, {"reputation": -2}],
         "ai": {"base": 1, "traits": {"cruel": 8, "vengeful": 6, "wrathful": 4, "kind": -8}}}
+     ]},
+
+    // Gossip that gives the head something to do (design/stitching-fable.md): ask, warn, spread, or let it be. The one
+    // talked about has something to hide; what is learned over a pot of ale is a hold over them (把柄).
+    {"id": "village_gossip", "title": "閒話", "scope": "player_head", "chance": 0.012, "cooldown_years": 3,
+     "conditions": {"is_head": true, "age": [18, 80]},
+     "target": {"pick": "random_villager", "conditions": {"has_secret": "target", "is_lover": false, "other_dynasty": true, "age": [18, 80], "not": {"occupation": ["lord", "lady", "priest"]}}},
+     "prompt": "井邊幾個婦人說得正起勁，一見{name}走近就住了口。後來才聽說，她們在講{target}的事：有些事，{target_first}瞞著全村。",
+     "prompts": ["井邊幾個婦人說得正起勁，一見{name}走近就住了口。後來才聽說，她們在講{target}的事：有些事，{target_first}瞞著全村。",
+                 "磨坊排隊的時候，前頭兩個人在嘀咕{target}，說{target_pron}這幾年做過一件見不得人的事，說到一半又不說了。",
+                 "酒館裡有人喝多了，拍著桌子說：「{target}？{target_pron}那點事，我可是知道的。」旁邊的人趕緊把他拉走了。"],
+     "options": [
+       {"text": "請{target_first}喝一壺，套套話（1 便士，佔一段空閒；套出來的就是你手上的把柄）", "conditions": {"money_ge": 1},
+        "log": "{name}在酒館請{target}喝了一壺，東拉西扯，慢慢把話往那件事上引。",
+        "effects": [{"money": -1}, {"spend_time": 1},
+                    {"random": {"percent": 50, "effects": [{"log": "  {target_first}喝到第三杯，話就收不住了。"}, {"on_target": [{"confess_secrets": "target"}]}],
+                                "else": [{"log": "  {target_first}嘴緊得很，喝完酒拍拍屁股走了，什麼也沒說。"}]}}],
+        "ai": {"base": 5, "traits": {"ambitious": 6, "cynical": 4, "gregarious": 4, "pious": -4}}},
+       {"text": "去跟{target_first}透個口風：外頭在傳你的閒話（把柄不要了，{target_pron}欠你一份情）",
+        "log": "{name}找了個沒人的時候對{target}說：「村裡有人在說你的事，小心些。」{target_first}愣了半天，低聲道了謝。",
+        "effects": [{"target_opinion": {"value": 10, "mod": "heeded", "years": 10}}],
+        "ai": {"base": 6, "traits": {"kind": 8, "forgiving": 4, "cruel": -6}}},
+       {"text": "把聽來的閒話再添幾句傳出去（{target_house}家的名聲要受損；萬一傳回{target_pron}耳裡，就是你造謠）",
+        "log": "{name}在磨坊、井邊把聽來的話又說了幾遍，每說一遍就多一分。",
+        "effects": [{"deed": {"type": "slander"}}, {"on_target": [{"reputation": -2}]}],
+        "ai": {"base": 2, "traits": {"cruel": 6, "vengeful": 6, "gregarious": 3, "kind": -8, "pious": -4}, "if": [{"cond": {"opinion_of_target_lt": -20}, "add": 8}]}},
+       {"text": "各家有各家的事，不聽閒話（什麼也不花，也什麼都不知道）",
+        "log": "{name}擺擺手：「人家的事，跟咱們有什麼相干。」",
+        "effects": [{"need": {"spirit": 5}}],
+        "ai": {"base": 6, "traits": {"pious": 6, "content": 4, "shy": 3, "calm": 3}}}
      ]}
   ]
 }
