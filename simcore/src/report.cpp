@@ -529,6 +529,7 @@ std::string World::personReport(Id id) const {
         if (h.debt > 0.5) o << "，欠著債";
         o << "。\n";
     }
+    if (std::string d = districtPersonLine(id); !d.empty()) o << "地方上：" << d << "。\n";
     std::string t;
     for (const auto& tr : p.traits)
         if (defs_.traits.at(tr).category != "education" || tr == "literate") t += (t.empty() ? "" : "、") + defs_.traits.at(tr).name;

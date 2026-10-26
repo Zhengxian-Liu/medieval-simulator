@@ -17,6 +17,8 @@
 //       {"do":"interact","who":12,"event":"keep_company"}   (陪家人: the company visit this person needs most)
 //       {"do":"rule","rule":"occasions","value":"close"}     (家裡的規矩: one of the state's "rules", set to one of its choices;
 //                                                             occasions = all|close|none|ask, grain = harvest|monthly|ask, repeats, votes, quarrels)
+//       {"do":"bid","stake":"brook","level":0} {"do":"speak","stake":"brook","who":12} {"do":"lend","ask":3,"level":1}
+//                                                            (地方: the "act" of an option in the state's "district" panel; a free day each)
 #include <algorithm>
 #include <cmath>
 #include <fstream>
@@ -99,6 +101,7 @@ std::string badAction(const std::map<std::string, std::string>& m) {
         {"plan", {{"plan"}, {"target", "subject"}}},
         {"cancel", {{}, {"plan"}}},
         {"rule", {{"rule", "value"}, {}}},
+        {"bid", {{"stake", "level"}, {}}}, {"speak", {{"stake", "who"}, {}}}, {"lend", {{"ask", "level"}, {}}},
         {"pass", {{}, {}}}, {"year", {{}, {}}}, {"regency", {{}, {}}}, {"quit", {{}, {}}}};
     auto it = m.find("do");
     if (it == m.end()) return "動作沒有 \"do\"（例：{\"do\":\"pass\"}）";
@@ -660,6 +663,46 @@ public:
             for (const auto& c : w.rivalClashes()) clashes.push_back(str(c));
             o.raw("rival", Obj().text("name", w.rivalName()).n("house", rh).n("head", w.households()[rh].head).text("after", w.rivalAfter())
                                .raw("clashes", arr(clashes)).b("struck", w.rival().struck).done());
+        }
+        // 地方 (design/district.md): the rival out there goes on the same line as the village's (rival_district), and
+        // once the family is in, the 「地方」 panel: what is contested, who wants to borrow, the loans, the suits, the
+        // people. Each option is a ready action ({"do":"bid","stake":..,"level":..} / speak / lend).
+        {
+            const World::DistrictView dv = w.districtView();
+            if (!dv.rival.empty()) {
+                std::vector<std::string> clashes;
+                for (const auto& c : dv.rivalClashes) clashes.push_back(str(c));
+                o.raw("rival_district", Obj().text("name", dv.rival).text("after", dv.rivalAfter).raw("clashes", arr(clashes)).done());
+            }
+            if (dv.in) {
+                auto opts = [&](const std::vector<World::DistrictView::Opt>& list) {
+                    std::vector<std::string> out;
+                    for (const auto& op : list) {
+                        Obj act;
+                        act.text("do", op.verb);
+                        if (op.verb == "lend") act.text("ask", op.key).text("level", op.arg);
+                        else act.text("stake", op.key).text(op.verb == "speak" ? "who" : "level", op.arg);
+                        out.push_back(Obj().text("label", op.label).b("open", op.open).text("why", op.why).raw("act", act.done()).done());
+                    }
+                    return arr(out);
+                };
+                auto rows = [&](const std::vector<World::DistrictView::Row>& list) {
+                    std::vector<std::string> out;
+                    for (const auto& r : list)
+                        out.push_back(Obj().text("key", r.key).text("title", r.title).text("place", r.place).text("desc", r.desc).text("state", r.state)
+                                          .raw("opts", opts(r.opts)).done());
+                    return arr(out);
+                };
+                auto lines = [&](const std::vector<std::string>& list) {
+                    std::vector<std::string> out;
+                    for (const auto& s : list) out.push_back(str(s));
+                    return arr(out);
+                };
+                o.raw("district", Obj().text("status", dv.status).raw("footholds", lines(dv.footholds)).text("fall", dv.fall).text("rival", dv.rival)
+                                      .text("rival_after", dv.rivalAfter).raw("rival_clashes", lines(dv.rivalClashes)).text("wool", dv.wool)
+                                      .raw("stakes", rows(dv.stakes)).raw("asks", rows(dv.asks)).raw("loans", lines(dv.loans)).raw("suits", lines(dv.suits))
+                                      .raw("people", lines(dv.people)).raw("houses", lines(dv.houses)).done());
+            }
         }
         // 這一季的事: the few things worth a free day now, each a button ({"do":"agenda","id":...}).
         if (withActions) {
@@ -1308,6 +1351,14 @@ int main(int argc, char** argv) {
                     w.runCommands();
                 } else if (what == "cancel") {
                     w.issue({w.today(), "cancel_plan", w.actingHead(), m["plan"], kNone, kNone});
+                    w.runCommands();
+                } else if (what == "bid" || what == "speak") {
+                    // 地方: 出價 / 託人 on something contested out there (the panel's options carry these).
+                    w.issue({w.today(), "district", head, what + "|" + m["stake"] + "|" + (what == "bid" ? m["level"] : m["who"]), kNone, kNone});
+                    w.runCommands();
+                } else if (what == "lend") {
+                    // 地方: 放貸 to one who asked this season (or a share in the wool).
+                    w.issue({w.today(), "district", head, "lend|" + m["ask"] + "|" + m["level"], kNone, kNone});
                     w.runCommands();
                 } else if (what == "rule") {
                     // 家裡的規矩: {"do":"rule","rule":"occasions","value":"close"}

@@ -270,7 +270,13 @@ function renderTop() {
   // This season's big news and the last's, counted from the newest entry (as textplay's top_events).
   const nowKey = entries.length ? Math.max(...entries.map((e) => e.skey)) : null;
   const tops = nowKey === null ? [] : entries.filter((e) => e.top && e.skey >= nowKey - 1).slice(-6);
-  const line3 = (rv ? `<div class="row"><span>他在跟你搶：<b>${esc(rv.after || "")}</b>（宿敵 ${esc(rv.name)}）</span></div>` : "") +
+  const rd = s.rival_district, ds = s.district;
+  // The district's rival shares the rival line (design/district.md), shown once it is after something or the family is in.
+  const rparts = [];
+  if (rv) rparts.push(`<b>${esc(rv.after || "")}</b>（宿敵 ${esc(rv.name)}）`);
+  if (rd && (ds || rd.after)) rparts.push(`地方上，${esc(rd.name)}：<b>${esc(rd.after || "還沒有")}</b>`);
+  if (ds) rparts.push(`地方：${esc(ds.status)}，立足在${esc((ds.footholds || []).join("、") || "——沒有")}`);
+  const line3 = (rparts.length ? `<div class="row"><span>他在跟你搶：${rparts.join("｜")}</span></div>` : "") +
     (tops.length ? `<div class="row"><span>■ 大事：${tops.map((e) => esc(e.season + " " + e.text)).join("／")}</span></div>` : "");
   const line2 = `<div class="row">${amb ? `<span>志向 <b>${esc(amb.race || amb.name)}</b>（${amb.race ? esc(amb.name) + "，" : ""}到 ${amb.deadline || "?"} 年底，${amb.years_left <= 1 ? "<b class=\"lean\">今年是最後一年</b>" : `還剩 ${amb.years_left} 年（含今年）`}）</span>
       <span>下一步 <span class="blocker">${esc(amb.blocker || "")}</span></span>` : `<span class="muted">還沒立志</span>`}
@@ -523,10 +529,14 @@ function renderFeed() {
 
 const TABS = [["talk", "村裡在說"], ["contest", "在爭什麼"], ["map", "地圖"], ["net", "關係網"], ["people", "村民"], ["plans", "計畫"]];
 function renderTabs() {
-  $("tabs").innerHTML = TABS.map(([k, n]) => `<button class="${tab === k ? "on" : ""}" onclick="tab='${k}';renderTabs()">${n}</button>`).join("");
   const s = view.state;
+  // 「地方」 only once the family is in (design/district.md 五); if it falls back out, back to the village's talk.
+  const tabs = s && s.district ? TABS.concat([["district", "地方"]]) : TABS;
+  if (tab === "district" && !(s && s.district)) tab = "talk";
+  $("tabs").innerHTML = tabs.map(([k, n]) => `<button class="${tab === k ? "on" : ""}" onclick="tab='${k}';renderTabs()">${n}</button>`).join("");
   if (!s || !s.family) { $("tab-body").innerHTML = ""; return; }
-  if (tab === "talk") renderTalk(s);
+  if (tab === "district") renderDistrict(s);
+  else if (tab === "talk") renderTalk(s);
   else if (tab === "net") renderNet(s);
   else if (tab === "map") renderMap(s);
   else if (tab === "people") renderPeople(s);
@@ -723,6 +733,35 @@ function renderContest(s) {
          ${x.ask ? `<button ${x.ask.open && can ? "" : "disabled"} title="${esc(x.ask.open ? "用一段空閒去問" : x.ask.why)}" onclick="${askCall(x.id, x.ask, x.ask.lever || "")}">${x.ask.lever === "owed" ? "討人情" : "拉票"}</button>` : ""}</div>`).join("")}</div>` : ""}`).join("");
   if (c.past.length) html += `<h3>你家最近的結果</h3>` + c.past.map((p) => `<div style="font-size:13px">${p.year} 年　${esc(p.thing)}：<b>${esc(p.outcome)}</b></div>`).join("");
   html += `<p class="legend">只列你家聽說的。去「村民」那一欄找人開口：買地、租地、請他投票、借錢、說親、收學徒。</p>`;
+  $("tab-body").innerHTML = html;
+}
+
+// 地方 (design/district.md): the neighbour village, the town, the lord's household and the hundred court. Each row is
+// something contested (or held), or someone asking to borrow; each option says what it costs and the odds, and is a
+// ready action (bid / speak / lend), a free day each.
+let districtActs = [];
+function renderDistrict(s) {
+  const d = s.district, can = seasonOpen();
+  districtActs = [];
+  const opt = (o) => {
+    if (!o.open) return `<div class="muted" style="font-size:12px">✗ ${esc(o.label)}（${esc(o.why)}）</div>`;
+    districtActs.push(o.act);
+    return `<div><button ${can ? "" : "disabled"} onclick="act(districtActs[${districtActs.length - 1}])">${esc(o.label)}</button></div>`;
+  };
+  const rows = (title, list, empty) => `<h3>${title}</h3>` + (list.length ? list.map((r) => `<div class="item" style="padding:4px 0">
+      <div><b>${esc(r.title)}</b>　<span class="muted">${esc(r.place)}</span>　${esc(r.state)}</div>
+      ${r.desc ? `<div class="muted" style="font-size:12px">${esc(r.desc)}</div>` : ""}
+      ${(r.opts || []).map(opt).join("")}</div>`).join("") : `<p class="muted">${empty}</p>`);
+  const lines = (title, list) => list.length ? `<h3>${title}</h3>` + list.map((x) => `<div style="font-size:13px">· ${esc(x)}</div>`).join("") : "";
+  let html = `<div class="card"><b>${esc(d.status)}</b>${(d.footholds || []).length ? `<br>立足：${esc(d.footholds.join("、"))}` : ""}
+    ${d.fall ? `<br><span class="neg">小心：${esc(d.fall)}</span>` : ""}
+    ${d.rival ? `<br>地方上的對頭：<b>${esc(d.rival)}</b>，在跟你搶：${esc(d.rival_after || "還沒有")}` : ""}
+    ${(d.rival_clashes || []).map((c) => `<div class="muted" style="font-size:12px">· ${esc(c)}</div>`).join("")}
+    ${d.wool ? `<br>羊毛：${esc(d.wool)}` : ""}</div>`;
+  html += rows("在爭的、你家手上的", d.stakes || [], "現在地方上沒有在爭的。");
+  html += rows("這一季想借錢的", d.asks || [], "這一季沒人來借錢。");
+  html += lines("借出去的錢", d.loans || []) + lines("官司", d.suits || []) + lines("地方上的人", d.people || []) + lines("地方上的人家", d.houses || []);
+  html += `<p class="legend">只算你家聽說了的出價。每出一次價、託一次人、放一筆債，要花一段空閒。</p>`;
   $("tab-body").innerHTML = html;
 }
 

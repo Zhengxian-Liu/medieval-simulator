@@ -14,6 +14,8 @@ village's talk.
     textplay.py --port 8820 talk            everything the village is saying (the view shows the last three years)
     textplay.py --port 8820 look <id>       look at a person (the page's click on a name)
     textplay.py --port 8820 report          what the family knows (secrets, rumours)
+    textplay.py --port 8820 district        地方: the neighbour village, the town, the lord's household, the hundred court
+                                            (what is contested, who wants to borrow, loans, suits; how to get in before that)
 
 Actions (the page's buttons):
   {"do":"choose","index":0}                         answer a question (options are numbered from 0)
@@ -28,6 +30,9 @@ Actions (the page's buttons):
   {"do":"focus","who":12,"focus":"letters"}          年度重心 (free, during a season; see more)
   {"do":"pass"}   end this season          {"do":"year"}   let the AI play a whole year
   {"do":"regency"}   holding the house for a child: hand the years to the steward until they come of age
+  {"do":"bid","stake":"brook","level":"0"}   出價 on something contested out there (see district; a free day)
+  {"do":"speak","stake":"brook","who":"12"}  託人: ask someone to speak for you on it (a free day)
+  {"do":"lend","ask":"3","level":"1"}        放貸 to someone asking to borrow this season (a free day)
   {"do":"rule","rule":"occasions","value":"close"}   家裡的規矩 (standing rules: occasions = all|close|none|ask,
                                                      grain = harvest|monthly|ask, repeats = fold|ask,
                                                      votes = ask|kin|free, quarrels = ask|forbid|free)
@@ -204,9 +209,18 @@ def top_bar(s):
         when = "今年是最後一年！" if isinstance(yl, (int, float)) and yl <= 1 else f"還剩 {yl} 年（含今年）"
         left = f"到 {amb['deadline']} 年底，{when}" if amb.get("deadline") else when
         out.append(f"志向：{amb.get('race') or amb['name']}（{amb['name']}，{left}）｜下一步 {amb.get('blocker', '')}　（全部條件：more）")
-    rv = s.get("rival")
+    # The village's rival and the one out in the district share one line (design/district.md: the neighbour's house
+    # goes on the existing rival line), with where the family stands out there once it is in.
+    rv, rd, ds = s.get("rival"), s.get("rival_district"), s.get("district")
+    parts = []
     if rv:
-        out.append(f"他在跟你搶：{rv.get('after', '')}（宿敵 {rv['name']}；people 看兩家撞過的事）")
+        parts.append(f"{rv.get('after', '')}（宿敵 {rv['name']}；people 看兩家撞過的事）")
+    if rd and (ds or rd.get("after")):
+        parts.append(f"地方上，{rd['name']}：{rd.get('after') or '還沒有'}")
+    if ds:
+        parts.append(f"地方：{ds.get('status', '')}，立足在{'、'.join(ds.get('footholds') or []) or '——沒有'}（district）")
+    if parts:
+        out.append("他在跟你搶：" + "｜".join(parts))
     if fine:
         out.append(f"！入地費 {fine['amount']} 便士，{fine['year']} 年 {fine['month']} 月前交給領主{'（已寬限過）' if fine.get('extended') else ''}")
     if s.get("notice"):
@@ -372,7 +386,8 @@ def render(v):
     t = talk_lines(s)
     if t:
         out += ["", "―― 村裡在說（最近三年，◆ 跟你家有關）――"] + t
-    out += ["", "參考：more（全部條件、名聲、地位、規矩、重心）｜people（村民、開口）｜contest（在爭什麼、差事）｜plans｜chronicle｜talk｜report"]
+    out += ["", "參考：more（全部條件、名聲、地位、規矩、重心）｜people（村民、開口）｜contest（在爭什麼、差事）｜plans｜chronicle｜talk｜report"
+            + ("｜district（地方）" if s.get("district") else "")]
     return "\n".join(out)
 
 
@@ -519,6 +534,49 @@ def render_contest(s):
     return "\n".join(out)
 
 
+def render_district(s):
+    """The 「地方」 panel (design/district.md): only once the family is in; before that, the ways in."""
+    out = ["―― 地方 ――"]
+    d = s.get("district")
+    if not d:
+        rd = s.get("rival_district")
+        out.append("你家還沒在地方上立足。進得去的路：在外村買下或租下地、讓兒子進鎮上當學徒或書記、"
+                   "女兒嫁進地方上的人家、借錢給領主、或在百戶法庭打贏官司拿到地。")
+        out.append("這些機會出現時會在「這一季的事」裡（出價前會先告訴你要花多少、勝算多少）。")
+        if rd:
+            out.append(f"地方上的對頭：{rd['name']}（{rd.get('after') or '還沒跟你搶什麼'}）")
+        return "\n".join(out)
+    out.append(f"{d.get('status', '')}")
+    if d.get("footholds"):
+        out.append("立足：" + "、".join(d["footholds"]))
+    if d.get("fall"):
+        out.append("小心：" + d["fall"])
+    if d.get("rival"):
+        out.append(f"地方上的對頭：{d['rival']}，在跟你搶：{d.get('rival_after') or '還沒有'}")
+        for c in d.get("rival_clashes") or []:
+            out.append(f"    · {c}")
+    if d.get("wool"):
+        out.append("羊毛：" + d["wool"])
+
+    def rows(title, items):
+        if not items:
+            return
+        out.extend(["", title])
+        for r in items:
+            out.append(f"  {r['title']}（{r.get('place', '')}）：{r.get('state', '')}")
+            if r.get("desc"):
+                out.append(f"    {r['desc']}")
+            for o in r.get("opts") or []:
+                out.append(f"    → {o['label']}　{act_json(o['act'])}" if o.get("open") else f"    ✗ {o['label']}（{o.get('why', '')}）")
+
+    rows("在爭的、你家手上的：", d.get("stakes"))
+    rows("這一季想借錢的：", d.get("asks"))
+    for title, key in (("借出去的錢：", "loans"), ("官司：", "suits"), ("地方上的人：", "people"), ("地方上的人家：", "houses")):
+        if d.get(key):
+            out.extend(["", title] + [f"  · {x}" for x in d[key]])
+    return "\n".join(out)
+
+
 def wait_ask(prev_seq):
     v = get(f"/api/view?seq={prev_seq}&line=0&entry=0")
     deadline = time.time() + 60
@@ -534,7 +592,7 @@ def now():
     return v
 
 
-SEASON_DO = ("agenda", "interact", "ask", "plan", "cancel", "want", "focus", "rule", "pass", "year", "regency", "quit")
+SEASON_DO = ("agenda", "interact", "ask", "plan", "cancel", "want", "focus", "rule", "bid", "speak", "lend", "pass", "year", "regency", "quit")
 cmd = args[0] if args else "view"
 if cmd == "view":
     print(render(now()))
@@ -567,6 +625,8 @@ elif cmd == "people":
     print(render_people(now().get("state") or {}, full="--full" in args))
 elif cmd == "contest":
     print(render_contest(now().get("state") or {}))
+elif cmd == "district":
+    print(render_district(now().get("state") or {}))
 elif cmd == "chronicle":
     v = now()
     n = int(args[1]) if len(args) > 1 and args[1].isdigit() else None

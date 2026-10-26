@@ -26,6 +26,12 @@ std::string odds(double p) {
     if (p > 0.95) return "9 成以上";
     return num(std::clamp(std::round(p * 10), 1.0, 9.0)) + " 成";
 }
+// 「領主府總管的位子」 -> 「領主府總管」: the post itself, as in 「當上了…」.
+std::string postName(const std::string& n) {
+    for (const char* t : {"的位子", "的席位"})
+        if (size_t at = n.find(t); at != std::string::npos) return n.substr(0, at);
+    return n;
+}
 int toIndex(const std::string& s) {
     if (s.empty()) return -1;
     char* end = nullptr;
@@ -150,7 +156,7 @@ std::string World::districtPersonLine(Id id) const {
     if (!d) return "";
     std::string role = d->head == id ? "當家的" : "家裡人";
     for (const auto& s : stakes_)
-        if ((s.kind == "post" || s.kind == "seat") && s.holderMan == id) role = s.name.substr(0, s.name.find("的位子")) + "";
+        if ((s.kind == "post" || s.kind == "seat") && s.holderMan == id) role = postName(s.name);
     return houseTag(d->shell) + "（" + role + "）：" + d->note;
 }
 
@@ -719,7 +725,7 @@ void World::placeBid(Stake& s, Id house, int level, Id man) {
     std::string from = "市集上聽人說的";
     if (std::string son = sonInTown(); !son.empty()) hear += 0.4, from = son + "從鎮上捎話說的";
     for (const auto& o : stakes_)
-        if ((o.kind == "post" || o.kind == "seat") && inPlayerHouse(o.holder)) hear += 0.2, from = "在" + o.name.substr(0, o.name.find("的位子")) + "任上聽說的";
+        if ((o.kind == "post" || o.kind == "seat") && inPlayerHouse(o.holder)) hear += 0.2, from = "在" + postName(o.name) + "任上聽說的";
     if (!isDistrictShell(house)) hear += 0.3, from = "村裡都在傳";
     if (rngDistrict_.chance(hear)) {
         b->known = true;
@@ -957,19 +963,19 @@ void World::settleStake(Stake& s, size_t winner) {
         done = "包下了" + s.name;
     } else if (s.kind == "post" || s.kind == "seat") {
         if (s.holderMan != kNone && people_[s.holderMan].alive() && s.holderMan != man && inPlayerHouse(s.holder))
-            log(1, "【地方】" + fullName(s.holderMan) + "的" + s.name.substr(0, s.name.find("的位子")) + "做到頭了。");
+            log(1, "【地方】" + fullName(s.holderMan) + "的" + postName(s.name) + "做到頭了。");
         s.holder = win.house;
         s.holderMan = man;
         s.until = s.years > 0 ? day_ + s.years * kDaysPerYear : -1;
         if (man != kNone) people_[man].flags.insert("district_post");
-        done = (man != kNone ? shortName(man) : std::string("家裡")) + "當上了" + s.name.substr(0, s.name.find("的位子"));
+        done = (man != kNone ? shortName(man) : std::string("家裡")) + "當上了" + postName(s.name);
     } else if (s.kind == "place") {
         s.holderMan = man;
         if (man != kNone && !wd) {
             people_[man].flags.insert("district_place");
-            setStation(man, s.station, s.years, "進了" + s.name.substr(0, s.name.find("的位子")));
+            setStation(man, s.station, s.years, "進了" + postName(s.name));
         }
-        done = (man != kNone ? shortName(man) : std::string("孩子")) + "進了" + s.name.substr(0, s.name.find("的位子"));
+        done = (man != kNone ? shortName(man) : std::string("孩子")) + "進了" + postName(s.name);
     } else if (s.kind == "match") {
         const Id bride = s.holderMan;
         DHouse* bh = dhouseByKey(s.house);
@@ -1069,7 +1075,7 @@ std::vector<std::string> World::footholds() const {
     for (const auto& s : stakes_) {
         if (s.kind == "lease" && inPlayerHouse(s.holder) && s.until > day_) out.push_back("包租著" + s.name.substr(0, s.name.find("（")) + "（到 " + std::to_string(cfg_.startYear + s.until / kDaysPerYear) + " 年）");
         if ((s.kind == "post" || s.kind == "seat") && inPlayerHouse(s.holder) && s.holderMan != kNone && people_[s.holderMan].alive())
-            out.push_back(shortName(s.holderMan) + "當著" + s.name.substr(0, s.name.find("的位子")));
+            out.push_back(shortName(s.holderMan) + "當著" + postName(s.name));
     }
     for (const auto& p : people_)
         if (p.alive() && isPlayerFamily(p) && p.flags.count("district_place") && (p.station == "town_apprentice" || p.station == "town_clerk" || p.station == "town_journeyman" || p.station == "town_master"))
@@ -1717,7 +1723,7 @@ void World::districtMichaelmas() {
         book(households_[manor], "差事的薪俸", -fee);
         h.money += fee;
         book(h, "差事的薪俸", fee);
-        if (inPlayerHouse(h.id)) log(1, "【地方】" + shortName(s.holderMan) + "當" + s.name.substr(0, s.name.find("的位子")) + "，領了今年的薪俸 " + pence(fee) + (fee < s.fee ? "（府裡的錢一時不夠，欠著）" : "") + "。");
+        if (inPlayerHouse(h.id)) log(1, "【地方】" + shortName(s.holderMan) + "當" + postName(s.name) + "，領了今年的薪俸 " + pence(fee) + (fee < s.fee ? "（府裡的錢一時不夠，欠著）" : "") + "。");
     }
     // Loans and the wool fall due.
     loansDue();
