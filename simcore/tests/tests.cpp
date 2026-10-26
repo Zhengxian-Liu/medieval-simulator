@@ -243,6 +243,64 @@ struct WorldTest {
     static void noMillFarmer(World& w) {  // nobody farms the mill (its toll comes out of every purse at Michaelmas)
         for (auto& h : w.households_) h.millUntil = -1;
     }
+    // 地方 (src/district.cpp, design/district.md)
+    static bool districtBuilt(const World& w) { return w.dist_.built; }
+    static World::Stake* stake(World& w, const std::string& key) { return w.stakeByKey(key); }
+    static std::vector<World::DLoan>& dloans(World& w) { return w.dloans_; }
+    static std::vector<World::DSuit>& dsuits(World& w) { return w.dsuits_; }
+    static Id dshell(World& w, const std::string& key) {
+        const auto* d = w.dhouseByKey(key);
+        return d ? d->shell : kNone;
+    }
+    static double& dacres(World& w, const std::string& key) { return w.dhouseByKey(key)->acres; }
+    static void give(World& w, Id hid, double amount) {  // booked, as any purse change must be
+        w.households_[hid].money += amount;
+        w.book(w.households_[hid], "test", amount);
+    }
+    static int addAsk(World& w, const std::string& house, double amount, double pledge) {
+        World::DAsk a;
+        a.id = w.dist_.nextAsk++;
+        a.kind = "loan";
+        a.house = dshell(w, house);
+        a.amount = amount, a.rate = 0.15, a.years = 1, a.pledge = pledge, a.risk = 0.2;
+        a.until = w.day_ + 90;
+        a.why = "test";
+        w.dasks_.push_back(a);
+        return a.id;
+    }
+    static void addLoan(World& w, Id lender, Id borrower, double lent, double owed) {  // due this Michaelmas
+        World::DLoan l;
+        l.lender = lender, l.borrower = borrower, l.lent = lent, l.owed = owed, l.due = w.year(), l.since = w.day_;
+        w.dloans_.push_back(l);
+    }
+    static void lend(World& w, int id, int level) { w.lendTo(id, level); }
+    static void loansDue(World& w) { w.loansDue(); }
+    static void court(World& w) {
+        for (auto& s : w.dsuits_)
+            if (!s.done) s.filed = std::min(s.filed, w.day_ - 1);
+        w.hundredCourt();
+    }
+    static void districtMichaelmas(World& w) { w.districtMichaelmas(); }
+    static void bidAlone(World& w, const std::string& key, int level) {  // the family the only bidder, and the round closed
+        World::Stake* s = w.stakeByKey(key);
+        s->bids.clear();
+        std::vector<Id> men = w.stakeMen(*s, w.playerHousehold_);
+        w.placeBid(*s, w.playerHousehold_, level, men.empty() ? kNone : men.front());
+        w.closeRound(*s);
+    }
+    static void enterTier(World& w, const std::string& why) { w.enterTier(w.playerHousehold_, why); }
+    static void blow(World& w, const std::string& why) { w.districtBlow(why); }
+    static double landOut(const World& w) {  // every acre out there: the houses' own and the village's 外村地
+        double a = 0;
+        for (const auto& d : w.dhouses_) a += d.acres;
+        for (const auto& h : w.households_) a += h.outAcres;
+        return a;
+    }
+    static double allMoney(const World& w) {
+        double m = 0;
+        for (const auto& h : w.households_) m += h.money;
+        return m;
+    }
 };
 }  // namespace sim
 
@@ -3175,12 +3233,21 @@ int main() {
             CHECK(w.unbookedMoney() - unbooked < 1, "the goods forfeit to the lord were not booked");
             CHECK(!w.person(victim).alive(), "the victim of a killing still lives");
         }
+        // The first seed from 122 on whose head after twenty years holds the land in his own right (a regent's name is
+        // not the line's to pass), with a grown heir at home. (Round 12B: on seed 122 itself the district now takes the
+        // heir to town as an apprentice and leaves his grandmother holding the house for him.)
         Config c2;
-        c2.seed = 122;
+        for (c2.seed = 122; c2.seed < 132; ++c2.seed) {
+            World t(defs, c2);
+            t.runYears(20);
+            const Id th = t.playerHead(), tn = th == kNone ? kNone : WorldTest::heirOf(t, t.playerHousehold());
+            if (tn != kNone && t.household(t.playerHousehold()).ward == kNone && !t.isAway(t.person(tn)) && t.ageYears(t.person(tn)) >= 14) break;
+        }
         World r(defs, c2);
         r.runYears(20);
         Id old = r.playerHead();
         Id next = WorldTest::heirOf(r, r.playerHousehold());
+        CHECK(c2.seed < 132, "no seed from 122 with a head in his own right and a grown heir at home after twenty years");
         if (old != kNone && next != kNone && r.ageYears(r.person(next)) >= 14) {
             WorldTest::person(r, old).reputation = 30;
             WorldTest::person(r, next).reputation = 4;
@@ -3189,6 +3256,191 @@ int main() {
             std::printf("reputation carried: head 30, heir 4 -> %.0f\n", got);
             CHECK(std::abs(got - 19) <= 2, "the heir's name is not his own plus half the old head's");
         }
+    }
+
+    // 地方 (design/district.md): the way in by buying land out there. Land and money only move, the family is in, the
+    // panel opens, and blows put it back out (the way up stays open).
+    {
+        Config c;
+        c.seed = 195;
+        c.startYear = 1340;
+        c.prerun = 25;
+        World w(defs, c);
+        CHECK(WorldTest::districtBuilt(w), "the district was not set up at the hand-over");
+        CHECK(!w.inDistrict() && !w.districtView().in, "the family starts in the district");
+        const Id ph = w.playerHousehold();
+        if (w.household(ph).money < 400) WorldTest::give(w, ph, 400);
+        const double land = WorldTest::landOut(w), money = WorldTest::allMoney(w);
+        const double hadley = WorldTest::dacres(w, "hadley");
+        WorldTest::bidAlone(w, "brook", 0);
+        CHECK(std::abs(WorldTest::landOut(w) - land) < 1e-6, "buying land out there made or lost acres");
+        CHECK(std::abs(WorldTest::allMoney(w) - money) < 0.01, "buying land out there made or lost money");
+        CHECK(std::abs(w.household(ph).outAcres - 6) < 1e-6 && std::abs(WorldTest::dacres(w, "hadley") - (hadley - 6)) < 1e-6, "the brook land did not pass from the seller to the family");
+        CHECK(w.inDistrict(), "buying the brook land did not take the family into the district");
+        const World::DistrictView v = w.districtView();
+        CHECK(v.in && !v.status.empty() && !v.footholds.empty() && !v.people.empty(), "the district panel is empty once in");
+        CHECK(w.counters().count("district:in") && w.counters().at("district:in") == 1, "entering not counted once");
+        WorldTest::blow(w, "test 1");
+        WorldTest::blow(w, "test 2");
+        CHECK(w.inDistrict(), "two blows put the family out (three are needed)");
+        WorldTest::blow(w, "test 3");
+        CHECK(!w.inDistrict() && !w.districtView().in, "three blows in four years did not put the family out");
+        CHECK(w.counters().count("district:fell") && w.counters().at("district:fell") == 1, "the fall not counted");
+        WorldTest::enterTier(w, "test");
+        CHECK(w.inDistrict(), "the family could not climb back in after a fall");
+        checkInvariants(w, "district gate");
+    }
+    // Loans out there (放貸): lent, repaid, defaulted, the pledge taken, sued for at the hundred court. Money and land
+    // only move between purses; the loan's state follows; the family's books are kept to the penny.
+    {
+        Config c;
+        c.seed = 195;
+        c.startYear = 1340;
+        c.prerun = 25;
+        World w(defs, c);
+        w.runYears(1);  // past the opening, so the cards below are asked
+        std::string pick;
+        int asked = 0;
+        w.setChooser([&](const World::ChoicePrompt& p) {
+            for (size_t i = 0; i < p.options.size(); ++i)
+                if (!pick.empty() && p.options[i].rfind(pick, 0) == 0) return ++asked, static_cast<int>(i);
+            return -1;
+        });
+        const Id ph = w.playerHousehold();
+        const Id hadley = WorldTest::dshell(w, "hadley");
+        WorldTest::give(w, ph, 3000);
+        if (WorldTest::dacres(w, "hadley") < 12) WorldTest::dacres(w, "hadley") = 12;
+        const double unbooked = w.unbookedMoney();
+        // Lent against land, at the lower rate.
+        double money = WorldTest::allMoney(w), land = WorldTest::landOut(w);
+        int id = WorldTest::addAsk(w, "hadley", 100, 4);
+        WorldTest::lend(w, id, 1);
+        auto& loans = WorldTest::dloans(w);
+        CHECK(!loans.empty() && loans.back().lender == ph && loans.back().borrower == hadley && loans.back().lent == 100 && loans.back().owed == 110 &&
+                  loans.back().pledge == 4 && loans.back().state == 0,
+              "a pledged loan not booked as lent (100 at 10%, 4 acres)");
+        CHECK(std::abs(WorldTest::allMoney(w) - money) < 0.01, "lending made or lost money");
+        // Not paid: the pledge taken.
+        const size_t first = loans.size() - 1;
+        WorldTest::house(w, hadley).money = 0;
+        loans[first].due = w.year();
+        money = WorldTest::allMoney(w);
+        const double out = w.household(ph).outAcres;
+        pick = "收下抵押的";
+        WorldTest::loansDue(w);
+        CHECK(WorldTest::dloans(w)[first].state == 5, "the pledge was not taken when chosen");
+        CHECK(std::abs(w.household(ph).outAcres - out - 4) < 1e-6, "the pledged acres did not come to the family");
+        CHECK(std::abs(WorldTest::landOut(w) - land) < 1e-6, "taking a pledge made or lost acres");
+        CHECK(std::abs(WorldTest::allMoney(w) - money) < 0.01, "a default made or lost money");
+        CHECK(w.inDistrict(), "taking land out there for a debt did not take the family into the district");
+        // Not paid, no pledge: to the hundred court.
+        id = WorldTest::addAsk(w, "hadley", 200, 0);
+        WorldTest::lend(w, id, 0);
+        const size_t second = WorldTest::dloans(w).size() - 1;
+        CHECK(WorldTest::dloans(w)[second].owed == 230 && WorldTest::dloans(w)[second].pledge == 0, "an unpledged loan not at the full rate");
+        WorldTest::house(w, hadley).money = 0;
+        WorldTest::dloans(w)[second].due = w.year();
+        pick = "上百戶法庭告他";
+        const size_t suits = WorldTest::dsuits(w).size();
+        WorldTest::loansDue(w);
+        CHECK(WorldTest::dloans(w)[second].state == 3 && WorldTest::dsuits(w).size() == suits + 1, "the default was not taken to the hundred court");
+        money = WorldTest::allMoney(w), land = WorldTest::landOut(w);
+        pick = "自己去說";
+        WorldTest::court(w);
+        const auto& suit = WorldTest::dsuits(w)[suits];
+        const int st = WorldTest::dloans(w)[second].state;
+        std::printf("district loans: pledge taken, suit over 230 pence: %s (loan state %d), %d cards answered\n", suit.result.c_str(), st, asked);
+        CHECK(suit.done && !suit.result.empty(), "the hundred court did not hear the debt");
+        CHECK(st == 1 || st == 4, "the loan not settled by the verdict");
+        CHECK(std::abs(WorldTest::landOut(w) - land) < 1e-6, "the hundred court made or lost acres");
+        CHECK(std::abs(WorldTest::allMoney(w) - money) < 0.01, "the hundred court made or lost money");
+        // Paid back: the family's own debt to the town's lender, at Michaelmas.
+        const Id draper = WorldTest::dshell(w, "draper");
+        WorldTest::addLoan(w, draper, ph, 100, 125);
+        const double before = w.household(ph).money, lenderBefore = w.household(draper).money;
+        money = WorldTest::allMoney(w);
+        WorldTest::loansDue(w);
+        CHECK(WorldTest::dloans(w).back().state == 1, "the family's debt out there not paid when it could be");
+        CHECK(std::abs(before - w.household(ph).money - 125) < 0.01 && std::abs(w.household(draper).money - lenderBefore - 125) < 0.01, "the repayment did not go from the family to the lender");
+        CHECK(std::abs(WorldTest::allMoney(w) - money) < 0.01, "repaying made or lost money");
+        w.stepDay();
+        CHECK(w.unbookedMoney() - unbooked < 0.01, "a loan moved the family's purse without a line in its books");
+        checkInvariants(w, "district loans");
+    }
+    // The lease (包租): the rent is the lord's whatever the summer; in a bad year the town's lender covers the gap,
+    // at his rate, as a debt on the books.
+    {
+        Config c;
+        c.seed = 195;
+        c.startYear = 1340;
+        c.prerun = 25;
+        World w(defs, c);
+        w.runYears(1);
+        const Id ph = w.playerHousehold();
+        auto* s = WorldTest::stake(w, "seat_farm");
+        CHECK(s && s->kind == "lease", "no lease in the district data");
+        if (s) {
+            s->holder = ph, s->holderMan = w.playerHead(), s->until = w.today() + 2 * kDaysPerYear;
+            WorldTest::setWeather(w, 0.5);
+            WorldTest::give(w, ph, 10 - w.household(ph).money);
+            const size_t loans = WorldTest::dloans(w).size();
+            const double crop = std::round(s->acres * s->yield * 0.5);
+            WorldTest::districtMichaelmas(w);
+            const auto& all = WorldTest::dloans(w);
+            double lent = 0, owed = 0;
+            for (size_t i = loans; i < all.size(); ++i)
+                if (all[i].borrower == ph && all[i].lender == WorldTest::dshell(w, "draper")) lent = all[i].lent, owed = all[i].owed;
+            std::printf("district lease in a bad year: crop %.0f, rent %.0f, borrowed %.0f, owed %.0f\n", crop, s->rent, lent, owed);
+            CHECK(lent > 0 && std::abs(lent - (s->rent - crop - 10)) < 0.01 && std::abs(owed - std::round(lent * 1.25)) < 0.01,
+                  "the lease's bad-year shortfall was not borrowed from the town's lender at his rate");
+            CHECK(s->holder == ph, "the lease was lost though the rent was paid");
+            w.stepDay();
+            checkInvariants(w, "district lease");
+        }
+    }
+    // Rich start (seed 195 from 1340), fifteen years: the family goes into the district, meets someone over it there,
+    // and the books stay whole; the decider's district answers replay to the same world.
+    {
+        Config c;
+        c.seed = 195;
+        c.startYear = 1340;
+        c.prerun = 25;
+        World w(defs, c);
+        const double unbooked = w.unbookedMoney();
+        w.runYears(15);
+        auto n = [&](const std::string& k) { return w.counters().count(k) ? w.counters().at(k) : 0; };
+        std::printf("district, seed 195 from 1340, 15 years: in %d, fell %d, rounds %d, our bids %d, won %d, clashes %d, suits %d, village houses in %d, blows %d\n",
+                    n("district:in"), n("district:fell"), n("district:round"), n("district:bid_ours"), n("district:won_ours"), n("district:clash"), n("district:suit"),
+                    n("district:npc_in"), n("district:blow"));
+        CHECK(n("district:in") >= 1, "a rich family never got into the district in fifteen years");
+        CHECK(n("district:clash") >= 1, "no clash over anything in the district in fifteen years");
+        CHECK(n("district:npc_in") >= 1, "no village house went into the district in fifteen years");
+        CHECK(w.unbookedMoney() - unbooked < 1, "the district moved the family's purse without a line in its books");
+        checkInvariants(w, "district 15 years");
+
+        std::vector<int> answers;
+        int districtAsked = 0;
+        auto ours = [](const std::string& t) { return t.rfind("出價：", 0) == 0 || t.rfind("誰拿到", 0) == 0 || t.rfind("這一年怎麼對付", 0) == 0; };
+        World a(defs, c);
+        a.setNpcDecider([&](const World::NpcChoice& ch, std::string& why) {
+            int r = ours(ch.title) ? 0 : -1;
+            districtAsked += r == 0;
+            why = r >= 0 ? "test" : "";
+            answers.push_back(r);
+            return r;
+        });
+        a.runYears(6);
+        World b(defs, c);
+        size_t at = 0;
+        b.setNpcDecider([&](const World::NpcChoice&, std::string& why) {
+            int r = at < answers.size() ? answers[at++] : -1;
+            why = r >= 0 ? "test" : "";
+            return r;
+        });
+        b.runYears(6);
+        std::printf("district decider: %d district choices asked, %zu answers replayed\n", districtAsked, answers.size());
+        CHECK(districtAsked > 0, "the decider was never asked a district choice");
+        CHECK(a.digest() == b.digest(), "the decider's district answers did not replay to the same world");
     }
 
     if (failures == 0) std::printf("all tests passed\n");

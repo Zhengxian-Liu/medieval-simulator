@@ -324,7 +324,7 @@ void World::monthlyDistrict() {
             s.holderMan = kNone, s.holder = kNone, s.until = -1;
             s.nextOpen = std::min(s.nextOpen, year() + (month() < s.month ? 0 : 1));
         }
-    if (month() % 3 == 0) seasonAsks();
+    if (month() % 3 == 2) seasonAsks();
     const Json& months = defs_.district["court"]["months"];
     if (months.isArray())
         for (const auto& m : months.asArray())
@@ -631,6 +631,10 @@ void World::openRound(Stake& s) {
     s.open = true;
     s.openDay = day_;
     s.closeDay = day_ + static_cast<int>(defs_.district.numberOr("round_months", 2)) * kDaysPerMonth;
+    // The round stays open over the first day of a season (when the family plans it), so the panel and the season's
+    // list can still take a bid when the card was not asked.
+    const int q = 3 * kDaysPerMonth, prompt = (day_ / q + 1) * q;
+    if (s.closeDay <= prompt) s.closeDay = prompt + kDaysPerMonth;
     s.bids.clear();
     s.carded = false;
     ++counters_["district:round"];
@@ -1121,9 +1125,11 @@ void World::dHear(Id news, Id teller) {
 
 // ---- Loans and wool -----------------------------------------------------------------------------
 
+// The last month of each season: who will come asking in the next one. They stand through that season, so the
+// family sees them when it plans the season (its list comes on the season's first day, before that day's news).
 void World::seasonAsks() {
-    dasks_.erase(std::remove_if(dasks_.begin(), dasks_.end(), [&](const DAsk& a) { return a.until <= day_; }), dasks_.end());
-    const int until = day_ + 3 * kDaysPerMonth - 1;
+    dasks_.erase(std::remove_if(dasks_.begin(), dasks_.end(), [&](const DAsk& a) { return a.until <= day_ + kDaysPerMonth; }), dasks_.end());
+    const int until = day_ + 4 * kDaysPerMonth - 1;
     static const char* whys[] = {"春耕要買種子，犁牛又病了", "女兒要出嫁，嫁妝還差一截", "去年的租子還欠著領主府", "要付一場官司的錢", "房子塌了半邊要修"};
     for (auto& d : dhouses_) {
         if (d.gone || d.head == kNone || !d.borrow.isObject()) continue;
@@ -1149,7 +1155,7 @@ void World::seasonAsks() {
     }
     // The wool merchant's share in the clip, every spring; the price it will fetch at Michaelmas is already in the
     // making (a son in town hears which way it goes).
-    if (month() == static_cast<int>(defs_.district["wool"].numberOr("month", 3))) {
+    if ((month() + 1) % 12 == static_cast<int>(defs_.district["wool"].numberOr("month", 3))) {
         const Json& W = defs_.district["wool"];
         const double spread = W.numberOr("spread", 0.3);
         dist_.woolNext = std::clamp(std::round(dist_.wool * (1 + (rngDistrict_.uniform() * 2 - 1) * spread)), W.numberOr("min", 32), W.numberOr("max", 110));
@@ -1360,7 +1366,8 @@ void World::hundredCourt() {
             if (clerk != kNone) opts.push_back("讓" + shortName(clerk) + "替家裡說話（他識字懂規矩，勝算多一成半，不花錢）"), kind.push_back(2);
             const std::string role = inPlayerHouse(s.plaintiff) ? "你家告 " + fullName(D) : fullName(P) + "告你家";
             const std::string merit = (inPlayerHouse(s.plaintiff) ? "你家的理由站得住的把握大約 " : "對方的理由站得住的把握大約 ") + odds(s.merit);
-            int r = askPlayer("百戶法庭", cardText("district.court.situation", {{"case", role}, {"what", s.what}, {"merit", merit}}), opts);
+            int r = askPlayer("百戶法庭", cardText("district.court.situation", {{"case", role}, {"what", s.what}, {"merit", merit},
+                                                                       {"basis", s.kind == "debt" ? "照借據" : s.kind == "bounds" ? "照地界和老人的記憶" : "照鄰居們看到的"}}), opts);
             int k = r >= 0 && r < static_cast<int>(kind.size()) ? kind[static_cast<size_t>(r)] : (clerk != kNone ? 2 : h.money >= att + 150 ? 1 : 0);
             if (k == 1) {
                 h.money -= att;
@@ -1460,6 +1467,7 @@ void World::hundredCourt() {
                 dh.outAcres -= acres;
                 dh.outFree = std::min(dh.outFree, dh.outAcres);
                 if (DHouse* pd = dhouseOf(s.plaintiff)) pd->acres += acres;
+                else ph.outAcres += acres, ph.outFree += acres;
                 result = "判" + fullName(P) + "有理：地界往你家這邊挪，" + num(acres) + " 畝劃給了他家";
                 if (inPlayerHouse(s.defendant)) districtBlow("地界的官司輸了，丟了 " + num(acres) + " 畝");
             } else {
@@ -1546,8 +1554,7 @@ void World::rivalYear() {
     if (r < 0) r = rngDistrict_.weighted(w);
     const int a = r >= 0 && r < static_cast<int>(act.size()) ? act[static_cast<size_t>(r)] : -1;
     if (a == 0) {
-        fileSuit("bounds", rv.shell, playerHousehold_, 2, 0.55 + 0.35 * rngDistrict_.uniform(), -1, brook->name + "的地界");
-        noteClash(playerHousehold_, rv.shell, "告你家" + brook->name + "的地界");
+        fileSuit("bounds", rv.shell, playerHousehold_, 2, 0.55 + 0.35 * rngDistrict_.uniform(), -1, brook->name + "的地界");  // the verdict goes in the clash book
     } else if (a == 1) {
         const Id dec = stakeDecider(*next);
         addOpinion(dec, me, "rival_slander", -8, 4);
@@ -1880,7 +1887,7 @@ World::DistrictView World::districtView() const {
         const Id dec = stakeDecider(s);
         if (!s.open) {
             r.state = "在你家手上";
-            r.desc = s.until >= 0 ? "到 " + std::to_string(cfg_.startYear + s.until / kDaysPerYear) + " 年" : "";
+            r.desc = s.until < 0 ? "" : s.until <= day_ ? "任期滿了，下一回換人時還能再爭" : "到 " + std::to_string(cfg_.startYear + s.until / kDaysPerYear) + " 年";
             v.stakes.push_back(r);
             continue;
         }
