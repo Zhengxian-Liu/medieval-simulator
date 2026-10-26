@@ -71,6 +71,7 @@ World::World(const Defs& defs, Config cfg)
         return;
     }
     openBooks();
+    setupDistrict();  // 地方 (src/district.cpp): the places outside the village, from the first day of play
     // Each game opens on one of a few situations the family is already in (data/events/openings.json).
     std::vector<std::string> openings;
     for (const auto& ev : defs_.events)
@@ -159,6 +160,7 @@ void World::stepDay() {
             rivalHeadOn();
         }
         settlePledges();
+        monthlyDistrict();  // 地方 (src/district.cpp): the rounds out there, the season's loans, the hundred court
         events.pulse("monthly");
     }
     // The cards held back at the opening: one a month, in the middle of the month, once the first season is on.
@@ -169,6 +171,7 @@ void World::stepDay() {
         yearlyDebts();
         payRent();
         settlePledges();
+        districtMichaelmas();  // 地方: the lease out there, the outside land's rent, the posts' fees, loans and the wool
     }
 
     if (!gameOver_) followSurvivingBranch();
@@ -697,6 +700,13 @@ uint64_t World::digest() const {
         mix(uint64_t(std::llround(hh.debt * 100)) + uint64_t(hh.debtYears));
     }
     for (const auto& f : feuds_) mix(uint64_t(f.a) * 1000 + uint64_t(f.b) * 10 + uint64_t(f.stage));
+    // 地方 (src/district.cpp): who holds what out there, the loans, the suits, the wool.
+    mix(uint64_t(dist_.in) + uint64_t(std::llround(dist_.wool * 10)) * 3);
+    for (const auto& s : stakes_) mix(hashString(s.key) + uint64_t(s.holder + 10) * 7 + uint64_t(s.holderMan + 10) * 13 + uint64_t(s.bids.size()));
+    for (const auto& l : dloans_) mix(uint64_t(std::llround(l.owed * 100)) + uint64_t(l.state) * 17);
+    for (const auto& s : dsuits_) mix(hashString(s.result) + uint64_t(s.done));
+    for (const auto& d : dhouses_) mix(uint64_t(std::llround(d.acres * 100)) + uint64_t(d.members.size()));
+    for (const auto& hh : households_) mix(uint64_t(std::llround(hh.outAcres * 100)));
     for (const auto& c : chronicle_) mix(hashString(c.text));
     return h;
 }

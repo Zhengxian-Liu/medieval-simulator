@@ -217,6 +217,9 @@ struct Household {
     Id passHeir = kNone;
     int passSince = -1;
     int passAsked = -1;    // the year the head was last asked (once a generation, or when the sons change)
+    // 地方 (src/district.cpp): land held outside the village (not one of its parcels), let to tenants out there; of it,
+    // the acres held by charter. They count to the house's standing and to the king's tax like the land at home.
+    double outAcres = 0, outFree = 0;
 };
 
 // A quarrel between two families that grows by stages (Crusader Kings-style story arc).
@@ -647,7 +650,7 @@ public:
     void setNpcScope(Ring r) { npcScope_ = r; }
     bool npcInScope(Id id) const {
         int r = ringOf(id);
-        return npcDecider_ && r != kHome && r >= npcScope_;
+        return npcDecider_ && r != kHome && (r >= npcScope_ || districtNotable_.count(id) > 0);
     }
     const std::vector<Deed>& deeds() const { return deeds_; }
     const std::vector<Memory>& memoriesOf(Id id) const { return memories_.at(id); }
@@ -974,6 +977,43 @@ public:
     Id ballotHead() const;
     const std::vector<Pledge>& pledges() const { return pledges_; }
 
+    // 第二層舞台：地方 (src/district.cpp, design/district.md): a neighbouring village with a rising house of its own,
+    // the market town, the lord's household and the hundred court. What the front ends show (the 「地方」 panel) and
+    // what can be done there: 出價 (bid), 託人 (have someone speak for the family), 放貸 (lend).
+    struct DistrictView {
+        bool in = false;          // the family is in 地方: the panel is shown
+        std::string status;       // 「1352 年起：買下了布雷德利村溪邊那 6 畝自由地」
+        std::vector<std::string> footholds;  // what holds the family there
+        std::string fall;         // what would bring it down
+        std::string rival;        // 「布萊克伍德家（傑佛瑞）」, "" when there is none
+        std::string rivalAfter;   // what he is after now
+        std::vector<std::string> rivalClashes;
+        std::string wool;         // the wool price, and what the family hears of where it is going
+        struct Opt {
+            std::string verb;     // bid | speak | lend
+            std::string key;      // the stake (bid, speak) or the ask (lend)
+            std::string arg;      // the level (bid, lend) or who speaks (speak)
+            std::string label;    // what it is and what it costs
+            bool open = true;
+            std::string why;      // when closed
+        };
+        struct Row {
+            std::string key, title, place, desc, state;
+            std::vector<Opt> opts;
+        };
+        std::vector<Row> stakes;  // what is contested now (and what the family holds)
+        std::vector<Row> asks;    // who wants to borrow this season
+        std::vector<std::string> loans, suits, people, houses;
+    };
+    DistrictView districtView() const;
+    bool inDistrict() const;                     // the family is in 地方
+    bool districtHouse(Id house) const;          // a village house that has stepped up into 地方 (the family's included)
+    std::string districtRivalName() const;       // the rising house in the neighbouring village, "" when none (or kin now)
+    std::string districtRivalAfter() const;
+    std::vector<std::string> districtRivalClashes() const;
+    std::string districtPersonLine(Id id) const;  // 「布雷德利村 布萊克伍德家的家長」, "" for a villager
+    bool isDistrictShell(Id house) const;        // the household standing for a house out there (news, the clash book)
+
     // --- player interface
     void issue(const Command& c);
     std::vector<PlanOption> availablePlans(Id actor);
@@ -1120,6 +1160,7 @@ private:
     NpcDecider npcDecider_;
     NpcBatchDecider npcBatchDecider_;
     Ring npcScope_ = kSpotlight;
+    std::set<Id> districtNotable_;       // 地方's heads: their choices go to the decider whatever the scope
     std::vector<uint8_t> ring_;          // by person id
     std::vector<float> ringScore_;       // how much each villager has to do with the family right now
     std::vector<float> shownScore_;      // the part of it the family can see
@@ -1606,7 +1647,7 @@ private:
     void rivalForLand(Person& head);
     void rivalForMatch(Person& head);
     void rivalForOffice(Person& head);
-    void stewardLoan(Person& head);
+    void stewardLoan(Person& head, bool pressed = false);  // pressed: 地方 (a rich house is asked; a no costs the lord's goodwill)
     void manorBondDue(Person& head);
 
     // minds.cpp: rings, yearly intentions, and acting on them
@@ -1742,7 +1783,7 @@ private:
     void kinRespond(Grievance& g);       // the target's side answers a sign (an NPC by the rules, the player on a card)
     bool kinCourt(Id plaintiff, Id defendant, const std::string& claim, double merit, const std::string& about, const std::vector<Id>* pool = nullptr);
     int neighbourJury(Id accused, Id accuser, double truth, std::vector<Id>& ayes, int& panel, const std::string& what,
-                      const std::vector<Id>* drawn = nullptr);
+                      const std::vector<Id>* drawn = nullptr, Rng* rng = nullptr);  // rng: the hundred court draws its own
     std::vector<Id> pickJury(Id accused, Id accuser);
     void hearDocket();                      // the year's kin suits, heard on one court day
     void sueHear(Grievance& g, const std::vector<Id>* pool);
@@ -1763,6 +1804,141 @@ private:
     double payLord(Household& h, double amount, const std::string& why);  // what the purse holds of it, booked both sides
     std::string repPassed_;              // how the name passed at the last succession, for the hand-over scene
     void dowerHouseEnds(Id house);       // a house holding a dower ends or merges: the acres go where they belong
+
+    // district.cpp (design/district.md): 地方.
+    struct DHouse {
+        std::string key, place, note;
+        Id dynasty = kNone, shell = kNone;  // shell: an extinct household that stands for it in news and the clash book
+        std::vector<Id> members;             // the living, the head first
+        Id head = kNone;
+        double acres = 0, income = 0, spend = 0.8;
+        bool rival = false, gentry = false, lender = false, gone = false;
+        Json borrow;
+    };
+    struct DBid {
+        Id house = kNone;      // a village household or a district shell
+        double amount = 0;
+        int level = 0;
+        Id man = kNone;        // who it is for (the son for a place or the match, the man for a post)
+        Id speak = kNone;      // who spoke for them (託人)
+        std::string speakHow;  // favour | kin | clerk | post
+        int day = 0;
+        bool known = false;    // the family heard of it (its odds count it, its card names it)
+        std::string heardFrom;
+    };
+    struct Stake {
+        std::string key, kind, place, name;
+        std::string decider;     // a district house's key, or "lord"
+        std::string seller, master, house, bride, station, bounds, dowryName;
+        double base = 0, acres = 0, rent = 0, yield = 0, fee = 0, learning = 0, dowryAcres = 0;
+        int years = 0, month = 0, every = 0, minAge = 0, maxAge = 99, standing = 0, retire = 0, brideAge = 0;
+        bool free = false, tier = false, minor = false, gate = false;
+        Id holder = kNone;       // the household holding it now (a village one or a shell)
+        Id holderMan = kNone;    // post, seat, place: the one in it
+        int until = -1;          // day the lease, post or seat runs out (-1: for life)
+        int nextOpen = 0;        // year it next comes up
+        bool open = false, done = false, carded = false;
+        int openDay = -1, closeDay = -1;
+        std::vector<DBid> bids;
+        std::vector<std::string> history;  // 「1352 年 卡特家拿到」
+    };
+    struct DLoan {
+        Id lender = kNone, borrower = kNone;  // households (village or shell)
+        double lent = 0, owed = 0, pledge = 0;
+        int due = 0, since = 0;
+        int state = 0;           // 0 running, 1 repaid, 2 not paid (waiting), 3 in court, 4 written off, 5 pledge taken
+        bool graced = false, wool = false;
+        double price = 0;        // wool: the price when it was put in
+    };
+    struct DAsk {
+        int id = 0;
+        std::string kind;        // loan | wool
+        Id house = kNone;        // the shell asking
+        double amount = 0, rate = 0, pledge = 0, risk = 0;
+        int years = 1, until = 0;
+        std::string why;
+    };
+    struct DSuit {
+        std::string kind;        // debt | bounds | oppress
+        Id plaintiff = kNone, defendant = kNone;  // households
+        double amount = 0, merit = 0.5;
+        int loan = -1;
+        int filed = 0, hear = 0;
+        bool attorney = false, done = false;
+        Id speak = kNone;        // who pleaded for the family (a son who is a clerk)
+        std::string what, result;
+    };
+    struct District {
+        bool built = false, in = false;
+        int since = -1;
+        std::string gate;
+        std::vector<int> blows;                    // days of the blows that count against the family
+        std::vector<std::string> blowWhy;
+        std::map<Id, std::string> houses;          // village households in 地方 -> how they got there
+        double wool = 60, woolNext = 60;
+        int cardSeason = -1, lordAsk = 0, nextAsk = 1;
+        int woolHint = 0;                          // what a son in town hears of the wool price: +1 up, -1 down, 0 level (right most years)
+        Id rivalHead = kNone;                      // the rival's head when last looked (a new one is told)
+        bool rivalKin = false;                     // the rival house became kin: no longer the rival
+    };
+    District dist_;
+    std::vector<DHouse> dhouses_;
+    std::vector<Stake> stakes_;
+    std::vector<DLoan> dloans_;
+    std::vector<DAsk> dasks_;
+    std::vector<DSuit> dsuits_;
+    Rng rngDistrict_;
+    void setupDistrict();
+    void monthlyDistrict();
+    void districtMichaelmas();
+    void districtYear();
+    void districtLives();
+    DHouse* dhouseOf(Id shell);
+    const DHouse* dhouseOf(Id shell) const;
+    DHouse* dhouseByKey(const std::string& key);
+    const DHouse* dhouseByKey(const std::string& key) const;
+    const DHouse* dhouseOfPerson(Id person) const;
+    Id stakeDecider(const Stake& s) const;
+    std::string houseTag(Id house) const;     // 「你家」, 「卡特家」, 「布雷德利村的布萊克伍德家」
+    Id houseHead(Id house) const;
+    bool districtKinHouse(const DHouse& d) const;  // one of the family's near kin lives in it
+    const DHouse* districtRival() const;
+    Stake* stakeByKey(const std::string& key);
+    const Stake* stakeByKey(const std::string& key) const;
+    bool stakeVacant(const Stake& s) const;
+    void openRound(Stake& s);
+    void closeRound(Stake& s);
+    std::vector<Id> stakeMen(const Stake& s, Id house) const;   // who the house could put up for it
+    std::string stakeBar(const Stake& s, Id house) const;       // why the house cannot bid ("" when it can)
+    double bidScore(const Stake& s, const DBid& b) const;
+    double stakeOdds(const Stake& s, Id house, double amount, Id speak, bool knownOnly) const;
+    void placeBid(Stake& s, Id house, int level, Id man);
+    void npcBids(Stake& s);
+    void bidCard(Stake& s, bool fromAgenda);
+    void settleStake(Stake& s, size_t winner);
+    std::vector<std::pair<Id, std::string>> speakers(const Stake& s) const;  // who could speak for the family, and on what strength
+    void speakFor(Stake& s, Id who);
+    void enterTier(Id house, const std::string& why);
+    void districtBlow(const std::string& why);
+    void checkFall();
+    std::vector<std::string> footholds() const;
+    void dHear(Id news, Id teller);  // the family hears a piece of district news
+    void seasonAsks();
+    void lendTo(int ask, int level);
+    void loansDue();
+    void loanDefault(size_t i);
+    void fileSuit(const std::string& kind, Id plaintiff, Id defendant, double amount, double merit, int loan, const std::string& what);
+    void hundredCourt();
+    void rivalYear();
+    void proposals();
+    void districtCommand(const Command& c);
+    void districtAgenda(std::vector<AgendaItem>& items);
+    void doDistrictAgenda(const AgendaItem& a);
+    double districtTaxMult(const Household& h) const;
+    std::string levelName(int level) const;
+    double levelMult(int level) const;
+    int levelCount() const;
+    std::string sonInTown() const;  // the family's own in town or at a clerk's desk, by name ("" none): they hear prices and bids
 };
 
 }  // namespace sim

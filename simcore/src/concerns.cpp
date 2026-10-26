@@ -1288,6 +1288,7 @@ std::vector<World::AgendaItem> World::seasonAgenda(bool all) {
 
     // The family's own drive (src/kin.cpp): what is brewing at home, how the holding will pass, the ladder in the head's hand.
     if (!hiding) kinAgenda(items);
+    if (!hiding) districtAgenda(items);  // 地方 (src/district.cpp): what is contested out there, the ways in
     std::stable_sort(items.begin(), items.end(), [](const AgendaItem& x, const AgendaItem& y) { return x.rank > y.rank; });
     // One plan once: the ambition's step may be the match or the courting found below it.
     // And every item once: two hungry houses can name the same child to take in (help_take:<child>).
@@ -1405,7 +1406,7 @@ void World::doAgenda(const std::string& id) {
             for (const auto& in : interactionsWith(a.who))
                 if (in.ev->id == a.event && in.open) still = true;
         }
-        if (a.kind == "plan" || a.kind == "ask") still = true;  // startPlan / ask check it and say why not
+        if (a.kind == "plan" || a.kind == "ask" || a.kind == "district") still = true;  // startPlan / ask check it and say why not
         if (!still) {
             log(1, "〔這一季的事〕" + a.title + "辦不成了：" + agendaGoneWhy(a) + "。");
             return;
@@ -1422,6 +1423,10 @@ void World::doAgenda(const std::string& id) {
         log(1, "〔這一季的事〕" + a.done);
         EventRunner er(*this);
         er.apply(Json::parse(a.effects), people_[head], a.target);
+        return;
+    }
+    if (a.kind == "district") {
+        doDistrictAgenda(a);  // the bid card (a free day when a bid is made)
         return;
     }
     if (a.kind == "kin") {

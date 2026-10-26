@@ -74,7 +74,17 @@
     {"id": "kin:upkeep_broken","text": "{other}沒照約奉養{subject}：{thing}", "heat": 0.8, "fade_months": 6, "instant": 0.5, "wide": true},
     {"id": "kin:attempt",      "text": "{subject}想害死{other}，被人撞破了", "heat": 1.0, "fade_months": 8, "instant": 0.5, "wide": true},
     {"id": "kin:inquest",      "text": "驗屍官來驗了{subject}的屍：{thing}", "heat": 1.0, "fade_months": 8, "instant": 0.5, "wide": true},
-    {"id": "kin:verdict",      "text": "{thing}", "heat": 1.0, "fade_months": 10, "instant": 0.5, "wide": true}
+    {"id": "kin:verdict",      "text": "{thing}", "heat": 1.0, "fade_months": 10, "instant": 0.5, "wide": true},
+
+    // 地方 (src/district.cpp): what happens out there reaches the family by its own ways (a son in town, the posts it
+    // holds, the market), not round the village (monthlyNews does not pass these on), so log_link 2: the panel says it.
+    {"id": "district:bid",     "text": "{house}家在爭{thing}", "heat": 0.5, "fade_months": 4, "instant": 2, "log_link": 2},
+    {"id": "district:won",     "text": "{thing}讓{house}家拿到了", "heat": 0.6, "fade_months": 6, "instant": 2, "log_link": 2},
+    {"id": "district:tier",    "text": "{house}家在地方上有了名字：{thing}", "heat": 0.6, "fade_months": 6, "instant": 2, "log_link": 2},
+    {"id": "district:death",   "text": "{house}家的{subject}去世了", "heat": 0.6, "fade_months": 4, "instant": 2, "log_link": 2},
+    {"id": "district:verdict", "text": "百戶法庭判了：{thing}", "heat": 0.7, "fade_months": 6, "instant": 2, "log_link": 2},
+    {"id": "district:slander", "text": "{subject}在{other}面前說你家的不是", "heat": 0.5, "fade_months": 4, "instant": 2, "log_link": 2},
+    {"id": "district:default", "text": "{house}家欠的債還不出來了", "heat": 0.6, "fade_months": 5, "instant": 2, "log_link": 2}
   ],
   // What is whispered of a secret deed (a belief passed on, true or not): {subject} the one said to have done it.
   "whispers": {

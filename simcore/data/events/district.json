@@ -1,0 +1,14 @@
+{
+  // 地方 (src/district.cpp, design/district.md): the words of the cards the code builds out there. {name} and the
+  // like are filled in there; an option says what it costs before the choice.
+  "events": [],
+  "texts": {
+    "district.bid.situation": "{place}：{name}{what}。{for}{decider}{bids}可能還有別家沒傳出來。{close}見分曉：輸了不花錢，贏了當場付清。你家現在有 {money}。",
+    "district.bid.option": "出 {amount}（{level}）：勝算約 {odds}（只算聽說了的出價）",
+    "district.bid.pass": "這回不出價（「地方」那一欄或這一季的事裡還能出）",
+    "district.default.situation": "{year} 年借給{house}的 {lent}，連本帶利 {owed}，到期了。{who}上門來賠不是，說實在拿不出來。",
+    "district.court.situation": "百戶法庭開庭：{case}，為的是「{what}」。照借據和地界，{merit}；陪審是各村殷實的人家，也看人情。你家要怎麼上堂？",
+    "district.propose.situation": "{house}託媒人來說親，想替 {groom}（{age} 歲）娶你家的 {girl}。嫁過去就是外村人家的媳婦，兩家成了親家，往後在地方上有人替你家說話。照你家的身分，嫁妝要 {dowry}。{rival}",
+    "district.propose.rival": "{house}是你家在地方上的對頭：結了親，兩家就是親家，不再爭了。"
+  }
+}

@@ -49,7 +49,10 @@ const std::map<std::string, std::string>& modNames() {
         // (fun-r11: ids that had no words and showed raw)
         {"dodged_array", "點兵時躲著不去"}, {"forgave_debt", "免過我的債"}, {"forgave_manor", "免了莊園的債"}, {"gave_time", "抽空陪過我"},
         {"keeps_accounts", "帳記得清楚"}, {"land_rival", "跟我家搶過地"}, {"lent_to_manor", "借過錢給莊園"}, {"lent_us", "借過錢給我家"},
-        {"lost_in_court", "在法庭上輸給你家"}, {"made_peace", "講和過"}, {"patient_lender", "肯寬限的債主"}, {"took_demesne", "包下了莊園的自營地"},
+        // 地方 (src/district.cpp).
+        {"above_us", "如今把你家看成上面的人"}, {"rival_slander", "聽人說了你家的壞話"}, {"took_pledge", "收走了我家抵押的地"},
+        {"refused_match", "回絕了我家的親事"}, {"asked_letter", "替你家寫過信說情"},
+        {"lost_in_court", "在法庭上輸給你家"},{"made_peace", "講和過"}, {"patient_lender", "肯寬限的債主"}, {"took_demesne", "包下了莊園的自營地"},
         {"trusty_lender", "靠得住的債主"}, {"rival_outbid", "搶過我看中的東西"}};
     return names;
 }

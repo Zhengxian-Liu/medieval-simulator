@@ -14,6 +14,7 @@
     {"id": "town_master",     "name": "在鎮上當師傅", "away": true, "lasting": true},
     {"id": "town_labourer",   "name": "在鎮上打零工", "away": true},
     {"id": "town_servant",    "name": "在鎮上幫傭", "away": true},
+    {"id": "town_clerk",      "name": "在鎮上的書記房做事", "away": true},
     {"id": "town_wife",       "name": "嫁到了鎮上", "away": true, "lasting": true},
     {"id": "scholar",         "name": "在文法學校讀書", "away": true},
     {"id": "priest_away",     "name": "在外地當神父", "occupation": "priest", "away": true, "lasting": true},

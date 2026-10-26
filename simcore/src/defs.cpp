@@ -411,6 +411,7 @@ Defs Defs::loadFromDir(const std::string& dir) {
     for (const auto& [k, v] : newsRoot["whispers"].asObject()) d.whispers[k] = v.asString();
 
     d.village = Json::parseFile(dir + "/village.json");
+    if (std::filesystem::exists(dir + "/district.json")) d.district = Json::parseFile(dir + "/district.json");
     return d;
 }
 

@@ -326,6 +326,10 @@ void World::kill(Id id, const std::string& cause) {
         p.health = std::max(p.health, 50.0);
         return;
     }
+    // 地方 (src/district.cpp): the heir lost is one of the blows that can bring the family down out there.
+    if (dist_.in && p.household != kNone && inPlayerHouse(p.household) && households_[p.household].head != id && households_[p.household].head != kNone &&
+        heirOf(households_[p.household], households_[p.household].head) == id && ageYears(p) >= 5)
+        districtBlow("繼承人" + p.firstName + "死了");
     // A cause that says how ("戰死沙場", "…被絞死") stands as it is; a sickness (黑死病 too) is what they died of.
     auto endsWith = [&](const std::string& s) { return cause.size() >= s.size() && cause.compare(cause.size() - s.size(), s.size(), s) == 0; };
     bool saysHow = cause.find("死") != std::string::npos && !endsWith("病");

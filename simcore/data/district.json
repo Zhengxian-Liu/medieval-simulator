@@ -1,0 +1,126 @@
+{
+  // 第二層舞台：地方 (design/district.md 六). Four places outside the village, each only a few named people and a few
+  // things that can be contested. The people are real people of the sim (they age, die, marry, have children); they
+  // live outside the village's own daily life (src/district.cpp runs their years). They come into being when the
+  // family is handed over, so the years before the hand-over are the village's alone.
+  "places": {
+    "neighbour": "布雷德利村",
+    "town": "奇平頓鎮",
+    "seat": "領主府",
+    "hundred": "溫德利百戶法庭"
+  },
+  // income: what the house takes in, in an ordinary year, from its own fields or trade; spend: the share of it the
+  // house lives on. borrow: how often it comes to ask for a loan, how much, the interest it offers a year, how many
+  // years, the acres it would pledge, and how likely it is not to pay (risk, more in a bad year).
+  "houses": [
+    {"key": "blackwood", "place": "neighbour", "surname": "布萊克伍德", "rival": true, "money": 650, "acres": 34, "income": 300, "spend": 0.7,
+     "note": "布雷德利村殷實的自由農，跟你家一樣在往上爬",
+     "people": [
+       {"name": "傑佛瑞", "sex": "m", "age": 44, "role": "head", "occupation": "peasant", "traits": ["ambitious", "greedy", "wrathful"], "skills": {"charm": 9, "learning": 4, "farming": 12}},
+       {"name": "瑪格麗特", "sex": "f", "age": 40, "role": "wife", "occupation": "housewife", "traits": ["clever"]},
+       {"name": "亞當", "sex": "m", "age": 20, "role": "child", "occupation": "peasant", "traits": ["literate", "diligent"], "skills": {"learning": 9, "charm": 6}},
+       {"name": "休", "sex": "m", "age": 16, "role": "child", "occupation": "peasant", "traits": ["strong"]},
+       {"name": "艾薇絲", "sex": "f", "age": 12, "role": "child", "traits": ["comely"]}
+     ]},
+    {"key": "hadley", "place": "neighbour", "surname": "哈德利", "money": 90, "acres": 22, "income": 150, "spend": 0.95,
+     "note": "布雷德利村的莊頭家，地不少，手頭總是緊",
+     "borrow": {"chance": 0.35, "amount": [60, 140], "rate": 0.2, "years": 2, "pledge": 3, "risk": 0.3},
+     "people": [
+       {"name": "羅傑", "sex": "m", "age": 50, "role": "head", "occupation": "peasant", "traits": ["calm", "lazy"], "skills": {"farming": 10, "charm": 5}},
+       {"name": "瓊安", "sex": "f", "age": 47, "role": "wife", "occupation": "housewife", "traits": ["kind"]},
+       {"name": "彼得", "sex": "m", "age": 23, "role": "child", "occupation": "peasant", "traits": ["gregarious"], "skills": {"farming": 8}}
+     ]},
+    {"key": "morton", "place": "neighbour", "surname": "德·莫頓", "gentry": true, "money": 300, "acres": 60, "income": 260, "spend": 0.9,
+     "note": "鄉紳家的遺孀，守著女兒的嫁妝地",
+     "borrow": {"chance": 0.15, "amount": [150, 300], "rate": 0.15, "years": 2, "pledge": 5, "risk": 0.2},
+     "people": [
+       {"name": "伊莎貝爾", "sex": "f", "age": 39, "role": "head", "occupation": "gentlewoman", "traits": ["pious", "clever"], "skills": {"charm": 10, "learning": 6}},
+       {"name": "凱瑟琳", "sex": "f", "age": 14, "role": "child", "traits": ["comely", "literate"], "skills": {"learning": 5}}
+     ]},
+    {"key": "wolman", "place": "town", "surname": "沃爾曼", "money": 1500, "income": 600, "spend": 0.8,
+     "note": "奇平頓鎮的羊毛商，收各村的毛賣給佛蘭德斯的商人",
+     "borrow": {"chance": 0.2, "amount": [150, 300], "rate": 0.12, "years": 1, "pledge": 0, "risk": 0.12},
+     "people": [
+       {"name": "西蒙", "sex": "m", "age": 48, "role": "head", "occupation": "merchant", "traits": ["greedy", "clever"], "skills": {"charm": 10, "learning": 8}},
+       {"name": "愛麗絲", "sex": "f", "age": 42, "role": "wife", "occupation": "housewife", "traits": ["generous"]}
+     ]},
+    {"key": "scrivener", "place": "town", "surname": "斯克里文", "money": 400, "income": 220, "spend": 0.85,
+     "note": "鎮上的書記，替人寫契約、狀子和帳",
+     "people": [
+       {"name": "尼可拉斯", "sex": "m", "age": 55, "role": "head", "occupation": "clerk", "traits": ["literate", "calm"], "skills": {"learning": 14, "charm": 6}}
+     ]},
+    {"key": "draper", "place": "town", "surname": "德雷珀", "lender": true, "money": 1200, "income": 300, "spend": 0.6,
+     "note": "鎮上的布商，也放債，利錢很重",
+     "people": [
+       {"name": "艾倫", "sex": "m", "age": 51, "role": "head", "occupation": "merchant", "traits": ["greedy", "cynical"], "skills": {"charm": 7, "learning": 7}}
+     ]},
+    {"key": "fetton", "place": "seat", "surname": "費頓", "money": 500, "income": 240, "spend": 0.8,
+     "note": "領主府的總管，替老爺管各處莊園的帳和地",
+     "people": [
+       {"name": "理查", "sex": "m", "age": 62, "role": "head", "occupation": "steward", "post": "steward", "traits": ["diligent", "cynical"], "skills": {"learning": 12, "charm": 7}}
+     ]},
+    {"key": "stokes", "place": "seat", "surname": "斯托克斯", "money": 200, "income": 140, "spend": 0.9,
+     "note": "領主府的管家，收租、催債、看林子",
+     "people": [
+       {"name": "亨利", "sex": "m", "age": 40, "role": "head", "occupation": "bailiff", "post": "bailiff", "traits": ["wrathful"], "skills": {"charm": 5, "learning": 5}}
+     ]},
+    {"key": "brun", "place": "hundred", "surname": "布倫", "money": 400, "income": 200, "spend": 0.85,
+     "note": "百戶長，每三週在溫德利開一次庭",
+     "people": [
+       {"name": "華特", "sex": "m", "age": 53, "role": "head", "occupation": "hundredman", "post": "hundredman", "traits": ["calm", "greedy"], "skills": {"learning": 9, "charm": 8}}
+     ]}
+  ],
+  // What can be contested. kind: land (bought outright) | lease (a farm let for years at a yearly rent) | post (a
+  // place in the lord's household, with a yearly fee) | place (a boy's place in town) | seat (the hundred juror's
+  // seat) | match (a daughter of a house out there). base: what it goes for at the asking price (land: the price;
+  // lease: the entry gift; post / place / seat / match: the gift or premium). decider: the house whose head decides
+  // ("lord": the village's lord). first: the year after the hand-over it first comes up; every: then every so many
+  // years (0: once). month: the month the bidding opens (it closes two months later). tier: only houses already in
+  // 地方 may bid. gate: winning it is one of the ways into 地方 (design/district.md 五).
+  "stakes": [
+    {"key": "brook", "kind": "land", "place": "neighbour", "name": "布雷德利村溪邊那 6 畝自由地", "acres": 6, "free": true,
+     "seller": "hadley", "decider": "hadley", "base": 270, "first": 1, "every": 0, "month": 2, "gate": true, "bounds": "blackwood"},
+    {"key": "long_furlong", "kind": "land", "place": "neighbour", "name": "布雷德利村長條地那 10 畝", "acres": 10, "free": false,
+     "seller": "morton", "decider": "morton", "base": 380, "first": 5, "every": 0, "month": 2, "gate": true},
+    {"key": "seat_farm", "kind": "lease", "place": "seat", "name": "領主府的自營地（24 畝，包租五年）", "acres": 24, "rent": 230, "yield": 17, "years": 5,
+     "decider": "fetton", "base": 40, "first": 2, "every": 5, "month": 5, "gate": true},
+    {"key": "steward", "kind": "post", "place": "seat", "name": "領主府總管的位子", "fee": 90, "holder": "fetton", "retire": 66,
+     "decider": "lord", "base": 140, "first": 1, "every": 0, "month": 8, "tier": true, "min_age": 25, "learning": 4},
+    {"key": "bailiff", "kind": "post", "place": "seat", "name": "領主府管家的位子", "fee": 45, "holder": "stokes", "years": 4,
+     "decider": "fetton", "base": 60, "first": 2, "every": 4, "month": 8, "tier": true, "min_age": 21},
+    {"key": "apprentice", "kind": "place", "place": "town", "name": "沃爾曼家羊毛行的學徒位子", "master": "wolman", "decider": "wolman",
+     "base": 80, "min_age": 12, "max_age": 18, "station": "town_apprentice", "years": 7, "first": 1, "every": 3, "month": 0, "gate": true},
+    {"key": "clerk", "kind": "place", "place": "town", "name": "鎮上書記房的位子", "master": "scrivener", "decider": "scrivener",
+     "base": 60, "min_age": 14, "max_age": 25, "learning": 3, "station": "town_clerk", "years": 0, "first": 2, "every": 4, "month": 0, "gate": true},
+    {"key": "juror", "kind": "seat", "place": "hundred", "name": "百戶法庭陪審員的席位", "decider": "brun", "base": 20, "standing": 2, "years": 3,
+     "first": 1, "every": 3, "month": 0, "tier": true, "minor": true},
+    {"key": "match", "kind": "match", "place": "neighbour", "name": "德·莫頓家凱瑟琳的親事", "house": "morton", "bride": "凱瑟琳", "decider": "morton",
+     "base": 120, "dowry_acres": 8, "dowry_name": "坡上磨坊旁那 8 畝", "bride_age": 15, "min_age": 17, "max_age": 30, "standing": 1,
+     "first": 1, "every": 0, "month": 3, "gate": true}
+  ],
+  // A house short of money sells land now and then: a lot of `acres` (a share of what it has), priced by the acre.
+  "sales": {"below": 40, "acres": [3, 5], "price": 42, "keep": 12},
+  // 出價: the levels a bid can be made at, against the stake's base.
+  "levels": [
+    {"mult": 1.0, "name": "照價"},
+    {"mult": 1.25, "name": "多出兩成半"},
+    {"mult": 1.6, "name": "出高價"}
+  ],
+  "round_months": 2,
+  // 羊毛價 (pence for a sack's worth of a village's clip, as the merchant reckons it): it moves by up to `spread`
+  // a year, between min and max. Each spring the merchant offers a share in the clip (wool levels), settled at
+  // Michaelmas at the new price, with `margin` on top.
+  "wool": {"price": 60, "spread": 0.3, "min": 32, "max": 110, "margin": 1.12, "month": 3, "levels": [100, 200, 400], "hint": 0.8},
+  // The hundred court: what a suit costs to bring, an attorney, the court days (months), the jurors drawn.
+  "court": {"fee": 6, "attorney": 20, "months": [1, 4, 7, 10], "jurors": 8, "acre_price": 40},
+  // The town's lender: what he asks a year when the family cannot meet a rent out there.
+  "lender": {"house": "draper", "rate": 0.25},
+  // Outside land is let to tenants there: pence an acre a year, by the summer (a bad one brings in less).
+  "out_rent": 9,
+  // Into 地方 and out of it (design/district.md 五): blows (a big loan lost, a suit lost, the rival taking what the
+  // family bid for, the heir dying) within `blow_years` that bring the house down; the purse at which the lord's
+  // steward starts coming for loans (every `lord_every` years), and the loan to the lord that is a way in.
+  "tier": {"blows": 3, "blow_years": 4, "rich": 520, "lord_every": 2, "lord_gate": 400, "lord_refused": -8, "tax_mult": 1.2},
+  // A daughter of the family asked for by a house out there (a way in when she goes).
+  "proposal": {"chance": 0.3, "month": 4, "dowry": 0.12, "min_age": 16, "max_age": 26}
+}

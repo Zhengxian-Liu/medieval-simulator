@@ -98,6 +98,7 @@ void World::handOver(Id house, Id dynasty, int playYear) {
     computeRings();
     for (const auto& hh : households_) lastStanding_[hh.id] = standing(hh.id);
     watchSuccession();  // the line as it stands at the start: an heir lost in the first month is told
+    setupDistrict();    // 地方 (src/district.cpp): the places outside the village come in with play
 }
 
 }  // namespace sim

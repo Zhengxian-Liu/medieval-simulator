@@ -1414,14 +1414,15 @@ std::vector<Id> World::pickJury(Id accused, Id accuser) {
 // How the head voted, for a verdict line when he sat on the jury: 「（你說有罪）」.
 std::string World::juryAside() const { return juryHeadSat_ && !juryNote_.empty() ? "（" + juryNote_ + "）" : std::string(); }
 
-int World::neighbourJury(Id accused, Id accuser, double truth, std::vector<Id>& ayes, int& panel, const std::string& what, const std::vector<Id>* drawn) {
+int World::neighbourJury(Id accused, Id accuser, double truth, std::vector<Id>& ayes, int& panel, const std::string& what, const std::vector<Id>* drawn, Rng* rng) {
+    Rng& draw = rng ? *rng : rngKin_;
     std::vector<Id> pool = drawn ? *drawn : pickJury(accused, accuser);
     panel = static_cast<int>(pool.size());
     juryNote_.clear();
     juryHeadSat_ = false;
     if (panel < 3) {
         panel = 1;
-        return rngKin_.chance(0.25 + 0.4 * truth) ? 1 : 0;
+        return draw.chance(0.25 + 0.4 * truth) ? 1 : 0;
     }
     // The family's head votes last when he goes with the room (a court day's 「跟著多數」).
     const Id me = playerHead();
@@ -1441,7 +1442,7 @@ int World::neighbourJury(Id accused, Id accuser, double truth, std::vector<Id>& 
             const bool civil = what.find("為了「") != std::string::npos;  // a suit between kin, not a felony
             int r = civil ? askPlayer("陪審", "你被叫去當陪審：" + what + "。你站哪一邊？", {"說原告有理（" + shortName(accused) + "要輸，他會記你）", "說 " + shortName(accused) + " 有理"})
                           : askPlayer("陪審", "你被叫去當陪審：" + what + "。你說 " + fullName(accused) + " 有罪嗎？", {"說有罪（" + shortName(accused) + "和他家會記你）", "說無罪"});
-            aye = r == 0 || (r < 0 && rngKin_.chance(0.2 + 0.45 * truth));
+            aye = r == 0 || (r < 0 && draw.chance(0.2 + 0.45 * truth));
             juryNote_ = std::string("你說") + (civil ? (aye ? "原告有理" : shortName(accused) + "有理") : (aye ? "有罪" : "無罪"));
         } else {
             double pr = 0.2 + 0.45 * truth;
@@ -1450,7 +1451,7 @@ int World::neighbourJury(Id accused, Id accuser, double truth, std::vector<Id>& 
             pr -= std::min(0.25, favourOwed(j, accused) / 60);
             if (accuser != kNone) pr += std::min(0.15, favourOwed(j, accuser) / 80);
             pr -= people_[accused].reputation / 250;
-            aye = rngKin_.chance(std::clamp(pr, 0.03, 0.95));
+            aye = draw.chance(std::clamp(pr, 0.03, 0.95));
             ++others;
         }
         if (aye) ++votes, ayes.push_back(j);

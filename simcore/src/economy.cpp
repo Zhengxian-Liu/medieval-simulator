@@ -1302,9 +1302,10 @@ bool World::feedMenu(Household& h, bool chosen) {
 double World::taxDue(const Household& h) const {
     if (h.extinct || h.members.empty() || h.head == kNone) return 0;
     double grain = std::max(0.0, h.food - consumption(h) * kDaysPerYear) * param("grain_price", 0.5) * kFarmGate;
-    double goods = h.money + grain + h.acres * 6;  // the beasts and gear, roughly, by the size of the holding
+    double goods = h.money + grain + (h.acres + h.outAcres) * 6;  // the beasts and gear, roughly, by the size of the holding
     if (goods < 120) return 0;                     // under ten shillings of goods: the poor were not taxed
-    return std::round(goods / 15);
+    // A house known out there (地方) is assessed without the neighbourly discount (design/district.md 四).
+    return std::round(goods / 15 * districtTaxMult(h));
 }
 
 // The lay subsidy: a fifteenth of movable goods, granted by Parliament now and then, and most years once the war
@@ -1326,6 +1327,9 @@ void World::yearlyTax() {
         double tax = taxDue(h);
         if (tax <= 0) continue;
         if (inPlayerHouse(h.id) && actingHead() != kNone) {
+            if (districtTaxMult(h) > 1)
+                log(1, "【國王的稅】你家在地方上有了名字，估稅的人不再手下留情：照家當估足了算（多 " +
+                           std::to_string(static_cast<int>(std::lround((districtTaxMult(h) - 1) * 100))) + "%）。");
             // A yearly institution, told by the situation the family is in this time (data/events/market.json).
             Id head = actingHead();
             bool assesses = assessor != kNone && inPlayerHouse(people_[assessor].household);

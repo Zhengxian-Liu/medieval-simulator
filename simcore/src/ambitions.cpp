@@ -56,8 +56,9 @@ int World::standing(Id hid) const {
     const Person& hp = people_[h.head];
     if (hp.occupation == "lord" || hp.occupation == "lady" || hp.occupation == "priest" || gentry(h.head)) return -1;
     if (!houseFree(h)) return 0;
-    if (h.freehold >= 20 && h.acres >= 40) return 3;
-    if (h.freehold >= 6) return 2;
+    // Land out there (地方) counts as land at home.
+    if (h.freehold + h.outFree >= 20 && h.acres + h.outAcres >= 40) return 3;
+    if (h.freehold + h.outFree >= 6) return 2;
     return 1;
 }
 
@@ -717,7 +718,7 @@ void World::rivalForOffice(Person& head) {
 
 // 「莊園欠我家的錢」: each May the steward comes to borrow, the family says how much. Three years on, at Michaelmas,
 // the manor pays it back with a quarter more, or pledges what it has.
-void World::stewardLoan(Person& head) {
+void World::stewardLoan(Person& head, bool pressed) {
     if (manorBond_.house != kNone || lord_ == kNone || !people_[lord_].alive()) return;
     auto asked = lateAsked_.find("loan");
     if (asked != lateAsked_.end() && asked->second > day_) return;
@@ -726,7 +727,8 @@ void World::stewardLoan(Person& head) {
     if (h.money < small + 40) return;
     lateAsked_["loan"] = day_ + kDaysPerYear;
     std::string sit = "管家上門來，說老爺要替國王出人出錢，莊園的現錢一時周轉不過來，想向你家借一筆，" + std::to_string(year() + 3) +
-                      " 年米迦勒節連本帶利多還四分之一。到時候莊園要是拿不出錢，就拿自營地或磨坊來抵。你家現在有 " + pence(h.money) + "。";
+                      " 年米迦勒節連本帶利多還四分之一。到時候莊園要是拿不出錢，就拿自營地或磨坊來抵。你家現在有 " + pence(h.money) + "。" +
+                      (pressed ? "管家話裡有話：老爺知道你家手頭寬裕，不借，老爺會記著（好感 " + num(defs_.district["tier"].numberOr("lord_refused", -8)) + "）。借得多，你家在地方上就有了靠山。" : "");
     std::vector<std::string> opts;
     std::vector<double> amounts;
     if (h.money >= big + 40) opts.push_back("借 " + pence(big) + "（到期還 " + pence(std::round(big * 1.25)) + "）"), amounts.push_back(big);
@@ -735,6 +737,12 @@ void World::stewardLoan(Person& head) {
     int r = askPlayer("莊園要借錢", sit, opts);
     if (r < 0) r = static_cast<int>(amounts.size()) - 1;  // the rules: the smaller sum
     if (r >= static_cast<int>(amounts.size())) {
+        if (pressed) {
+            const double cost = defs_.district["tier"].numberOr("lord_refused", -8);
+            addOpinion(lord_, head.id, "refused_loan", cost, 6);
+            log(1, "〔莊園要借錢〕" + head.firstName + " 推說手頭緊。管家臉色一沉走了：老爺記下了（老爺好感 " + num(cost) + "）。");
+            return;
+        }
         log(1, "〔莊園要借錢〕" + head.firstName + " 推說手頭緊。管家點點頭走了，說明年再來。");
         return;
     }
@@ -749,6 +757,8 @@ void World::stewardLoan(Person& head) {
     ++counters_["manor_loan:lent"];
     log(1, "〔莊園要借錢〕" + head.firstName + " 借給莊園 " + pence(amt) + "。管家在帳上寫明：" + std::to_string(manorBond_.due) + " 年米迦勒節還 " +
                pence(manorBond_.owed) + "，還不出就拿地或磨坊抵（老爺好感 +10）。");
+    // A big loan to the lord is one of the ways into 地方 (design/district.md 五).
+    if (amt >= defs_.district["tier"].numberOr("lord_gate", 400) && defs_.district.isObject()) enterTier(h.id, "借給領主 " + pence(amt));
 }
 
 void World::manorBondDue(Person& head) {

@@ -99,6 +99,8 @@ void World::processCommands() {
             }
         } else if (c.type == "agenda") {
             doAgenda(c.plan);  // 這一季的事: plan = the item's id
+        } else if (c.type == "district") {
+            districtCommand(c);  // 地方: plan = "bid|<stake>|<level>", "speak|<stake>|<who>", "lend|<ask>|<level>"
         } else if (c.type == "rule") {
             // 家裡的規矩: plan = "occasions:<all|close|none|ask>", "grain:<harvest|monthly|ask>", or "routine:1"/"routine:0" while a year is let run.
             size_t at = c.plan.find(':');

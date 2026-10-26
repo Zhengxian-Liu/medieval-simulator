@@ -215,7 +215,7 @@ std::string World::newsText(const News& n) const {
 
 Id World::addNews(const std::string& kind, Id subject, Id other, Id house, Id deed, const std::string& thing) {
     const NewsKindDef* k = defs_.newsKind(kind);
-    if (!k || house == kNone || households_[house].extinct) return kNone;
+    if (!k || house == kNone || (households_[house].extinct && !isDistrictShell(house))) return kNone;
     // The same thing told twice (both lovers' side of one affair) is one piece of news, and the same help given
     // again while the last time is still talked of is not news again.
     for (auto it = news_.rbegin(); it != news_.rend() && day_ - it->day < k->fadeMonths * kDaysPerMonth; ++it)
@@ -506,7 +506,7 @@ void World::monthlyNews() {
     std::vector<Id> active;
     for (const auto& n : news_) {
         const NewsKindDef* k = defs_.newsKind(n.kind);
-        if (k && day_ - n.day < k->fadeMonths * kDaysPerMonth && n.heard.size() < live.size()) active.push_back(n.id);
+        if (k && day_ - n.day < k->fadeMonths * kDaysPerMonth && n.heard.size() < live.size() && n.kind.rfind("district:", 0) != 0) active.push_back(n.id);
     }
     if (active.empty()) return;
     std::map<Id, std::vector<double>> rows;

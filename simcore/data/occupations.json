@@ -12,6 +12,11 @@
     {"id": "clerk",     "name": "書記",     "skill": "learning", "sex": "male", "monthly_income": 20},
     {"id": "lord",      "name": "領主",     "skill": "charm",    "sex": "male", "monthly_income": 20},
     {"id": "lady",      "name": "領主夫人", "skill": "charm",    "sex": "female"},
-    {"id": "soldier",   "name": "弓兵",     "skill": "charm",    "sex": "male", "monthly_income": 20}
+    {"id": "soldier",   "name": "弓兵",     "skill": "charm",    "sex": "male", "monthly_income": 20},
+    {"id": "merchant",  "name": "商人",     "skill": "charm",    "sex": "male"},
+    {"id": "steward",   "name": "總管",     "skill": "learning", "sex": "male"},
+    {"id": "bailiff",   "name": "管家",     "skill": "charm",    "sex": "male"},
+    {"id": "hundredman", "name": "百戶長",  "skill": "learning", "sex": "male"},
+    {"id": "gentlewoman", "name": "鄉紳太太", "skill": "charm",  "sex": "female"}
   ]
 }
